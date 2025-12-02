@@ -9,7 +9,8 @@ from typing import Optional
 
 import click
 
-from oaknut_dfs.dfs_filesystem import DFSFilesystem, BootOption
+from oaknut_dfs.dfs_filesystem import DFSImage, BootOption
+from oaknut_dfs.exceptions import InvalidFormatError
 
 
 @click.group()
@@ -28,12 +29,18 @@ def cli():
 
 @cli.command()
 @click.argument('image_path', type=click.Path(exists=True))
-def cat(image_path):
+@click.option('--side', type=int, default=0, help='Disk side for DSD (0 or 1, default: 0)')
+def cat(image_path, side):
     """List files on disk (*CAT equivalent).
 
     Displays disk title, boot option, and file catalog.
+    For DSD (double-sided) disks, use --side to select which side to list.
     """
-    disk = DFSFilesystem.open(image_path, writable=False)
+    try:
+        disk = DFSImage.open(image_path, writable=False, side=side)
+    except (ValueError, InvalidFormatError) as e:
+        click.echo(f"Error: {e}", err=True)
+        sys.exit(1)
 
     # Display disk info
     click.echo(f"\nDisk: {disk.title}")
@@ -59,9 +66,17 @@ def cat(image_path):
 
 @cli.command()
 @click.argument('image_path', type=click.Path(exists=True))
-def info(image_path):
-    """Show detailed disk information (*INFO equivalent)."""
-    disk = DFSFilesystem.open(image_path, writable=False)
+@click.option('--side', type=int, default=0, help='Disk side for DSD (0 or 1, default: 0)')
+def info(image_path, side):
+    """Show detailed disk information (*INFO equivalent).
+
+    For DSD (double-sided) disks, use --side to select which side to display.
+    """
+    try:
+        disk = DFSImage.open(image_path, writable=False, side=side)
+    except (ValueError, InvalidFormatError) as e:
+        click.echo(f"Error: {e}", err=True)
+        sys.exit(1)
     info_obj = disk.info
 
     click.echo("\nDisk Information:")
@@ -83,13 +98,19 @@ def info(image_path):
 @click.argument('image_path', type=click.Path(exists=True))
 @click.argument('dfs_filename')
 @click.argument('output_path', type=click.Path(), required=False)
-def load(image_path, dfs_filename, output_path):
+@click.option('--side', type=int, default=0, help='Disk side for DSD (0 or 1, default: 0)')
+def load(image_path, dfs_filename, output_path, side):
     """Load file from disk (*LOAD equivalent).
 
     If OUTPUT_PATH is not specified, writes to current directory
     using the DFS filename (with '$.' replaced by '_').
+    For DSD (double-sided) disks, use --side to select which side to load from.
     """
-    disk = DFSFilesystem.open(image_path, writable=False)
+    try:
+        disk = DFSImage.open(image_path, writable=False, side=side)
+    except (ValueError, InvalidFormatError) as e:
+        click.echo(f"Error: {e}", err=True)
+        sys.exit(1)
 
     # Load file
     try:
@@ -117,12 +138,18 @@ def load(image_path, dfs_filename, output_path):
 @click.option('--load', 'load_addr', type=str, help='Load address (hex)')
 @click.option('--exec', 'exec_addr', type=str, help='Exec address (hex)')
 @click.option('--locked', is_flag=True, help='Lock file after saving')
-def save(image_path, source_path, dfs_filename, load_addr, exec_addr, locked):
+@click.option('--side', type=int, default=0, help='Disk side for DSD (0 or 1, default: 0)')
+def save(image_path, source_path, dfs_filename, load_addr, exec_addr, locked, side):
     """Save file to disk (*SAVE equivalent).
 
     Addresses should be specified in hexadecimal (e.g., --load 1900).
+    For DSD (double-sided) disks, use --side to select which side to save to.
     """
-    disk = DFSFilesystem.open(image_path)
+    try:
+        disk = DFSImage.open(image_path, side=side)
+    except (ValueError, InvalidFormatError) as e:
+        click.echo(f"Error: {e}", err=True)
+        sys.exit(1)
 
     # Parse addresses
     load_address = int(load_addr, 16) if load_addr else 0
@@ -140,21 +167,30 @@ def save(image_path, source_path, dfs_filename, load_addr, exec_addr, locked):
             exec_address=exec_address,
             locked=locked
         )
-        click.echo(
-            f"Saved {source_path} → {dfs_filename} "
-            f"({len(data)} bytes, load={load_address:08X}, exec={exec_address:08X})"
-        )
     except ValueError as e:
         click.echo(f"Error: {e}", err=True)
         sys.exit(1)
+
+    click.echo(
+        f"Saved {source_path} → {dfs_filename} "
+        f"({len(data)} bytes, load={load_address:08X}, exec={exec_address:08X})"
+    )
 
 
 @cli.command()
 @click.argument('image_path', type=click.Path(exists=True))
 @click.argument('filename')
-def delete(image_path, filename):
-    """Delete file from disk (*DELETE equivalent)."""
-    disk = DFSFilesystem.open(image_path)
+@click.option('--side', type=int, default=0, help='Disk side for DSD (0 or 1, default: 0)')
+def delete(image_path, filename, side):
+    """Delete file from disk (*DELETE equivalent).
+
+    For DSD (double-sided) disks, use --side to select which side to delete from.
+    """
+    try:
+        disk = DFSImage.open(image_path, side=side)
+    except (ValueError, InvalidFormatError) as e:
+        click.echo(f"Error: {e}", err=True)
+        sys.exit(1)
 
     try:
         disk.delete(filename)
@@ -171,9 +207,17 @@ def delete(image_path, filename):
 @click.argument('image_path', type=click.Path(exists=True))
 @click.argument('old_name')
 @click.argument('new_name')
-def rename(image_path, old_name, new_name):
-    """Rename file (*RENAME equivalent)."""
-    disk = DFSFilesystem.open(image_path)
+@click.option('--side', type=int, default=0, help='Disk side for DSD (0 or 1, default: 0)')
+def rename(image_path, old_name, new_name, side):
+    """Rename file (*RENAME equivalent).
+
+    For DSD (double-sided) disks, use --side to select which side to rename on.
+    """
+    try:
+        disk = DFSImage.open(image_path, side=side)
+    except (ValueError, InvalidFormatError) as e:
+        click.echo(f"Error: {e}", err=True)
+        sys.exit(1)
 
     try:
         disk.rename(old_name, new_name)
@@ -189,9 +233,17 @@ def rename(image_path, old_name, new_name):
 @cli.command()
 @click.argument('image_path', type=click.Path(exists=True))
 @click.argument('filename')
-def lock(image_path, filename):
-    """Lock file (*ACCESS <file> L equivalent)."""
-    disk = DFSFilesystem.open(image_path)
+@click.option('--side', type=int, default=0, help='Disk side for DSD (0 or 1, default: 0)')
+def lock(image_path, filename, side):
+    """Lock file (*ACCESS <file> L equivalent).
+
+    For DSD (double-sided) disks, use --side to select which side to lock on.
+    """
+    try:
+        disk = DFSImage.open(image_path, side=side)
+    except (ValueError, InvalidFormatError) as e:
+        click.echo(f"Error: {e}", err=True)
+        sys.exit(1)
 
     try:
         disk.lock(filename)
@@ -204,9 +256,17 @@ def lock(image_path, filename):
 @cli.command()
 @click.argument('image_path', type=click.Path(exists=True))
 @click.argument('filename')
-def unlock(image_path, filename):
-    """Unlock file (*ACCESS <file> equivalent)."""
-    disk = DFSFilesystem.open(image_path)
+@click.option('--side', type=int, default=0, help='Disk side for DSD (0 or 1, default: 0)')
+def unlock(image_path, filename, side):
+    """Unlock file (*ACCESS <file> equivalent).
+
+    For DSD (double-sided) disks, use --side to select which side to unlock on.
+    """
+    try:
+        disk = DFSImage.open(image_path, side=side)
+    except (ValueError, InvalidFormatError) as e:
+        click.echo(f"Error: {e}", err=True)
+        sys.exit(1)
 
     try:
         disk.unlock(filename)
@@ -234,29 +294,40 @@ def create(image_path, title, tracks, double_sided):
             sys.exit(0)
 
     try:
-        with DFSFilesystem.create(
+        disk = DFSImage.create(
             image_path,
             title=title,
             num_tracks=tracks,
             double_sided=double_sided
-        ) as disk:
-            format_str = "DSD (double-sided)" if double_sided else "SSD (single-sided)"
-            click.echo(f"Created {format_str} disk: {image_path}")
-            click.echo(f"  Title: {disk.title if disk.title else '(none)'}")
-            click.echo(f"  Tracks: {tracks}")
-            click.echo(f"  Total sectors: {disk.info.total_sectors}")
-            click.echo(f"  Capacity: {disk.info.total_sectors * 256:,} bytes")
+        )
     except ValueError as e:
         click.echo(f"Error: {e}", err=True)
         sys.exit(1)
+
+    with disk:
+        format_str = "DSD (double-sided)" if double_sided else "SSD (single-sided)"
+        click.echo(f"Created {format_str} disk: {image_path}")
+        click.echo(f"  Title: {disk.title if disk.title else '(none)'}")
+        click.echo(f"  Tracks: {tracks}")
+        click.echo(f"  Total sectors: {disk.info.total_sectors}")
+        click.echo(f"  Capacity: {disk.info.total_sectors * 256:,} bytes")
 
 
 @cli.command()
 @click.argument('image_path', type=click.Path(exists=True))
 @click.argument('new_title')
-def title(image_path, new_title):
-    """Change disk title (*TITLE equivalent)."""
-    disk = DFSFilesystem.open(image_path)
+@click.option('--side', type=int, default=0, help='Disk side for DSD (0 or 1, default: 0)')
+def title(image_path, new_title, side):
+    """Change disk title (*TITLE equivalent).
+
+    For DSD (double-sided) disks, use --side to select which side's title to change.
+    Each side has its own independent title.
+    """
+    try:
+        disk = DFSImage.open(image_path, side=side)
+    except (ValueError, InvalidFormatError) as e:
+        click.echo(f"Error: {e}", err=True)
+        sys.exit(1)
 
     try:
         disk.title = new_title
@@ -269,7 +340,8 @@ def title(image_path, new_title):
 @cli.command('opt')
 @click.argument('image_path', type=click.Path(exists=True))
 @click.argument('option', type=click.Choice(['0', '1', '2', '3', 'NONE', 'LOAD', 'RUN', 'EXEC']))
-def boot_option(image_path, option):
+@click.option('--side', type=int, default=0, help='Disk side for DSD (0 or 1, default: 0)')
+def boot_option(image_path, option, side):
     """Set boot option (*OPT 4,<n> equivalent).
 
     Options:
@@ -277,8 +349,15 @@ def boot_option(image_path, option):
       1/LOAD - *LOAD $.!BOOT
       2/RUN  - *RUN $.!BOOT
       3/EXEC - *EXEC $.!BOOT
+
+    For DSD (double-sided) disks, use --side to select which side's boot option to set.
+    Each side has its own independent boot option.
     """
-    disk = DFSFilesystem.open(image_path)
+    try:
+        disk = DFSImage.open(image_path, side=side)
+    except (ValueError, InvalidFormatError) as e:
+        click.echo(f"Error: {e}", err=True)
+        sys.exit(1)
 
     # Map string to BootOption
     option_map = {
@@ -295,32 +374,45 @@ def boot_option(image_path, option):
 
 @cli.command()
 @click.argument('image_path', type=click.Path(exists=True))
-def compact(image_path):
+@click.option('--side', type=int, default=0, help='Disk side for DSD (0 or 1, default: 0)')
+def compact(image_path, side):
     """Defragment disk (*COMPACT equivalent).
 
     Moves files to eliminate gaps from deleted files.
+    For DSD (double-sided) disks, use --side to select which side to compact.
     """
-    disk = DFSFilesystem.open(image_path)
+    try:
+        disk = DFSImage.open(image_path, side=side)
+    except (ValueError, InvalidFormatError) as e:
+        click.echo(f"Error: {e}", err=True)
+        sys.exit(1)
 
     try:
         files_moved = disk.compact()
-        if files_moved == 0:
-            click.echo("Disk already compact (no fragmentation)")
-        else:
-            click.echo(f"Compacted disk ({files_moved} files moved)")
     except PermissionError as e:
         click.echo(f"Error: {e}", err=True)
         sys.exit(1)
 
+    if files_moved == 0:
+        click.echo("Disk already compact (no fragmentation)")
+    else:
+        click.echo(f"Compacted disk ({files_moved} files moved)")
+
 
 @cli.command()
 @click.argument('image_path', type=click.Path(exists=True))
-def validate(image_path):
+@click.option('--side', type=int, default=0, help='Disk side for DSD (0 or 1, default: 0)')
+def validate(image_path, side):
     """Check disk integrity.
 
     Validates catalog structure and file layout.
+    For DSD (double-sided) disks, use --side to select which side to validate.
     """
-    disk = DFSFilesystem.open(image_path, writable=False)
+    try:
+        disk = DFSImage.open(image_path, writable=False, side=side)
+    except (ValueError, InvalidFormatError) as e:
+        click.echo(f"Error: {e}", err=True)
+        sys.exit(1)
 
     errors = disk.validate()
     if not errors:
@@ -339,12 +431,18 @@ def validate(image_path):
 @click.argument('image_path', type=click.Path(exists=True))
 @click.argument('output_dir', type=click.Path())
 @click.option('--no-metadata', is_flag=True, help='Skip .inf metadata files')
-def export_all(image_path, output_dir, no_metadata):
+@click.option('--side', type=int, default=0, help='Disk side for DSD (0 or 1, default: 0)')
+def export_all(image_path, output_dir, no_metadata, side):
     """Export all files from disk to directory.
 
     Creates .inf files with load/exec addresses and locked status.
+    For DSD (double-sided) disks, use --side to select which side to export from.
     """
-    disk = DFSFilesystem.open(image_path, writable=False)
+    try:
+        disk = DFSImage.open(image_path, writable=False, side=side)
+    except (ValueError, InvalidFormatError) as e:
+        click.echo(f"Error: {e}", err=True)
+        sys.exit(1)
 
     output_path = Path(output_dir)
     disk.export_all(output_path, preserve_metadata=not no_metadata)
@@ -358,12 +456,18 @@ def export_all(image_path, output_dir, no_metadata):
 @click.argument('image_path', type=click.Path(exists=True))
 @click.argument('data_file', type=click.Path(exists=True))
 @click.option('--inf', 'inf_file', type=click.Path(exists=True), help='Metadata file (default: <data_file>.inf)')
-def import_inf(image_path, data_file, inf_file):
+@click.option('--side', type=int, default=0, help='Disk side for DSD (0 or 1, default: 0)')
+def import_inf(image_path, data_file, inf_file, side):
     """Import file with .inf metadata.
 
     Reads load address, exec address, and locked status from .inf file.
+    For DSD (double-sided) disks, use --side to select which side to import to.
     """
-    disk = DFSFilesystem.open(image_path)
+    try:
+        disk = DFSImage.open(image_path, side=side)
+    except (ValueError, InvalidFormatError) as e:
+        click.echo(f"Error: {e}", err=True)
+        sys.exit(1)
 
     try:
         disk.import_from_inf(data_file, inf_file)
@@ -380,50 +484,63 @@ def import_inf(image_path, data_file, inf_file):
 @click.argument('image_path', type=click.Path(exists=True))
 @click.argument('filename')
 @click.option('--hex', 'show_hex', is_flag=True, help='Show hex dump')
-def dump(image_path, filename, show_hex):
+@click.option('--side', type=int, default=0, help='Disk side for DSD (0 or 1, default: 0)')
+def dump(image_path, filename, show_hex, side):
     """Display file contents.
 
     By default shows ASCII. Use --hex for hexadecimal dump.
+    For DSD (double-sided) disks, use --side to select which side to dump from.
     """
-    disk = DFSFilesystem.open(image_path, writable=False)
+    try:
+        disk = DFSImage.open(image_path, writable=False, side=side)
+    except (ValueError, InvalidFormatError) as e:
+        click.echo(f"Error: {e}", err=True)
+        sys.exit(1)
 
     try:
         data = disk.load(filename)
         info = disk.get_file_info(filename)
-
-        click.echo(f"\nFile: {info.name}")
-        click.echo(f"Size: {info.length} bytes")
-        click.echo(f"Load: {info.load_address:08X}")
-        click.echo(f"Exec: {info.exec_address:08X}")
-        click.echo(f"Locked: {'Yes' if info.locked else 'No'}")
-        click.echo()
-
-        if show_hex:
-            # Hex dump
-            for i in range(0, len(data), 16):
-                hex_bytes = ' '.join(f'{b:02X}' for b in data[i:i+16])
-                ascii_repr = ''.join(chr(b) if 32 <= b < 127 else '.' for b in data[i:i+16])
-                click.echo(f'{i:04X}:  {hex_bytes:48}  {ascii_repr}')
-        else:
-            # ASCII dump
-            try:
-                text = data.decode('utf-8')
-                click.echo(text)
-            except UnicodeDecodeError:
-                click.echo("(binary data - use --hex for hexadecimal dump)")
-
     except FileNotFoundError:
         click.echo(f"Error: File not found: {filename}", err=True)
         sys.exit(1)
+
+    click.echo(f"\nFile: {info.name}")
+    click.echo(f"Size: {info.length} bytes")
+    click.echo(f"Load: {info.load_address:08X}")
+    click.echo(f"Exec: {info.exec_address:08X}")
+    click.echo(f"Locked: {'Yes' if info.locked else 'No'}")
+    click.echo()
+
+    if show_hex:
+        # Hex dump
+        for i in range(0, len(data), 16):
+            hex_bytes = ' '.join(f'{b:02X}' for b in data[i:i+16])
+            ascii_repr = ''.join(chr(b) if 32 <= b < 127 else '.' for b in data[i:i+16])
+            click.echo(f'{i:04X}:  {hex_bytes:48}  {ascii_repr}')
+    else:
+        # ASCII dump
+        try:
+            text = data.decode('utf-8')
+            click.echo(text)
+        except UnicodeDecodeError:
+            click.echo("(binary data - use --hex for hexadecimal dump)")
 
 
 @cli.command('copy')
 @click.argument('image_path', type=click.Path(exists=True))
 @click.argument('source')
 @click.argument('dest')
-def copy(image_path, source, dest):
-    """Copy file within disk."""
-    disk = DFSFilesystem.open(image_path)
+@click.option('--side', type=int, default=0, help='Disk side for DSD (0 or 1, default: 0)')
+def copy(image_path, source, dest, side):
+    """Copy file within disk.
+
+    For DSD (double-sided) disks, use --side to select which side to copy on.
+    """
+    try:
+        disk = DFSImage.open(image_path, side=side)
+    except (ValueError, InvalidFormatError) as e:
+        click.echo(f"Error: {e}", err=True)
+        sys.exit(1)
 
     try:
         disk.copy_file(source, dest)

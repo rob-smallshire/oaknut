@@ -7,6 +7,7 @@ from oaknut_dfs.sector_image import (
     SSDSectorImage,
     SequentialDSDSectorImage,
     InterleavedDSDSectorImage,
+    DSDSideSectorImage,
 )
 
 
@@ -370,6 +371,244 @@ class TestInterleavedDSDSectorImage:
         assert data[256:512] == bytes([9]) * 256
         assert data[512:768] == bytes([10]) * 256
         assert data[768:1024] == bytes([11]) * 256
+
+
+class TestDSDSideSectorImage:
+    """Tests for DSD side sector access (separate catalog per side)."""
+
+    def test_constructor_validates_side(self):
+        """Constructor rejects invalid side values."""
+        disk = MemoryDiskImage(size=204800)
+        interleaved = InterleavedDSDSectorImage(disk, tracks_per_side=40)
+
+        # Valid sides
+        DSDSideSectorImage(interleaved, side=0, tracks_per_side=40)
+        DSDSideSectorImage(interleaved, side=1, tracks_per_side=40)
+
+        # Invalid sides
+        with pytest.raises(ValueError, match="Invalid side: 2"):
+            DSDSideSectorImage(interleaved, side=2, tracks_per_side=40)
+
+        with pytest.raises(ValueError, match="Invalid side: -1"):
+            DSDSideSectorImage(interleaved, side=-1, tracks_per_side=40)
+
+    def test_side0_physical_offset_sector_0(self):
+        """Side 0, sector 0 maps to physical sector 0."""
+        disk = MemoryDiskImage(size=204800)
+        interleaved = InterleavedDSDSectorImage(disk, tracks_per_side=40)
+        side0 = DSDSideSectorImage(interleaved, side=0, tracks_per_side=40)
+
+        # Side 0, sector 0 -> physical sector 0 -> offset 0
+        assert side0.physical_offset(0) == 0
+
+    def test_side0_physical_offset_sector_9(self):
+        """Side 0, sector 9 (end of track 0) maps correctly."""
+        disk = MemoryDiskImage(size=204800)
+        interleaved = InterleavedDSDSectorImage(disk, tracks_per_side=40)
+        side0 = DSDSideSectorImage(interleaved, side=0, tracks_per_side=40)
+
+        # Side 0, sector 9 -> physical sector 9 -> offset 2304
+        assert side0.physical_offset(9) == 2304
+
+    def test_side0_physical_offset_sector_10(self):
+        """Side 0, sector 10 (track 1) maps correctly."""
+        disk = MemoryDiskImage(size=204800)
+        interleaved = InterleavedDSDSectorImage(disk, tracks_per_side=40)
+        side0 = DSDSideSectorImage(interleaved, side=0, tracks_per_side=40)
+
+        # Side 0, sector 10 -> physical sector 20 (after track 0 both sides)
+        # Physical offset: 20 * 256 = 5120
+        assert side0.physical_offset(10) == 5120
+
+    def test_side1_physical_offset_sector_0(self):
+        """Side 1, sector 0 maps to physical sector 10."""
+        disk = MemoryDiskImage(size=204800)
+        interleaved = InterleavedDSDSectorImage(disk, tracks_per_side=40)
+        side1 = DSDSideSectorImage(interleaved, side=1, tracks_per_side=40)
+
+        # Side 1, sector 0 -> physical sector 10 (side 1 of track 0)
+        # Physical offset: 10 * 256 = 2560
+        assert side1.physical_offset(0) == 2560
+
+    def test_side1_physical_offset_sector_9(self):
+        """Side 1, sector 9 (end of track 0) maps correctly."""
+        disk = MemoryDiskImage(size=204800)
+        interleaved = InterleavedDSDSectorImage(disk, tracks_per_side=40)
+        side1 = DSDSideSectorImage(interleaved, side=1, tracks_per_side=40)
+
+        # Side 1, sector 9 -> physical sector 19
+        # Physical offset: 19 * 256 = 4864
+        assert side1.physical_offset(9) == 4864
+
+    def test_side1_physical_offset_sector_10(self):
+        """Side 1, sector 10 (track 1) maps correctly."""
+        disk = MemoryDiskImage(size=204800)
+        interleaved = InterleavedDSDSectorImage(disk, tracks_per_side=40)
+        side1 = DSDSideSectorImage(interleaved, side=1, tracks_per_side=40)
+
+        # Side 1, sector 10 -> physical sector 30 (side 1 of track 1)
+        # Physical offset: 30 * 256 = 7680
+        assert side1.physical_offset(10) == 7680
+
+    def test_side0_sector_range_validation(self):
+        """Side 0 rejects sectors outside 0-399 range (40T)."""
+        disk = MemoryDiskImage(size=204800)
+        interleaved = InterleavedDSDSectorImage(disk, tracks_per_side=40)
+        side0 = DSDSideSectorImage(interleaved, side=0, tracks_per_side=40)
+
+        # Valid: 0-399
+        side0.physical_offset(0)
+        side0.physical_offset(399)
+
+        # Invalid: 400 and above
+        with pytest.raises(ValueError, match="Invalid sector: 400"):
+            side0.physical_offset(400)
+
+        with pytest.raises(ValueError, match="Invalid sector: -1"):
+            side0.physical_offset(-1)
+
+    def test_side1_sector_range_validation(self):
+        """Side 1 rejects sectors outside 0-399 range (40T)."""
+        disk = MemoryDiskImage(size=204800)
+        interleaved = InterleavedDSDSectorImage(disk, tracks_per_side=40)
+        side1 = DSDSideSectorImage(interleaved, side=1, tracks_per_side=40)
+
+        # Valid: 0-399
+        side1.physical_offset(0)
+        side1.physical_offset(399)
+
+        # Invalid: 400 and above
+        with pytest.raises(ValueError, match="Invalid sector: 400"):
+            side1.physical_offset(400)
+
+    def test_80T_side0_sector_range(self):
+        """80T disk: side 0 accepts 0-799."""
+        disk = MemoryDiskImage(size=409600)  # 80T DSD
+        interleaved = InterleavedDSDSectorImage(disk, tracks_per_side=80)
+        side0 = DSDSideSectorImage(interleaved, side=0, tracks_per_side=80)
+
+        # Valid: 0-799
+        side0.physical_offset(0)
+        side0.physical_offset(799)
+
+        # Invalid: 800 and above
+        with pytest.raises(ValueError, match="Invalid sector: 800"):
+            side0.physical_offset(800)
+
+    def test_read_sector_side0(self):
+        """Can read sectors from side 0."""
+        disk = MemoryDiskImage(size=204800)
+        interleaved = InterleavedDSDSectorImage(disk, tracks_per_side=40)
+        side0 = DSDSideSectorImage(interleaved, side=0, tracks_per_side=40)
+
+        # Write directly to physical sector 0 (side 0, sector 0)
+        test_data = b"SIDE0-SECTOR0" + b"\x00" * (256 - 13)
+        interleaved.write_sector(0, test_data)
+
+        # Read via side0
+        data = side0.read_sector(0)
+        assert data == test_data
+
+    def test_read_sector_side1(self):
+        """Can read sectors from side 1."""
+        disk = MemoryDiskImage(size=204800)
+        interleaved = InterleavedDSDSectorImage(disk, tracks_per_side=40)
+        side1 = DSDSideSectorImage(interleaved, side=1, tracks_per_side=40)
+
+        # Write directly to physical sector 10 (side 1, sector 0)
+        test_data = b"SIDE1-SECTOR0" + b"\x00" * (256 - 13)
+        interleaved.write_sector(10, test_data)
+
+        # Read via side1
+        data = side1.read_sector(0)
+        assert data == test_data
+
+    def test_write_sector_side0(self):
+        """Can write sectors to side 0."""
+        disk = MemoryDiskImage(size=204800)
+        interleaved = InterleavedDSDSectorImage(disk, tracks_per_side=40)
+        side0 = DSDSideSectorImage(interleaved, side=0, tracks_per_side=40)
+
+        # Write via side0
+        test_data = b"WRITE-TO-SIDE0" + b"\x00" * (256 - 14)
+        side0.write_sector(5, test_data)
+
+        # Read back directly from physical sector 5
+        data = interleaved.read_sector(5)
+        assert data == test_data
+
+    def test_write_sector_side1(self):
+        """Can write sectors to side 1."""
+        disk = MemoryDiskImage(size=204800)
+        interleaved = InterleavedDSDSectorImage(disk, tracks_per_side=40)
+        side1 = DSDSideSectorImage(interleaved, side=1, tracks_per_side=40)
+
+        # Write via side1 sector 5
+        test_data = b"WRITE-TO-SIDE1" + b"\x00" * (256 - 14)
+        side1.write_sector(5, test_data)
+
+        # Read back directly from physical sector 15 (side1, track 0, sector 5)
+        data = interleaved.read_sector(15)
+        assert data == test_data
+
+    def test_sides_are_independent(self):
+        """Writing to one side doesn't affect the other."""
+        disk = MemoryDiskImage(size=204800)
+        interleaved = InterleavedDSDSectorImage(disk, tracks_per_side=40)
+        side0 = DSDSideSectorImage(interleaved, side=0, tracks_per_side=40)
+        side1 = DSDSideSectorImage(interleaved, side=1, tracks_per_side=40)
+
+        # Write different data to sector 0 on each side
+        data0 = b"SIDE0" + b"\x00" * 251
+        data1 = b"SIDE1" + b"\x00" * 251
+
+        side0.write_sector(0, data0)
+        side1.write_sector(0, data1)
+
+        # Read back - each side should have its own data
+        assert side0.read_sector(0) == data0
+        assert side1.read_sector(0) == data1
+
+    def test_size_40T(self):
+        """40T disk: each side is 102400 bytes (400 sectors)."""
+        disk = MemoryDiskImage(size=204800)
+        interleaved = InterleavedDSDSectorImage(disk, tracks_per_side=40)
+        side0 = DSDSideSectorImage(interleaved, side=0, tracks_per_side=40)
+        side1 = DSDSideSectorImage(interleaved, side=1, tracks_per_side=40)
+
+        # Each side: 40 tracks * 10 sectors * 256 bytes = 102400
+        assert side0.size() == 102400
+        assert side1.size() == 102400
+
+    def test_size_80T(self):
+        """80T disk: each side is 204800 bytes (800 sectors)."""
+        disk = MemoryDiskImage(size=409600)
+        interleaved = InterleavedDSDSectorImage(disk, tracks_per_side=80)
+        side0 = DSDSideSectorImage(interleaved, side=0, tracks_per_side=80)
+        side1 = DSDSideSectorImage(interleaved, side=1, tracks_per_side=80)
+
+        # Each side: 80 tracks * 10 sectors * 256 bytes = 204800
+        assert side0.size() == 204800
+        assert side1.size() == 204800
+
+    def test_read_sector_validates_range(self):
+        """read_sector() validates sector number."""
+        disk = MemoryDiskImage(size=204800)
+        interleaved = InterleavedDSDSectorImage(disk, tracks_per_side=40)
+        side0 = DSDSideSectorImage(interleaved, side=0, tracks_per_side=40)
+
+        with pytest.raises(ValueError, match="Invalid sector"):
+            side0.read_sector(400)
+
+    def test_write_sector_validates_range(self):
+        """write_sector() validates sector number."""
+        disk = MemoryDiskImage(size=204800)
+        interleaved = InterleavedDSDSectorImage(disk, tracks_per_side=40)
+        side0 = DSDSideSectorImage(interleaved, side=0, tracks_per_side=40)
+
+        test_data = b"\x00" * 256
+        with pytest.raises(ValueError, match="Invalid sector"):
+            side0.write_sector(400, test_data)
 
 
 class TestSectorImageInterface:

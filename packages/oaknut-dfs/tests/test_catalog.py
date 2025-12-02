@@ -9,6 +9,7 @@ from oaknut_dfs.catalog import (
     FileEntry,
     DiskInfo,
 )
+from oaknut_dfs.exceptions import CatalogFullError, FileExistsError, FileLocked
 
 
 class TestFileEntry:
@@ -286,7 +287,7 @@ class TestAcornDFSCatalog:
         assert info.num_files == 1
 
     def test_add_file_duplicate_raises(self, empty_disk):
-        """Adding duplicate filename raises ValueError."""
+        """Adding duplicate filename raises FileExistsError."""
         entry = FileEntry(
             filename="DUPE",
             directory="$",
@@ -298,7 +299,7 @@ class TestAcornDFSCatalog:
         )
         empty_disk.add_file_entry(entry)
 
-        with pytest.raises(ValueError, match="already exists"):
+        with pytest.raises(FileExistsError, match="already exists"):
             empty_disk.add_file_entry(entry)
 
     def test_add_file_filename_too_long_raises(self, empty_disk):
@@ -316,7 +317,7 @@ class TestAcornDFSCatalog:
             empty_disk.add_file_entry(entry)
 
     def test_add_file_catalog_full_raises(self, empty_disk):
-        """Adding more than MAX_FILES raises ValueError."""
+        """Adding more than MAX_FILES raises CatalogFullError."""
         # Add MAX_FILES files
         for i in range(AcornDFSCatalog.MAX_FILES):
             entry = FileEntry(
@@ -340,7 +341,7 @@ class TestAcornDFSCatalog:
             length=100,
             start_sector=100,
         )
-        with pytest.raises(ValueError, match="Catalog is full"):
+        with pytest.raises(CatalogFullError, match="Catalog is full"):
             empty_disk.add_file_entry(entry)
 
     def test_find_file_exists(self, empty_disk):
@@ -427,7 +428,7 @@ class TestAcornDFSCatalog:
             empty_disk.remove_file_entry("$.NOTHERE")
 
     def test_remove_locked_file_raises(self, empty_disk):
-        """Removing locked file raises PermissionError."""
+        """Removing locked file raises FileLocked."""
         entry = FileEntry(
             filename="LOCKED",
             directory="$",
@@ -439,7 +440,7 @@ class TestAcornDFSCatalog:
         )
         empty_disk.add_file_entry(entry)
 
-        with pytest.raises(PermissionError, match="locked"):
+        with pytest.raises(FileLocked, match="locked"):
             empty_disk.remove_file_entry("$.LOCKED")
 
     def test_remove_file_updates_num_files(self, empty_disk):

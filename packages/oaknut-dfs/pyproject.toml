@@ -1,0 +1,49 @@
+[build-system]
+build-backend = 'setuptools.build_meta'
+requires = ["setuptools>=49.9.0"]
+
+[project]
+name = "oaknut-dfs"
+requires-python = ">=3.11"
+dynamic = ["version"]
+authors = [{ name = "Rob Smallshire", email = "robert@smallshire.org.uk" }]
+description = "Python library for handling Acorn DFS disk images (SSD/DSD format)"
+readme = { file = "README.md", content-type = "text/markdown" }
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python",
+  "Programming Language :: Python :: 3 :: Only",
+]
+dependencies = [
+    "click>=8.1.7",
+]
+
+[project.scripts]
+oaknut-dfs = "oaknut_dfs.cli:cli"
+
+[tool.setuptools.dynamic]
+version = { attr = "oaknut_dfs.__version__" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = [
+    "tests",
+]
+
+[tool.black]
+line-length = 100
+
+[dependency-groups]
+test = [
+    "pytest>=8.3.4",
+]
+
+dev = [
+  "ruff>=0.9.1",
+  { include-group = "test" },
+]

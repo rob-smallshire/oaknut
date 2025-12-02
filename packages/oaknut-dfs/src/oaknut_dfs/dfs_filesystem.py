@@ -17,8 +17,10 @@ from oaknut_dfs.sector_image import (
     SSDSectorImage,
     InterleavedDSDSectorImage,
     SequentialDSDSectorImage,
+    DSDSideSectorImage,
 )
 from oaknut_dfs.disk_image import DiskImage, FileDiskImage, MemoryDiskImage
+from oaknut_dfs.exceptions import DiskFullError, FileLocked, InvalidFormatError
 
 
 class BootOption(IntEnum):
@@ -69,7 +71,7 @@ class DiskInfo:
     format: str            # Format description (e.g., "SSD 40T")
 
 
-class DFSFilesystem:
+class DFSImage:
     """
     High-level interface to Acorn DFS disk images.
 
@@ -77,12 +79,12 @@ class DFSFilesystem:
     the BBC Micro's DFS star commands while following Python conventions.
 
     Basic usage:
-        >>> with DFSFilesystem.open("games.ssd") as disk:
+        >>> with DFSImage.open("games.ssd") as disk:
         ...     print(disk.title)
         ...     data = disk.load("$.ELITE")
 
     Create new disks:
-        >>> disk = DFSFilesystem.create("new.ssd", title="MY DISK")
+        >>> disk = DFSImage.create("new.ssd", title="MY DISK")
         >>> disk.save("$.HELLO", b"Hello, World!")
         >>> disk.close()
     """
@@ -114,7 +116,8 @@ class DFSFilesystem:
         *,
         writable: bool = True,
         format: Optional[str] = None,
-    ) -> "DFSFilesystem":
+        side: int = 0,
+    ) -> "DFSImage":
         """
         Open an existing disk image.
 
@@ -123,22 +126,34 @@ class DFSFilesystem:
         - .dsd -> Double-sided interleaved (standard)
         - Format can be overridden with format parameter
 
+        For double-sided disks (DSD), each side has independent catalog:
+        - side=0: First side (400 sectors, catalog at sectors 0-1)
+        - side=1: Second side (400 sectors, catalog at sectors 0-1)
+        - Default: side=0 for backward compatibility
+
         Args:
             filepath: Path to disk image (.ssd or .dsd)
             writable: Open for writing (default: True)
             format: Force format ("ssd", "dsd-interleaved", "dsd-sequential")
+            side: Which side to access (0 or 1, default: 0)
 
         Returns:
-            DFSFilesystem instance
+            DFSImage instance
 
         Raises:
             FileNotFoundError: If file doesn't exist
             ValueError: If file format is invalid or unrecognized
+            InvalidFormatError: If side=1 specified for SSD format
 
         Example:
-            >>> disk = DFSFilesystem.open("games.ssd")
+            >>> disk = DFSImage.open("games.ssd")
             >>> print(disk.title)
             GAMES DISK
+
+            >>> # Open side 0 of double-sided disk
+            >>> disk0 = DFSImage.open("disk.dsd", side=0)
+            >>> # Open side 1 of double-sided disk
+            >>> disk1 = DFSImage.open("disk.dsd", side=1)
         """
         filepath = Path(filepath)
 
@@ -156,7 +171,7 @@ class DFSFilesystem:
             with open(filepath, "rb") as f:
                 disk_image = MemoryDiskImage(data=f.read())
 
-        sector_image = cls._create_sector_image(disk_image, detected_format)
+        sector_image = cls._create_sector_image(disk_image, detected_format, side)
         catalog = AcornDFSCatalog(sector_image)
 
         return cls(catalog, sector_image, filepath if writable else None)
@@ -169,7 +184,7 @@ class DFSFilesystem:
 
         # Validate size is a multiple of track size
         if size % 2560 != 0:
-            raise ValueError(f"Invalid disk image size: {size} bytes")
+            raise InvalidFormatError(f"Invalid disk image size: {size} bytes")
 
         # Check extension first
         if ext == ".ssd":
@@ -184,25 +199,63 @@ class DFSFilesystem:
         elif tracks in (80, 160):
             return "dsd-interleaved"
         else:
-            raise ValueError(f"Unrecognized disk size: {size} bytes")
+            raise InvalidFormatError(f"Unrecognized disk size: {size} bytes")
 
     @staticmethod
-    def _create_sector_image(disk_image: DiskImage, format: str) -> SectorImage:
-        """Create appropriate sector image for format."""
+    def _create_sector_image(
+        disk_image: DiskImage, format: str, side: int = 0
+    ) -> SectorImage:
+        """
+        Create appropriate sector image for format and side.
+
+        Args:
+            disk_image: Underlying disk image
+            format: Format string ("ssd", "dsd-interleaved", "dsd-sequential")
+            side: Which side to access (0 or 1, default: 0)
+
+        Returns:
+            SectorImage instance configured for the requested side
+
+        Raises:
+            InvalidFormatError: If format is unknown or side is invalid for format
+            ValueError: If side is not 0 or 1
+        """
+        # Validate side parameter
+        if side not in (0, 1):
+            raise ValueError(f"Invalid side: {side} (must be 0 or 1)")
+
         if format == "ssd":
+            # SSD only has side 0
+            if side != 0:
+                raise InvalidFormatError(
+                    f"SSD format only supports side=0, got side={side}"
+                )
             return SSDSectorImage(disk_image)
+
         elif format == "dsd-interleaved":
-            # InterleavedDSDSectorImage needs num_tracks
-            # Default to 80 tracks (most common)
+            # DSD supports both sides
             size = disk_image.size()
             num_tracks = size // (2 * 10 * 256)  # 2 sides, 10 sectors/track
-            return InterleavedDSDSectorImage(disk_image, num_tracks)
-        elif format == "dsd-sequential":
-            return SequentialDSDSectorImage(disk_image)
-        else:
-            raise ValueError(f"Unknown format: {format}")
+            tracks_per_side = num_tracks // 2
 
-    def __enter__(self) -> "DFSFilesystem":
+            # Create interleaved image, then wrap for specific side
+            interleaved = InterleavedDSDSectorImage(disk_image, num_tracks)
+            return DSDSideSectorImage(interleaved, side, tracks_per_side)
+
+        elif format == "dsd-sequential":
+            # Sequential DSD also supports both sides
+            size = disk_image.size()
+            num_tracks = size // (2 * 10 * 256)
+            tracks_per_side = num_tracks // 2
+
+            # Create sequential image, then wrap for specific side
+            sequential = SequentialDSDSectorImage(disk_image)
+            return DSDSideSectorImage(sequential, side, tracks_per_side)
+
+        else:
+            raise InvalidFormatError(f"Unknown format: {format}")
+
+    def __enter__(self) -> "DFSImage":
         """Context manager entry."""
         return self
 
@@ -215,7 +268,7 @@ class DFSFilesystem:
         """
         Close the disk image, flushing any pending changes.
 
-        After calling close(), the DFSFilesystem instance should not be used.
+        After calling close(), the DFSImage instance should not be used.
         Using a context manager (with statement) is preferred.
         """
         self.flush()
@@ -408,14 +461,14 @@ class DFSFilesystem:
         self._catalog.write_disk_info(info)
         self._dirty = True
 
-    def set_boot_option(self, option: Union[BootOption, int]) -> "DFSFilesystem":
+    def set_boot_option(self, option: Union[BootOption, int]) -> "DFSImage":
         """
         Set boot option (chainable version).
 
         Returns self for method chaining.
 
         Example:
-            >>> disk = (DFSFilesystem.create("boot.ssd")
+            >>> disk = (DFSImage.create("boot.ssd")
             ...         .set_boot_option(BootOption.EXEC)
             ...         .save_text("$.!BOOT", "*RUN $.MAIN"))
         """
@@ -519,7 +572,7 @@ class DFSFilesystem:
         info = self.info
         path = f" at {self._filepath}" if self._filepath else ""
         return (
-            f"DFSFilesystem(title='{info.title}', "
+            f"DFSImage(title='{info.title}', "
             f"files={info.num_files}, "
             f"format={info.format}{path})"
         )
@@ -634,7 +687,7 @@ class DFSFilesystem:
         num_tracks: int = 40,
         double_sided: bool = False,
         interleaved: bool = True,
-    ) -> "DFSFilesystem":
+    ) -> "DFSImage":
         """
         Create a new formatted disk image (*FORM equivalent).
 
@@ -646,14 +699,14 @@ class DFSFilesystem:
             interleaved: Use interleaved format for DSD (default: True)
 
         Returns:
-            DFSFilesystem instance with empty catalog
+            DFSImage instance with empty catalog
 
         Raises:
             ValueError: If parameters are invalid
             FileExistsError: If file already exists
 
         Example:
-            >>> disk = DFSFilesystem.create("new.ssd", title="MY DISK")
+            >>> disk = DFSImage.create("new.ssd", title="MY DISK")
             >>> disk.save("$.TEST", b"test data")
             >>> disk.close()
         """
@@ -684,22 +737,58 @@ class DFSFilesystem:
         # Create sector image
         if double_sided:
             if interleaved:
-                sector_image = InterleavedDSDSectorImage(disk_image, num_tracks)
+                interleaved_img = InterleavedDSDSectorImage(disk_image, num_tracks)
+                tracks_per_side = num_tracks // 2
+
+                # Initialize catalogs on BOTH sides
+                for side in [0, 1]:
+                    side_img = DSDSideSectorImage(interleaved_img, side=side, tracks_per_side=tracks_per_side)
+                    side_catalog = AcornDFSCatalog(side_img)
+                    side_info = CatalogDiskInfo(
+                        title=title,
+                        cycle_number=0,
+                        num_files=0,
+                        total_sectors=sectors_per_side,
+                        boot_option=0,
+                    )
+                    side_catalog.write_disk_info(side_info)
+
+                # Return filesystem for side 0
+                sector_image = DSDSideSectorImage(interleaved_img, side=0, tracks_per_side=tracks_per_side)
             else:
-                sector_image = SequentialDSDSectorImage(disk_image)
+                sequential_img = SequentialDSDSectorImage(disk_image)
+                tracks_per_side = num_tracks // 2
+
+                # Initialize catalogs on BOTH sides
+                for side in [0, 1]:
+                    side_img = DSDSideSectorImage(sequential_img, side=side, tracks_per_side=tracks_per_side)
+                    side_catalog = AcornDFSCatalog(side_img)
+                    side_info = CatalogDiskInfo(
+                        title=title,
+                        cycle_number=0,
+                        num_files=0,
+                        total_sectors=sectors_per_side,
+                        boot_option=0,
+                    )
+                    side_catalog.write_disk_info(side_info)
+
+                # Return filesystem for side 0
+                sector_image = DSDSideSectorImage(sequential_img, side=0, tracks_per_side=tracks_per_side)
         else:
             sector_image = SSDSectorImage(disk_image)
 
-        # Create and initialize catalog
+        # Create and initialize catalog for SSD or finalize for DSD
         catalog = AcornDFSCatalog(sector_image)
-        info = CatalogDiskInfo(
-            title=title,
-            cycle_number=0,
-            num_files=0,
-            total_sectors=total_sectors,
-            boot_option=0,
-        )
-        catalog.write_disk_info(info)
+        if not double_sided:
+            # For SSD, write the catalog info
+            info = CatalogDiskInfo(
+                title=title,
+                cycle_number=0,
+                num_files=0,
+                total_sectors=total_sectors,
+                boot_option=0,
+            )
+            catalog.write_disk_info(info)
 
         instance = cls(catalog, sector_image, filepath)
         instance._dirty = True
@@ -756,7 +845,7 @@ class DFSFilesystem:
             if not overwrite:
                 raise FileExistsError(f"File already exists: {full_name}")
             if existing.locked:
-                raise PermissionError(f"Cannot overwrite locked file: {full_name}")
+                raise FileLocked(f"Cannot overwrite locked file: {full_name}")
             # Delete existing file first
             self.delete(full_name)
 
@@ -766,7 +855,7 @@ class DFSFilesystem:
         if start_sector is None:
             needed = (len(data) + 255) // 256
             free = self.free_sectors
-            raise ValueError(
+            raise DiskFullError(
                 f"Cannot save '{full_name}': needs {needed} sectors, "
                 f"only {free} free"
             )
@@ -836,7 +925,7 @@ class DFSFilesystem:
             raise FileNotFoundError(f"File not found: {old_full}")
 
         if entry.locked:
-            raise PermissionError(f"Cannot rename locked file: {old_full}")
+            raise FileLocked(f"Cannot rename locked file: {old_full}")
 
         # Check new name doesn't exist
         if self._catalog.find_file(new_full) is not None:
@@ -1174,7 +1263,7 @@ class DFSFilesystem:
         *,
         title: str = "",
         **create_kwargs,
-    ) -> "DFSFilesystem":
+    ) -> "DFSImage":
         """
         Create a new disk and populate with files in one operation.
 
@@ -1187,10 +1276,10 @@ class DFSFilesystem:
             **create_kwargs: Additional arguments for create()
 
         Returns:
-            DFSFilesystem instance
+            DFSImage instance
 
         Example:
-            >>> disk = DFSFilesystem.create_from_files(
+            >>> disk = DFSImage.create_from_files(
             ...     "game.ssd",
             ...     {
             ...         "$.!BOOT": b"*RUN $.MAIN",

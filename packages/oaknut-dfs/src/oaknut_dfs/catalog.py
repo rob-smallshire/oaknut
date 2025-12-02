@@ -4,6 +4,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Optional
 from oaknut_dfs.sector_image import SectorImage
+from oaknut_dfs.exceptions import CatalogReadError, CatalogFullError, FileExistsError, FileLocked
 import oaknut_dfs.acorn_encoding  # Register Acorn codec
 
 
@@ -260,7 +261,7 @@ class AcornDFSCatalog(Catalog):
         disk_info = self.read_disk_info()
 
         if disk_info.num_files >= self.MAX_FILES:
-            raise ValueError(f"Catalog is full (max {self.MAX_FILES} files)")
+            raise CatalogFullError(f"Catalog is full (max {self.MAX_FILES} files)")
 
         # Validate filename
         if len(entry.filename) > 7:
@@ -270,7 +271,7 @@ class AcornDFSCatalog(Catalog):
 
         # Check if file already exists
         if self.find_file(entry.full_name) is not None:
-            raise ValueError(f"File already exists: {entry.full_name}")
+            raise FileExistsError(f"File already exists: {entry.full_name}")
 
         # Read current sectors
         sector0 = bytearray(self._sector_image.read_sector(self.CATALOG_SECTOR_0))
@@ -332,7 +333,7 @@ class AcornDFSCatalog(Catalog):
         if entry is None:
             raise FileNotFoundError(f"File not found: {filename}")
         if entry.locked:
-            raise PermissionError(f"File is locked: {filename}")
+            raise FileLocked(f"File is locked: {filename}")
 
         files = self.list_files()
         disk_info = self.read_disk_info()
@@ -412,7 +413,7 @@ class AcornDFSCatalog(Catalog):
 
         try:
             disk_info = self.read_disk_info()
-        except Exception as e:
+        except (UnicodeDecodeError, ValueError, IndexError) as e:
             errors.append(f"Failed to read disk info: {e}")
             return errors
 
@@ -431,29 +432,29 @@ class AcornDFSCatalog(Catalog):
         # Try to read files
         try:
             files = self.list_files()
-
-            # Check for duplicate filenames
-            names = [f.full_name.upper() for f in files]
-            duplicates = set([n for n in names if names.count(n) > 1])
-            if duplicates:
-                errors.append(f"Duplicate filenames: {', '.join(duplicates)}")
-
-            # Check file entry validity
-            for f in files:
-                if len(f.filename) > 7:
-                    errors.append(f"Filename too long: {f.full_name}")
-                if f.start_sector < 2:
-                    errors.append(
-                        f"File {f.full_name} start sector {f.start_sector} "
-                        f"overlaps catalog"
-                    )
-                if f.start_sector >= disk_info.total_sectors:
-                    errors.append(
-                        f"File {f.full_name} start sector {f.start_sector} "
-                        f"exceeds disk size"
-                    )
-
-        except Exception as e:
+        except (UnicodeDecodeError, ValueError, IndexError) as e:
             errors.append(f"Failed to read files: {e}")
+            return errors
+
+        # Check for duplicate filenames
+        names = [f.full_name.upper() for f in files]
+        duplicates = set([n for n in names if names.count(n) > 1])
+        if duplicates:
+            errors.append(f"Duplicate filenames: {', '.join(duplicates)}")
+
+        # Check file entry validity
+        for f in files:
+            if len(f.filename) > 7:
+                errors.append(f"Filename too long: {f.full_name}")
+            if f.start_sector < 2:
+                errors.append(
+                    f"File {f.full_name} start sector {f.start_sector} "
+                    f"overlaps catalog"
+                )
+            if f.start_sector >= disk_info.total_sectors:
+                errors.append(
+                    f"File {f.full_name} start sector {f.start_sector} "
+                    f"exceeds disk size"
+                )
 
         return errors

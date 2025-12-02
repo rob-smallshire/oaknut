@@ -7,7 +7,8 @@ including round-trip persistence, real-world workflows, and cross-layer integrat
 import pytest
 from pathlib import Path
 
-from oaknut_dfs.dfs_filesystem import DFSFilesystem, BootOption
+from oaknut_dfs.dfs_filesystem import DFSImage, BootOption
+from oaknut_dfs.exceptions import CatalogFullError, DiskFullError, FileLocked, InvalidFormatError
 
 
 # ========== Fixtures ==========
@@ -17,7 +18,7 @@ from oaknut_dfs.dfs_filesystem import DFSFilesystem, BootOption
 def fragmented_disk(tmp_path):
     """Disk with fragmentation for compact testing."""
     path = tmp_path / "frag.ssd"
-    with DFSFilesystem.create(path, title="FRAG") as disk:
+    with DFSImage.create(path, title="FRAG") as disk:
         disk.save("$.FILE1", b"x" * 1000)
         disk.save("$.FILE2", b"y" * 2000)
         disk.save("$.FILE3", b"z" * 1500)
@@ -36,11 +37,11 @@ class TestRoundTrip:
         path = tmp_path / "test.ssd"
 
         # Create and save
-        with DFSFilesystem.create(path, title="ROUNDTRIP") as disk:
+        with DFSImage.create(path, title="ROUNDTRIP") as disk:
             disk.save("$.TEST", b"test data", load_address=0x1900, exec_address=0x8023)
 
         # Reopen and verify
-        with DFSFilesystem.open(path) as disk:
+        with DFSImage.open(path) as disk:
             assert disk.title == "ROUNDTRIP"
             assert disk.exists("$.TEST")
             assert disk.load("$.TEST") == b"test data"
@@ -53,13 +54,13 @@ class TestRoundTrip:
         path = tmp_path / "test.ssd"
 
         # Create with multiple files
-        with DFSFilesystem.create(path, title="MULTI") as disk:
+        with DFSImage.create(path, title="MULTI") as disk:
             disk.save("$.FILE1", b"data1")
             disk.save("$.FILE2", b"data2")
             disk.save("A.FILE3", b"data3")
 
         # Reopen and verify
-        with DFSFilesystem.open(path) as disk:
+        with DFSImage.open(path) as disk:
             assert len(disk.files) == 3
             assert disk.load("$.FILE1") == b"data1"
             assert disk.load("$.FILE2") == b"data2"
@@ -70,18 +71,18 @@ class TestRoundTrip:
         path = tmp_path / "test.ssd"
 
         # Create initial files
-        with DFSFilesystem.create(path, title="MODIFY") as disk:
+        with DFSImage.create(path, title="MODIFY") as disk:
             disk.save("$.FILE1", b"original1")
             disk.save("$.FILE2", b"original2")
 
         # Modify files
-        with DFSFilesystem.open(path) as disk:
+        with DFSImage.open(path) as disk:
             disk.delete("$.FILE1")
             disk.save("$.FILE3", b"new3")
             disk.title = "MODIFIED"
 
         # Verify modifications
-        with DFSFilesystem.open(path) as disk:
+        with DFSImage.open(path) as disk:
             assert disk.title == "MODIFIED"
             assert not disk.exists("$.FILE1")
             assert disk.exists("$.FILE2")
@@ -93,16 +94,16 @@ class TestRoundTrip:
         path = tmp_path / "test.ssd"
 
         # Create locked file
-        with DFSFilesystem.create(path, title="LOCKED") as disk:
+        with DFSImage.create(path, title="LOCKED") as disk:
             disk.save("$.FILE", b"protected", locked=True)
 
         # Verify locked status persists
-        with DFSFilesystem.open(path) as disk:
+        with DFSImage.open(path) as disk:
             info = disk.get_file_info("$.FILE")
             assert info.locked is True
 
             # Locked file still protects
-            with pytest.raises(PermissionError):
+            with pytest.raises(FileLocked):
                 disk.delete("$.FILE")
 
     def test_roundtrip_boot_option(self, tmp_path):
@@ -110,11 +111,11 @@ class TestRoundTrip:
         path = tmp_path / "test.ssd"
 
         # Set boot option
-        with DFSFilesystem.create(path, title="BOOT") as disk:
+        with DFSImage.create(path, title="BOOT") as disk:
             disk.boot_option = BootOption.RUN
 
         # Verify persistence
-        with DFSFilesystem.open(path) as disk:
+        with DFSImage.open(path) as disk:
             assert disk.boot_option == BootOption.RUN
 
     def test_roundtrip_large_file(self, tmp_path):
@@ -123,11 +124,11 @@ class TestRoundTrip:
         large_data = b"X" * 50000  # ~50KB
 
         # Save large file
-        with DFSFilesystem.create(path, title="LARGE") as disk:
+        with DFSImage.create(path, title="LARGE") as disk:
             disk.save("$.LARGE", large_data)
 
         # Verify
-        with DFSFilesystem.open(path) as disk:
+        with DFSImage.open(path) as disk:
             loaded = disk.load("$.LARGE")
             assert loaded == large_data
 
@@ -142,7 +143,7 @@ class TestRealWorldWorkflows:
         """Create a typical game disk with boot file."""
         path = tmp_path / "game.ssd"
 
-        with DFSFilesystem.create(path, title="MY GAME") as disk:
+        with DFSImage.create(path, title="MY GAME") as disk:
             # Set boot option
             disk.boot_option = BootOption.RUN
 
@@ -155,7 +156,7 @@ class TestRealWorldWorkflows:
             disk.save("$.SCORES", b"high scores")
 
         # Verify game disk
-        with DFSFilesystem.open(path) as disk:
+        with DFSImage.open(path) as disk:
             assert disk.title == "MY GAME"
             assert disk.boot_option == BootOption.RUN
             assert disk.exists("$.!BOOT")
@@ -169,24 +170,24 @@ class TestRealWorldWorkflows:
         restored = tmp_path / "restored.ssd"
 
         # Create original disk
-        with DFSFilesystem.create(original, title="ORIGINAL") as disk:
+        with DFSImage.create(original, title="ORIGINAL") as disk:
             disk.save("$.FILE1", b"data1", load_address=0x1900)
             disk.save("$.FILE2", b"data2", locked=True)
             disk.save("A.FILE3", b"data3")
 
         # Export all files
-        with DFSFilesystem.open(original) as disk:
+        with DFSImage.open(original) as disk:
             disk.export_all(backup_dir)
 
         # Restore to new disk
-        with DFSFilesystem.create(restored, title="RESTORED") as disk:
+        with DFSImage.create(restored, title="RESTORED") as disk:
             for inf_file in backup_dir.glob("*.inf"):
                 data_file = inf_file.with_suffix("")
                 if data_file.exists():
                     disk.import_from_inf(data_file)
 
         # Verify restoration
-        with DFSFilesystem.open(restored) as disk:
+        with DFSImage.open(restored) as disk:
             assert len(disk.files) == 3
             assert disk.load("$.FILE1") == b"data1"
             assert disk.load("$.FILE2") == b"data2"
@@ -202,7 +203,7 @@ class TestRealWorldWorkflows:
     def test_compact_workflow(self, tmp_path, fragmented_disk):
         """Typical compaction workflow."""
         # Open fragmented disk
-        with DFSFilesystem.open(fragmented_disk) as disk:
+        with DFSImage.open(fragmented_disk) as disk:
             # Check fragmentation
             free_map_before = disk.get_free_map()
             assert len(free_map_before) > 1  # Has gaps
@@ -224,21 +225,21 @@ class TestRealWorldWorkflows:
         path = tmp_path / "dev.ssd"
 
         # Session 1: Initial files
-        with DFSFilesystem.create(path, title="DEV") as disk:
+        with DFSImage.create(path, title="DEV") as disk:
             disk.save("$.MAIN", b"version 1")
 
         # Session 2: Add more files
-        with DFSFilesystem.open(path) as disk:
+        with DFSImage.open(path) as disk:
             disk.save("$.DATA", b"config")
             disk.save("$.UTILS", b"helpers")
 
         # Session 3: Replace main
-        with DFSFilesystem.open(path) as disk:
+        with DFSImage.open(path) as disk:
             disk.delete("$.MAIN")
             disk.save("$.MAIN", b"version 2")
 
         # Verify final state
-        with DFSFilesystem.open(path) as disk:
+        with DFSImage.open(path) as disk:
             assert disk.load("$.MAIN") == b"version 2"
             assert len(disk.files) == 3
 
@@ -253,7 +254,7 @@ class TestEdgeCases:
         """Operations on empty disk."""
         path = tmp_path / "empty.ssd"
 
-        with DFSFilesystem.create(path, title="EMPTY") as disk:
+        with DFSImage.create(path, title="EMPTY") as disk:
             assert len(disk.files) == 0
             assert disk.free_sectors == 398
             assert disk.validate() == []
@@ -267,7 +268,7 @@ class TestEdgeCases:
         """Behavior when disk is nearly full."""
         path = tmp_path / "full.ssd"
 
-        with DFSFilesystem.create(path, title="FULL") as disk:
+        with DFSImage.create(path, title="FULL") as disk:
             # Fill disk almost completely
             large_data = b"X" * (397 * 256)  # Leave 1 sector free
             disk.save("$.LARGE", large_data)
@@ -283,7 +284,7 @@ class TestEdgeCases:
         """Create disk with maximum files (31)."""
         path = tmp_path / "maxfiles.ssd"
 
-        with DFSFilesystem.create(path, title="MAX") as disk:
+        with DFSImage.create(path, title="MAX") as disk:
             # Add 31 files (max for DFS)
             for i in range(31):
                 disk.save(f"$.F{i:02d}", b"data")
@@ -291,14 +292,14 @@ class TestEdgeCases:
             assert len(disk.files) == 31
 
             # 32nd file should raise
-            with pytest.raises(ValueError, match="full"):
+            with pytest.raises(CatalogFullError, match="full"):
                 disk.save("$.F32", b"data")
 
     def test_filename_edge_cases(self, tmp_path):
         """Test filename boundary conditions."""
         path = tmp_path / "names.ssd"
 
-        with DFSFilesystem.create(path, title="NAMES") as disk:
+        with DFSImage.create(path, title="NAMES") as disk:
             # 7-character filename (max)
             disk.save("$.ABCDEFG", b"max length name")
             assert disk.exists("$.ABCDEFG")
@@ -316,7 +317,7 @@ class TestEdgeCases:
         """Save and load zero-length file."""
         path = tmp_path / "zero.ssd"
 
-        with DFSFilesystem.create(path, title="ZERO") as disk:
+        with DFSImage.create(path, title="ZERO") as disk:
             disk.save("$.EMPTY", b"")
             assert disk.exists("$.EMPTY")
             assert disk.load("$.EMPTY") == b""
@@ -332,7 +333,7 @@ class TestCrossLayerIntegration:
         """Verify Layer 4 keeps Layer 3 catalog consistent."""
         path = tmp_path / "catalog.ssd"
 
-        with DFSFilesystem.create(path, title="CATALOG") as disk:
+        with DFSImage.create(path, title="CATALOG") as disk:
             disk.save("$.FILE1", b"data1")
             disk.save("$.FILE2", b"data2")
 
@@ -348,7 +349,7 @@ class TestCrossLayerIntegration:
         """Verify Layer 4 writes sectors correctly through Layer 2."""
         path = tmp_path / "sectors.ssd"
 
-        with DFSFilesystem.create(path, title="SECTORS") as disk:
+        with DFSImage.create(path, title="SECTORS") as disk:
             disk.save("$.FILE", b"X" * 512)  # 2 sectors
 
             # Access Layer 2 sector image
@@ -366,7 +367,7 @@ class TestCrossLayerIntegration:
         path = tmp_path / "persist.ssd"
 
         # Create and modify
-        with DFSFilesystem.create(path, title="PERSIST") as disk:
+        with DFSImage.create(path, title="PERSIST") as disk:
             disk.save("$.FILE", b"persistent data")
 
         # Verify file was written to disk
@@ -389,7 +390,7 @@ class TestErrorHandling:
         """FileNotFoundError includes helpful info."""
         path = tmp_path / "test.ssd"
 
-        with DFSFilesystem.create(path, title="TEST") as disk:
+        with DFSImage.create(path, title="TEST") as disk:
             with pytest.raises(FileNotFoundError, match="MISSING"):
                 disk.load("$.MISSING")
 
@@ -397,25 +398,25 @@ class TestErrorHandling:
         """Disk full error is clear."""
         path = tmp_path / "test.ssd"
 
-        with DFSFilesystem.create(path, title="TEST") as disk:
+        with DFSImage.create(path, title="TEST") as disk:
             # Try to save file larger than available space
             large_data = b"X" * (399 * 256)  # More than 398 available sectors
-            with pytest.raises(ValueError, match="free"):
+            with pytest.raises(DiskFullError, match="free"):
                 disk.save("$.LARGE", large_data)
 
     def test_locked_file_error_messages(self, tmp_path):
         """Locked file operations give clear errors."""
         path = tmp_path / "test.ssd"
 
-        with DFSFilesystem.create(path, title="TEST") as disk:
+        with DFSImage.create(path, title="TEST") as disk:
             disk.save("$.LOCKED", b"data", locked=True)
 
             # Delete locked file
-            with pytest.raises(PermissionError, match="locked"):
+            with pytest.raises(FileLocked, match="locked"):
                 disk.delete("$.LOCKED")
 
             # Rename locked file
-            with pytest.raises(PermissionError, match="locked"):
+            with pytest.raises(FileLocked, match="locked"):
                 disk.rename("$.LOCKED", "$.RENAMED")
 
     def test_invalid_format_error(self, tmp_path):
@@ -423,8 +424,8 @@ class TestErrorHandling:
         invalid = tmp_path / "invalid.ssd"
         invalid.write_bytes(b"not a disk image" * 100)
 
-        with pytest.raises(ValueError, match="size"):
-            DFSFilesystem.open(invalid)
+        with pytest.raises(InvalidFormatError, match="size"):
+            DFSImage.open(invalid)
 
 
 # ========== Consistency checks ==========
@@ -437,7 +438,7 @@ class TestConsistency:
         """Free space calculations remain consistent."""
         path = tmp_path / "test.ssd"
 
-        with DFSFilesystem.create(path, title="TEST") as disk:
+        with DFSImage.create(path, title="TEST") as disk:
             initial_free = disk.free_sectors
 
             # Save file
@@ -452,7 +453,7 @@ class TestConsistency:
         """File count stays consistent with operations."""
         path = tmp_path / "test.ssd"
 
-        with DFSFilesystem.create(path, title="TEST") as disk:
+        with DFSImage.create(path, title="TEST") as disk:
             assert len(disk) == 0
 
             disk.save("$.FILE1", b"data1")
@@ -471,7 +472,7 @@ class TestConsistency:
         """Validation passes after all operations."""
         path = tmp_path / "test.ssd"
 
-        with DFSFilesystem.create(path, title="TEST") as disk:
+        with DFSImage.create(path, title="TEST") as disk:
             # Initial validation
             assert disk.validate() == []
 

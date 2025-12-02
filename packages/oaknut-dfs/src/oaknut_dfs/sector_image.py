@@ -218,3 +218,177 @@ class InterleavedDSDSectorImage(SectorImage):
         )
 
         return offset
+
+
+class DSDSideSectorImage(SectorImage):
+    """Access one side of an interleaved DSD disk (400 sectors per side).
+
+    This class wraps an InterleavedDSDSectorImage and provides logical
+    sector addressing (0-399) for a single side, with independent catalog
+    management per side as required by DFS.
+
+    Each side of a DSD disk:
+    - Has 400 sectors numbered 0-399
+    - Has its own catalog in sectors 0-1
+    - Is completely independent from the other side
+
+    Args:
+        underlying: The InterleavedDSDSectorImage to wrap
+        side: Which side to access (0 or 1)
+        tracks_per_side: Number of tracks per side (40 or 80)
+    """
+
+    def __init__(
+        self,
+        underlying: InterleavedDSDSectorImage,
+        side: int,
+        tracks_per_side: int,
+    ):
+        """Initialize DSD side sector access.
+
+        Args:
+            underlying: The interleaved DSD sector image
+            side: Side number (0 or 1)
+            tracks_per_side: Number of tracks per side (40 or 80)
+
+        Raises:
+            ValueError: If side is not 0 or 1
+        """
+        if side not in (0, 1):
+            raise ValueError(f"Invalid side: {side} (must be 0 or 1)")
+
+        super().__init__(underlying._disk_image)
+        self._underlying = underlying
+        self._side = side
+        self._tracks_per_side = tracks_per_side
+
+    def physical_offset(self, logical_sector: int) -> int:
+        """
+        Calculate physical offset for a logical sector on this side.
+
+        Maps logical sectors 0-399 for the selected side to physical
+        sectors in the interleaved layout.
+
+        Side 0 logical sector mapping:
+        - Sector 0 -> Physical sector 0 (track 0)
+        - Sector 10 -> Physical sector 20 (track 1)
+        - Sector 20 -> Physical sector 40 (track 2)
+
+        Side 1 logical sector mapping:
+        - Sector 0 -> Physical sector 10 (track 0)
+        - Sector 10 -> Physical sector 30 (track 1)
+        - Sector 20 -> Physical sector 50 (track 2)
+
+        Args:
+            logical_sector: Logical sector number (0-399)
+
+        Returns:
+            Physical byte offset in disk image
+
+        Raises:
+            ValueError: If logical_sector is out of range
+        """
+        max_sector = self._tracks_per_side * self.SECTORS_PER_TRACK
+        if not 0 <= logical_sector < max_sector:
+            raise ValueError(
+                f"Invalid sector: {logical_sector} "
+                f"(must be 0-{max_sector-1} for {self._tracks_per_side} tracks)"
+            )
+
+        # Map logical sector on this side to physical interleaved sector
+        track_on_side = logical_sector // self.SECTORS_PER_TRACK
+        sector_in_track = logical_sector % self.SECTORS_PER_TRACK
+
+        # Interleaved physical sector number:
+        # Each track pair occupies 20 sectors (10 per side)
+        # Side 0 uses even-numbered tracks in the interleaved layout
+        # Side 1 uses odd-numbered tracks in the interleaved layout
+        physical_sector = (
+            track_on_side * 2 * self.SECTORS_PER_TRACK  # Skip to correct track pair
+            + self._side * self.SECTORS_PER_TRACK  # Offset for side
+            + sector_in_track  # Sector within track
+        )
+
+        return self._underlying.physical_offset(physical_sector)
+
+    def read_sector(self, sector_num: int) -> bytes:
+        """Read a sector from this side.
+
+        Args:
+            sector_num: Logical sector number (0-399)
+
+        Returns:
+            256 bytes of sector data
+
+        Raises:
+            ValueError: If sector_num is out of range
+        """
+        max_sector = self._tracks_per_side * self.SECTORS_PER_TRACK
+        if not 0 <= sector_num < max_sector:
+            raise ValueError(
+                f"Invalid sector: {sector_num} "
+                f"(must be 0-{max_sector-1} for {self._tracks_per_side} tracks)"
+            )
+
+        # Map to physical sector and read
+        track_on_side = sector_num // self.SECTORS_PER_TRACK
+        sector_in_track = sector_num % self.SECTORS_PER_TRACK
+        physical_sector = (
+            track_on_side * 2 * self.SECTORS_PER_TRACK
+            + self._side * self.SECTORS_PER_TRACK
+            + sector_in_track
+        )
+
+        return self._underlying.read_sector(physical_sector)
+
+    def write_sector(self, sector_num: int, data: bytes) -> None:
+        """Write a sector to this side.
+
+        Args:
+            sector_num: Logical sector number (0-399)
+            data: 256 bytes to write
+
+        Raises:
+            ValueError: If sector_num is out of range or data is wrong size
+        """
+        max_sector = self._tracks_per_side * self.SECTORS_PER_TRACK
+        if not 0 <= sector_num < max_sector:
+            raise ValueError(
+                f"Invalid sector: {sector_num} "
+                f"(must be 0-{max_sector-1} for {self._tracks_per_side} tracks)"
+            )
+
+        # Map to physical sector and write
+        track_on_side = sector_num // self.SECTORS_PER_TRACK
+        sector_in_track = sector_num % self.SECTORS_PER_TRACK
+        physical_sector = (
+            track_on_side * 2 * self.SECTORS_PER_TRACK
+            + self._side * self.SECTORS_PER_TRACK
+            + sector_in_track
+        )
+
+        self._underlying.write_sector(physical_sector, data)
+
+    def num_sectors(self) -> int:
+        """Return number of sectors on this side.
+
+        Each side has tracks_per_side * 10 sectors.
+        For 40T: 40 * 10 = 400 sectors
+        For 80T: 80 * 10 = 800 sectors
+
+        Returns:
+            Number of sectors
+        """
+        return self._tracks_per_side * self.SECTORS_PER_TRACK
+
+    def size(self) -> int:
+        """Return size of this side in bytes.
+
+        Each side has tracks_per_side * 10 sectors * 256 bytes.
+        For 40T: 40 * 10 * 256 = 102400 bytes
+        For 80T: 80 * 10 * 256 = 204800 bytes
+
+        Returns:
+            Size in bytes
+        """
+        return self._tracks_per_side * self.SECTORS_PER_TRACK * self.SECTOR_SIZE
