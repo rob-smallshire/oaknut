@@ -37,6 +37,7 @@ name = "oaknut-dfs"
 source = { editable = "." }
 dependencies = [
     { name = "click" },
+    { name = "typename" },
 ]
 
 [package.dev-dependencies]
@@ -49,7 +50,10 @@ test = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "click", specifier = ">=8.1.7" }]
+requires-dist = [
+    { name = "click", specifier = ">=8.1.7" },
+    { name = "typename", specifier = ">=1.0.4" },
+]
 
 [package.metadata.requires-dev]
 dev = [
@@ -125,4 +129,13 @@ wheels = [
     { url = "https://sixtynorthartifactory1.jfrog.io/artifactory/api/pypi/python-packages/packages/packages/69/82/251d5f1aa4dcad30aed491b4657cecd9fb4274214da6960ffec144c260f7/ruff-0.14.7-py3-none-win32.whl", hash = "sha256:e33052c9199b347c8937937163b9b149ef6ab2e4bb37b042e593da2e6f6cccfa" },
     { url = "https://sixtynorthartifactory1.jfrog.io/artifactory/api/pypi/python-packages/packages/packages/a8/b5/d0b7d145963136b564806f6584647af45ab98946660d399ec4da79cae036/ruff-0.14.7-py3-none-win_amd64.whl", hash = "sha256:e17a20ad0d3fad47a326d773a042b924d3ac31c6ca6deb6c72e9e6b5f661a7c6" },
     { url = "https://sixtynorthartifactory1.jfrog.io/artifactory/api/pypi/python-packages/packages/packages/1d/d2/1637f4360ada6a368d3265bf39f2cf737a0aaab15ab520fc005903e883f8/ruff-0.14.7-py3-none-win_arm64.whl", hash = "sha256:be4d653d3bea1b19742fcc6502354e32f65cd61ff2fbdb365803ef2c2aec6228" },
+]
+
+[[package]]
+name = "typename"
+version = "1.0.4"
+source = { registry = "https://sixtynorthartifactory1.jfrog.io/artifactory/api/pypi/python-packages/simple" }
+sdist = { url = "https://sixtynorthartifactory1.jfrog.io/artifactory/api/pypi/python-packages/packages/packages/2f/c1/a505c885b63161ea3588baa48ea1a3a664cafc40fe7b784ee15f9558164e/typename-1.0.4.tar.gz", hash = "sha256:a3db47d5df84d6667ce23456c7775eb658314c413667549e787f5657e825923f" }
+wheels = [
+    { url = "https://sixtynorthartifactory1.jfrog.io/artifactory/api/pypi/python-packages/packages/packages/29/e1/b6752e5131f90b47aa618c73e77dd6703e5ddc420851c7b2c1d4306b64db/typename-1.0.4-py3-none-any.whl", hash = "sha256:ba422aa55026a86632d5c12ac58fff2893fb3dc85e119b3d11cb21a945e7d1ad" },
 ]
