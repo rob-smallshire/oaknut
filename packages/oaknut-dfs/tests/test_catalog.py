@@ -1,7 +1,6 @@
-"""Tests for Layer 3: Catalog management."""
+"""Tests for Layer 2: Catalog management."""
 
 import pytest
-from oaknut_dfs.disk_image import MemoryDiskImage
 from oaknut_dfs.sector_image import SSDSectorImage
 from oaknut_dfs.catalog import (
     Catalog,
@@ -87,8 +86,8 @@ class TestAcornDFSCatalog:
     @pytest.fixture
     def empty_disk(self):
         """Create an empty formatted disk."""
-        disk = MemoryDiskImage(size=102400)  # 400 sectors
-        sector_img = SSDSectorImage(disk)
+        buffer = bytearray(102400)  # 400 sectors
+        sector_img = SSDSectorImage(buffer)
         catalog = AcornDFSCatalog(sector_img)
 
         # Initialize with empty catalog
@@ -131,7 +130,7 @@ class TestAcornDFSCatalog:
         assert read_info.boot_option == 2
 
     def test_write_disk_info_long_title(self, empty_disk):
-        """Long titles are truncated to 12 characters."""
+        """Long titles raise ValueError."""
         info = DiskInfo(
             title="THIS IS A VERY LONG TITLE",
             cycle_number=0,
@@ -139,11 +138,8 @@ class TestAcornDFSCatalog:
             total_sectors=400,
             boot_option=0,
         )
-        empty_disk.write_disk_info(info)
-
-        read_info = empty_disk.read_disk_info()
-        assert len(read_info.title) <= 12
-        assert read_info.title == "THIS IS A VE"
+        with pytest.raises(ValueError, match="Title too long"):
+            empty_disk.write_disk_info(info)
 
     def test_write_disk_info_short_title(self, empty_disk):
         """Short titles are padded."""

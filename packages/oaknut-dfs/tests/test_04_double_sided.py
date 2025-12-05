@@ -243,13 +243,13 @@ class TestCapacity:
         disk = reference_image(IMAGE_NAME, side=0)
         # 80 tracks * 10 sectors/track = 800 sectors total
         # Note: total_sectors reports physical disk size, not per-side
-        assert disk.info.total_sectors == 800
+        assert disk.info.num_sectors == 800
 
     def test_side1_total_sectors(self, reference_image):
         """Side 1 reports 800 total sectors (entire disk)."""
         disk = reference_image(IMAGE_NAME, side=1)
         # total_sectors reports physical disk size, same for both sides
-        assert disk.info.total_sectors == 800
+        assert disk.info.num_sectors == 800
 
     def test_side0_free_space(self, reference_image):
         """Side 0 has reasonable free space."""

@@ -37,30 +37,31 @@ def cat(image_path, side):
     For DSD (double-sided) disks, use --side to select which side to list.
     """
     try:
-        with DFSImage.open(image_path, mode="rb", side=side) as disk:
-            # Display disk info
-            click.echo(f"\nDisk: {disk.title}")
-            click.echo(f"Boot option: {disk.boot_option.name}")
-            click.echo(f"Free space: {disk.free_sectors * 256:,} bytes ({disk.free_sectors} sectors)")
-            click.echo()
-
-            # Display files
-            if len(disk.files) == 0:
-                click.echo("(empty disk)")
-            else:
-                click.echo("Files:")
-                for file in disk.files:
-                    locked = "L" if file.locked else " "
-                    load_hex = f"{file.load_address:08X}"
-                    exec_hex = f"{file.exec_address:08X}"
-                    click.echo(
-                        f"  {file.name:12} {locked} {file.length:6} bytes  "
-                        f"Load: {load_hex}  Exec: {exec_hex}"
-                    )
-            click.echo()
+        disk = DFSImage.open(image_path, writable=False, side=side)
     except (ValueError, InvalidFormatError) as e:
         click.echo(f"Error: {e}", err=True)
         sys.exit(1)
+
+    # Display disk info
+    click.echo(f"\nDisk: {disk.title}")
+    click.echo(f"Boot option: {disk.boot_option.name}")
+    click.echo(f"Free space: {disk.free_bytes:,} bytes ({disk.free_sectors} sectors)")
+    click.echo()
+
+    # Display files
+    if len(disk.files) == 0:
+        click.echo("(empty disk)")
+    else:
+        click.echo("Files:")
+        for file in disk.files:
+            locked = "L" if file.locked else " "
+            load_hex = f"{file.load_address:08X}"
+            exec_hex = f"{file.exec_address:08X}"
+            click.echo(
+                f"  {file.name:12} {locked} {file.length:6} bytes  "
+                f"Load: {load_hex}  Exec: {exec_hex}"
+            )
+    click.echo()
 
 
 @cli.command()

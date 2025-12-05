@@ -139,6 +139,7 @@ class AcornDFSCatalog(Catalog):
     """Standard Acorn DFS catalog implementation."""
 
     MAX_FILES = 31
+    MAX_TITLE_LENGTH = 12
     CATALOG_SECTOR_0 = 0
     CATALOG_SECTOR_1 = 1
 
@@ -171,12 +172,22 @@ class AcornDFSCatalog(Catalog):
         )
 
     def write_disk_info(self, info: DiskInfo) -> None:
-        """Write catalog metadata to sectors 0 and 1."""
+        """Write catalog metadata to sectors 0 and 1.
+
+        Raises:
+            ValueError: If title is too long
+        """
+        # Validate title length
+        if len(info.title) > self.MAX_TITLE_LENGTH:
+            raise ValueError(
+                f"Title too long (max {self.MAX_TITLE_LENGTH} chars): {info.title}"
+            )
+
         sector0 = bytearray(self._sector_image.read_sector(self.CATALOG_SECTOR_0))
         sector1 = bytearray(self._sector_image.read_sector(self.CATALOG_SECTOR_1))
 
         # Write title (pad to 12 characters) using Acorn encoding
-        title = info.title[:12].ljust(12)
+        title = info.title.ljust(self.MAX_TITLE_LENGTH)
         sector0[0:8] = title[0:8].encode("acorn")
         sector1[0:4] = title[8:12].encode("acorn")
 

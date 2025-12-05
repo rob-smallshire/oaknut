@@ -472,3 +472,307 @@ class TestDiscImage:
 
         repr_str = repr(disc)
         assert "DiscImage" in repr_str
+
+
+class TestSurfaceSectors:
+    """Tests for Surface.sectors() method."""
+
+    def test_sectors_single(self):
+        """Test getting a single sector."""
+        spec = SurfaceSpec(
+            num_tracks=40,
+            sectors_per_track=10,
+            bytes_per_sector=256,
+            track_zero_offset_bytes=0,
+            track_stride_bytes=2560,
+        )
+        buffer = memoryview(bytearray(102400))
+        buffer[1280:1536] = b"X" * 256  # Sector 5
+
+        disc = DiscImage(buffer, [spec])
+        surface = disc.surface(0)
+
+        sectors_view = surface.sector_range(5, 1)
+        assert len(sectors_view) == 256
+        assert bytes(sectors_view) == b"X" * 256
+
+    def test_sectors_multiple(self):
+        """Test getting multiple sectors."""
+        spec = SurfaceSpec(
+            num_tracks=40,
+            sectors_per_track=10,
+            bytes_per_sector=256,
+            track_zero_offset_bytes=0,
+            track_stride_bytes=2560,
+        )
+        buffer = memoryview(bytearray(102400))
+        buffer[1280:2048] = b"ABC" * 256  # Sectors 5-7
+
+        disc = DiscImage(buffer, [spec])
+        surface = disc.surface(0)
+
+        sectors_view = surface.sector_range(5, 3)
+        assert len(sectors_view) == 768  # 3 * 256
+        assert bytes(sectors_view[:3]) == b"ABC"
+
+    def test_sectors_across_track_boundary(self):
+        """Test getting sectors that span track boundaries."""
+        spec = SurfaceSpec(
+            num_tracks=40,
+            sectors_per_track=10,
+            bytes_per_sector=256,
+            track_zero_offset_bytes=0,
+            track_stride_bytes=2560,
+        )
+        buffer = memoryview(bytearray(102400))
+        # Sectors 9-11 cross track 0→1 boundary
+        buffer[2304:2560] = b"A" * 256  # Sector 9
+        buffer[2560:2816] = b"B" * 256  # Sector 10
+        buffer[2816:3072] = b"C" * 256  # Sector 11
+
+        disc = DiscImage(buffer, [spec])
+        surface = disc.surface(0)
+
+        sectors_view = surface.sector_range(9, 3)
+        assert len(sectors_view) == 768
+        data = bytes(sectors_view)
+        assert data[:256] == b"A" * 256
+        assert data[256:512] == b"B" * 256
+        assert data[512:768] == b"C" * 256
+
+    def test_sectors_interleaved_layout(self):
+        """Test with interleaved DSD layout (larger stride)."""
+        spec = SurfaceSpec(
+            num_tracks=40,
+            sectors_per_track=10,
+            bytes_per_sector=256,
+            track_zero_offset_bytes=0,
+            track_stride_bytes=5120,  # Skips other side
+        )
+        buffer = memoryview(bytearray(204800))
+        buffer[0:256] = b"0" * 256       # Sector 0 (track 0)
+        buffer[5120:5376] = b"1" * 256   # Sector 10 (track 1)
+
+        disc = DiscImage(buffer, [spec])
+        surface = disc.surface(0)
+
+        # Get sectors 0 and 10
+        view0 = surface.sector_range(0, 1)
+        assert bytes(view0) == b"0" * 256
+
+        view10 = surface.sector_range(10, 1)
+        assert bytes(view10) == b"1" * 256
+
+    def test_sectors_writes_through(self):
+        """Test that writes to Sectors update the buffer."""
+        spec = SurfaceSpec(
+            num_tracks=40,
+            sectors_per_track=10,
+            bytes_per_sector=256,
+            track_zero_offset_bytes=0,
+            track_stride_bytes=2560,
+        )
+        buffer = memoryview(bytearray(102400))
+        disc = DiscImage(buffer, [spec])
+        surface = disc.surface(0)
+
+        sectors_view = surface.sector_range(5, 2)
+        sectors_view[0:5] = b"Hello"
+
+        # Verify buffer was updated
+        assert bytes(buffer[1280:1285]) == b"Hello"
+
+    def test_sectors_validation(self):
+        """Test validation of sector range."""
+        spec = SurfaceSpec(
+            num_tracks=40,
+            sectors_per_track=10,
+            bytes_per_sector=256,
+            track_zero_offset_bytes=0,
+            track_stride_bytes=2560,
+        )
+        buffer = memoryview(bytearray(102400))
+        disc = DiscImage(buffer, [spec])
+        surface = disc.surface(0)
+
+        # Negative start
+        with pytest.raises(ValueError, match="must be non-negative"):
+            surface.sector_range(-1, 5)
+
+        # Zero/negative count
+        with pytest.raises(ValueError, match="must be positive"):
+            surface.sector_range(0, 0)
+
+        with pytest.raises(ValueError, match="must be positive"):
+            surface.sector_range(0, -1)
+
+        # Out of bounds
+        with pytest.raises(ValueError, match="exceeds surface bounds"):
+            surface.sector_range(395, 10)  # Would need sectors 395-404, but only 0-399 exist
+
+
+class TestDiscImageGetSectorViews:
+    """Tests for DiscImage.get_sector_views() method."""
+
+    def test_get_sector_views_single_sector(self):
+        """Test getting a single sector returns one memoryview."""
+        spec = SurfaceSpec(
+            num_tracks=40,
+            sectors_per_track=10,
+            bytes_per_sector=256,
+            track_zero_offset_bytes=0,
+            track_stride_bytes=2560,
+        )
+        buffer = memoryview(bytearray(102400))
+        buffer[1280:1536] = b"X" * 256  # Sector 5
+
+        disc = DiscImage(buffer, [spec])
+
+        # Get sector 5 directly from DiscImage
+        views = disc.sector_views(0, [5])
+        assert len(views) == 1
+        assert len(views[0]) == 256
+        assert bytes(views[0]) == b"X" * 256
+
+    def test_get_sector_views_merges_contiguous_sectors(self):
+        """Test that physically contiguous sectors are merged into one memoryview."""
+        spec = SurfaceSpec(
+            num_tracks=40,
+            sectors_per_track=10,
+            bytes_per_sector=256,
+            track_zero_offset_bytes=0,
+            track_stride_bytes=2560,
+        )
+        buffer = memoryview(bytearray(102400))
+        buffer[1280:2048] = b"ABCDEFGH" * 96  # Sectors 5-7 (3 contiguous sectors)
+
+        disc = DiscImage(buffer, [spec])
+
+        # Request sectors 5, 6, 7 - should return ONE memoryview
+        views = disc.sector_views(0, [5, 6, 7])
+        assert len(views) == 1
+        assert len(views[0]) == 768  # 3 * 256
+        assert bytes(views[0][:8]) == b"ABCDEFGH"
+
+    def test_get_sector_views_preserves_non_contiguous_sectors(self):
+        """Test that non-contiguous sectors are kept separate."""
+        spec = SurfaceSpec(
+            num_tracks=40,
+            sectors_per_track=10,
+            bytes_per_sector=256,
+            track_zero_offset_bytes=0,
+            track_stride_bytes=2560,
+        )
+        buffer = memoryview(bytearray(102400))
+        buffer[1280:1536] = b"A" * 256  # Sector 5
+        buffer[2048:2304] = b"B" * 256  # Sector 8 (gap at sectors 6-7)
+
+        disc = DiscImage(buffer, [spec])
+
+        # Request sectors 5, 8 - should return TWO memoryviews
+        views = disc.sector_views(0, [5, 8])
+        assert len(views) == 2
+        assert len(views[0]) == 256
+        assert len(views[1]) == 256
+        assert bytes(views[0]) == b"A" * 256
+        assert bytes(views[1]) == b"B" * 256
+
+    def test_get_sector_views_across_track_boundary(self):
+        """Test merging works across track boundaries."""
+        spec = SurfaceSpec(
+            num_tracks=40,
+            sectors_per_track=10,
+            bytes_per_sector=256,
+            track_zero_offset_bytes=0,
+            track_stride_bytes=2560,
+        )
+        buffer = memoryview(bytearray(102400))
+        # Sectors 9-11 span track 0->1 boundary but are contiguous
+        buffer[2304:3072] = b"XYZ" * 256
+
+        disc = DiscImage(buffer, [spec])
+
+        # Request sectors 9, 10, 11 - should merge into ONE memoryview
+        views = disc.sector_views(0, [9, 10, 11])
+        assert len(views) == 1
+        assert len(views[0]) == 768  # 3 * 256
+
+    def test_get_sector_views_interleaved_dsd_no_merge(self):
+        """Test that interleaved DSD sectors don't merge (they're not contiguous)."""
+        spec = SurfaceSpec(
+            num_tracks=40,
+            sectors_per_track=10,
+            bytes_per_sector=256,
+            track_zero_offset_bytes=0,
+            track_stride_bytes=5120,  # Interleaved - skips other side
+        )
+        buffer = memoryview(bytearray(204800))
+        buffer[0:256] = b"A" * 256       # Sector 0 (track 0)
+        buffer[256:512] = b"B" * 256     # Sector 1 (track 0)
+        buffer[5120:5376] = b"C" * 256   # Sector 10 (track 1)
+
+        disc = DiscImage(buffer, [spec])
+
+        # Sectors 0-1 are contiguous, but 10 is far away
+        views = disc.sector_views(0, [0, 1, 10])
+        assert len(views) == 2  # [0-1], [10]
+        assert len(views[0]) == 512  # Sectors 0-1 merged
+        assert len(views[1]) == 256  # Sector 10 alone
+
+    def test_get_sector_views_unsorted_input(self):
+        """Test that method handles unsorted sector numbers correctly."""
+        spec = SurfaceSpec(
+            num_tracks=40,
+            sectors_per_track=10,
+            bytes_per_sector=256,
+            track_zero_offset_bytes=0,
+            track_stride_bytes=2560,
+        )
+        buffer = memoryview(bytearray(102400))
+        buffer[1280:2048] = b"X" * 768  # Sectors 5-7
+
+        disc = DiscImage(buffer, [spec])
+
+        # Request in reverse order - should still merge
+        views = disc.sector_views(0, [7, 6, 5])
+        assert len(views) == 1
+        assert len(views[0]) == 768
+
+    def test_get_sector_views_empty_list(self):
+        """Test that empty sector list returns empty views list."""
+        spec = SurfaceSpec(
+            num_tracks=40,
+            sectors_per_track=10,
+            bytes_per_sector=256,
+            track_zero_offset_bytes=0,
+            track_stride_bytes=2560,
+        )
+        buffer = memoryview(bytearray(102400))
+        disc = DiscImage(buffer, [spec])
+
+        views = disc.sector_views(0, [])
+        assert views == []
+
+    def test_get_sector_views_validation(self):
+        """Test validation in get_sector_views."""
+        spec = SurfaceSpec(
+            num_tracks=40,
+            sectors_per_track=10,
+            bytes_per_sector=256,
+            track_zero_offset_bytes=0,
+            track_stride_bytes=2560,
+        )
+        buffer = memoryview(bytearray(102400))
+        disc = DiscImage(buffer, [spec])
+
+        # Invalid surface index
+        with pytest.raises(IndexError):
+            disc.sector_views(1, [0])  # Only surface 0 exists
+
+        # Invalid sector number
+        with pytest.raises(ValueError):
+            disc.sector_views(0, [400])  # Only 0-399 exist
+
+        # Mix of valid and invalid
+        with pytest.raises(ValueError):
+            disc.sector_views(0, [5, 400])

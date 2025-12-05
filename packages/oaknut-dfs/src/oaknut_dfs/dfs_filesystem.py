@@ -5,10 +5,12 @@ mirroring BBC Micro DFS star commands while following modern Python conventions.
 """
 
 from __future__ import annotations
+from contextlib import contextmanager
 from dataclasses import dataclass
 from enum import IntEnum
+import mmap
 from pathlib import Path
-from typing import Iterator, Optional, Union
+from typing import Iterator, Optional, Union, TYPE_CHECKING
 
 from oaknut_dfs.catalog import Catalog, AcornDFSCatalog, FileEntry
 from oaknut_dfs.catalog import DiskInfo as CatalogDiskInfo
@@ -17,10 +19,23 @@ from oaknut_dfs.sector_image import (
     SSDSectorImage,
     InterleavedDSDSectorImage,
     SequentialDSDSectorImage,
+    SSDSideSectorImage,
     DSDSideSectorImage,
 )
-from oaknut_dfs.disk_image import DiskImage, FileDiskImage, MemoryDiskImage
 from oaknut_dfs.exceptions import DiskFullError, FileLocked, InvalidFormatError
+
+# Acorn DFS constants
+ACORN_DFS_SECTORS_PER_TRACK = SectorImage.ACORN_DFS_SECTORS_PER_TRACK
+SECTOR_SIZE = SectorImage.SECTOR_SIZE
+
+if TYPE_CHECKING:
+    from typing import Type
+
+
+# Format strings for disk formats
+FORMAT_SSD = "ssd"
+FORMAT_DSD_INTERLEAVED = "dsd-interleaved"
+FORMAT_DSD_SEQUENTIAL = "dsd-sequential"
 
 
 class BootOption(IntEnum):
@@ -38,7 +53,7 @@ class BootOption(IntEnum):
     EXEC = 3
 
 
-@dataclass
+@dataclass(frozen=True)
 class FileInfo:
     """User-facing file information.
 
@@ -60,7 +75,7 @@ class FileInfo:
         return (self.length + 255) // 256
 
 
-@dataclass
+@dataclass(frozen=True)
 class DiskInfo:
     """User-facing disk information."""
     title: str             # Disk title (12 chars max)
@@ -84,60 +99,79 @@ class DFSImage:
         ...     data = disk.load("$.ELITE")
 
     Create new disks:
-        >>> disk = DFSImage.create("new.ssd", title="MY DISK")
-        >>> disk.save("$.HELLO", b"Hello, World!")
-        >>> disk.close()
+        >>> with DFSImage.create("new.ssd", title="MY DISK") as disk:
+        ...     disk.save("$.HELLO", b"Hello, World!")
+
+    Direct buffer access:
+        >>> buffer = bytearray(204800)  # 200KB
+        >>> disk = DFSImage(buffer, format="ssd")
+        >>> disk.save("$.TEST", b"test data")
     """
 
-    def __init__(
-        self,
-        catalog: Catalog,
-        sector_image: SectorImage,
-        filepath: Optional[Path] = None,
-    ):
+    def __init__(self, buffer, *, format: str = "auto", side: int = 0):
         """
-        Initialize DFS filesystem (use open() or create() instead).
+        Initialize DFS filesystem from a buffer.
 
         Args:
-            catalog: Catalog layer instance
-            sector_image: Sector access layer instance
-            filepath: Optional path to disk image file
+            buffer: Any buffer-protocol object (bytes, bytearray, memoryview, mmap)
+            format: Format string ("ssd", "dsd-interleaved", "dsd-sequential", "auto")
+            side: Which side to access (0 or 1) for double-sided formats
+
+        Raises:
+            ValueError: If format is invalid or side is out of range
+            InvalidFormatError: If buffer size doesn't match format
+
+        Example:
+            >>> # From bytearray
+            >>> buffer = bytearray(204800)
+            >>> disk = DFSImage(buffer, format="ssd")
+
+            >>> # From memoryview slice (e.g., MMB container)
+            >>> mmb_view = memoryview(mmb_data)[offset:offset + 204800]
+            >>> disk = DFSImage(mmb_view, format="ssd")
         """
-        self._catalog = catalog
-        self._sector_image = sector_image
-        self._filepath = filepath
+        self._buffer = memoryview(buffer)
+        self._format = format
+        self._side = side
         self._current_directory = "$"
-        self._dirty = False
+
+        # Detect format from size if auto
+        if format == "auto":
+            format = self._detect_format_from_size(len(self._buffer))
+            self._format = format
+
+        # Create sector image and catalog
+        self._sector_image = self._create_sector_image(self._buffer, format, side)
+        self._catalog = AcornDFSCatalog(self._sector_image)
 
     @classmethod
+    @contextmanager
     def open(
         cls,
         filepath: Union[Path, str],
         *,
-        writable: bool = True,
-        format: Optional[str] = None,
+        mode: str = "r+b",
+        format: str = "auto",
         side: int = 0,
-    ) -> "DFSImage":
+    ):
         """
-        Open an existing disk image.
+        Open an existing disk image with memory mapping.
 
         Auto-detects format from file extension and size:
         - .ssd -> Single-sided sequential
         - .dsd -> Double-sided interleaved (standard)
-        - Format can be overridden with format parameter
 
         For double-sided disks (DSD), each side has independent catalog:
         - side=0: First side (400 sectors, catalog at sectors 0-1)
         - side=1: Second side (400 sectors, catalog at sectors 0-1)
-        - Default: side=0 for backward compatibility
 
         Args:
             filepath: Path to disk image (.ssd or .dsd)
-            writable: Open for writing (default: True)
-            format: Force format ("ssd", "dsd-interleaved", "dsd-sequential")
+            mode: File mode ("r+b" for read-write, "rb" for read-only)
+            format: Force format ("ssd", "dsd-interleaved", "dsd-sequential", "auto")
             side: Which side to access (0 or 1, default: 0)
 
-        Returns:
+        Yields:
             DFSImage instance
 
         Raises:
@@ -146,70 +180,74 @@ class DFSImage:
             InvalidFormatError: If side=1 specified for SSD format
 
         Example:
-            >>> disk = DFSImage.open("games.ssd")
-            >>> print(disk.title)
-            GAMES DISK
+            >>> with DFSImage.open("games.ssd") as disk:
+            ...     print(disk.title)
+            ...     data = disk.load("$.ELITE")
 
-            >>> # Open side 0 of double-sided disk
-            >>> disk0 = DFSImage.open("disk.dsd", side=0)
-            >>> # Open side 1 of double-sided disk
-            >>> disk1 = DFSImage.open("disk.dsd", side=1)
+            >>> # Read-only access
+            >>> with DFSImage.open("games.ssd", mode="rb") as disk:
+            ...     files = disk.files
+
+            >>> # Open specific side of DSD
+            >>> with DFSImage.open("disk.dsd", side=1) as disk:
+            ...     print(f"Side 1: {disk.title}")
         """
         filepath = Path(filepath)
 
         if not filepath.exists():
             raise FileNotFoundError(f"Disk image not found: {filepath}")
 
-        # Auto-detect or use specified format
-        detected_format = format or cls._detect_format(filepath)
+        # Detect format from extension if auto
+        if format == "auto":
+            ext = filepath.suffix.lower()
+            if ext == ".ssd":
+                format = FORMAT_SSD
+            elif ext == ".dsd":
+                format = FORMAT_DSD_INTERLEAVED
+            # else: will detect from size in __init__
 
-        # Create appropriate layer stack
-        if writable:
-            disk_image = FileDiskImage(filepath)
-        else:
-            # Read into memory for read-only access
-            with open(filepath, "rb") as f:
-                disk_image = MemoryDiskImage(data=f.read())
+        # Open file and create mmap
+        file = open(filepath, mode)
+        try:
+            # Determine mmap access mode
+            if "w" in mode or "+" in mode or "a" in mode:
+                access = mmap.ACCESS_WRITE
+            else:
+                access = mmap.ACCESS_READ
 
-        sector_image = cls._create_sector_image(disk_image, detected_format, side)
-        catalog = AcornDFSCatalog(sector_image)
-
-        return cls(catalog, sector_image, filepath if writable else None)
+            mm = mmap.mmap(file.fileno(), 0, access=access)
+            # Create and yield DFSImage
+            disk = cls(mm, format=format, side=side)
+            yield disk
+            # Note: we don't explicitly close mm - closing the file will flush and release it
+        finally:
+            file.close()
 
     @staticmethod
-    def _detect_format(filepath: Path) -> str:
-        """Detect disk image format from extension and file size."""
-        ext = filepath.suffix.lower()
-        size = filepath.stat().st_size
-
+    def _detect_format_from_size(size: int) -> str:
+        """Detect disk image format from buffer size."""
         # Validate size is a multiple of track size
         if size % 2560 != 0:
             raise InvalidFormatError(f"Invalid disk image size: {size} bytes")
 
-        # Check extension first
-        if ext == ".ssd":
-            return "ssd"
-        elif ext == ".dsd":
-            return "dsd-interleaved"
-
-        # Fall back to size detection
+        # Detect from size
         tracks = size // 2560
         if tracks in (40, 80):
-            return "ssd"
+            return FORMAT_SSD
         elif tracks in (80, 160):
-            return "dsd-interleaved"
+            return FORMAT_DSD_INTERLEAVED
         else:
             raise InvalidFormatError(f"Unrecognized disk size: {size} bytes")
 
     @staticmethod
     def _create_sector_image(
-        disk_image: DiskImage, format: str, side: int = 0
+        buffer, format: str, side: int = 0
     ) -> SectorImage:
         """
         Create appropriate sector image for format and side.
 
         Args:
-            disk_image: Underlying disk image
+            buffer: Buffer containing disk image data
             format: Format string ("ssd", "dsd-interleaved", "dsd-sequential")
             side: Which side to access (0 or 1, default: 0)
 
@@ -224,78 +262,166 @@ class DFSImage:
         if side not in (0, 1):
             raise ValueError(f"Invalid side: {side} (must be 0 or 1)")
 
-        if format == "ssd":
+        # For now, we only support Acorn DFS (10 sectors per track)
+        # Future formats like Watford DDFS would need to pass different values
+        sectors_per_track = ACORN_DFS_SECTORS_PER_TRACK
+
+        if format == FORMAT_SSD:
             # SSD only has side 0
             if side != 0:
                 raise InvalidFormatError(
                     f"SSD format only supports side=0, got side={side}"
                 )
-            return SSDSectorImage(disk_image)
+            ssd_img = SSDSectorImage(buffer, sectors_per_track)
+            # Calculate tracks from buffer size
+            tracks_per_side = len(buffer) // (sectors_per_track * SECTOR_SIZE)
+            return SSDSideSectorImage(ssd_img, 0, tracks_per_side)
 
-        elif format == "dsd-interleaved":
+        elif format == FORMAT_DSD_INTERLEAVED:
             # DSD supports both sides
-            size = disk_image.size()
-            num_tracks = size // (2 * 10 * 256)  # 2 sides, 10 sectors/track
-            tracks_per_side = num_tracks // 2
+            size = len(buffer)
+            total_tracks = size // (sectors_per_track * SECTOR_SIZE)
+            tracks_per_side = total_tracks // 2
 
             # Create interleaved image, then wrap for specific side
-            interleaved = InterleavedDSDSectorImage(disk_image, num_tracks)
+            interleaved = InterleavedDSDSectorImage(buffer, tracks_per_side, sectors_per_track)
             return DSDSideSectorImage(interleaved, side, tracks_per_side)
 
-        elif format == "dsd-sequential":
+        elif format == FORMAT_DSD_SEQUENTIAL:
             # Sequential DSD also supports both sides
-            size = disk_image.size()
-            num_tracks = size // (2 * 10 * 256)
-            tracks_per_side = num_tracks // 2
+            size = len(buffer)
+            total_tracks = size // (sectors_per_track * SECTOR_SIZE)
+            tracks_per_side = total_tracks // 2
 
             # Create sequential image, then wrap for specific side
-            sequential = SequentialDSDSectorImage(disk_image)
+            sequential = SequentialDSDSectorImage(buffer, sectors_per_track)
             return DSDSideSectorImage(sequential, side, tracks_per_side)
 
         else:
             raise InvalidFormatError(f"Unknown format: {format}")
 
-    def __enter__(self) -> "DFSImage":
-        """Context manager entry."""
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
-        """Context manager exit - flushes changes automatically."""
-        if exc_type is None:  # Only flush on success
-            self.flush()
-
-    def close(self) -> None:
+    @classmethod
+    @contextmanager
+    def create(
+        cls,
+        filepath: Union[Path, str],
+        *,
+        title: str = "",
+        num_tracks_per_side: int = 40,
+        format: str = "auto",
+    ):
         """
-        Close the disk image, flushing any pending changes.
+        Create a new formatted disk image file.
 
-        After calling close(), the DFSImage instance should not be used.
-        Using a context manager (with statement) is preferred.
-        """
-        self.flush()
+        Args:
+            filepath: Path for new disk image file
+            title: Disk title (max 12 chars, default: derived from filename)
+            num_tracks_per_side: Number of tracks per side (40 or 80, default: 40)
+            format: Format ("ssd", "dsd-interleaved", "dsd-sequential", or "auto")
 
-    def flush(self) -> None:
-        """
-        Write any pending changes to disk.
-
-        For file-backed images, this ensures all modifications are persisted.
-        For memory-backed images, this writes to the file if filepath is set.
+        Yields:
+            DFSImage instance
 
         Raises:
-            IOError: If write fails
+            FileExistsError: If file already exists
+            ValueError: If parameters are invalid
+
+        Example:
+            >>> with DFSImage.create("new.ssd", title="MY DISK") as disk:
+            ...     disk.save("$.HELLO", b"Hello!")
+
+            >>> # 80-track disk
+            >>> with DFSImage.create("big.ssd", num_tracks_per_side=80) as disk:
+            ...     print(f"{disk.info.num_sectors} sectors")
         """
-        if not self._dirty or not self._filepath:
-            return
+        filepath = Path(filepath)
 
-        # If using MemoryDiskImage, write entire image to file
-        disk_image = self._sector_image._disk_image
-        if isinstance(disk_image, MemoryDiskImage):
-            size = disk_image.size()
-            data = disk_image.read_bytes(0, size)
-            with open(self._filepath, "wb") as f:
-                f.write(data)
+        if filepath.exists():
+            raise FileExistsError(f"File already exists: {filepath}")
 
-        # FileDiskImage writes are already persisted
-        self._dirty = False
+        # Default title from filename
+        if not title:
+            title = filepath.stem.upper()[:12]
+
+        # Detect format from extension if auto
+        if format == "auto":
+            ext = filepath.suffix.lower()
+            if ext == ".ssd":
+                format = FORMAT_SSD
+            elif ext == ".dsd":
+                format = FORMAT_DSD_INTERLEAVED
+            else:
+                raise ValueError(
+                    f"Cannot auto-detect format from extension '{ext}'. "
+                    f"Specify format parameter."
+                )
+
+        # Calculate size and number of sides
+        # For now, only Acorn DFS with 10 sectors per track
+        sectors_per_track = ACORN_DFS_SECTORS_PER_TRACK
+
+        if format == FORMAT_SSD:
+            size = num_tracks_per_side * sectors_per_track * SECTOR_SIZE
+            num_sides = 1
+        elif format in (FORMAT_DSD_INTERLEAVED, FORMAT_DSD_SEQUENTIAL):
+            size = num_tracks_per_side * 2 * sectors_per_track * SECTOR_SIZE
+            num_sides = 2
+        else:
+            raise ValueError(f"Unknown format: {format}")
+
+        # Create empty file of correct size
+        with open(filepath, "wb") as f:
+            f.write(b"\x00" * size)
+
+        # Open with mmap and initialize catalogs
+        with cls.open(filepath, mode="r+b", format=format, side=0) as disk:
+            # Initialize catalogs for all sides
+            for side_num in range(num_sides):
+                if side_num > 0:
+                    # Create sector image for this side
+                    sector_img = disk._create_sector_image(disk._buffer, format, side_num)
+                    catalog = AcornDFSCatalog(sector_img)
+                else:
+                    catalog = disk._catalog
+
+                # Initialize empty catalog
+                catalog.write_disk_info(CatalogDiskInfo(
+                    title=title,
+                    cycle_number=0,
+                    num_files=0,
+                    total_sectors=num_tracks_per_side * sectors_per_track,
+                    boot_option=0,
+                ))
+
+            yield disk
+
+    @classmethod
+    def from_bytes(cls, data: bytes, *, format: str = "auto", side: int = 0) -> "DFSImage":
+        """
+        Create DFS filesystem from bytes (makes a mutable copy).
+
+        Useful for testing or temporary in-memory modifications.
+
+        Args:
+            data: Disk image bytes
+            format: Format string or "auto" to detect from size
+            side: Which side to access (0 or 1)
+
+        Returns:
+            DFSImage instance backed by bytearray
+
+        Example:
+            >>> with open("disk.ssd", "rb") as f:
+            ...     data = f.read()
+            >>>
+            >>> disk = DFSImage.from_bytes(data)
+            >>> disk.save("$.TEST", b"test")
+            >>>
+            >>> # Get modified bytes back
+            >>> modified = bytes(disk._buffer)
+        """
+        buffer = bytearray(data)
+        return cls(buffer, format=format, side=side)
 
     def load(self, filename: str) -> bytes:
         """
@@ -322,14 +448,13 @@ class DFSImage:
             disk_name = f" on disk '{self._filepath}'" if self._filepath else ""
             raise FileNotFoundError(f"File '{full_name}' not found{disk_name}")
 
-        # Read file data sector by sector
-        data = bytearray()
-        for i in range(entry.sectors_required):
-            sector_data = self._sector_image.read_sector(entry.start_sector + i)
-            data.extend(sector_data)
+        # Get all sectors for the file at once
+        sectors_view = self._sector_image.get_sectors(
+            entry.start_sector, entry.sectors_required
+        )
 
         # Return only actual file data (trim padding)
-        return bytes(data[: entry.length])
+        return bytes(sectors_view[: entry.length])
 
     def exists(self, filename: str) -> bool:
         """
@@ -406,21 +531,17 @@ class DFSImage:
         Set disk title (*TITLE equivalent).
 
         Args:
-            new_title: New disk title (max 12 chars)
+            new_title: New disk title (max length depends on catalog type)
 
         Raises:
-            ValueError: If title too long
+            ValueError: If title is invalid or too long
 
         Example:
             >>> disk.title = "MY DISK"
         """
-        if len(new_title) > 12:
-            raise ValueError(f"Title too long (max 12 chars): {new_title}")
-
         info = self._catalog.read_disk_info()
         info.title = new_title
-        self._catalog.write_disk_info(info)
-        self._dirty = True
+        self._catalog.write_disk_info(info)  # Catalog validates title length
 
     @property
     def boot_option(self) -> BootOption:
@@ -459,21 +580,6 @@ class DFSImage:
         info = self._catalog.read_disk_info()
         info.boot_option = option.value
         self._catalog.write_disk_info(info)
-        self._dirty = True
-
-    def set_boot_option(self, option: Union[BootOption, int]) -> "DFSImage":
-        """
-        Set boot option (chainable version).
-
-        Returns self for method chaining.
-
-        Example:
-            >>> disk = (DFSImage.create("boot.ssd")
-            ...         .set_boot_option(BootOption.EXEC)
-            ...         .save_text("$.!BOOT", "*RUN $.MAIN"))
-        """
-        self.boot_option = option
-        return self
 
     @property
     def free_sectors(self) -> int:
@@ -514,28 +620,14 @@ class DFSImage:
             >>> print(f"Free: {info.free_sectors} sectors")
         """
         catalog_info = self._catalog.read_disk_info()
-        free = self.free_sectors
-
-        # Determine format string
-        total_sectors = catalog_info.total_sectors
-        if total_sectors <= 400:
-            format_str = "SSD 40T"
-        elif total_sectors <= 800 and isinstance(
-            self._sector_image, SSDSectorImage
-        ):
-            format_str = "SSD 80T"
-        elif total_sectors <= 800:
-            format_str = "DSD 40T"
-        else:
-            format_str = "DSD 80T"
 
         return DiskInfo(
             title=catalog_info.title,
             num_files=catalog_info.num_files,
             total_sectors=catalog_info.total_sectors,
-            free_sectors=free,
+            free_sectors=self.free_sectors,
             boot_option=BootOption(catalog_info.boot_option),
-            format=format_str,
+            format=self._sector_image.format_description(),
         )
 
     def __contains__(self, filename: str) -> bool:
@@ -667,11 +759,6 @@ class DFSImage:
 
         return errors
 
-    @property
-    def free_bytes(self) -> int:
-        """Get free space in bytes."""
-        return self.free_sectors * 256
-
     def _resolve_filename(self, filename: str) -> str:
         """Resolve filename, adding current directory if needed."""
         if "." not in filename:
@@ -679,26 +766,29 @@ class DFSImage:
         return filename.upper()
 
     @classmethod
+    @contextmanager
     def create(
         cls,
         filepath: Union[Path, str],
         *,
         title: str = "",
-        num_tracks: int = 40,
-        double_sided: bool = False,
-        interleaved: bool = True,
-    ) -> "DFSImage":
+        num_tracks_per_side: int = 40,
+        format: Optional[str] = None,
+        side: int = 0,
+    ):
         """
         Create a new formatted disk image (*FORM equivalent).
+
+        Returns a context manager that automatically closes the file.
 
         Args:
             filepath: Path for new disk image
             title: Disk title (max 12 chars, default: derived from filename)
-            num_tracks: Number of tracks (40 or 80, default: 40)
-            double_sided: Create double-sided disk (default: False)
-            interleaved: Use interleaved format for DSD (default: True)
+            num_tracks_per_side: Number of tracks per side (40 or 80, default: 40)
+            format: Disk format string ("ssd", "dsd-interleaved", "dsd-sequential", default: auto-detect from extension)
+            side: Which side to access for DSD (0 or 1, default: 0)
 
-        Returns:
+        Yields:
             DFSImage instance with empty catalog
 
         Raises:
@@ -706,93 +796,75 @@ class DFSImage:
             FileExistsError: If file already exists
 
         Example:
-            >>> disk = DFSImage.create("new.ssd", title="MY DISK")
-            >>> disk.save("$.TEST", b"test data")
-            >>> disk.close()
+            >>> with DFSImage.create("new.ssd", title="MY DISK") as disk:
+            ...     disk.save("$.TEST", b"test data")
+
+            >>> # 80 track disk
+            >>> with DFSImage.create("new.ssd", num_tracks_per_side=80) as disk:
+            ...     pass
+
+            >>> # Explicitly specify format
+            >>> with DFSImage.create("new.dsd", format="dsd-sequential") as disk:
+            ...     pass
         """
         filepath = Path(filepath)
 
         if filepath.exists():
             raise FileExistsError(f"File already exists: {filepath}")
 
-        # Validate parameters
-        if num_tracks not in (40, 80):
-            raise ValueError(f"num_tracks must be 40 or 80, got {num_tracks}")
-
-        if len(title) > 12:
-            raise ValueError(f"Title too long (max 12 chars): {title}")
-
         # Default title from filename
         if not title:
             title = filepath.stem.upper()[:12]
 
-        # Calculate size
-        sectors_per_side = num_tracks * 10
-        total_sectors = sectors_per_side * (2 if double_sided else 1)
-        size = total_sectors * 256
-
-        # Create disk image
-        disk_image = MemoryDiskImage(size=size)
-
-        # Create sector image
-        if double_sided:
-            if interleaved:
-                interleaved_img = InterleavedDSDSectorImage(disk_image, num_tracks)
-                tracks_per_side = num_tracks // 2
-
-                # Initialize catalogs on BOTH sides
-                for side in [0, 1]:
-                    side_img = DSDSideSectorImage(interleaved_img, side=side, tracks_per_side=tracks_per_side)
-                    side_catalog = AcornDFSCatalog(side_img)
-                    side_info = CatalogDiskInfo(
-                        title=title,
-                        cycle_number=0,
-                        num_files=0,
-                        total_sectors=sectors_per_side,
-                        boot_option=0,
-                    )
-                    side_catalog.write_disk_info(side_info)
-
-                # Return filesystem for side 0
-                sector_image = DSDSideSectorImage(interleaved_img, side=0, tracks_per_side=tracks_per_side)
+        # Auto-detect format from extension if not specified
+        if format is None:
+            ext = filepath.suffix.lower()
+            if ext == ".ssd":
+                format = FORMAT_SSD
+            elif ext == ".dsd":
+                format = FORMAT_DSD_INTERLEAVED
             else:
-                sequential_img = SequentialDSDSectorImage(disk_image)
-                tracks_per_side = num_tracks // 2
+                raise ValueError(
+                    f"Cannot auto-detect format from extension '{ext}'. "
+                    f"Please specify format parameter (e.g., format='ssd')"
+                )
 
-                # Initialize catalogs on BOTH sides
-                for side in [0, 1]:
-                    side_img = DSDSideSectorImage(sequential_img, side=side, tracks_per_side=tracks_per_side)
-                    side_catalog = AcornDFSCatalog(side_img)
-                    side_info = CatalogDiskInfo(
-                        title=title,
-                        cycle_number=0,
-                        num_files=0,
-                        total_sectors=sectors_per_side,
-                        boot_option=0,
-                    )
-                    side_catalog.write_disk_info(side_info)
-
-                # Return filesystem for side 0
-                sector_image = DSDSideSectorImage(sequential_img, side=0, tracks_per_side=tracks_per_side)
+        # Calculate file size based on format and tracks
+        sectors_per_track = 10  # Standard Acorn DFS
+        if format == FORMAT_SSD:
+            num_sectors = num_tracks_per_side * sectors_per_track
+        elif format in (FORMAT_DSD_INTERLEAVED, FORMAT_DSD_SEQUENTIAL):
+            num_sectors = 2 * num_tracks_per_side * sectors_per_track
         else:
-            sector_image = SSDSectorImage(disk_image)
+            raise ValueError(f"Unknown format: {format}")
 
-        # Create and initialize catalog for SSD or finalize for DSD
-        catalog = AcornDFSCatalog(sector_image)
-        if not double_sided:
-            # For SSD, write the catalog info
-            info = CatalogDiskInfo(
+        file_size = num_sectors * 256  # 256 bytes per sector
+
+        # Create the file with zeros
+        file = open(filepath, "w+b")
+        try:
+            file.write(bytes(file_size))
+            file.flush()
+
+            # Memory-map it
+            mm = mmap.mmap(file.fileno(), 0, access=mmap.ACCESS_WRITE)
+            # Create DFSImage instance
+            disk = cls(mm, format=format, side=side)
+
+            # Initialize catalog with empty disk info
+            disk_info = CatalogDiskInfo(
                 title=title,
                 cycle_number=0,
                 num_files=0,
-                total_sectors=total_sectors,
+                total_sectors=disk._sector_image.num_sectors(),
                 boot_option=0,
             )
-            catalog.write_disk_info(info)
+            disk._catalog.write_disk_info(disk_info)
 
-        instance = cls(catalog, sector_image, filepath)
-        instance._dirty = True
-        return instance
+            yield disk
+            # Note: we don't explicitly close mm - closing the file will flush and release it
+        finally:
+            file.close()
 
     def save(
         self,
@@ -860,13 +932,13 @@ class DFSImage:
                 f"only {free} free"
             )
 
-        # Write sectors
+        # Write data to sectors
         sectors_needed = (len(data) + 255) // 256
-        padded_data = data + bytes(sectors_needed * 256 - len(data))
+        sectors_view = self._sector_image.get_sectors(start_sector, sectors_needed)
 
-        for i in range(sectors_needed):
-            sector_data = padded_data[i * 256 : (i + 1) * 256]
-            self._sector_image.write_sector(start_sector + i, sector_data)
+        # Pad data to sector boundary and write
+        padded_data = data + bytes(sectors_needed * 256 - len(data))
+        sectors_view[:] = padded_data
 
         # Add catalog entry
         entry = FileEntry(
@@ -879,7 +951,6 @@ class DFSImage:
             start_sector=start_sector,
         )
         self._catalog.add_file_entry(entry)
-        self._dirty = True
 
     def delete(self, filename: str) -> None:
         """
@@ -897,7 +968,6 @@ class DFSImage:
         """
         full_name = self._resolve_filename(filename)
         self._catalog.remove_file_entry(full_name)
-        self._dirty = True
 
     def rename(self, old_name: str, new_name: str) -> None:
         """
@@ -954,7 +1024,6 @@ class DFSImage:
             start_sector=entry.start_sector,
         )
         self._catalog.add_file_entry(new_entry)
-        self._dirty = True
 
     def lock(self, filename: str) -> None:
         """
@@ -1071,17 +1140,17 @@ class DFSImage:
         for entry in files:
             if entry.start_sector != next_sector:
                 # Need to move this file
-                data = bytearray()
-                for i in range(entry.sectors_required):
-                    sector_data = self._sector_image.read_sector(
-                        entry.start_sector + i
-                    )
-                    data.extend(sector_data)
+                # Read from old location
+                old_sectors = self._sector_image.get_sectors(
+                    entry.start_sector, entry.sectors_required
+                )
+                data = old_sectors.tobytes()
 
                 # Write to new location
-                for i in range(entry.sectors_required):
-                    sector_data = bytes(data[i * 256 : (i + 1) * 256])
-                    self._sector_image.write_sector(next_sector + i, sector_data)
+                new_sectors = self._sector_image.get_sectors(
+                    next_sector, entry.sectors_required
+                )
+                new_sectors[:] = data
 
                 # Update catalog entry
                 entry.start_sector = next_sector
@@ -1100,7 +1169,6 @@ class DFSImage:
             for entry in files:
                 self._catalog.add_file_entry(entry)
 
-            self._dirty = True
 
         return moved
 
@@ -1256,6 +1324,7 @@ class DFSImage:
         )
 
     @classmethod
+    @contextmanager
     def create_from_files(
         cls,
         filepath: Union[Path, str],
@@ -1263,11 +1332,12 @@ class DFSImage:
         *,
         title: str = "",
         **create_kwargs,
-    ) -> "DFSImage":
+    ):
         """
         Create a new disk and populate with files in one operation.
 
         Convenience method for building disk images programmatically.
+        Returns a context manager like create().
 
         Args:
             filepath: Path for new disk image
@@ -1275,11 +1345,11 @@ class DFSImage:
             title: Disk title
             **create_kwargs: Additional arguments for create()
 
-        Returns:
+        Yields:
             DFSImage instance
 
         Example:
-            >>> disk = DFSImage.create_from_files(
+            >>> with DFSImage.create_from_files(
             ...     "game.ssd",
             ...     {
             ...         "$.!BOOT": b"*RUN $.MAIN",
@@ -1287,26 +1357,27 @@ class DFSImage:
             ...         "$.DATA": {"data": b"game data", "load_address": 0x1900}
             ...     },
             ...     title="MY GAME"
-            ... )
+            ... ) as disk:
+            ...     # Disk is already populated with files
+            ...     print(f"Created disk with {len(disk.files)} files")
         """
-        disk = cls.create(filepath, title=title, **create_kwargs)
+        with cls.create(filepath, title=title, **create_kwargs) as disk:
+            for name, content in files.items():
+                if isinstance(content, dict):
+                    # Dict format with metadata
+                    data = content["data"]
+                    save_kwargs = {k: v for k, v in content.items() if k != "data"}
+                    disk.save(name, data, **save_kwargs)
+                elif isinstance(content, Path):
+                    # Path to file
+                    with open(content, "rb") as f:
+                        data = f.read()
+                    disk.save(name, data)
+                else:
+                    # Raw bytes
+                    disk.save(name, content)
 
-        for name, content in files.items():
-            if isinstance(content, dict):
-                # Dict format with metadata
-                data = content["data"]
-                save_kwargs = {k: v for k, v in content.items() if k != "data"}
-                disk.save(name, data, **save_kwargs)
-            elif isinstance(content, Path):
-                # Path to file
-                with open(content, "rb") as f:
-                    data = f.read()
-                disk.save(name, data)
-            else:
-                # Raw bytes
-                disk.save(name, content)
-
-        return disk
+            yield disk
 
     def _set_locked(self, filename: str, locked: bool) -> None:
         """Set locked status for a file."""
@@ -1333,7 +1404,6 @@ class DFSImage:
         for file_entry in files:
             self._catalog.add_file_entry(file_entry)
 
-        self._dirty = True
 
     @staticmethod
     def _entry_to_fileinfo(entry: FileEntry) -> FileInfo:
