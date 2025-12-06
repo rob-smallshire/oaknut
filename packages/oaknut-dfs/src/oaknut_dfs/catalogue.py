@@ -75,10 +75,59 @@ class Catalogue(ABC):
     # Class constants (must be defined by subclasses)
     CATALOG_START_SECTOR: int
     CATALOG_NUM_SECTORS: int
+    CATALOGUE_NAME: str | None = None  # Must be overridden (e.g., "acorn-dfs", "watford-dfs")
+
+    # Registry of catalogue subclasses for format identification
+    _registry: dict[str, type['Catalogue']] = {}
+
+    def __init_subclass__(cls, **kwargs):
+        """Register catalogue subclass for format identification."""
+        super().__init_subclass__(**kwargs)
+        # Subclasses must override CATALOGUE_NAME
+        assert cls.CATALOGUE_NAME is not None, (
+            f"{cls.__name__} must define CATALOGUE_NAME class attribute"
+        )
+        Catalogue._registry[cls.CATALOGUE_NAME] = cls
 
     def __init__(self, surface: Surface):
         """Initialize catalog with surface access."""
         self._surface = surface
+
+    @classmethod
+    def identify(cls, surface: Surface) -> Optional[type['Catalogue']]:
+        """
+        Identify which catalogue type this surface uses.
+
+        Tries each registered catalogue type's heuristic check to find
+        the best match.
+
+        Args:
+            surface: The surface to identify
+
+        Returns:
+            Catalogue class that matches, or None if no match found
+        """
+        for catalogue_cls in cls._registry.values():
+            if catalogue_cls.matches(surface):
+                return catalogue_cls
+        return None
+
+    @classmethod
+    @abstractmethod
+    def matches(cls, surface: Surface) -> bool:
+        """
+        Check if this catalogue type matches the given surface.
+
+        This is a heuristic check based on catalogue structure, magic bytes,
+        validity of metadata, etc.
+
+        Args:
+            surface: The surface to check
+
+        Returns:
+            True if this surface appears to use this catalogue format
+        """
+        pass
 
     @abstractmethod
     def get_disk_info(self) -> DiskInfo:

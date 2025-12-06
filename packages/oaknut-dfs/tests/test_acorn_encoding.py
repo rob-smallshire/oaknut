@@ -137,8 +137,8 @@ class TestIsValidAcornFilenameChar:
         assert is_valid_acorn_filename_char('£')
 
     def test_common_punctuation(self):
-        """Common punctuation is valid."""
-        for char in "!#$%&()+-.@^_":
+        """Common allowed punctuation is valid (excluding forbidden: # * : . !)."""
+        for char in "$%&()+@^_-":
             assert is_valid_acorn_filename_char(char)
 
     def test_lowercase_invalid(self):
@@ -182,8 +182,8 @@ class TestSanitizeForAcorn:
         assert sanitize_for_acorn("HELLO WORLD") == "HELLOWORLD"
 
     def test_mixed_case_and_invalid(self):
-        """Mixed case and invalid characters."""
-        assert sanitize_for_acorn("TeSt*FiLe.BIN") == "TESTFILE.BIN"
+        """Mixed case and invalid characters (. and * are forbidden)."""
+        assert sanitize_for_acorn("TeSt*FiLe.BIN") == "TESTFILEBIN"
 
     def test_empty_string(self):
         """Empty string remains empty."""
@@ -198,8 +198,8 @@ class TestSanitizeForAcorn:
         assert sanitize_for_acorn("file123") == "FILE123"
 
     def test_preserves_punctuation(self):
-        """Allowed punctuation is preserved."""
-        assert sanitize_for_acorn("test!@#$%") == "TEST!@#$%"
+        """Allowed punctuation is preserved (! and # are forbidden)."""
+        assert sanitize_for_acorn("test!@#$%") == "TEST@$%"
 
 
 class TestEncodingIntegration:

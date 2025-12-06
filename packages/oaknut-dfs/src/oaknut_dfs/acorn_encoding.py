@@ -189,18 +189,20 @@ def is_valid_acorn_filename_char(char: str) -> bool:
         True if character is valid in filenames
 
     Notes:
-        Acorn DFS filenames typically use:
-        - Uppercase letters A-Z
-        - Digits 0-9
-        - Some punctuation (varies by DFS implementation)
-        - UK characters (£) on BBC systems
+        Per "Guide to Disc Formats.pdf", forbidden characters are:
+        - '#', '*', ':', '.', '!' (except '!' as first character)
+        - Top-bit set characters (>127)
+        - Control characters (<32)
+
+        This function checks general validity. Position-specific rules
+        (like '!' only at position 0) must be checked separately.
     """
     # Standard alphanumeric
     if 'A' <= char <= 'Z' or '0' <= char <= '9':
         return True
 
-    # Common punctuation allowed in DFS filenames
-    if char in '!#$%&()+-.@^_':
+    # Allowed punctuation (excluding forbidden: # * : . !)
+    if char in '$%&()+@^_-':
         return True
 
     # UK-specific characters

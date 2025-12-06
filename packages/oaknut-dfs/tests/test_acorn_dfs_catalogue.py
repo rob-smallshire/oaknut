@@ -4,8 +4,122 @@ import pytest
 
 import oaknut_dfs.acorn_encoding  # Register codec
 from oaknut_dfs.acorn_dfs_catalogue import AcornDFSCatalogue
-from oaknut_dfs.catalogue import DiskInfo, FileEntry
+from oaknut_dfs.catalogue import Catalogue, DiskInfo, FileEntry
 from oaknut_dfs.surface import DiscImage, SurfaceSpec
+
+
+class TestCatalogueRegistry:
+    """Tests for Catalogue registry system."""
+
+    def test_acorn_dfs_registered_with_nice_name(self):
+        """Test that AcornDFSCatalogue is registered as 'acorn-dfs'."""
+        assert "acorn-dfs" in Catalogue._registry
+        assert Catalogue._registry["acorn-dfs"] is AcornDFSCatalogue
+
+    def test_identify_returns_acorn_dfs_for_valid_image(self):
+        """Test that identify() returns AcornDFSCatalogue for valid image."""
+        # Create valid Acorn DFS buffer
+        buffer = bytearray(102400)
+        buffer[0:8] = b"TESTDISC"
+        buffer[256:260] = b"    "
+        buffer[260] = 0
+        buffer[261] = 0
+        buffer[262] = 0x00
+        buffer[263] = 200
+
+        spec = SurfaceSpec(
+            num_tracks=40,
+            sectors_per_track=10,
+            bytes_per_sector=256,
+            track_zero_offset_bytes=0,
+            track_stride_bytes=2560,
+        )
+        disc = DiscImage(memoryview(buffer), [spec])
+        surface = disc.surface(0)
+
+        # Identify should return AcornDFSCatalogue
+        identified = Catalogue.identify(surface)
+        assert identified is AcornDFSCatalogue
+
+    def test_identify_returns_none_for_invalid_image(self):
+        """Test that identify() returns None for invalid image."""
+        # Create invalid buffer (too small)
+        buffer = bytearray(1024)
+
+        spec = SurfaceSpec(
+            num_tracks=1,
+            sectors_per_track=4,
+            bytes_per_sector=256,
+            track_zero_offset_bytes=0,
+            track_stride_bytes=1024,
+        )
+        disc = DiscImage(memoryview(buffer), [spec])
+        surface = disc.surface(0)
+
+        # Identify should return None
+        identified = Catalogue.identify(surface)
+        assert identified is None
+
+    def test_missing_catalogue_name_raises_assertion(self):
+        """Test that subclass without CATALOGUE_NAME raises AssertionError."""
+        with pytest.raises(AssertionError, match="must define CATALOGUE_NAME"):
+            # Attempt to create a subclass without CATALOGUE_NAME
+            class BadCatalogue(Catalogue):
+                CATALOG_START_SECTOR = 0
+                CATALOG_NUM_SECTORS = 2
+
+                @classmethod
+                def matches(cls, surface):
+                    return False
+
+                def get_disk_info(self):
+                    pass
+
+                def list_files(self):
+                    pass
+
+                def add_file_entry(self, *args, **kwargs):
+                    pass
+
+                def remove_file_entry(self, filename):
+                    pass
+
+                def set_title(self, title):
+                    pass
+
+                def set_boot_option(self, option):
+                    pass
+
+                def lock_file(self, filename):
+                    pass
+
+                def unlock_file(self, filename):
+                    pass
+
+                def rename_file(self, old_name, new_name):
+                    pass
+
+                def parse_filename(self, path):
+                    pass
+
+                def validate_filename(self, filename):
+                    pass
+
+                def validate_directory(self, directory):
+                    pass
+
+                def validate_title(self, title):
+                    pass
+
+                @property
+                def max_files(self):
+                    return 0
+
+                def validate(self):
+                    return []
+
+                def compact(self):
+                    return 0
 
 
 class TestAcornDFSCatalogueGetDiskInfo:
@@ -539,6 +653,198 @@ class TestAcornDFSCatalogueValidateFilename:
         with pytest.raises(ValueError, match="Filename too long.*max 7 chars"):
             catalogue.validate_filename("TOOLONGNAME")
 
+    def test_validate_filename_forbids_hash(self):
+        """Test validate_filename rejects '#' character."""
+        buffer = bytearray(102400)
+        buffer[0:8] = b"DISK    "
+        buffer[256:260] = b"    "
+        buffer[260] = 0
+        buffer[261] = 0
+        buffer[262] = 0x00
+        buffer[263] = 200
+
+        spec = SurfaceSpec(
+            num_tracks=40,
+            sectors_per_track=10,
+            bytes_per_sector=256,
+            track_zero_offset_bytes=0,
+            track_stride_bytes=2560,
+        )
+        disc = DiscImage(memoryview(buffer), [spec])
+        surface = disc.surface(0)
+        catalogue = AcornDFSCatalogue(surface)
+
+        with pytest.raises(ValueError, match="Forbidden character '#'"):
+            catalogue.validate_filename("TEST#1")
+
+    def test_validate_filename_forbids_asterisk(self):
+        """Test validate_filename rejects '*' character."""
+        buffer = bytearray(102400)
+        buffer[0:8] = b"DISK    "
+        buffer[256:260] = b"    "
+        buffer[260] = 0
+        buffer[261] = 0
+        buffer[262] = 0x00
+        buffer[263] = 200
+
+        spec = SurfaceSpec(
+            num_tracks=40,
+            sectors_per_track=10,
+            bytes_per_sector=256,
+            track_zero_offset_bytes=0,
+            track_stride_bytes=2560,
+        )
+        disc = DiscImage(memoryview(buffer), [spec])
+        surface = disc.surface(0)
+        catalogue = AcornDFSCatalogue(surface)
+
+        with pytest.raises(ValueError, match="Forbidden character '\\*'"):
+            catalogue.validate_filename("TEST*1")
+
+    def test_validate_filename_forbids_colon(self):
+        """Test validate_filename rejects ':' character."""
+        buffer = bytearray(102400)
+        buffer[0:8] = b"DISK    "
+        buffer[256:260] = b"    "
+        buffer[260] = 0
+        buffer[261] = 0
+        buffer[262] = 0x00
+        buffer[263] = 200
+
+        spec = SurfaceSpec(
+            num_tracks=40,
+            sectors_per_track=10,
+            bytes_per_sector=256,
+            track_zero_offset_bytes=0,
+            track_stride_bytes=2560,
+        )
+        disc = DiscImage(memoryview(buffer), [spec])
+        surface = disc.surface(0)
+        catalogue = AcornDFSCatalogue(surface)
+
+        with pytest.raises(ValueError, match="Forbidden character ':'"):
+            catalogue.validate_filename("TEST:1")
+
+    def test_validate_filename_forbids_dot(self):
+        """Test validate_filename rejects '.' character."""
+        buffer = bytearray(102400)
+        buffer[0:8] = b"DISK    "
+        buffer[256:260] = b"    "
+        buffer[260] = 0
+        buffer[261] = 0
+        buffer[262] = 0x00
+        buffer[263] = 200
+
+        spec = SurfaceSpec(
+            num_tracks=40,
+            sectors_per_track=10,
+            bytes_per_sector=256,
+            track_zero_offset_bytes=0,
+            track_stride_bytes=2560,
+        )
+        disc = DiscImage(memoryview(buffer), [spec])
+        surface = disc.surface(0)
+        catalogue = AcornDFSCatalogue(surface)
+
+        with pytest.raises(ValueError, match="Forbidden character '\\.'"):
+            catalogue.validate_filename("TEST.1")
+
+    def test_validate_filename_allows_bang_at_start(self):
+        """Test validate_filename allows '!' as first character."""
+        buffer = bytearray(102400)
+        buffer[0:8] = b"DISK    "
+        buffer[256:260] = b"    "
+        buffer[260] = 0
+        buffer[261] = 0
+        buffer[262] = 0x00
+        buffer[263] = 200
+
+        spec = SurfaceSpec(
+            num_tracks=40,
+            sectors_per_track=10,
+            bytes_per_sector=256,
+            track_zero_offset_bytes=0,
+            track_stride_bytes=2560,
+        )
+        disc = DiscImage(memoryview(buffer), [spec])
+        surface = disc.surface(0)
+        catalogue = AcornDFSCatalogue(surface)
+
+        # Should not raise
+        catalogue.validate_filename("!BOOT")
+
+    def test_validate_filename_forbids_bang_not_at_start(self):
+        """Test validate_filename rejects '!' not at first position."""
+        buffer = bytearray(102400)
+        buffer[0:8] = b"DISK    "
+        buffer[256:260] = b"    "
+        buffer[260] = 0
+        buffer[261] = 0
+        buffer[262] = 0x00
+        buffer[263] = 200
+
+        spec = SurfaceSpec(
+            num_tracks=40,
+            sectors_per_track=10,
+            bytes_per_sector=256,
+            track_zero_offset_bytes=0,
+            track_stride_bytes=2560,
+        )
+        disc = DiscImage(memoryview(buffer), [spec])
+        surface = disc.surface(0)
+        catalogue = AcornDFSCatalogue(surface)
+
+        with pytest.raises(ValueError, match="'!' is only allowed as the first character"):
+            catalogue.validate_filename("TEST!")
+
+    def test_validate_filename_forbids_top_bit_set(self):
+        """Test validate_filename rejects characters with top bit set."""
+        buffer = bytearray(102400)
+        buffer[0:8] = b"DISK    "
+        buffer[256:260] = b"    "
+        buffer[260] = 0
+        buffer[261] = 0
+        buffer[262] = 0x00
+        buffer[263] = 200
+
+        spec = SurfaceSpec(
+            num_tracks=40,
+            sectors_per_track=10,
+            bytes_per_sector=256,
+            track_zero_offset_bytes=0,
+            track_stride_bytes=2560,
+        )
+        disc = DiscImage(memoryview(buffer), [spec])
+        surface = disc.surface(0)
+        catalogue = AcornDFSCatalogue(surface)
+
+        with pytest.raises(ValueError, match="has top bit set"):
+            catalogue.validate_filename("TEST\x80")
+
+    def test_validate_filename_forbids_control_chars(self):
+        """Test validate_filename rejects control characters."""
+        buffer = bytearray(102400)
+        buffer[0:8] = b"DISK    "
+        buffer[256:260] = b"    "
+        buffer[260] = 0
+        buffer[261] = 0
+        buffer[262] = 0x00
+        buffer[263] = 200
+
+        spec = SurfaceSpec(
+            num_tracks=40,
+            sectors_per_track=10,
+            bytes_per_sector=256,
+            track_zero_offset_bytes=0,
+            track_stride_bytes=2560,
+        )
+        disc = DiscImage(memoryview(buffer), [spec])
+        surface = disc.surface(0)
+        catalogue = AcornDFSCatalogue(surface)
+
+        with pytest.raises(ValueError, match="Control character"):
+            catalogue.validate_filename("TEST\x01")
+
 
 class TestAcornDFSCatalogueValidateDirectory:
     """Tests for validate_directory()."""
@@ -674,3 +980,396 @@ class TestAcornDFSCatalogueValidateTitle:
 
         with pytest.raises(ValueError, match="Title too long.*max 12 chars"):
             catalogue.validate_title("THIS IS TOO LONG")
+
+    def test_validate_title_forbids_top_bit_set(self):
+        """Test validate_title rejects characters with top bit set."""
+        buffer = bytearray(102400)
+        buffer[0:8] = b"DISK    "
+        buffer[256:260] = b"    "
+        buffer[260] = 0
+        buffer[261] = 0
+        buffer[262] = 0x00
+        buffer[263] = 200
+
+        spec = SurfaceSpec(
+            num_tracks=40,
+            sectors_per_track=10,
+            bytes_per_sector=256,
+            track_zero_offset_bytes=0,
+            track_stride_bytes=2560,
+        )
+        disc = DiscImage(memoryview(buffer), [spec])
+        surface = disc.surface(0)
+        catalogue = AcornDFSCatalogue(surface)
+
+        with pytest.raises(ValueError, match="has top bit set"):
+            catalogue.validate_title("DISK\x80")
+
+    def test_validate_title_forbids_control_chars(self):
+        """Test validate_title rejects control characters."""
+        buffer = bytearray(102400)
+        buffer[0:8] = b"DISK    "
+        buffer[256:260] = b"    "
+        buffer[260] = 0
+        buffer[261] = 0
+        buffer[262] = 0x00
+        buffer[263] = 200
+
+        spec = SurfaceSpec(
+            num_tracks=40,
+            sectors_per_track=10,
+            bytes_per_sector=256,
+            track_zero_offset_bytes=0,
+            track_stride_bytes=2560,
+        )
+        disc = DiscImage(memoryview(buffer), [spec])
+        surface = disc.surface(0)
+        catalogue = AcornDFSCatalogue(surface)
+
+        with pytest.raises(ValueError, match="control character"):
+            catalogue.validate_title("DISK\x01")
+
+    def test_validate_title_allows_null_padding(self):
+        """Test validate_title allows null character for padding."""
+        buffer = bytearray(102400)
+        buffer[0:8] = b"DISK    "
+        buffer[256:260] = b"    "
+        buffer[260] = 0
+        buffer[261] = 0
+        buffer[262] = 0x00
+        buffer[263] = 200
+
+        spec = SurfaceSpec(
+            num_tracks=40,
+            sectors_per_track=10,
+            bytes_per_sector=256,
+            track_zero_offset_bytes=0,
+            track_stride_bytes=2560,
+        )
+        disc = DiscImage(memoryview(buffer), [spec])
+        surface = disc.surface(0)
+        catalogue = AcornDFSCatalogue(surface)
+
+        # Should not raise - null is allowed for padding
+        catalogue.validate_title("DISK\x00\x00\x00")
+
+
+class TestAcornDFSCatalogueMatches:
+    """Tests for matches() classmethod."""
+
+    def test_matches_valid_acorn_dfs(self):
+        """Test that valid Acorn DFS is recognized."""
+        # Create valid Acorn DFS buffer
+        buffer = bytearray(102400)
+        buffer[0:8] = b"TESTDISC"
+        buffer[256:260] = b"    "
+        buffer[260] = 0  # Cycle
+        buffer[261] = 0  # 0 files (0 * 8)
+        buffer[262] = 0x00  # Boot option 0, bits 2,3,6,7 clear
+        buffer[263] = 200  # 200 sectors (40 tracks)
+
+        spec = SurfaceSpec(
+            num_tracks=40,
+            sectors_per_track=10,
+            bytes_per_sector=256,
+            track_zero_offset_bytes=0,
+            track_stride_bytes=2560,
+        )
+        disc = DiscImage(memoryview(buffer), [spec])
+        surface = disc.surface(0)
+
+        assert AcornDFSCatalogue.matches(surface) == True
+
+    def test_matches_valid_acorn_dfs_with_files(self):
+        """Test that valid Acorn DFS with files is recognized."""
+        buffer = bytearray(102400)
+        buffer[0:8] = b"MYDISK  "
+        buffer[256:260] = b"    "
+        buffer[260] = 0
+        buffer[261] = 8  # 1 file
+        buffer[262] = 0x10  # Boot option 1
+        buffer[263] = 200
+
+        spec = SurfaceSpec(
+            num_tracks=40,
+            sectors_per_track=10,
+            bytes_per_sector=256,
+            track_zero_offset_bytes=0,
+            track_stride_bytes=2560,
+        )
+        disc = DiscImage(memoryview(buffer), [spec])
+        surface = disc.surface(0)
+
+        assert AcornDFSCatalogue.matches(surface) == True
+
+    def test_matches_rejects_watford_dfs_aa_marker(self):
+        """Test that Watford DFS with 0xAA marker is rejected."""
+        buffer = bytearray(102400)
+        # Set up sectors 0-1 like Acorn DFS
+        buffer[0:8] = b"TESTDISC"
+        buffer[256:260] = b"    "
+        buffer[260] = 0
+        buffer[261] = 0
+        buffer[262] = 0x00
+        buffer[263] = 200
+
+        # Add Watford marker to sector 2
+        buffer[512:520] = b"\xAA" * 8  # 8 bytes of 0xAA
+
+        spec = SurfaceSpec(
+            num_tracks=40,
+            sectors_per_track=10,
+            bytes_per_sector=256,
+            track_zero_offset_bytes=0,
+            track_stride_bytes=2560,
+        )
+        disc = DiscImage(memoryview(buffer), [spec])
+        surface = disc.surface(0)
+
+        assert AcornDFSCatalogue.matches(surface) == False
+
+    def test_matches_rejects_watford_dfs_full_markers(self):
+        """Test that Watford DFS with full markers is rejected."""
+        buffer = bytearray(102400)
+        # Set up sectors 0-1 like Acorn DFS
+        buffer[0:8] = b"TESTDISC"
+        buffer[256:260] = b"    "
+        buffer[260] = 0
+        buffer[261] = 0
+        buffer[262] = 0x00
+        buffer[263] = 200
+
+        # Add full Watford markers
+        buffer[512:520] = b"\xAA" * 8  # Sector 2: 8 bytes of 0xAA
+        buffer[768:772] = b"\x00" * 4  # Sector 3: 4 bytes of 0x00
+        buffer[773] = 0  # bits 0,1,2 clear
+        buffer[774] = 0x00  # Match sector1[6]
+        buffer[775] = 200  # Match sector1[7]
+
+        spec = SurfaceSpec(
+            num_tracks=40,
+            sectors_per_track=10,
+            bytes_per_sector=256,
+            track_zero_offset_bytes=0,
+            track_stride_bytes=2560,
+        )
+        disc = DiscImage(memoryview(buffer), [spec])
+        surface = disc.surface(0)
+
+        assert AcornDFSCatalogue.matches(surface) == False
+
+    def test_matches_rejects_invalid_title_chars_top_bit(self):
+        """Test that title with top-bit-set chars is rejected."""
+        buffer = bytearray(102400)
+        buffer[0:8] = b"TEST\x80ISC"  # Byte 4 has top bit set
+        buffer[256:260] = b"    "
+        buffer[260] = 0
+        buffer[261] = 0
+        buffer[262] = 0x00
+        buffer[263] = 200
+
+        spec = SurfaceSpec(
+            num_tracks=40,
+            sectors_per_track=10,
+            bytes_per_sector=256,
+            track_zero_offset_bytes=0,
+            track_stride_bytes=2560,
+        )
+        disc = DiscImage(memoryview(buffer), [spec])
+        surface = disc.surface(0)
+
+        assert AcornDFSCatalogue.matches(surface) == False
+
+    def test_matches_rejects_invalid_title_chars_control(self):
+        """Test that title with control characters is rejected."""
+        buffer = bytearray(102400)
+        buffer[0:8] = b"TEST\x01ISC"  # Byte 4 is control char (1)
+        buffer[256:260] = b"    "
+        buffer[260] = 0
+        buffer[261] = 0
+        buffer[262] = 0x00
+        buffer[263] = 200
+
+        spec = SurfaceSpec(
+            num_tracks=40,
+            sectors_per_track=10,
+            bytes_per_sector=256,
+            track_zero_offset_bytes=0,
+            track_stride_bytes=2560,
+        )
+        disc = DiscImage(memoryview(buffer), [spec])
+        surface = disc.surface(0)
+
+        assert AcornDFSCatalogue.matches(surface) == False
+
+    def test_matches_accepts_null_padding_in_title(self):
+        """Test that null bytes in title are accepted (padding)."""
+        buffer = bytearray(102400)
+        buffer[0:8] = b"TEST\x00\x00\x00\x00"  # Null padding
+        buffer[256:260] = b"\x00\x00\x00\x00"  # Null padding
+        buffer[260] = 0
+        buffer[261] = 0
+        buffer[262] = 0x00
+        buffer[263] = 200
+
+        spec = SurfaceSpec(
+            num_tracks=40,
+            sectors_per_track=10,
+            bytes_per_sector=256,
+            track_zero_offset_bytes=0,
+            track_stride_bytes=2560,
+        )
+        disc = DiscImage(memoryview(buffer), [spec])
+        surface = disc.surface(0)
+
+        assert AcornDFSCatalogue.matches(surface) == True
+
+    def test_matches_rejects_invalid_num_files_byte(self):
+        """Test that invalid num_files byte (not multiple of 8) is rejected."""
+        buffer = bytearray(102400)
+        buffer[0:8] = b"TESTDISC"
+        buffer[256:260] = b"    "
+        buffer[260] = 0
+        buffer[261] = 7  # Not a multiple of 8 (bits 0,1,2 set)
+        buffer[262] = 0x00
+        buffer[263] = 200
+
+        spec = SurfaceSpec(
+            num_tracks=40,
+            sectors_per_track=10,
+            bytes_per_sector=256,
+            track_zero_offset_bytes=0,
+            track_stride_bytes=2560,
+        )
+        disc = DiscImage(memoryview(buffer), [spec])
+        surface = disc.surface(0)
+
+        assert AcornDFSCatalogue.matches(surface) == False
+
+    def test_matches_rejects_invalid_boot_sectors_byte(self):
+        """Test that invalid boot/sectors byte (bits 2,3,6,7 set) is rejected."""
+        buffer = bytearray(102400)
+        buffer[0:8] = b"TESTDISC"
+        buffer[256:260] = b"    "
+        buffer[260] = 0
+        buffer[261] = 0
+        buffer[262] = 0x04  # Bit 2 set (invalid)
+        buffer[263] = 200
+
+        spec = SurfaceSpec(
+            num_tracks=40,
+            sectors_per_track=10,
+            bytes_per_sector=256,
+            track_zero_offset_bytes=0,
+            track_stride_bytes=2560,
+        )
+        disc = DiscImage(memoryview(buffer), [spec])
+        surface = disc.surface(0)
+
+        assert AcornDFSCatalogue.matches(surface) == False
+
+    def test_matches_rejects_sectors_not_divisible_by_10(self):
+        """Test that sector count not divisible by 10 is rejected."""
+        buffer = bytearray(102400)
+        buffer[0:8] = b"TESTDISC"
+        buffer[256:260] = b"    "
+        buffer[260] = 0
+        buffer[261] = 0
+        buffer[262] = 0x00
+        buffer[263] = 199  # Not divisible by 10
+
+        spec = SurfaceSpec(
+            num_tracks=40,
+            sectors_per_track=10,
+            bytes_per_sector=256,
+            track_zero_offset_bytes=0,
+            track_stride_bytes=2560,
+        )
+        disc = DiscImage(memoryview(buffer), [spec])
+        surface = disc.surface(0)
+
+        assert AcornDFSCatalogue.matches(surface) == False
+
+    def test_matches_rejects_zero_tracks(self):
+        """Test that zero tracks is rejected."""
+        buffer = bytearray(102400)
+        buffer[0:8] = b"TESTDISC"
+        buffer[256:260] = b"    "
+        buffer[260] = 0
+        buffer[261] = 0
+        buffer[262] = 0x00
+        buffer[263] = 0  # 0 sectors = 0 tracks (invalid)
+
+        spec = SurfaceSpec(
+            num_tracks=40,
+            sectors_per_track=10,
+            bytes_per_sector=256,
+            track_zero_offset_bytes=0,
+            track_stride_bytes=2560,
+        )
+        disc = DiscImage(memoryview(buffer), [spec])
+        surface = disc.surface(0)
+
+        assert AcornDFSCatalogue.matches(surface) == False
+
+    def test_matches_accepts_80_tracks(self):
+        """Test that 80-track discs are accepted."""
+        buffer = bytearray(204800)  # 80 tracks * 10 sectors * 256 bytes
+        buffer[0:8] = b"TESTDISC"
+        buffer[256:260] = b"    "
+        buffer[260] = 0
+        buffer[261] = 0
+        buffer[262] = 0x03  # High bits = 3
+        buffer[263] = 32  # Low byte = 32, total = 800 sectors
+
+        spec = SurfaceSpec(
+            num_tracks=80,
+            sectors_per_track=10,
+            bytes_per_sector=256,
+            track_zero_offset_bytes=0,
+            track_stride_bytes=2560,
+        )
+        disc = DiscImage(memoryview(buffer), [spec])
+        surface = disc.surface(0)
+
+        assert AcornDFSCatalogue.matches(surface) == True
+
+    def test_matches_rejects_too_few_sectors(self):
+        """Test that surface with < 4 sectors is rejected."""
+        buffer = bytearray(768)  # Only 3 sectors
+        buffer[0:8] = b"TESTDISC"
+        buffer[256:260] = b"    "
+
+        spec = SurfaceSpec(
+            num_tracks=1,
+            sectors_per_track=3,
+            bytes_per_sector=256,
+            track_zero_offset_bytes=0,
+            track_stride_bytes=768,
+        )
+        disc = DiscImage(memoryview(buffer), [spec])
+        surface = disc.surface(0)
+
+        assert AcornDFSCatalogue.matches(surface) == False
+
+    def test_matches_rejects_sectors_exceeding_surface_size(self):
+        """Test that claimed sectors exceeding surface size is rejected."""
+        buffer = bytearray(102400)  # 400 sectors
+        buffer[0:8] = b"TESTDISC"
+        buffer[256:260] = b"    "
+        buffer[260] = 0
+        buffer[261] = 0
+        buffer[262] = 0x01  # High bits = 1
+        buffer[263] = 244  # Low byte = 244, total = 500 sectors (exceeds 400)
+
+        spec = SurfaceSpec(
+            num_tracks=40,
+            sectors_per_track=10,
+            bytes_per_sector=256,
+            track_zero_offset_bytes=0,
+            track_stride_bytes=2560,
+        )
+        disc = DiscImage(memoryview(buffer), [spec])
+        surface = disc.surface(0)
+
+        assert AcornDFSCatalogue.matches(surface) == False

@@ -8,6 +8,7 @@ class AcornDFSCatalogue(Catalogue):
     """Acorn DFS catalog implementation (sectors 0-1, max 31 files)."""
 
     # Constants
+    CATALOGUE_NAME = "acorn-dfs"
     MAX_FILES = 31
     CATALOG_START_SECTOR = 0
     CATALOG_NUM_SECTORS = 2
@@ -17,6 +18,108 @@ class AcornDFSCatalogue(Catalogue):
 
     def __init__(self, surface: Surface):
         super().__init__(surface)
+
+    @classmethod
+    def matches(cls, surface: Surface) -> bool:
+        """
+        Check if surface appears to be standard Acorn DFS format.
+
+        Uses heuristics from "Guide to Disc Formats.pdf" to identify
+        Acorn DFS while excluding Watford DFS and other variants.
+
+        Returns:
+            True if surface appears to be standard Acorn DFS
+        """
+        # Need at least 4 sectors to check for Watford DFS markers
+        if surface.num_sectors < 4:
+            return False
+
+        # Read catalogue sectors
+        sector0 = surface.sector_range(0, 1)
+        sector1 = surface.sector_range(1, 1)
+
+        # Check 1: Offset 0x001 - 9 bytes of title without top bit set and >31 or =0
+        for i in range(1, 10):
+            if not cls._is_valid_title_char(sector0[i]):
+                return False
+
+        # Check 2: Offset 0x100 - 4 bytes of title without top bit set and >31 or =0
+        for i in range(4):
+            if not cls._is_valid_title_char(sector1[i]):
+                return False
+
+        # Check 3: Offset 0x105 - bits 0,1,2 should be clear (multiple of 8)
+        num_files_byte = sector1[5]
+        if num_files_byte & 0x07:  # Bits 0,1,2 set
+            return False
+        num_files = num_files_byte // 8
+        if num_files > cls.MAX_FILES:  # Should be <= 31 for Acorn DFS
+            return False
+
+        # Check 4: Offset 0x106 - bits 2,3,6,7 should be clear
+        boot_sectors_byte = sector1[6]
+        if boot_sectors_byte & 0xCC:  # Bits 2,3,6,7 set
+            return False
+
+        # Check 5: Total sectors calculation and divisibility by 10
+        total_sectors = ((boot_sectors_byte & 0x03) << 8) | sector1[7]
+        if total_sectors < 4:  # Minimum sectors
+            return False
+        if total_sectors % 10 != 0:
+            return False
+
+        # Check 6 (optional): Tracks should be reasonable
+        # PDF notes: "not all double-sided discs have the same number of tracks"
+        # and "there are valid DFS discs that have other numbers of tracks"
+        # So we keep this check very lenient - just ensure it's positive
+        tracks = total_sectors // 10
+        if tracks < 1:
+            return False
+
+        # Check 7: Must not exceed surface size
+        if total_sectors > surface.num_sectors:
+            return False
+
+        # EXCLUSION CHECK: Must NOT be Watford DFS
+        # Watford DFS has specific markers in sectors 2-3
+        sector2 = surface.sector_range(2, 1)
+        sector3 = surface.sector_range(3, 1)
+
+        # If sector 2 starts with 8 bytes of 0xAA, it's Watford
+        if all(sector2[i] == 0xAA for i in range(8)):
+            return False
+
+        # If sector 3 starts with 4 bytes of 0x00 AND has matching boot/sectors
+        # then it's Watford
+        if (all(sector3[i] == 0x00 for i in range(4)) and
+            sector3[5] & 0x07 == 0 and  # bits 0,1,2 clear
+            sector3[6] == sector1[6] and  # matches boot/sectors high
+            sector3[7] == sector1[7]):    # matches sectors low
+            return False
+
+        # All checks passed - this is standard Acorn DFS
+        return True
+
+    @staticmethod
+    def _is_valid_title_char(byte: int) -> bool:
+        """
+        Check if byte is valid for title character.
+
+        Per PDF: no top bit set, and either =0 (padding) or >31 (printable).
+
+        Args:
+            byte: Byte value to check
+
+        Returns:
+            True if valid title character
+        """
+        if byte & 0x80:  # Top bit set
+            return False
+        if byte == 0:  # Null padding is ok
+            return True
+        if byte <= 31:  # Control characters not ok
+            return False
+        return True
 
     @property
     def max_files(self) -> int:
@@ -113,7 +216,15 @@ class AcornDFSCatalogue(Catalogue):
         return ParsedFilename(directory=directory, filename=filename)
 
     def validate_filename(self, filename: str) -> None:
-        """Validate Acorn DFS filename constraints."""
+        """
+        Validate Acorn DFS filename constraints.
+
+        Per "Guide to Disc Formats.pdf", forbidden characters are:
+        - '#', '*', ':', '.', '!'
+        - Exception: '!' is allowed as the first character (e.g., !BOOT)
+        - Top-bit set characters (>127)
+        - Control characters (<32)
+        """
         if not filename:
             raise ValueError("Filename cannot be empty")
 
@@ -122,6 +233,34 @@ class AcornDFSCatalogue(Catalogue):
                 f"Filename too long: '{filename}' "
                 f"(max {self.MAX_FILENAME_LENGTH} chars)"
             )
+
+        # Check for forbidden characters
+        forbidden = set('#*:.')
+        for i, char in enumerate(filename):
+            # Check for forbidden characters
+            if char in forbidden:
+                raise ValueError(
+                    f"Forbidden character '{char}' in filename '{filename}'"
+                )
+
+            # '!' is only allowed as the first character
+            if char == '!' and i != 0:
+                raise ValueError(
+                    f"'!' is only allowed as the first character, not at position {i} in '{filename}'"
+                )
+
+            # Check for top-bit set characters
+            code_point = ord(char)
+            if code_point > 127:
+                raise ValueError(
+                    f"Character '{char}' (code {code_point}) has top bit set in '{filename}'"
+                )
+
+            # Check for control characters
+            if code_point < 32:
+                raise ValueError(
+                    f"Control character (code {code_point}) not allowed in '{filename}'"
+                )
 
         # Validate Acorn encoding compatibility
         try:
@@ -138,11 +277,33 @@ class AcornDFSCatalogue(Catalogue):
             raise ValueError(f"Invalid directory '{directory}'. Must be $ or A-Z")
 
     def validate_title(self, title: str) -> None:
-        """Validate Acorn DFS title constraints."""
+        """
+        Validate Acorn DFS title constraints.
+
+        Per "Guide to Disc Formats.pdf", title characters must:
+        - Not have top bit set (must be <= 127)
+        - Not be control characters (< 32), except null (0) for padding
+        """
         if len(title) > self.MAX_TITLE_LENGTH:
             raise ValueError(
                 f"Title too long: '{title}' (max {self.MAX_TITLE_LENGTH} chars)"
             )
+
+        # Check each character
+        for i, char in enumerate(title):
+            code_point = ord(char)
+
+            # Check for top-bit set characters
+            if code_point > 127:
+                raise ValueError(
+                    f"Title character '{char}' at position {i} has top bit set (code {code_point})"
+                )
+
+            # Check for control characters (except null/space for padding)
+            if code_point < 32 and code_point != 0:
+                raise ValueError(
+                    f"Title contains control character at position {i} (code {code_point})"
+                )
 
         # Validate Acorn encoding compatibility
         try:
