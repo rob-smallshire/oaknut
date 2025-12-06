@@ -118,9 +118,9 @@ class DFS:
         Raises:
             ValueError: If filename invalid or disk full
         """
-        directory, name = self._parse_filename(filename)
+        parsed = self._catalogued_surface.catalogue.parse_filename(filename)
         self._catalogued_surface.write_file(
-            name, directory, data, load_address, exec_address, locked
+            parsed.filename, parsed.directory, data, load_address, exec_address, locked
         )
 
     def save_text(
@@ -229,10 +229,12 @@ class DFS:
         # Read file data
         data = self._catalogued_surface.read_file(source)
 
+        # Parse destination using catalogue
+        parsed = self._catalogued_surface.catalogue.parse_filename(dest)
+
         # Write to new location with same metadata
-        directory, name = self._parse_filename(dest)
         self._catalogued_surface.write_file(
-            name, directory, data, entry.load_address, entry.exec_address, entry.locked
+            parsed.filename, parsed.directory, data, entry.load_address, entry.exec_address, entry.locked
         )
 
     # Disk metadata
@@ -286,8 +288,8 @@ class DFS:
         Raises:
             ValueError: If directory invalid
         """
-        if not (directory == "$" or (len(directory) == 1 and directory.isalpha())):
-            raise ValueError(f"Invalid directory: {directory}")
+        # Delegate validation to catalogue
+        self._catalogued_surface.catalogue.validate_directory(directory)
         self._current_directory = directory.upper()
 
     def list_directory(self, directory: str = None) -> list[FileEntry]:
@@ -372,106 +374,67 @@ class DFS:
         """
         Validate disk integrity.
 
+        Delegates to catalogue for catalogue-specific validation.
+
         Returns:
             List of error messages (empty if valid)
         """
-        errors = []
-
-        # Check catalog structure
-        disk_info = self._catalogued_surface.disk_info
-        if disk_info.num_files > self._catalogued_surface.catalogue.max_files:
-            errors.append(
-                f"Too many files: {disk_info.num_files} > "
-                f"{self._catalogued_surface.catalogue.max_files}"
-            )
-
-        # Check for overlapping files
-        files = self._catalogued_surface.list_files()
-        sector_map = {}
-
-        for entry in files:
-            for sector in range(
-                entry.start_sector, entry.start_sector + entry.sectors_required
-            ):
-                if sector in sector_map:
-                    errors.append(
-                        f"Sector {sector} used by both {sector_map[sector]} and {entry.path}"
-                    )
-                else:
-                    sector_map[sector] = entry.path
-
-        # Check files don't exceed disk bounds
-        total_sectors = self._catalogued_surface._surface.num_sectors
-        for entry in files:
-            end_sector = entry.start_sector + entry.sectors_required
-            if end_sector > total_sectors:
-                errors.append(
-                    f"File {entry.path} extends beyond disk: "
-                    f"sector {end_sector} > {total_sectors}"
-                )
-
-        # Check for duplicate filenames
-        names = [f.path.upper() for f in files]
-        duplicates = [name for name in set(names) if names.count(name) > 1]
-        if duplicates:
-            errors.append(f"Duplicate filenames: {', '.join(duplicates)}")
-
-        return errors
+        return self._catalogued_surface.catalogue.validate()
 
     def compact(self) -> int:
         """
         Compact disk by removing fragmentation.
 
-        Reads all files into memory, deletes them, then writes them back
-        sequentially. This consolidates all free space at the end.
+        Delegates to catalogue which works at the sector level to
+        rebuild entries sequentially, consolidating all free space at the end.
 
         Returns:
             Number of files compacted
 
         Raises:
-            PermissionError: If any file is locked
+            PermissionError: If any file is locked (catalogue-specific)
         """
-        files = self.files
+        return self._catalogued_surface.catalogue.compact()
 
-        # Check for locked files
-        locked_files = [f for f in files if f.locked]
-        if locked_files:
-            names = ", ".join(f.path for f in locked_files)
-            raise PermissionError(f"Cannot compact: locked files present: {names}")
+    def export_file(
+        self, filename: str, target_filepath: str, preserve_metadata: bool = True
+    ) -> None:
+        """
+        Export single file to host filesystem with optional .inf metadata file.
 
-        if not files:
-            return 0
+        Args:
+            filename: DFS filename to export (e.g., "$.HELLO")
+            target_filepath: Path to export file to
+            preserve_metadata: Create .inf file with DFS metadata (default True)
 
-        # Read all files into memory (with metadata)
-        file_data = []
-        for entry in files:
-            data = self.load(entry.path)
-            file_data.append(
-                {
-                    "name": entry.filename,
-                    "directory": entry.directory,
-                    "data": data,
-                    "load_address": entry.load_address,
-                    "exec_address": entry.exec_address,
-                    "locked": entry.locked,
-                }
+        Raises:
+            FileNotFoundError: If file doesn't exist on DFS disk
+            OSError: If file cannot be written
+        """
+        from pathlib import Path
+
+        entry = self._catalogued_surface.find_file(filename)
+        if entry is None:
+            raise FileNotFoundError(f"File not found: {filename}")
+
+        # Export file data
+        data = self.load(entry.path)
+        file_path = Path(target_filepath)
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+        file_path.write_bytes(data)
+
+        # Export metadata
+        if preserve_metadata:
+            inf_path = Path(str(target_filepath) + ".inf")
+            locked_str = " Locked" if entry.locked else ""
+            inf_content = (
+                f"$.{entry.filename} "
+                f"{entry.load_address:08X} "
+                f"{entry.exec_address:08X} "
+                f"{entry.length:08X}"
+                f"{locked_str}\n"
             )
-
-        # Delete all files
-        for entry in files:
-            self.delete(entry.path)
-
-        # Write them back (will be sequential)
-        for file_info in file_data:
-            self.save(
-                f"{file_info['directory']}.{file_info['name']}",
-                file_info["data"],
-                file_info["load_address"],
-                file_info["exec_address"],
-                file_info["locked"],
-            )
-
-        return len(file_data)
+            inf_path.write_text(inf_content)
 
     def export_all(self, target_dirpath: str, preserve_metadata: bool = True) -> None:
         """
@@ -569,18 +532,4 @@ class DFS:
         return f"DFS Disk: {self.title} ({len(self.files)} files, {self.free_sectors} sectors free)"
 
     # Helpers
-    def _parse_filename(self, filename: str) -> tuple[str, str]:
-        """
-        Parse filename into (directory, name).
-
-        Args:
-            filename: Filename to parse (e.g., "$.HELLO" or "HELLO")
-
-        Returns:
-            Tuple of (directory, name)
-        """
-        if "." in filename:
-            directory, name = filename.split(".", 1)
-            return directory, name
-        # Default to $ directory
-        return "$", filename
+    # _parse_filename() removed - parsing now delegated to Catalogue layer

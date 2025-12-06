@@ -3,7 +3,109 @@
 import pytest
 from pathlib import Path
 
+import oaknut_dfs.acorn_encoding  # Register codec
 from oaknut_dfs.dfs import DFS
+
+
+class TestExportFile:
+    """Tests for export_file()."""
+
+    def test_export_file_with_metadata(self, tmp_path):
+        """Test exporting single file with .inf metadata."""
+        buffer = bytearray(102400)
+
+        buffer[0:8] = b"DISK    "
+        buffer[256:260] = b"    "
+        buffer[260] = 0
+        buffer[261] = 0
+        buffer[262] = 0x00
+        buffer[263] = 200
+
+        dfs = DFS.from_ssd(memoryview(buffer))
+
+        # Add a file
+        dfs.save("$.HELLO", b"Hello World", load_address=0x1900, exec_address=0x8023)
+
+        # Export single file
+        target_file = tmp_path / "HELLO.bin"
+        dfs.export_file("$.HELLO", str(target_file))
+
+        # Check file was created
+        assert target_file.exists()
+        assert target_file.read_bytes() == b"Hello World"
+
+        # Check .inf file was created
+        inf_file = tmp_path / "HELLO.bin.inf"
+        assert inf_file.exists()
+        inf_content = inf_file.read_text()
+        assert "$.HELLO" in inf_content
+        assert "00001900" in inf_content
+        assert "00008023" in inf_content
+
+    def test_export_file_without_metadata(self, tmp_path):
+        """Test exporting file without .inf metadata."""
+        buffer = bytearray(102400)
+
+        buffer[0:8] = b"DISK    "
+        buffer[256:260] = b"    "
+        buffer[260] = 0
+        buffer[261] = 0
+        buffer[262] = 0x00
+        buffer[263] = 200
+
+        dfs = DFS.from_ssd(memoryview(buffer))
+
+        dfs.save("$.TEST", b"data")
+
+        # Export without metadata
+        target_file = tmp_path / "test.bin"
+        dfs.export_file("$.TEST", str(target_file), preserve_metadata=False)
+
+        # Check file was created
+        assert target_file.exists()
+        assert target_file.read_bytes() == b"data"
+
+        # Check .inf file was NOT created
+        assert not (tmp_path / "test.bin.inf").exists()
+
+    def test_export_file_nonexistent_raises(self, tmp_path):
+        """Test exporting nonexistent file raises error."""
+        buffer = bytearray(102400)
+
+        buffer[0:8] = b"DISK    "
+        buffer[256:260] = b"    "
+        buffer[260] = 0
+        buffer[261] = 0
+        buffer[262] = 0x00
+        buffer[263] = 200
+
+        dfs = DFS.from_ssd(memoryview(buffer))
+
+        with pytest.raises(FileNotFoundError):
+            dfs.export_file("$.NOSUCH", str(tmp_path / "file.bin"))
+
+    def test_export_file_creates_parent_directories(self, tmp_path):
+        """Test export_file creates parent directories if needed."""
+        buffer = bytearray(102400)
+
+        buffer[0:8] = b"DISK    "
+        buffer[256:260] = b"    "
+        buffer[260] = 0
+        buffer[261] = 0
+        buffer[262] = 0x00
+        buffer[263] = 200
+
+        dfs = DFS.from_ssd(memoryview(buffer))
+
+        dfs.save("$.FILE", b"data")
+
+        # Export to nested path
+        target_file = tmp_path / "nested" / "path" / "file.bin"
+        dfs.export_file("$.FILE", str(target_file))
+
+        # Check file was created
+        assert target_file.exists()
+        assert target_file.read_bytes() == b"data"
 
 
 class TestExportAll:

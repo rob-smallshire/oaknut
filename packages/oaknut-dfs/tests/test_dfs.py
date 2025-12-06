@@ -584,13 +584,13 @@ class TestDFSDirectoryNavigation:
 
         dfs = DFS.from_ssd(memoryview(buffer))
 
-        with pytest.raises(ValueError, match="Invalid directory"):
+        with pytest.raises(ValueError, match="Directory must be single character"):
             dfs.change_directory("AB")
 
-        with pytest.raises(ValueError, match="Invalid directory"):
+        with pytest.raises(ValueError, match="Invalid directory.*Must be"):
             dfs.change_directory("1")
 
-        with pytest.raises(ValueError, match="Invalid directory"):
+        with pytest.raises(ValueError, match="Directory must be single character"):
             dfs.change_directory("")
 
     def test_list_directory_current(self):

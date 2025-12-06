@@ -56,6 +56,19 @@ class FileInfo:
     sectors: int  # Number of sectors occupied
 
 
+@dataclass(frozen=True)
+class ParsedFilename:
+    """Validated and parsed filename components."""
+
+    directory: str  # Single character (e.g., '$' or 'A')
+    filename: str  # Name part (max 7 chars for Acorn DFS)
+
+    @property
+    def path(self) -> str:
+        """Return full path like $.HELLO"""
+        return f"{self.directory}.{self.filename}"
+
+
 class Catalogue(ABC):
     """Abstract base class for disk catalogs."""
 
@@ -128,8 +141,104 @@ class Catalogue(ABC):
         """Rename file preserving all metadata and location."""
         pass
 
+    @abstractmethod
+    def parse_filename(self, path: str) -> ParsedFilename:
+        """
+        Parse and validate filename path.
+
+        Args:
+            path: Full path (e.g., "$.HELLO") or bare filename (defaults to $ directory)
+
+        Returns:
+            ParsedFilename with validated components
+
+        Raises:
+            ValueError: If path is invalid for this catalogue type
+        """
+        pass
+
+    @abstractmethod
+    def validate_filename(self, filename: str) -> None:
+        """
+        Validate filename (without directory).
+
+        Args:
+            filename: Filename to validate (e.g., "HELLO")
+
+        Raises:
+            ValueError: If filename is invalid (too long, bad encoding, etc.)
+        """
+        pass
+
+    @abstractmethod
+    def validate_directory(self, directory: str) -> None:
+        """
+        Validate directory character.
+
+        Args:
+            directory: Directory character to validate (e.g., '$', 'A')
+
+        Raises:
+            ValueError: If directory is invalid
+        """
+        pass
+
+    @abstractmethod
+    def validate_title(self, title: str) -> None:
+        """
+        Validate disk title.
+
+        Args:
+            title: Title to validate
+
+        Raises:
+            ValueError: If title is invalid (too long, bad encoding, etc.)
+        """
+        pass
+
+    def _default_parse_filename(self, path: str, default_directory: str = "$") -> tuple[str, str]:
+        """
+        Default parsing logic: split on first dot, default to $ directory.
+
+        Subclasses can use this as starting point and then validate.
+        """
+        if "." in path:
+            directory, filename = path.split(".", 1)
+            return directory, filename
+        return default_directory, path
+
     @property
     @abstractmethod
     def max_files(self) -> int:
         """Maximum number of files this catalog can hold."""
+        pass
+
+    @abstractmethod
+    def validate(self) -> list[str]:
+        """
+        Validate catalogue structure and integrity.
+
+        Checks catalogue-specific constraints like max files, duplicate names,
+        overlapping sectors, file bounds, etc.
+
+        Returns:
+            List of error messages (empty if valid)
+        """
+        pass
+
+    @abstractmethod
+    def compact(self) -> int:
+        """
+        Compact catalogue by removing fragmentation.
+
+        Reads file data from sectors, then rewrites files sequentially.
+        This consolidates free space at the end. Works at the sector level
+        using only the surface abstraction.
+
+        Returns:
+            Number of files compacted
+
+        Raises:
+            PermissionError: If compaction not allowed (e.g., locked files)
+        """
         pass

@@ -2,6 +2,7 @@
 
 import pytest
 
+import oaknut_dfs.acorn_encoding  # Register codec
 from oaknut_dfs.acorn_dfs_catalogue import AcornDFSCatalogue
 from oaknut_dfs.catalogue import DiskInfo, FileEntry
 from oaknut_dfs.surface import DiscImage, SurfaceSpec
@@ -238,10 +239,10 @@ class TestAcornDFSCatalogueAddFileEntry:
 
         catalogue = AcornDFSCatalogue(surface)
 
-        # Try to add file - should fail
+        # Try to add file - should fail (use valid 7-char filename)
         with pytest.raises(ValueError, match="Catalog full"):
             catalogue.add_file_entry(
-                filename="OVERFLOW",
+                filename="FILE32",
                 directory="$",
                 load_address=0,
                 exec_address=0,
@@ -354,3 +355,322 @@ class TestAcornDFSCatalogueRemoveFileEntry:
 
         with pytest.raises(FileNotFoundError):
             catalogue.remove_file_entry("$.NOSUCHFILE")
+
+
+class TestAcornDFSCatalogueParseFilename:
+    """Tests for parse_filename()."""
+
+    def test_parse_filename_with_directory(self):
+        """Test parsing filename with directory prefix."""
+        buffer = bytearray(102400)
+        buffer[0:8] = b"DISK    "
+        buffer[256:260] = b"    "
+        buffer[260] = 0
+        buffer[261] = 0
+        buffer[262] = 0x00
+        buffer[263] = 200
+
+        spec = SurfaceSpec(
+            num_tracks=40,
+            sectors_per_track=10,
+            bytes_per_sector=256,
+            track_zero_offset_bytes=0,
+            track_stride_bytes=2560,
+        )
+        disc = DiscImage(memoryview(buffer), [spec])
+        surface = disc.surface(0)
+        catalogue = AcornDFSCatalogue(surface)
+
+        parsed = catalogue.parse_filename("$.HELLO")
+        assert parsed.directory == "$"
+        assert parsed.filename == "HELLO"
+        assert parsed.path == "$.HELLO"
+
+    def test_parse_filename_without_directory_defaults_to_dollar(self):
+        """Test parsing bare filename defaults to $ directory."""
+        buffer = bytearray(102400)
+        buffer[0:8] = b"DISK    "
+        buffer[256:260] = b"    "
+        buffer[260] = 0
+        buffer[261] = 0
+        buffer[262] = 0x00
+        buffer[263] = 200
+
+        spec = SurfaceSpec(
+            num_tracks=40,
+            sectors_per_track=10,
+            bytes_per_sector=256,
+            track_zero_offset_bytes=0,
+            track_stride_bytes=2560,
+        )
+        disc = DiscImage(memoryview(buffer), [spec])
+        surface = disc.surface(0)
+        catalogue = AcornDFSCatalogue(surface)
+
+        parsed = catalogue.parse_filename("TEST")
+        assert parsed.directory == "$"
+        assert parsed.filename == "TEST"
+        assert parsed.path == "$.TEST"
+
+    def test_parse_filename_normalizes_to_uppercase(self):
+        """Test parse_filename normalizes to uppercase."""
+        buffer = bytearray(102400)
+        buffer[0:8] = b"DISK    "
+        buffer[256:260] = b"    "
+        buffer[260] = 0
+        buffer[261] = 0
+        buffer[262] = 0x00
+        buffer[263] = 200
+
+        spec = SurfaceSpec(
+            num_tracks=40,
+            sectors_per_track=10,
+            bytes_per_sector=256,
+            track_zero_offset_bytes=0,
+            track_stride_bytes=2560,
+        )
+        disc = DiscImage(memoryview(buffer), [spec])
+        surface = disc.surface(0)
+        catalogue = AcornDFSCatalogue(surface)
+
+        parsed = catalogue.parse_filename("a.hello")
+        assert parsed.directory == "A"
+        assert parsed.filename == "HELLO"
+
+    def test_parse_filename_too_long_raises(self):
+        """Test parse_filename raises for filename > 7 chars."""
+        buffer = bytearray(102400)
+        buffer[0:8] = b"DISK    "
+        buffer[256:260] = b"    "
+        buffer[260] = 0
+        buffer[261] = 0
+        buffer[262] = 0x00
+        buffer[263] = 200
+
+        spec = SurfaceSpec(
+            num_tracks=40,
+            sectors_per_track=10,
+            bytes_per_sector=256,
+            track_zero_offset_bytes=0,
+            track_stride_bytes=2560,
+        )
+        disc = DiscImage(memoryview(buffer), [spec])
+        surface = disc.surface(0)
+        catalogue = AcornDFSCatalogue(surface)
+
+        with pytest.raises(ValueError, match="Filename too long"):
+            catalogue.parse_filename("$.TOOLONG12")
+
+
+class TestAcornDFSCatalogueValidateFilename:
+    """Tests for validate_filename()."""
+
+    def test_validate_filename_valid(self):
+        """Test validate_filename accepts valid filenames."""
+        buffer = bytearray(102400)
+        buffer[0:8] = b"DISK    "
+        buffer[256:260] = b"    "
+        buffer[260] = 0
+        buffer[261] = 0
+        buffer[262] = 0x00
+        buffer[263] = 200
+
+        spec = SurfaceSpec(
+            num_tracks=40,
+            sectors_per_track=10,
+            bytes_per_sector=256,
+            track_zero_offset_bytes=0,
+            track_stride_bytes=2560,
+        )
+        disc = DiscImage(memoryview(buffer), [spec])
+        surface = disc.surface(0)
+        catalogue = AcornDFSCatalogue(surface)
+
+        # Should not raise
+        catalogue.validate_filename("HELLO")
+        catalogue.validate_filename("TEST123")
+        catalogue.validate_filename("A")
+
+    def test_validate_filename_empty_raises(self):
+        """Test validate_filename raises for empty filename."""
+        buffer = bytearray(102400)
+        buffer[0:8] = b"DISK    "
+        buffer[256:260] = b"    "
+        buffer[260] = 0
+        buffer[261] = 0
+        buffer[262] = 0x00
+        buffer[263] = 200
+
+        spec = SurfaceSpec(
+            num_tracks=40,
+            sectors_per_track=10,
+            bytes_per_sector=256,
+            track_zero_offset_bytes=0,
+            track_stride_bytes=2560,
+        )
+        disc = DiscImage(memoryview(buffer), [spec])
+        surface = disc.surface(0)
+        catalogue = AcornDFSCatalogue(surface)
+
+        with pytest.raises(ValueError, match="Filename cannot be empty"):
+            catalogue.validate_filename("")
+
+    def test_validate_filename_too_long_raises(self):
+        """Test validate_filename raises for filename > 7 chars."""
+        buffer = bytearray(102400)
+        buffer[0:8] = b"DISK    "
+        buffer[256:260] = b"    "
+        buffer[260] = 0
+        buffer[261] = 0
+        buffer[262] = 0x00
+        buffer[263] = 200
+
+        spec = SurfaceSpec(
+            num_tracks=40,
+            sectors_per_track=10,
+            bytes_per_sector=256,
+            track_zero_offset_bytes=0,
+            track_stride_bytes=2560,
+        )
+        disc = DiscImage(memoryview(buffer), [spec])
+        surface = disc.surface(0)
+        catalogue = AcornDFSCatalogue(surface)
+
+        with pytest.raises(ValueError, match="Filename too long.*max 7 chars"):
+            catalogue.validate_filename("TOOLONGNAME")
+
+
+class TestAcornDFSCatalogueValidateDirectory:
+    """Tests for validate_directory()."""
+
+    def test_validate_directory_valid(self):
+        """Test validate_directory accepts valid directories."""
+        buffer = bytearray(102400)
+        buffer[0:8] = b"DISK    "
+        buffer[256:260] = b"    "
+        buffer[260] = 0
+        buffer[261] = 0
+        buffer[262] = 0x00
+        buffer[263] = 200
+
+        spec = SurfaceSpec(
+            num_tracks=40,
+            sectors_per_track=10,
+            bytes_per_sector=256,
+            track_zero_offset_bytes=0,
+            track_stride_bytes=2560,
+        )
+        disc = DiscImage(memoryview(buffer), [spec])
+        surface = disc.surface(0)
+        catalogue = AcornDFSCatalogue(surface)
+
+        # Should not raise
+        catalogue.validate_directory("$")
+        catalogue.validate_directory("A")
+        catalogue.validate_directory("Z")
+        catalogue.validate_directory("a")  # Will be normalized to uppercase
+
+    def test_validate_directory_invalid_char_raises(self):
+        """Test validate_directory raises for invalid characters."""
+        buffer = bytearray(102400)
+        buffer[0:8] = b"DISK    "
+        buffer[256:260] = b"    "
+        buffer[260] = 0
+        buffer[261] = 0
+        buffer[262] = 0x00
+        buffer[263] = 200
+
+        spec = SurfaceSpec(
+            num_tracks=40,
+            sectors_per_track=10,
+            bytes_per_sector=256,
+            track_zero_offset_bytes=0,
+            track_stride_bytes=2560,
+        )
+        disc = DiscImage(memoryview(buffer), [spec])
+        surface = disc.surface(0)
+        catalogue = AcornDFSCatalogue(surface)
+
+        with pytest.raises(ValueError, match="Invalid directory.*Must be"):
+            catalogue.validate_directory("1")
+
+        with pytest.raises(ValueError, match="Invalid directory.*Must be"):
+            catalogue.validate_directory("#")
+
+    def test_validate_directory_multi_char_raises(self):
+        """Test validate_directory raises for multi-character directory."""
+        buffer = bytearray(102400)
+        buffer[0:8] = b"DISK    "
+        buffer[256:260] = b"    "
+        buffer[260] = 0
+        buffer[261] = 0
+        buffer[262] = 0x00
+        buffer[263] = 200
+
+        spec = SurfaceSpec(
+            num_tracks=40,
+            sectors_per_track=10,
+            bytes_per_sector=256,
+            track_zero_offset_bytes=0,
+            track_stride_bytes=2560,
+        )
+        disc = DiscImage(memoryview(buffer), [spec])
+        surface = disc.surface(0)
+        catalogue = AcornDFSCatalogue(surface)
+
+        with pytest.raises(ValueError, match="Directory must be single character"):
+            catalogue.validate_directory("AB")
+
+
+class TestAcornDFSCatalogueValidateTitle:
+    """Tests for validate_title()."""
+
+    def test_validate_title_valid(self):
+        """Test validate_title accepts valid titles."""
+        buffer = bytearray(102400)
+        buffer[0:8] = b"DISK    "
+        buffer[256:260] = b"    "
+        buffer[260] = 0
+        buffer[261] = 0
+        buffer[262] = 0x00
+        buffer[263] = 200
+
+        spec = SurfaceSpec(
+            num_tracks=40,
+            sectors_per_track=10,
+            bytes_per_sector=256,
+            track_zero_offset_bytes=0,
+            track_stride_bytes=2560,
+        )
+        disc = DiscImage(memoryview(buffer), [spec])
+        surface = disc.surface(0)
+        catalogue = AcornDFSCatalogue(surface)
+
+        # Should not raise
+        catalogue.validate_title("DISK")
+        catalogue.validate_title("TEST DISK 12")  # Exactly 12 chars
+        catalogue.validate_title("A")
+
+    def test_validate_title_too_long_raises(self):
+        """Test validate_title raises for title > 12 chars."""
+        buffer = bytearray(102400)
+        buffer[0:8] = b"DISK    "
+        buffer[256:260] = b"    "
+        buffer[260] = 0
+        buffer[261] = 0
+        buffer[262] = 0x00
+        buffer[263] = 200
+
+        spec = SurfaceSpec(
+            num_tracks=40,
+            sectors_per_track=10,
+            bytes_per_sector=256,
+            track_zero_offset_bytes=0,
+            track_stride_bytes=2560,
+        )
+        disc = DiscImage(memoryview(buffer), [spec])
+        surface = disc.surface(0)
+        catalogue = AcornDFSCatalogue(surface)
+
+        with pytest.raises(ValueError, match="Title too long.*max 12 chars"):
+            catalogue.validate_title("THIS IS TOO LONG")

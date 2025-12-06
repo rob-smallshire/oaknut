@@ -62,12 +62,9 @@ class TestSetTitle:
         surface = disc.surface(0)
         catalogue = AcornDFSCatalogue(surface)
 
-        # Set title longer than 12 chars
-        catalogue.set_title("THIS IS TOO LONG")
-
-        info = catalogue.get_disk_info()
-        assert info.title == "THIS IS TOO"  # Truncated to 12, trailing spaces stripped
-        assert info.cycle_number == 6  # Incremented
+        # Set title longer than 12 chars - should now validate instead of truncate
+        with pytest.raises(ValueError, match="Title too long"):
+            catalogue.set_title("THIS IS TOO LONG")
 
 
 class TestSetBootOption:

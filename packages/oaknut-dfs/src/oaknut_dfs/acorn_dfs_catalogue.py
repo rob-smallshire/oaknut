@@ -1,6 +1,6 @@
 """Acorn DFS catalog implementation."""
 
-from oaknut_dfs.catalogue import Catalogue, DiskInfo, FileEntry
+from oaknut_dfs.catalogue import Catalogue, DiskInfo, FileEntry, ParsedFilename
 from oaknut_dfs.surface import Surface
 
 
@@ -11,6 +11,9 @@ class AcornDFSCatalogue(Catalogue):
     MAX_FILES = 31
     CATALOG_START_SECTOR = 0
     CATALOG_NUM_SECTORS = 2
+    MAX_FILENAME_LENGTH = 7
+    MAX_TITLE_LENGTH = 12
+    VALID_DIRECTORY_CHARS = "$ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
     def __init__(self, surface: Surface):
         super().__init__(surface)
@@ -94,6 +97,59 @@ class AcornDFSCatalogue(Catalogue):
 
         return files
 
+    def parse_filename(self, path: str) -> ParsedFilename:
+        """Parse and validate Acorn DFS filename."""
+        # Parse using base class helper
+        directory, filename = self._default_parse_filename(path, default_directory="$")
+
+        # Normalize to uppercase
+        directory = directory.upper()
+        filename = filename.upper()
+
+        # Validate components
+        self.validate_directory(directory)
+        self.validate_filename(filename)
+
+        return ParsedFilename(directory=directory, filename=filename)
+
+    def validate_filename(self, filename: str) -> None:
+        """Validate Acorn DFS filename constraints."""
+        if not filename:
+            raise ValueError("Filename cannot be empty")
+
+        if len(filename) > self.MAX_FILENAME_LENGTH:
+            raise ValueError(
+                f"Filename too long: '{filename}' "
+                f"(max {self.MAX_FILENAME_LENGTH} chars)"
+            )
+
+        # Validate Acorn encoding compatibility
+        try:
+            filename.encode('acorn')
+        except (UnicodeEncodeError, LookupError) as e:
+            raise ValueError(f"Filename contains invalid characters: {e}")
+
+    def validate_directory(self, directory: str) -> None:
+        """Validate Acorn DFS directory character."""
+        if len(directory) != 1:
+            raise ValueError(f"Directory must be single character, got: '{directory}'")
+
+        if directory.upper() not in self.VALID_DIRECTORY_CHARS:
+            raise ValueError(f"Invalid directory '{directory}'. Must be $ or A-Z")
+
+    def validate_title(self, title: str) -> None:
+        """Validate Acorn DFS title constraints."""
+        if len(title) > self.MAX_TITLE_LENGTH:
+            raise ValueError(
+                f"Title too long: '{title}' (max {self.MAX_TITLE_LENGTH} chars)"
+            )
+
+        # Validate Acorn encoding compatibility
+        try:
+            title.encode('acorn')
+        except (UnicodeEncodeError, LookupError) as e:
+            raise ValueError(f"Title contains invalid characters: {e}")
+
     def add_file_entry(
         self,
         filename: str,
@@ -105,6 +161,14 @@ class AcornDFSCatalogue(Catalogue):
         locked: bool = False,
     ) -> None:
         """Add file entry to catalog, increment cycle number."""
+        # Validate inputs
+        self.validate_filename(filename)
+        self.validate_directory(directory)
+
+        # Normalize to uppercase
+        filename = filename.upper()
+        directory = directory.upper()
+
         # Read current state
         disk_info = self.get_disk_info()
 
@@ -227,8 +291,11 @@ class AcornDFSCatalogue(Catalogue):
 
     def set_title(self, title: str) -> None:
         """Set disk title (max 12 chars)."""
-        # Truncate or pad to 12 characters
-        title = title[:12].ljust(12)
+        # Validate title
+        self.validate_title(title)
+
+        # Pad to 12 characters
+        title = title.ljust(12)
 
         sector0 = self._surface.sector_range(0, 1)
         sector1 = self._surface.sector_range(1, 1)
@@ -308,16 +375,10 @@ class AcornDFSCatalogue(Catalogue):
         if entry is None:
             raise FileNotFoundError(f"File not found: {old_name}")
 
-        # Parse new name
-        if "." in new_name:
-            new_directory, new_filename = new_name.split(".", 1)
-        else:
-            new_directory = "$"
-            new_filename = new_name
-
-        # Validate filename length
-        if len(new_filename) > 7:
-            raise ValueError(f"Filename too long (max 7 chars): {new_filename}")
+        # Parse and validate new name using new method
+        parsed = self.parse_filename(new_name)
+        new_filename = parsed.filename
+        new_directory = parsed.directory
 
         # Find file index in catalog
         files = self.list_files()
@@ -349,3 +410,128 @@ class AcornDFSCatalogue(Catalogue):
         # Increment cycle number
         disk_info = self.get_disk_info()
         sector1[4] = (disk_info.cycle_number + 1) & 0xFF
+
+    def validate(self) -> list[str]:
+        """
+        Validate Acorn DFS catalogue integrity.
+
+        Returns:
+            List of error messages (empty if valid)
+        """
+        errors = []
+
+        # Check catalog structure
+        disk_info = self.get_disk_info()
+        if disk_info.num_files > self.MAX_FILES:
+            errors.append(
+                f"Too many files: {disk_info.num_files} > {self.MAX_FILES}"
+            )
+
+        # Check for overlapping files
+        files = self.list_files()
+        sector_map = {}
+
+        for entry in files:
+            for sector in range(
+                entry.start_sector, entry.start_sector + entry.sectors_required
+            ):
+                if sector in sector_map:
+                    errors.append(
+                        f"Sector {sector} used by both {sector_map[sector]} and {entry.path}"
+                    )
+                else:
+                    sector_map[sector] = entry.path
+
+        # Check files don't exceed disk bounds
+        total_sectors = self._surface.num_sectors
+        for entry in files:
+            end_sector = entry.start_sector + entry.sectors_required
+            if end_sector > total_sectors:
+                errors.append(
+                    f"File {entry.path} extends beyond disk: "
+                    f"sector {end_sector} > {total_sectors}"
+                )
+
+        # Check for duplicate filenames
+        names = [f.path.upper() for f in files]
+        duplicates = [name for name in set(names) if names.count(name) > 1]
+        if duplicates:
+            errors.append(f"Duplicate filenames: {', '.join(duplicates)}")
+
+        return errors
+
+    def compact(self) -> int:
+        """
+        Compact Acorn DFS catalogue by removing fragmentation.
+
+        Reads file data from sectors, then rewrites files sequentially
+        starting from sector 2. This consolidates free space at the end.
+
+        Returns:
+            Number of files compacted
+
+        Raises:
+            PermissionError: If locked files present
+        """
+        files = self.list_files()
+
+        # Check for locked files
+        locked_files = [f for f in files if f.locked]
+        if locked_files:
+            names = ", ".join(f.path for f in locked_files)
+            raise PermissionError(f"Cannot compact: locked files present: {names}")
+
+        if not files:
+            return 0
+
+        # Read all file data from sectors (with metadata)
+        file_data = []
+        for entry in files:
+            # Read the actual sectors containing file data
+            sectors_view = self._surface.sector_range(entry.start_sector, entry.sectors_required)
+            # Copy only the actual file data (trim padding)
+            data = bytes(sectors_view[:entry.length])
+            file_data.append(
+                {
+                    "filename": entry.filename,
+                    "directory": entry.directory,
+                    "data": data,
+                    "load_address": entry.load_address,
+                    "exec_address": entry.exec_address,
+                    "locked": entry.locked,
+                }
+            )
+
+        # Build new file entries with sequential sectors starting from sector 2
+        new_entries = []
+        next_sector = 2
+        for file_info in file_data:
+            sectors_needed = (len(file_info["data"]) + 255) // 256
+            new_entries.append(
+                FileEntry(
+                    filename=file_info["filename"],
+                    directory=file_info["directory"],
+                    locked=file_info["locked"],
+                    load_address=file_info["load_address"],
+                    exec_address=file_info["exec_address"],
+                    length=len(file_info["data"]),
+                    start_sector=next_sector,
+                )
+            )
+            next_sector += sectors_needed
+
+        # Rebuild catalog with new sequential entries
+        self._rebuild_catalog(new_entries)
+
+        # Write file data to new sequential sectors
+        for file_info, entry in zip(file_data, new_entries):
+            # Pad data to sector boundary
+            data = file_info["data"]
+            padded_length = entry.sectors_required * 256
+            padded_data = data + bytes(padded_length - len(data))
+
+            # Write to sectors
+            sector_view = self._surface.sector_range(entry.start_sector, entry.sectors_required)
+            sector_view[:] = padded_data
+
+        return len(file_data)
