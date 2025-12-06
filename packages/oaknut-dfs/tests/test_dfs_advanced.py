@@ -3,6 +3,10 @@
 import pytest
 
 from oaknut_dfs.dfs import DFS
+from oaknut_dfs.formats import (
+    ACORN_DFS_40T_SINGLE_SIDED,
+    ACORN_DFS_40T_DOUBLE_SIDED_INTERLEAVED,
+)
 
 
 class TestFreeSpace:
@@ -20,7 +24,7 @@ class TestFreeSpace:
         buffer[262] = 0x00
         buffer[263] = 200
 
-        dfs = DFS.from_ssd(memoryview(buffer))
+        dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
         # 400 total sectors - 2 catalog sectors = 398 free
         assert dfs.free_sectors == 398
@@ -37,7 +41,7 @@ class TestFreeSpace:
         buffer[262] = 0x00
         buffer[263] = 200
 
-        dfs = DFS.from_ssd(memoryview(buffer))
+        dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
         # Add a 100-byte file (takes 1 sector)
         dfs.save("$.FILE1", b"X" * 100)
@@ -58,7 +62,7 @@ class TestFreeSpace:
         buffer[262] = 0x00
         buffer[263] = 200
 
-        dfs = DFS.from_ssd(memoryview(buffer))
+        dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
         free_map = dfs._catalogued_surface.get_free_map()
 
@@ -77,7 +81,7 @@ class TestFreeSpace:
         buffer[262] = 0x00
         buffer[263] = 200
 
-        dfs = DFS.from_ssd(memoryview(buffer))
+        dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
         # Add files to create gaps
         dfs.save("$.FILE1", b"X" * 256)  # 1 sector at sector 2
@@ -104,7 +108,7 @@ class TestFreeSpace:
         buffer[262] = 0x20  # Boot option 2
         buffer[263] = 200
 
-        dfs = DFS.from_ssd(memoryview(buffer))
+        dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
         info = dfs.info
 
@@ -129,7 +133,7 @@ class TestFileInfo:
         buffer[262] = 0x00
         buffer[263] = 200
 
-        dfs = DFS.from_ssd(memoryview(buffer))
+        dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
         # Save a file
         dfs.save("$.HELLO", b"Test content", load_address=0x1900, exec_address=0x8023)
@@ -158,7 +162,7 @@ class TestFileInfo:
         buffer[262] = 0x00
         buffer[263] = 200
 
-        dfs = DFS.from_ssd(memoryview(buffer))
+        dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
         with pytest.raises(FileNotFoundError):
             dfs.get_file_info("$.NOSUCHFILE")
@@ -178,7 +182,7 @@ class TestValidation:
         buffer[262] = 0x00
         buffer[263] = 200
 
-        dfs = DFS.from_ssd(memoryview(buffer))
+        dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
         # Add some files
         dfs.save("$.FILE1", b"data1")
@@ -209,7 +213,7 @@ class TestValidation:
         buffer[23] = ord("$")
         buffer[256 + 16:256 + 24] = bytes([0, 0, 0, 0, 100, 0, 0, 4])
 
-        dfs = DFS.from_ssd(memoryview(buffer))
+        dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
         errors = dfs.validate()
         assert len(errors) == 1
@@ -231,7 +235,7 @@ class TestCompaction:
         buffer[262] = 0x00
         buffer[263] = 200
 
-        dfs = DFS.from_ssd(memoryview(buffer))
+        dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
         # Create fragmentation
         dfs.save("$.FILE1", b"A" * 256)  # Sector 2
@@ -269,7 +273,7 @@ class TestCompaction:
         buffer[262] = 0x00
         buffer[263] = 200
 
-        dfs = DFS.from_ssd(memoryview(buffer))
+        dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
         # Add a locked file
         dfs.save("$.LOCKED", b"data", locked=True)
@@ -288,7 +292,7 @@ class TestCompaction:
         buffer[262] = 0x00
         buffer[263] = 200
 
-        dfs = DFS.from_ssd(memoryview(buffer))
+        dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
         # Add files sequentially
         dfs.save("$.FILE1", b"A" * 100)
@@ -309,7 +313,7 @@ class TestCompaction:
         buffer[262] = 0x00
         buffer[263] = 200
 
-        dfs = DFS.from_ssd(memoryview(buffer))
+        dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
         moved = dfs.compact()
         assert moved == 0
@@ -325,7 +329,7 @@ class TestCompaction:
         buffer[262] = 0x00
         buffer[263] = 200
 
-        dfs = DFS.from_ssd(memoryview(buffer))
+        dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
         # Add file with specific metadata
         dfs.save("$.PROG", b"X" * 500, load_address=0x1900, exec_address=0x8023)

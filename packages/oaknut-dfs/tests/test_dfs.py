@@ -1,8 +1,13 @@
 """Tests for DFS high-level class."""
 
 import pytest
+import oaknut_dfs.acorn_encoding  # Register codec
 
 from oaknut_dfs.dfs import DFS
+from oaknut_dfs.formats import (
+    ACORN_DFS_40T_SINGLE_SIDED,
+    ACORN_DFS_40T_DOUBLE_SIDED_INTERLEAVED,
+)
 
 
 class TestDFSNamedConstructors:
@@ -21,7 +26,7 @@ class TestDFSNamedConstructors:
         buffer[262] = 0x00
         buffer[263] = 200
 
-        dfs = DFS.from_ssd(memoryview(buffer))
+        dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
         assert dfs.title == "TESTSSD"
         assert dfs.boot_option == 0
@@ -40,7 +45,7 @@ class TestDFSNamedConstructors:
         buffer[262] = 0x00
         buffer[263] = 200
 
-        dfs = DFS.from_dsd(memoryview(buffer), side=0)
+        dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_DOUBLE_SIDED_INTERLEAVED, side=0)
 
         assert dfs.title == "DSD0"
 
@@ -57,7 +62,7 @@ class TestDFSNamedConstructors:
         buffer[2560 + 262] = 0x00
         buffer[2560 + 263] = 200
 
-        dfs = DFS.from_dsd(memoryview(buffer), side=1)
+        dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_DOUBLE_SIDED_INTERLEAVED, side=1)
 
         assert dfs.title == "DSD1"
 
@@ -65,8 +70,8 @@ class TestDFSNamedConstructors:
         """Test that invalid side raises error."""
         buffer = bytearray(204800)
 
-        with pytest.raises(ValueError, match="Side must be 0 or 1"):
-            DFS.from_dsd(memoryview(buffer), side=2)
+        with pytest.raises(IndexError, match="side must be in range"):
+            DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_DOUBLE_SIDED_INTERLEAVED, side=2)
 
 
 class TestDFSFileOperations:
@@ -84,7 +89,7 @@ class TestDFSFileOperations:
         buffer[262] = 0x00
         buffer[263] = 200
 
-        dfs = DFS.from_ssd(memoryview(buffer))
+        dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
         # Save a file
         file_data = b"Hello, World!"
@@ -111,7 +116,7 @@ class TestDFSFileOperations:
         buffer[262] = 0x00
         buffer[263] = 200
 
-        dfs = DFS.from_ssd(memoryview(buffer))
+        dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
         dfs.save("TEST", b"data")
 
@@ -135,7 +140,7 @@ class TestDFSFileOperations:
         buffer[15] = ord("$")
         buffer[256 + 8:256 + 16] = bytes([0, 0, 0, 0, 100, 0, 0, 2])
 
-        dfs = DFS.from_ssd(memoryview(buffer))
+        dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
         assert len(dfs.files) == 1
 
@@ -158,7 +163,7 @@ class TestDFSFileOperations:
         buffer[15] = ord("$")
         buffer[256 + 8:256 + 16] = bytes([0, 0, 0, 0, 100, 0, 0, 2])
 
-        dfs = DFS.from_ssd(memoryview(buffer))
+        dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
         assert dfs.exists("$.EXISTS") == True
         assert dfs.exists("$.NOSUCHFILE") == False
@@ -182,7 +187,7 @@ class TestDFSRenameAndLock:
         buffer[15] = ord("$")
         buffer[256 + 8:256 + 16] = bytes([0, 0, 0, 0, 100, 0, 0, 2])
 
-        dfs = DFS.from_ssd(memoryview(buffer))
+        dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
         dfs.rename("$.OLDNAME", "$.NEWNAME")
 
@@ -204,7 +209,7 @@ class TestDFSRenameAndLock:
         buffer[15] = ord("$")
         buffer[256 + 8:256 + 16] = bytes([0, 0, 0, 0, 100, 0, 0, 2])
 
-        dfs = DFS.from_ssd(memoryview(buffer))
+        dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
         # Initially unlocked
         assert dfs.files[0].locked == False
@@ -232,7 +237,7 @@ class TestDFSMetadata:
         buffer[262] = 0x00
         buffer[263] = 200
 
-        dfs = DFS.from_ssd(memoryview(buffer))
+        dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
         assert dfs.title == "MYTITLE"
 
@@ -247,7 +252,7 @@ class TestDFSMetadata:
         buffer[262] = 0x00
         buffer[263] = 200
 
-        dfs = DFS.from_ssd(memoryview(buffer))
+        dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
         dfs.title = "NEWTITLE"
 
@@ -264,7 +269,7 @@ class TestDFSMetadata:
         buffer[262] = 0x20  # Boot option 2
         buffer[263] = 200
 
-        dfs = DFS.from_ssd(memoryview(buffer))
+        dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
         assert dfs.boot_option == 2
 
@@ -279,7 +284,7 @@ class TestDFSMetadata:
         buffer[262] = 0x00
         buffer[263] = 200
 
-        dfs = DFS.from_ssd(memoryview(buffer))
+        dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
         dfs.boot_option = 3
 
@@ -300,7 +305,7 @@ class TestDFSCopyFile:
         buffer[262] = 0x00
         buffer[263] = 200
 
-        dfs = DFS.from_ssd(memoryview(buffer))
+        dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
         # Save file with specific metadata
         original_data = b"Test file contents"
@@ -335,7 +340,7 @@ class TestDFSCopyFile:
         buffer[262] = 0x00
         buffer[263] = 200
 
-        dfs = DFS.from_ssd(memoryview(buffer))
+        dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
         dfs.save("$.FILE", b"data")
         dfs.copy_file("$.FILE", "A.FILE")
@@ -359,7 +364,7 @@ class TestDFSCopyFile:
         buffer[262] = 0x00
         buffer[263] = 200
 
-        dfs = DFS.from_ssd(memoryview(buffer))
+        dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
         # Save and lock file
         dfs.save("$.LOCKED", b"data", locked=True)
@@ -382,7 +387,7 @@ class TestDFSCopyFile:
         buffer[262] = 0x00
         buffer[263] = 200
 
-        dfs = DFS.from_ssd(memoryview(buffer))
+        dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
         with pytest.raises(FileNotFoundError):
             dfs.copy_file("$.NOSUCHFILE", "$.COPY")
@@ -402,7 +407,7 @@ class TestDFSConvenienceMethods:
         buffer[262] = 0x00
         buffer[263] = 200
 
-        dfs = DFS.from_ssd(memoryview(buffer))
+        dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
         text = "Hello, World!"
         dfs.save_text("$.TEXT", text)
@@ -422,7 +427,7 @@ class TestDFSConvenienceMethods:
         buffer[262] = 0x00
         buffer[263] = 200
 
-        dfs = DFS.from_ssd(memoryview(buffer))
+        dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
         text = "ASCII text"
         dfs.save_text("$.ASCII", text, encoding="ascii")
@@ -441,7 +446,7 @@ class TestDFSConvenienceMethods:
         buffer[262] = 0x00
         buffer[263] = 200
 
-        dfs = DFS.from_ssd(memoryview(buffer))
+        dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
         dfs.save_text("$.PROG", "PRINT", load_address=0x1900, exec_address=0x8023)
 
@@ -460,7 +465,7 @@ class TestDFSConvenienceMethods:
         buffer[262] = 0x00
         buffer[263] = 200
 
-        dfs = DFS.from_ssd(memoryview(buffer))
+        dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
         # Create source file
         source_file = tmp_path / "source.bin"
@@ -484,7 +489,7 @@ class TestDFSConvenienceMethods:
         buffer[262] = 0x00
         buffer[263] = 200
 
-        dfs = DFS.from_ssd(memoryview(buffer))
+        dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
         # Create source file
         source_file = tmp_path / "program.bin"
@@ -509,7 +514,7 @@ class TestDFSConvenienceMethods:
         buffer[262] = 0x00
         buffer[263] = 200
 
-        dfs = DFS.from_ssd(memoryview(buffer))
+        dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
         with pytest.raises(FileNotFoundError):
             dfs.save_from_file("$.TEST", "/nonexistent/file.bin")
@@ -529,7 +534,7 @@ class TestDFSDirectoryNavigation:
         buffer[262] = 0x00
         buffer[263] = 200
 
-        dfs = DFS.from_ssd(memoryview(buffer))
+        dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
         assert dfs.current_directory == "$"
 
@@ -544,7 +549,7 @@ class TestDFSDirectoryNavigation:
         buffer[262] = 0x00
         buffer[263] = 200
 
-        dfs = DFS.from_ssd(memoryview(buffer))
+        dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
         dfs.change_directory("A")
         assert dfs.current_directory == "A"
@@ -566,7 +571,7 @@ class TestDFSDirectoryNavigation:
         buffer[262] = 0x00
         buffer[263] = 200
 
-        dfs = DFS.from_ssd(memoryview(buffer))
+        dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
         dfs.change_directory("a")
         assert dfs.current_directory == "A"
@@ -582,7 +587,7 @@ class TestDFSDirectoryNavigation:
         buffer[262] = 0x00
         buffer[263] = 200
 
-        dfs = DFS.from_ssd(memoryview(buffer))
+        dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
         with pytest.raises(ValueError, match="Directory must be single character"):
             dfs.change_directory("AB")
@@ -604,7 +609,7 @@ class TestDFSDirectoryNavigation:
         buffer[262] = 0x00
         buffer[263] = 200
 
-        dfs = DFS.from_ssd(memoryview(buffer))
+        dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
         # Add files to different directories
         dfs.save("$.FILE1", b"data1")
@@ -629,7 +634,7 @@ class TestDFSDirectoryNavigation:
         buffer[262] = 0x00
         buffer[263] = 200
 
-        dfs = DFS.from_ssd(memoryview(buffer))
+        dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
         dfs.save("$.FILE1", b"data1")
         dfs.save("A.FILE2", b"data2")
@@ -652,7 +657,7 @@ class TestDFSDirectoryNavigation:
         buffer[262] = 0x00
         buffer[263] = 200
 
-        dfs = DFS.from_ssd(memoryview(buffer))
+        dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
         dfs.save("$.FILE1", b"data1")
         dfs.save("A.FILE2", b"data2")
@@ -677,7 +682,7 @@ class TestDFSDirectoryNavigation:
         buffer[262] = 0x00
         buffer[263] = 200
 
-        dfs = DFS.from_ssd(memoryview(buffer))
+        dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
         dfs.save("$.FILE1", b"data1")
 
@@ -700,7 +705,7 @@ class TestDFSPythonicProtocols:
         buffer[262] = 0x00
         buffer[263] = 200
 
-        dfs = DFS.from_ssd(memoryview(buffer))
+        dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
         dfs.save("$.EXISTS", b"data")
 
@@ -718,7 +723,7 @@ class TestDFSPythonicProtocols:
         buffer[262] = 0x00
         buffer[263] = 200
 
-        dfs = DFS.from_ssd(memoryview(buffer))
+        dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
         dfs.save("$.FILE1", b"data1")
         dfs.save("$.FILE2", b"data2")
@@ -740,7 +745,7 @@ class TestDFSPythonicProtocols:
         buffer[262] = 0x00
         buffer[263] = 200
 
-        dfs = DFS.from_ssd(memoryview(buffer))
+        dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
         assert len(dfs) == 0
 
@@ -764,7 +769,7 @@ class TestDFSPythonicProtocols:
         buffer[262] = 0x00
         buffer[263] = 200
 
-        dfs = DFS.from_ssd(memoryview(buffer))
+        dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
         dfs.save("$.FILE1", b"data")
 
@@ -785,7 +790,7 @@ class TestDFSPythonicProtocols:
         buffer[262] = 0x00
         buffer[263] = 200
 
-        dfs = DFS.from_ssd(memoryview(buffer))
+        dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
         dfs.save("$.FILE1", b"data")
         dfs.save("$.FILE2", b"data")
@@ -811,7 +816,7 @@ class TestDFSIntegration:
         buffer[262] = 0x00
         buffer[263] = 200
 
-        dfs = DFS.from_ssd(memoryview(buffer))
+        dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
         # Add some files
         dfs.save("$.FILE1", b"Contents of file 1")

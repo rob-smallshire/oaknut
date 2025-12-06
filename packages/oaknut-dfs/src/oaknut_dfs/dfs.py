@@ -2,9 +2,9 @@
 
 from typing import Optional
 
-from oaknut_dfs.acorn_dfs_catalogue import AcornDFSCatalogue
 from oaknut_dfs.catalogue import FileEntry
 from oaknut_dfs.catalogued_surface import CataloguedSurface
+from oaknut_dfs.formats import DiskFormat
 from oaknut_dfs.surface import DiscImage, SurfaceSpec
 
 
@@ -23,62 +23,58 @@ class DFS:
 
     # Named constructors
     @classmethod
-    def from_ssd(cls, buffer: memoryview) -> "DFS":
+    def from_buffer(
+        cls, buffer: memoryview, disk_format: DiskFormat, side: int = 0
+    ) -> "DFS":
         """
-        Create from SSD buffer.
+        Create DFS from buffer using specified disk format.
 
         Args:
-            buffer: SSD disk image buffer (single-sided)
+            buffer: Disk image buffer
+            disk_format: DiskFormat specifying geometry and catalogue type
+            side: Which surface to use (0-based index, default 0)
 
         Returns:
-            DFS instance
+            DFS instance for the specified side
+
+        Raises:
+            IndexError: If side index is out of range for the format
+            KeyError: If catalogue_name is not registered
+            ValueError: If buffer size doesn't match format requirements
+
+        Examples:
+            # Single-sided 40-track SSD
+            dfs = DFS.from_buffer(buffer, ACORN_DFS_40T_SINGLE_SIDED)
+
+            # Double-sided 40-track DSD (side 0)
+            dfs = DFS.from_buffer(buffer, ACORN_DFS_40T_DOUBLE_SIDED_INTERLEAVED, side=0)
+
+            # Double-sided 40-track DSD (side 1)
+            dfs = DFS.from_buffer(buffer, ACORN_DFS_40T_DOUBLE_SIDED_INTERLEAVED, side=1)
+
+            # 80-track sequential DSD
+            dfs = DFS.from_buffer(buffer, ACORN_DFS_80T_DOUBLE_SIDED_SEQUENTIAL, side=1)
         """
-        spec = SurfaceSpec(
-            num_tracks=40,
-            sectors_per_track=10,
-            bytes_per_sector=256,
-            track_zero_offset_bytes=0,
-            track_stride_bytes=2560,
-        )
-        disc = DiscImage(buffer, [spec])
-        surface = disc.surface(0)
-        catalogued = CataloguedSurface(surface, AcornDFSCatalogue)
-        return cls(catalogued)
+        from oaknut_dfs.catalogue import Catalogue
 
-    @classmethod
-    def from_dsd(cls, buffer: memoryview, side: int) -> "DFS":
-        """
-        Create from DSD buffer (specify side 0 or 1).
+        # Validate side parameter
+        num_surfaces = len(disk_format.surface_specs)
+        if not 0 <= side < num_surfaces:
+            raise IndexError(f"side must be in range [0, {num_surfaces}), got {side}")
 
-        Args:
-            buffer: DSD disk image buffer (double-sided)
-            side: Which side to use (0 or 1)
+        # Look up catalogue class from registry
+        if disk_format.catalogue_name not in Catalogue._registry:
+            raise KeyError(
+                f"Unknown catalogue type: {disk_format.catalogue_name!r}. "
+                f"Available: {list(Catalogue._registry.keys())}"
+            )
+        catalogue_class = Catalogue._registry[disk_format.catalogue_name]
 
-        Returns:
-            DFS instance
-        """
-        if side not in (0, 1):
-            raise ValueError(f"Side must be 0 or 1, got {side}")
-
-        # DSD: 2 sides, interleaved by track
-        # Each side has 40 tracks, but tracks alternate (0, 2, 4,... for side 0; 1, 3, 5,... for side 1)
-        spec0 = SurfaceSpec(
-            num_tracks=40,  # 40 tracks per side
-            sectors_per_track=10,
-            bytes_per_sector=256,
-            track_zero_offset_bytes=0,
-            track_stride_bytes=5120,  # Skip 2 tracks (one for each side)
-        )
-        spec1 = SurfaceSpec(
-            num_tracks=40,
-            sectors_per_track=10,
-            bytes_per_sector=256,
-            track_zero_offset_bytes=2560,  # Offset by one track
-            track_stride_bytes=5120,  # Skip 2 tracks
-        )
-        disc = DiscImage(buffer, [spec0, spec1])
+        # Create disc and surface
+        disc = DiscImage(buffer, disk_format.surface_specs)
         surface = disc.surface(side)
-        catalogued = CataloguedSurface(surface, AcornDFSCatalogue)
+        catalogued = CataloguedSurface(surface, catalogue_class)
+
         return cls(catalogued)
 
     # File operations

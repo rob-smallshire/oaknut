@@ -156,43 +156,95 @@ Save the disk from the emulator to the `images/` directory with the exact filena
 
 ## Using Test Images in Tests
 
-Example test structure:
+### Fixtures
 
+The test suite provides two pytest fixtures in `tests/conftest.py` for working with reference images:
+
+#### `reference_image(name, side=0)` - Read-only Access
+
+Creates a temporary copy of a reference image and returns a `DFS` instance.
+
+- **Automatically creates temporary copy** to prevent accidental modification of originals
+- **Returns:** `DFS` instance ready for testing
+- **Format detection:** Automatically detects SSD/DSD and track count from file size
+
+**Example:**
 ```python
-import pytest
-from pathlib import Path
-from oaknut_dfs.dfs_filesystem import DFSImage
+def test_basic_validation_disk(reference_image):
+    """Test against reference disk created by emulator."""
+    disk = reference_image("01-basic-validation.ssd")
 
-TEST_DATA_DIR = Path(__file__).parent / "data" / "images"
+    # Verify expected files exist
+    assert disk.exists("$.TEXT")
+    assert disk.exists("$.BINARY")
+    assert disk.exists("$.LOCKED")
 
-def test_basic_validation_disk():
-    """Test against reference disk created in b2."""
-    disk_path = TEST_DATA_DIR / "01-basic-validation.ssd"
+    # Verify content
+    text_data = disk.load("$.TEXT")
+    assert text_data == b"Simple text content"
 
-    with DFSImage.open(disk_path) as disk:
-        # Verify expected files exist
-        assert disk.exists("$.TEXT")
-        assert disk.exists("$.BINARY")
-        assert disk.exists("$.LOCKED")
+    # Verify binary data (0-255 sequence)
+    binary_data = disk.load("$.BINARY")
+    assert len(binary_data) == 256
+    assert binary_data == bytes(range(256))
 
-        # Verify content
-        text_data = disk.load("$.TEXT")
-        assert b"Simple text content" in text_data
+    # Verify metadata
+    info = disk.get_file_info("$.BINARY")
+    assert info.load_address == 0x2000
+    assert info.exec_address == 0x2000
 
-        # Verify binary data (0-255 sequence)
-        binary_data = disk.load("$.BINARY")
-        assert len(binary_data) == 256
-        assert list(binary_data) == list(range(256))
-
-        # Verify metadata
-        info = disk.get_file_info("$.BINARY")
-        assert info.load_address == 0x2000
-        assert info.exec_address == 0x2000
-
-        # Verify locked status
-        info = disk.get_file_info("$.LOCKED")
-        assert info.locked is True
+    # Verify locked status
+    info = disk.get_file_info("$.LOCKED")
+    assert info.locked is True
 ```
+
+**For double-sided disks:**
+```python
+def test_double_sided_disk(reference_image):
+    """Test both sides of a DSD image."""
+    disk0 = reference_image("04-double-sided.dsd", side=0)
+    disk1 = reference_image("04-double-sided.dsd", side=1)
+
+    # Each side has independent catalog
+    assert len(disk0.files) == 13
+    assert len(disk1.files) == 9
+```
+
+#### `writable_copy(name, side=0)` - Writable Access
+
+Creates a writable temporary copy for tests that modify disk content.
+
+- **Returns:** Tuple of `(DFS instance, Path to temp file)`
+- **Use for:** Testing write operations, compaction, deletion, etc.
+
+**Example:**
+```python
+def test_compaction(writable_copy):
+    """Test disk compaction on fragmented disk."""
+    disk, path = writable_copy("03-fragmented.ssd")
+
+    # Test modification operations
+    files_moved = disk.compact()
+    assert files_moved > 0
+
+    # Add new files
+    disk.save("$.NEWFILE", b"test data")
+    assert disk.exists("$.NEWFILE")
+```
+
+### Test Organization
+
+- **`test_reference_integration.py`** - Main integration tests for all 4 reference images
+- **`test_reference_metadata.py`** - Disk metadata verification (titles, boot options, sector layout)
+- **`test_reference_images_base.py`** - Infrastructure validation (verifies images exist and are protected)
+
+### Adding New Reference Images
+
+1. Write BBC BASIC generator in `generators/XX-name.bas`
+2. Run generator on BBC Micro emulator to create disk image
+3. Copy disk image to `images/XX-name.ssd` (or `.dsd`)
+4. Set read-only protection: `chmod 444 images/XX-name.ssd`
+5. Add test class in `test_reference_integration.py`
 
 ## Maintenance
 

@@ -5,6 +5,10 @@ from pathlib import Path
 
 import oaknut_dfs.acorn_encoding  # Register codec
 from oaknut_dfs.dfs import DFS
+from oaknut_dfs.formats import (
+    ACORN_DFS_40T_SINGLE_SIDED,
+    ACORN_DFS_40T_DOUBLE_SIDED_INTERLEAVED,
+)
 
 
 class TestExportFile:
@@ -21,7 +25,7 @@ class TestExportFile:
         buffer[262] = 0x00
         buffer[263] = 200
 
-        dfs = DFS.from_ssd(memoryview(buffer))
+        dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
         # Add a file
         dfs.save("$.HELLO", b"Hello World", load_address=0x1900, exec_address=0x8023)
@@ -53,7 +57,7 @@ class TestExportFile:
         buffer[262] = 0x00
         buffer[263] = 200
 
-        dfs = DFS.from_ssd(memoryview(buffer))
+        dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
         dfs.save("$.TEST", b"data")
 
@@ -79,7 +83,7 @@ class TestExportFile:
         buffer[262] = 0x00
         buffer[263] = 200
 
-        dfs = DFS.from_ssd(memoryview(buffer))
+        dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
         with pytest.raises(FileNotFoundError):
             dfs.export_file("$.NOSUCH", str(tmp_path / "file.bin"))
@@ -95,7 +99,7 @@ class TestExportFile:
         buffer[262] = 0x00
         buffer[263] = 200
 
-        dfs = DFS.from_ssd(memoryview(buffer))
+        dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
         dfs.save("$.FILE", b"data")
 
@@ -122,7 +126,7 @@ class TestExportAll:
         buffer[262] = 0x00
         buffer[263] = 200
 
-        dfs = DFS.from_ssd(memoryview(buffer))
+        dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
         # Add some files
         dfs.save("$.FILE1", b"Contents 1", load_address=0x1900, exec_address=0x8023)
@@ -170,7 +174,7 @@ class TestExportAll:
         buffer[262] = 0x00
         buffer[263] = 200
 
-        dfs = DFS.from_ssd(memoryview(buffer))
+        dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
         dfs.save("$.TEST", b"data")
 
@@ -195,7 +199,7 @@ class TestExportAll:
         buffer[262] = 0x00
         buffer[263] = 200
 
-        dfs = DFS.from_ssd(memoryview(buffer))
+        dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
         dfs.save("$.TEST", b"data")
 
@@ -218,7 +222,7 @@ class TestExportAll:
         buffer[262] = 0x00
         buffer[263] = 200
 
-        dfs = DFS.from_ssd(memoryview(buffer))
+        dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
         # Export
         target = tmp_path / "export"
@@ -243,7 +247,7 @@ class TestImportFromInf:
         buffer[262] = 0x00
         buffer[263] = 200
 
-        dfs = DFS.from_ssd(memoryview(buffer))
+        dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
         # Create test files
         data_file = tmp_path / "TEST"
@@ -276,7 +280,7 @@ class TestImportFromInf:
         buffer[262] = 0x00
         buffer[263] = 200
 
-        dfs = DFS.from_ssd(memoryview(buffer))
+        dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
         # Create test files
         data_file = tmp_path / "TEST"
@@ -303,7 +307,7 @@ class TestImportFromInf:
         buffer[262] = 0x00
         buffer[263] = 200
 
-        dfs = DFS.from_ssd(memoryview(buffer))
+        dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
         # Create test file without .inf
         data_file = tmp_path / "MYFILE"
@@ -333,7 +337,7 @@ class TestImportFromInf:
         buffer[262] = 0x00
         buffer[263] = 200
 
-        dfs = DFS.from_ssd(memoryview(buffer))
+        dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
         # Create files in different locations
         data_file = tmp_path / "data" / "FILE"
@@ -367,7 +371,7 @@ class TestExportImportRoundTrip:
         buffer1[262] = 0x00
         buffer1[263] = 200
 
-        dfs1 = DFS.from_ssd(memoryview(buffer1))
+        dfs1 = DFS.from_buffer(memoryview(buffer1), ACORN_DFS_40T_SINGLE_SIDED)
 
         # Add files with various metadata
         dfs1.save("$.PROG", b"Program code", load_address=0x1900, exec_address=0x8023)
@@ -388,7 +392,7 @@ class TestExportImportRoundTrip:
         buffer2[262] = 0x00
         buffer2[263] = 200
 
-        dfs2 = DFS.from_ssd(memoryview(buffer2))
+        dfs2 = DFS.from_buffer(memoryview(buffer2), ACORN_DFS_40T_SINGLE_SIDED)
 
         # Import all files
         for filepath in export_path.glob("*"):
