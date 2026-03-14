@@ -60,7 +60,7 @@ dmypy.json
 .pyre/
 
 .idea
-/CLAUDE.md
+.claude/
 
 # Test data - images generated from .bas files, not committed
 tests/data/images/*.ssd
