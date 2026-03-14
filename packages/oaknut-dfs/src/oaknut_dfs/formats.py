@@ -8,6 +8,7 @@ from oaknut_dfs.surface import SurfaceSpec
 BYTES_PER_SECTOR = 256
 ACORN_DFS_SECTORS_PER_TRACK = 10
 ACORN_DFS_CATALOGUE_NAME = "acorn-dfs"
+WATFORD_DFS_CATALOGUE_NAME = "watford-dfs"
 
 # Track counts
 TRACKS_40 = 40
@@ -144,6 +145,52 @@ ACORN_DFS_80T_DOUBLE_SIDED_SEQUENTIAL = DiskFormat(
     catalogue_name=ACORN_DFS_CATALOGUE_NAME,
 )
 
+# Watford DFS formats (62-file catalog, same geometry as Acorn DFS: 10 sectors/track)
+
+# 40-track formats
+WATFORD_DFS_40T_SINGLE_SIDED = DiskFormat(
+    surface_specs=[
+        _single_sided_spec(TRACKS_40, ACORN_DFS_SECTORS_PER_TRACK, BYTES_PER_SECTOR)
+    ],
+    catalogue_name=WATFORD_DFS_CATALOGUE_NAME,
+)
+
+WATFORD_DFS_40T_DOUBLE_SIDED_INTERLEAVED = DiskFormat(
+    surface_specs=_interleaved_double_sided_specs(
+        TRACKS_40, ACORN_DFS_SECTORS_PER_TRACK, BYTES_PER_SECTOR
+    ),
+    catalogue_name=WATFORD_DFS_CATALOGUE_NAME,
+)
+
+WATFORD_DFS_40T_DOUBLE_SIDED_SEQUENTIAL = DiskFormat(
+    surface_specs=_sequential_double_sided_specs(
+        TRACKS_40, ACORN_DFS_SECTORS_PER_TRACK, BYTES_PER_SECTOR
+    ),
+    catalogue_name=WATFORD_DFS_CATALOGUE_NAME,
+)
+
+# 80-track formats
+WATFORD_DFS_80T_SINGLE_SIDED = DiskFormat(
+    surface_specs=[
+        _single_sided_spec(TRACKS_80, ACORN_DFS_SECTORS_PER_TRACK, BYTES_PER_SECTOR)
+    ],
+    catalogue_name=WATFORD_DFS_CATALOGUE_NAME,
+)
+
+WATFORD_DFS_80T_DOUBLE_SIDED_INTERLEAVED = DiskFormat(
+    surface_specs=_interleaved_double_sided_specs(
+        TRACKS_80, ACORN_DFS_SECTORS_PER_TRACK, BYTES_PER_SECTOR
+    ),
+    catalogue_name=WATFORD_DFS_CATALOGUE_NAME,
+)
+
+WATFORD_DFS_80T_DOUBLE_SIDED_SEQUENTIAL = DiskFormat(
+    surface_specs=_sequential_double_sided_specs(
+        TRACKS_80, ACORN_DFS_SECTORS_PER_TRACK, BYTES_PER_SECTOR
+    ),
+    catalogue_name=WATFORD_DFS_CATALOGUE_NAME,
+)
+
 # Export all format constants
 __all__ = [
     "DiskFormat",
@@ -153,4 +200,10 @@ __all__ = [
     "ACORN_DFS_80T_SINGLE_SIDED",
     "ACORN_DFS_80T_DOUBLE_SIDED_INTERLEAVED",
     "ACORN_DFS_80T_DOUBLE_SIDED_SEQUENTIAL",
+    "WATFORD_DFS_40T_SINGLE_SIDED",
+    "WATFORD_DFS_40T_DOUBLE_SIDED_INTERLEAVED",
+    "WATFORD_DFS_40T_DOUBLE_SIDED_SEQUENTIAL",
+    "WATFORD_DFS_80T_SINGLE_SIDED",
+    "WATFORD_DFS_80T_DOUBLE_SIDED_INTERLEAVED",
+    "WATFORD_DFS_80T_DOUBLE_SIDED_SEQUENTIAL",
 ]
