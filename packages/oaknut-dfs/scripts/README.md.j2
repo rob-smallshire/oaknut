@@ -1,9 +1,9 @@
 # oaknut-dfs
 
-[![PyPI version](https://img.shields.io/pypi/v/oaknut-dfs)](https://pypi.org/project/oaknut-dfs/)
+[![PyPI version](https://img.shields.io/pypi/v/oaknut-dfs.svg)](https://pypi.org/project/oaknut-dfs/)
 [![CI](https://github.com/rob-smallshire/oaknut-dfs/actions/workflows/tests.yml/badge.svg)](https://github.com/rob-smallshire/oaknut-dfs/actions/workflows/tests.yml)
-[![Python versions](https://img.shields.io/pypi/pyversions/oaknut-dfs)](https://pypi.org/project/oaknut-dfs/)
-[![License: MIT](https://img.shields.io/pypi/l/oaknut-dfs)](https://github.com/rob-smallshire/oaknut-dfs/blob/master/LICENSE)
+[![Python versions](https://img.shields.io/pypi/pyversions/oaknut-dfs.svg)](https://pypi.org/project/oaknut-dfs/)
+[![License: MIT](https://img.shields.io/pypi/l/oaknut-dfs.svg)](https://github.com/rob-smallshire/oaknut-dfs/blob/master/LICENSE)
 
 A Python library for reading and writing
 [Acorn DFS](https://en.wikipedia.org/wiki/Disc_Filing_System) (Disc Filing
