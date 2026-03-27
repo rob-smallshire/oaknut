@@ -33,15 +33,13 @@ class TestReferenceImageSetup:
 
     def test_reference_images_directory_exists(self):
         """Reference images directory structure is set up."""
-        if not REFERENCE_IMAGES.exists():
-            pytest.skip("Reference images directory not present")
+        assert REFERENCE_IMAGES.exists()
         assert REFERENCE_IMAGES.is_dir()
 
     def test_generators_directory_exists(self):
         """Generator programs directory exists."""
         generators_dir = Path(__file__).parent / "data" / "generators"
-        if not generators_dir.exists():
-            pytest.skip("Generators directory not present")
+        assert generators_dir.exists()
         assert generators_dir.is_dir()
 
     def test_list_available_reference_images(self):
