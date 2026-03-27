@@ -61,7 +61,3 @@ dmypy.json
 
 .idea
 .claude/
-
-# Test data - images generated from .bas files, not committed
-tests/data/images/*.ssd
-tests/data/images/*.dsd
