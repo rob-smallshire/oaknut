@@ -1,28 +1,33 @@
-[build-system]
-build-backend = 'setuptools.build_meta'
-requires = ["setuptools>=49.9.0"]
-
 [project]
 name = "oaknut-dfs"
-requires-python = ">=3.11"
 dynamic = ["version"]
-authors = [{ name = "Rob Smallshire", email = "robert@smallshire.org.uk" }]
-description = "Python library for handling Acorn DFS disk images (SSD/DSD format)"
-readme = { file = "README.md", content-type = "text/markdown" }
+authors = [{ name = "Robert Smallshire", email = "robert@smallshire.org.uk" }]
+description = "Python library for handling Acorn DFS disc images (SSD/DSD format)"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.11"
 classifiers = [
-  "Development Status :: 3 - Alpha",
-  "Environment :: Console",
-  "Operating System :: OS Independent",
-  "Programming Language :: Python",
-  "Programming Language :: Python :: 3 :: Only",
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
 ]
 dependencies = [
     "click>=8.1.7",
     "typename>=1.0.4",
 ]
 
-[project.scripts]
-oaknut-dfs = "oaknut_dfs.cli:cli"
+# [project.scripts]
+# oaknut-dfs = "oaknut_dfs.cli:cli"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
 
 [tool.setuptools.dynamic]
 version = { attr = "oaknut_dfs.__version__" }
@@ -36,15 +41,36 @@ testpaths = [
     "tests",
 ]
 
-[tool.black]
-line-length = 100
-
 [dependency-groups]
 test = [
     "pytest>=8.3.4",
 ]
 
 dev = [
-  "ruff>=0.9.1",
-  { include-group = "test" },
+    "bump-my-version>=0.28.0",
+    "jinja2>=3.0",
+    "pre-commit>=3.0",
+    "ruff>=0.9.1",
+    {include-group = "test"},
 ]
+
+[tool.bumpversion]
+current_version = "0.1.0"
+parse = "(?P<major>\\d+)\\.(?P<minor>\\d+)\\.(?P<patch>\\d+)"
+serialize = ["{major}.{minor}.{patch}"]
+tag = true
+commit = true
+message = "Bump version: {current_version} → {new_version}"
+tag_name = "v{new_version}"
+tag_message = "Bump version: {current_version} → {new_version}"
+files = [
+    { filename = "src/oaknut_dfs/__init__.py" },
+]
+
+[tool.uv]
+index-url = "https://pypi.org/simple/"
+publish-url = "https://upload.pypi.org/legacy/"
+
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"

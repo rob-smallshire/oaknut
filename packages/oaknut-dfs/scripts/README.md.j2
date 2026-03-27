@@ -80,106 +80,43 @@ uv sync
 ### Creating a DFS instance
 
 ```python
-from oaknut_dfs import DFS, ACORN_DFS_40T_SINGLE_SIDED
-
-# Create a 40-track single-sided disc image (102,400 bytes)
-buffer = bytearray(102400)
-# ... initialise catalogue sectors ...
-
-dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
-print(dfs.title)   # 'DEMO'
-print(repr(dfs))   # DFS(title='DEMO', files=0, free_sectors=398)
+{{ basic_usage }}
 ```
 
 ### Saving and loading files
 
 ```python
-# Save files with load and execution addresses
-dfs.save("$.HELLO", b"Hello, World!", load_address=0x1200, exec_address=0x1200)
-dfs.save("$.README", b"oaknut-dfs demo disc")
-
-# Load a file back
-data = dfs.load("$.HELLO")
-print(data)   # b'Hello, World!'
+{{ save_load }}
 ```
 
 ### Listing files
 
 ```python
-for entry in dfs.files:
-    lock = "L" if entry.locked else " "
-    print(f"{lock} {entry.path:10s}  {entry.load_address:06X}  {entry.exec_address:06X}  {entry.length:06X}")
-#   $.HELLO     001200  001200  00000D
-#   $.README    000000  000000  000014
-# L $.PROG      003000  003000  000200
+{{ file_listing }}
 ```
 
 ### File information
 
 ```python
-info = dfs.get_file_info("$.HELLO")
-print(info.name)            # '$.HELLO'
-print(hex(info.load_address))  # 0x1200
-print(hex(info.exec_address))  # 0x1200
-print(info.length)          # 13
-print(info.locked)          # False
-print(info.start_sector)    # 2
-print(info.sectors)         # 1
+{{ file_info }}
 ```
 
 ### Disc information
 
 ```python
-print(dfs.info)
-# {
-#     'title': 'DEMO',
-#     'num_files': 1,
-#     'total_sectors': 400,
-#     'free_sectors': 397,
-#     'boot_option': 0,
-# }
+{{ disc_info }}
 ```
 
 ### Pythonic interface
 
 ```python
-# Check if a file exists
-print("$.HELLO" in dfs)   # True
-print("$.NOPE" in dfs)    # False
-
-# Number of files
-print(len(dfs))            # 2
-
-# Iterate over files
-for entry in dfs:
-    print(entry.path)
-# $.HELLO
-# $.README
+{{ pythonic }}
 ```
 
 ### Double-sided discs (DSD)
 
 ```python
-from oaknut_dfs import ACORN_DFS_40T_DOUBLE_SIDED_INTERLEAVED
-
-# DSD images contain two independent sides, each with its own catalogue.
-# This mirrors the BBC Micro, where double-sided discs were accessed as
-# separate drives using *DRIVE 0 and *DRIVE 2.
-
-buffer = bytearray(204800)  # 40-track double-sided
-# ... initialise catalogue sectors for both sides ...
-
-# Access each side independently
-dfs0 = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_DOUBLE_SIDED_INTERLEAVED, side=0)
-dfs1 = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_DOUBLE_SIDED_INTERLEAVED, side=1)
-
-# Each side has its own title, files, and catalogue
-print(dfs0.title)   # 'SIDE ZERO'
-print(dfs1.title)   # 'SIDE ONE'
-
-# Files on one side are not visible from the other
-print("$.FILE0" in dfs0)   # True
-print("$.FILE0" in dfs1)   # False
+{{ dsd_example }}
 ```
 
 ## Development
