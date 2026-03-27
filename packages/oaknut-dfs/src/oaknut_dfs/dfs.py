@@ -1,6 +1,9 @@
 """High-level DFS filesystem operations."""
 
-from typing import Optional
+import mmap
+from contextlib import contextmanager
+from os import PathLike
+from typing import Iterator, Optional, Union
 
 from oaknut_dfs.catalogue import FileEntry
 from oaknut_dfs.catalogued_surface import CataloguedSurface
@@ -22,6 +25,58 @@ class DFS:
         self._current_directory = "$"  # Default directory
 
     # Named constructors
+    @staticmethod
+    @contextmanager
+    def from_file(
+        filepath: Union[str, PathLike],
+        disk_format: DiskFormat,
+        side: int = 0,
+        mode: str = "rb",
+    ) -> Iterator["DFS"]:
+        """
+        Open a disc image file as a context manager.
+
+        When opened in read-write mode ("r+b"), changes are written
+        through to the file via mmap.
+
+        Args:
+            filepath: Path to the disc image file (.ssd or .dsd)
+            disk_format: DiskFormat specifying geometry and catalogue type
+            side: Which surface to use (0-based index, default 0)
+            mode: File open mode — "rb" for read-only (default),
+                  "r+b" for read-write
+
+        Yields:
+            DFS instance backed by the file
+
+        Raises:
+            FileNotFoundError: If the file does not exist
+            IndexError: If side index is out of range for the format
+            ValueError: If mode is not "rb" or "r+b"
+
+        Examples:
+            # Read-only access
+            with DFS.from_file("Zalaga.ssd", ACORN_DFS_80T_SINGLE_SIDED) as dfs:
+                print(dfs.title)
+                data = dfs.load("$.ZALAGA")
+
+            # Read-write access
+            with DFS.from_file("disc.ssd", ACORN_DFS_40T_SINGLE_SIDED, mode="r+b") as dfs:
+                dfs.save("$.HELLO", b"Hello!")
+        """
+        if mode not in ("rb", "r+b"):
+            raise ValueError(f"mode must be 'rb' or 'r+b', got {mode!r}")
+
+        access = mmap.ACCESS_READ if mode == "rb" else mmap.ACCESS_WRITE
+        with open(filepath, mode) as f:
+            mm = mmap.mmap(f.fileno(), 0, access=access)
+            dfs = DFS.from_buffer(memoryview(mm), disk_format, side)
+            try:
+                yield dfs
+            finally:
+                if mode == "r+b":
+                    mm.flush()
+
     @classmethod
     def from_buffer(
         cls, buffer: memoryview, disk_format: DiskFormat, side: int = 0

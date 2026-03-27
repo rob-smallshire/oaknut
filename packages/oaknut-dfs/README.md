@@ -34,9 +34,10 @@ DFS disc images using familiar Python patterns.
 
 ## Prerequisites
 
-oaknut-dfs requires only [`uv`](https://docs.astral.sh/uv/). `uv` handles
-Python installation, dependency resolution, and virtual environments
-automatically --- you do not need to install anything else by hand.
+oaknut-dfs is a standard Python package and can be installed with any Python
+package manager, including `pip`. The instructions below use
+[`uv`](https://docs.astral.sh/uv/), which handles Python installation,
+dependency resolution, and virtual environments automatically.
 
 ### Installing uv
 
@@ -69,6 +70,12 @@ for other methods including pip, pipx, Cargo, Conda, Winget, and Scoop.
 uv add oaknut-dfs
 ```
 
+or with pip:
+
+```
+pip install oaknut-dfs
+```
+
 ### For development
 
 ```
@@ -77,54 +84,58 @@ uv sync
 
 ## Usage
 
-### Creating a DFS instance
+### Opening a disc image
 
 ```python
-from oaknut_dfs import DFS, ACORN_DFS_40T_SINGLE_SIDED
+from oaknut_dfs import DFS, ACORN_DFS_80T_SINGLE_SIDED
 
-# Create a 40-track single-sided disc image (102,400 bytes)
-buffer = bytearray(102400)
-# ... initialise catalogue sectors ...
-
-dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
-print(dfs.title)   # 'DEMO'
-print(repr(dfs))   # DFS(title='DEMO', files=0, free_sectors=398)
+with DFS.from_file("Zalaga.ssd", ACORN_DFS_80T_SINGLE_SIDED) as dfs:
+    print(dfs.title)   # 'ZALAG-L'
+    print(len(dfs))    # 4 files
 ```
 
-### Saving and loading files
-
-```python
-# Save files with load and execution addresses
-dfs.save("$.HELLO", b"Hello, World!", load_address=0x1200, exec_address=0x1200)
-dfs.save("$.README", b"oaknut-dfs demo disc")
-
-# Load a file back
-data = dfs.load("$.HELLO")
-print(data)   # b'Hello, World!'
-```
-
-### Listing files
+### Reading the catalogue
 
 ```python
 for entry in dfs.files:
     lock = "L" if entry.locked else " "
-    print(f"{lock} {entry.path:10s}  {entry.load_address:06X}  {entry.exec_address:06X}  {entry.length:06X}")
-#   $.HELLO     001200  001200  00000D
-#   $.README    000000  000000  000014
-# L $.PROG      003000  003000  000200
+    print(
+        f"{lock} {entry.path:10s}"
+        f"  load={entry.load_address:08X}"
+        f"  exec={entry.exec_address:08X}"
+        f"  length={entry.length:5d}"
+    )
+# L $.ZALAGA?   load=00003000  exec=00004522  length=11557
+# L $.ZALAGA    load=000023EE  exec=00002400  length= 2816
+# L $.ZALAG-L   load=00001900  exec=00001900  length= 3328
+# L $.!BOOT     load=00000000  exec=00000000  length=   48
 ```
 
 ### File information
 
 ```python
-info = dfs.get_file_info("$.HELLO")
-print(info.name)            # '$.HELLO'
-print(hex(info.load_address))  # 0x1200
-print(hex(info.exec_address))  # 0x1200
-print(info.length)          # 13
-print(info.locked)          # False
-print(info.start_sector)    # 2
-print(info.sectors)         # 1
+info = dfs.get_file_info("$.ZALAGA?")
+print(info.name)              # '$.ZALAGA?'
+print(hex(info.load_address)) # 0x3000
+print(hex(info.exec_address)) # 0x4522
+print(info.length)            # 11557
+print(info.locked)            # True
+print(info.start_sector)      # 27
+print(info.sectors)           # 46
+```
+
+### Loading a file
+
+```python
+# Get the catalogue entry for the main game binary
+info = dfs.get_file_info("$.ZALAGA")
+print(hex(info.load_address))  # 0x23ee — where to load in memory
+print(hex(info.exec_address))  # 0x2400 — entry point for execution
+print(info.length)             # 2816 bytes
+
+# Load the file data
+data = dfs.load("$.ZALAGA")
+print(len(data))               # 2816
 ```
 
 ### Disc information
@@ -132,11 +143,11 @@ print(info.sectors)         # 1
 ```python
 print(dfs.info)
 # {
-#     'title': 'DEMO',
-#     'num_files': 1,
-#     'total_sectors': 400,
-#     'free_sectors': 397,
-#     'boot_option': 0,
+#     'title': 'ZALAG-L\x00\x00\x00\x00\x00',
+#     'num_files': 4,
+#     'total_sectors': 800,
+#     'free_sectors': 727,
+#     'boot_option': 3,
 # }
 ```
 
@@ -144,17 +155,41 @@ print(dfs.info)
 
 ```python
 # Check if a file exists
-print("$.HELLO" in dfs)   # True
-print("$.NOPE" in dfs)    # False
+print("$.!BOOT" in dfs)    # True
+print("$.MISSING" in dfs)  # False
 
 # Number of files
-print(len(dfs))            # 2
+print(len(dfs))             # 4
 
-# Iterate over files
+# Iterate over filenames
 for entry in dfs:
     print(entry.path)
-# $.HELLO
-# $.README
+# $.ZALAGA?
+# $.ZALAGA
+# $.ZALAG-L
+# $.!BOOT
+```
+
+### Creating and writing disc images
+
+```python
+from oaknut_dfs import ACORN_DFS_40T_SINGLE_SIDED
+
+# Create an empty 40-track single-sided disc in memory
+buffer = bytearray(102400)  # 40 tracks * 10 sectors * 256 bytes
+# ... initialise catalogue sectors ...
+
+dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
+
+# Save files with load and execution addresses
+dfs.save("$.HELLO", b"Hello, World!", load_address=0x1200, exec_address=0x1200)
+dfs.save("$.README", b"oaknut-dfs demo disc")
+
+# Load a file back
+data = dfs.load("$.HELLO")
+print(data)   # b'Hello, World!'
+
+print(repr(dfs))   # DFS(title='DEMO', files=2, free_sectors=396)
 ```
 
 ### Double-sided discs (DSD)

@@ -34,9 +34,10 @@ DFS disc images using familiar Python patterns.
 
 ## Prerequisites
 
-oaknut-dfs requires only [`uv`](https://docs.astral.sh/uv/). `uv` handles
-Python installation, dependency resolution, and virtual environments
-automatically --- you do not need to install anything else by hand.
+oaknut-dfs is a standard Python package and can be installed with any Python
+package manager, including `pip`. The instructions below use
+[`uv`](https://docs.astral.sh/uv/), which handles Python installation,
+dependency resolution, and virtual environments automatically.
 
 ### Installing uv
 
@@ -69,6 +70,12 @@ for other methods including pip, pipx, Cargo, Conda, Winget, and Scoop.
 uv add oaknut-dfs
 ```
 
+or with pip:
+
+```
+pip install oaknut-dfs
+```
+
 ### For development
 
 ```
@@ -77,28 +84,28 @@ uv sync
 
 ## Usage
 
-### Creating a DFS instance
+### Opening a disc image
 
 ```python
-{{ basic_usage }}
+{{ open_disc }}
 ```
 
-### Saving and loading files
+### Reading the catalogue
 
 ```python
-{{ save_load }}
-```
-
-### Listing files
-
-```python
-{{ file_listing }}
+{{ catalogue }}
 ```
 
 ### File information
 
 ```python
 {{ file_info }}
+```
+
+### Loading a file
+
+```python
+{{ load_file }}
 ```
 
 ### Disc information
@@ -111,6 +118,12 @@ uv sync
 
 ```python
 {{ pythonic }}
+```
+
+### Creating and writing disc images
+
+```python
+{{ save_load }}
 ```
 
 ### Double-sided discs (DSD)

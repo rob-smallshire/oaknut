@@ -3,6 +3,10 @@ from collections import namedtuple
 # Import acorn_encoding to register the codec
 import oaknut_dfs.acorn_encoding  # noqa: F401
 
+# Import catalogue implementations to register them
+import oaknut_dfs.acorn_dfs_catalogue  # noqa: F401
+import oaknut_dfs.watford_dfs_catalogue  # noqa: F401
+
 from oaknut_dfs.boot_option import BootOption
 from oaknut_dfs.catalogue import DiskInfo, FileInfo
 from oaknut_dfs.dfs import DFS

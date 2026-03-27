@@ -10,9 +10,7 @@ Usage:
 
 from __future__ import annotations
 
-import io
 import sys
-from contextlib import redirect_stdout
 from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader
@@ -24,24 +22,29 @@ from oaknut_dfs import DFS
 from oaknut_dfs.formats import (
     ACORN_DFS_40T_DOUBLE_SIDED_INTERLEAVED,
     ACORN_DFS_40T_SINGLE_SIDED,
+    ACORN_DFS_80T_SINGLE_SIDED,
 )
 
 REPO_DIRPATH = Path(__file__).resolve().parent.parent
 TEMPLATE_DIRPATH = REPO_DIRPATH / "scripts"
 TEMPLATE_FILENAME = "README.md.j2"
 OUTPUT_FILEPATH = REPO_DIRPATH / "README.md"
+FIXTURE_FILEPATH = REPO_DIRPATH / "tests" / "data" / "images" / "games" / "Disc003-Zalaga.ssd"
+
+
+def _load_game_disc() -> DFS:
+    """Load the Zalaga game disc for README examples."""
+    buffer = bytearray(FIXTURE_FILEPATH.read_bytes())
+    return DFS.from_buffer(memoryview(buffer), ACORN_DFS_80T_SINGLE_SIDED)
 
 
 def _create_empty_ssd(title: str = "", total_sectors: int = 400) -> bytearray:
     """Create a minimal 40-track SSD buffer with a valid empty catalogue."""
     buffer = bytearray(total_sectors * 256)
-    # Title: first 8 bytes in sector 0, next 4 bytes in sector 1
     encoded_title = title.encode("acorn")[:12].ljust(12, b" ")
     buffer[0:8] = encoded_title[:8]
     buffer[256:260] = encoded_title[8:12]
-    # Number of files * 8 in sector 1 byte 5
     buffer[261] = 0
-    # Total sectors: high bits in byte 6 (bits 0-1), low byte in byte 7
     buffer[262] = (total_sectors >> 8) & 0x03
     buffer[263] = total_sectors & 0xFF
     return buffer
@@ -51,11 +54,9 @@ def _create_empty_dsd(
     title_side0: str = "", title_side1: str = "", total_sectors_per_side: int = 400
 ) -> bytearray:
     """Create a minimal 40-track interleaved DSD buffer with valid catalogues on both sides."""
-    # Interleaved DSD: tracks alternate sides (track 0 side 0, track 0 side 1, track 1 side 0, ...)
     num_tracks = total_sectors_per_side // 10
     buffer = bytearray(num_tracks * 2 * 10 * 256)
 
-    # Side 0 catalogue is at the start (track 0, side 0)
     encoded_title0 = title_side0.encode("acorn")[:12].ljust(12, b" ")
     buffer[0:8] = encoded_title0[:8]
     buffer[256:260] = encoded_title0[8:12]
@@ -63,7 +64,6 @@ def _create_empty_dsd(
     buffer[262] = (total_sectors_per_side >> 8) & 0x03
     buffer[263] = total_sectors_per_side & 0xFF
 
-    # Side 1 catalogue starts at offset 2560 (track 0, side 1)
     side1_offset = 2560
     encoded_title1 = title_side1.encode("acorn")[:12].ljust(12, b" ")
     buffer[side1_offset : side1_offset + 8] = encoded_title1[:8]
@@ -75,116 +75,96 @@ def _create_empty_dsd(
     return buffer
 
 
-def _capture(func) -> str:
-    """Capture stdout from a function call."""
-    buf = io.StringIO()
-    with redirect_stdout(buf):
-        func()
-    return buf.getvalue().rstrip()
+def capture_open_disc() -> str:
+    """Demonstrate opening an SSD file and reading the catalogue."""
+    dfs = _load_game_disc()
 
-
-def capture_basic_usage() -> str:
-    """Demonstrate creating a DFS instance and inspecting it."""
-    buf = _create_empty_ssd("DEMO")
-    dfs = DFS.from_buffer(memoryview(buf), ACORN_DFS_40T_SINGLE_SIDED)
+    title = dfs.title.rstrip("\x00")
 
     lines = [
-        "from oaknut_dfs import DFS, ACORN_DFS_40T_SINGLE_SIDED",
+        "from oaknut_dfs import DFS, ACORN_DFS_80T_SINGLE_SIDED",
         "",
-        "# Create a 40-track single-sided disc image (102,400 bytes)",
-        "buffer = bytearray(102400)",
-        "# ... initialise catalogue sectors ...",
-        "",
-        "dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)",
-        f"print(dfs.title)   # {dfs.title!r}",
-        f"print(repr(dfs))   # {dfs!r}",
+        'with DFS.from_file("Zalaga.ssd", ACORN_DFS_80T_SINGLE_SIDED) as dfs:',
+        f"    print(dfs.title)   # {title!r}",
+        f"    print(len(dfs))    # {len(dfs)} files",
     ]
     return "\n".join(lines)
 
 
-def capture_save_load() -> str:
-    """Demonstrate saving and loading files."""
-    buf = _create_empty_ssd("DEMO")
-    dfs = DFS.from_buffer(memoryview(buf), ACORN_DFS_40T_SINGLE_SIDED)
-
-    dfs.save("$.HELLO", b"Hello, World!", load_address=0x1200, exec_address=0x1200)
-    dfs.save("$.README", b"oaknut-dfs demo disc", load_address=0x0000, exec_address=0x0000)
-
-    loaded = dfs.load("$.HELLO")
-
-    lines = [
-        "# Save files with load and execution addresses",
-        'dfs.save("$.HELLO", b"Hello, World!", load_address=0x1200, exec_address=0x1200)',
-        'dfs.save("$.README", b"oaknut-dfs demo disc")',
-        "",
-        "# Load a file back",
-        'data = dfs.load("$.HELLO")',
-        f"print(data)   # {loaded!r}",
-    ]
-    return "\n".join(lines)
-
-
-def capture_file_listing() -> str:
-    """Demonstrate listing files."""
-    buf = _create_empty_ssd("DEMO")
-    dfs = DFS.from_buffer(memoryview(buf), ACORN_DFS_40T_SINGLE_SIDED)
-
-    dfs.save("$.HELLO", b"Hello, World!", load_address=0x1200, exec_address=0x1200)
-    dfs.save("$.README", b"oaknut-dfs demo disc", load_address=0x0000, exec_address=0x0000)
-    dfs.save("$.PROG", b"\x00" * 512, load_address=0x3000, exec_address=0x3000, locked=True)
+def capture_catalogue() -> str:
+    """Demonstrate reading the catalogue of a real game disc."""
+    dfs = _load_game_disc()
 
     lines = [
         "for entry in dfs.files:",
         '    lock = "L" if entry.locked else " "',
-        '    print(f"{lock} {entry.path:10s}  {entry.load_address:06X}  '
-        '{entry.exec_address:06X}  {entry.length:06X}")',
+        "    print(",
+        '        f"{lock} {entry.path:10s}"',
+        '        f"  load={entry.load_address:08X}"',
+        '        f"  exec={entry.exec_address:08X}"',
+        '        f"  length={entry.length:5d}"',
+        "    )",
     ]
 
     for entry in dfs.files:
         lock = "L" if entry.locked else " "
         lines.append(
-            f"# {lock} {entry.path:10s}  {entry.load_address:06X}  "
-            f"{entry.exec_address:06X}  {entry.length:06X}"
+            f"# {lock} {entry.path:10s}"
+            f"  load={entry.load_address:08X}"
+            f"  exec={entry.exec_address:08X}"
+            f"  length={entry.length:5d}"
         )
 
     return "\n".join(lines)
 
 
 def capture_file_info() -> str:
-    """Demonstrate get_file_info()."""
-    buf = _create_empty_ssd("DEMO")
-    dfs = DFS.from_buffer(memoryview(buf), ACORN_DFS_40T_SINGLE_SIDED)
-
-    dfs.save("$.HELLO", b"Hello, World!", load_address=0x1200, exec_address=0x1200)
-
-    info = dfs.get_file_info("$.HELLO")
+    """Demonstrate get_file_info() on a real file."""
+    dfs = _load_game_disc()
+    first_file = dfs.files[0]
+    info = dfs.get_file_info(first_file.path)
 
     lines = [
-        'info = dfs.get_file_info("$.HELLO")',
-        f"print(info.name)            # {info.name!r}",
-        f"print(hex(info.load_address))  # {hex(info.load_address)}",
-        f"print(hex(info.exec_address))  # {hex(info.exec_address)}",
-        f"print(info.length)          # {info.length}",
-        f"print(info.locked)          # {info.locked}",
-        f"print(info.start_sector)    # {info.start_sector}",
-        f"print(info.sectors)         # {info.sectors}",
+        f'info = dfs.get_file_info("{first_file.path}")',
+        f"print(info.name)              # {info.name!r}",
+        f"print(hex(info.load_address)) # {hex(info.load_address)}",
+        f"print(hex(info.exec_address)) # {hex(info.exec_address)}",
+        f"print(info.length)            # {info.length}",
+        f"print(info.locked)            # {info.locked}",
+        f"print(info.start_sector)      # {info.start_sector}",
+        f"print(info.sectors)           # {info.sectors}",
+    ]
+    return "\n".join(lines)
+
+
+def capture_load_file() -> str:
+    """Demonstrate loading a file and using its metadata."""
+    dfs = _load_game_disc()
+    info = dfs.get_file_info("$.ZALAGA")
+    data = dfs.load("$.ZALAGA")
+
+    lines = [
+        "# Get the catalogue entry for the main game binary",
+        'info = dfs.get_file_info("$.ZALAGA")',
+        f"print(hex(info.load_address))  # {hex(info.load_address)} — where to load in memory",
+        f"print(hex(info.exec_address))  # {hex(info.exec_address)} — entry point for execution",
+        f"print(info.length)             # {info.length} bytes",
+        "",
+        "# Load the file data",
+        'data = dfs.load("$.ZALAGA")',
+        f"print(len(data))               # {len(data)}",
     ]
     return "\n".join(lines)
 
 
 def capture_disc_info() -> str:
-    """Demonstrate the .info property."""
-    buf = _create_empty_ssd("DEMO")
-    dfs = DFS.from_buffer(memoryview(buf), ACORN_DFS_40T_SINGLE_SIDED)
-
-    dfs.save("$.HELLO", b"Hello, World!", load_address=0x1200, exec_address=0x1200)
-
+    """Demonstrate the .info property on a real disc."""
+    dfs = _load_game_disc()
     info = dfs.info
 
     lines = [
         "print(dfs.info)",
     ]
-    # Format the dict nicely
     formatted_items = [f"    {k!r}: {v!r}," for k, v in info.items()]
     lines.append("# {")
     for item in formatted_items:
@@ -195,22 +175,18 @@ def capture_disc_info() -> str:
 
 
 def capture_pythonic() -> str:
-    """Demonstrate Pythonic interface."""
-    buf = _create_empty_ssd("DEMO")
-    dfs = DFS.from_buffer(memoryview(buf), ACORN_DFS_40T_SINGLE_SIDED)
-
-    dfs.save("$.HELLO", b"Hello, World!", load_address=0x1200, exec_address=0x1200)
-    dfs.save("$.README", b"oaknut-dfs demo disc", load_address=0x0000, exec_address=0x0000)
+    """Demonstrate Pythonic interface on a real disc."""
+    dfs = _load_game_disc()
 
     lines = [
         "# Check if a file exists",
-        f'print("$.HELLO" in dfs)   # {"$.HELLO" in dfs}',
-        f'print("$.NOPE" in dfs)    # {"$.NOPE" in dfs}',
+        f'print("$.!BOOT" in dfs)    # {"$.!BOOT" in dfs}',
+        f'print("$.MISSING" in dfs)  # {"$.MISSING" in dfs}',
         "",
         "# Number of files",
-        f"print(len(dfs))            # {len(dfs)}",
+        f"print(len(dfs))             # {len(dfs)}",
         "",
-        "# Iterate over files",
+        "# Iterate over filenames",
         "for entry in dfs:",
         "    print(entry.path)",
     ]
@@ -218,6 +194,38 @@ def capture_pythonic() -> str:
     for entry in dfs:
         lines.append(f"# {entry.path}")
 
+    return "\n".join(lines)
+
+
+def capture_save_load() -> str:
+    """Demonstrate creating a new disc and saving/loading files."""
+    buf = _create_empty_ssd("DEMO")
+    dfs = DFS.from_buffer(memoryview(buf), ACORN_DFS_40T_SINGLE_SIDED)
+
+    dfs.save("$.HELLO", b"Hello, World!", load_address=0x1200, exec_address=0x1200)
+    dfs.save("$.README", b"oaknut-dfs demo disc")
+
+    loaded = dfs.load("$.HELLO")
+
+    lines = [
+        "from oaknut_dfs import ACORN_DFS_40T_SINGLE_SIDED",
+        "",
+        "# Create an empty 40-track single-sided disc in memory",
+        "buffer = bytearray(102400)  # 40 tracks * 10 sectors * 256 bytes",
+        "# ... initialise catalogue sectors ...",
+        "",
+        "dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)",
+        "",
+        "# Save files with load and execution addresses",
+        'dfs.save("$.HELLO", b"Hello, World!", load_address=0x1200, exec_address=0x1200)',
+        'dfs.save("$.README", b"oaknut-dfs demo disc")',
+        "",
+        "# Load a file back",
+        'data = dfs.load("$.HELLO")',
+        f"print(data)   # {loaded!r}",
+        "",
+        f"print(repr(dfs))   # {dfs!r}",
+    ]
     return "\n".join(lines)
 
 
@@ -264,12 +272,13 @@ def generate() -> str:
     template = env.get_template(TEMPLATE_FILENAME)
 
     return template.render(
-        basic_usage=capture_basic_usage(),
-        save_load=capture_save_load(),
-        file_listing=capture_file_listing(),
+        open_disc=capture_open_disc(),
+        catalogue=capture_catalogue(),
         file_info=capture_file_info(),
+        load_file=capture_load_file(),
         disc_info=capture_disc_info(),
         pythonic=capture_pythonic(),
+        save_load=capture_save_load(),
         dsd_example=capture_dsd_example(),
     )
 
@@ -290,7 +299,7 @@ def main() -> int:
         else:
             print(
                 "ERROR: README.md is out of date. "
-                "Regenerate with: uv run scripts/generate_readme.py",
+                "Regenerate with: uv run --group dev scripts/generate_readme.py",
                 file=sys.stderr,
             )
             return 1

@@ -1,5 +1,7 @@
 """Tests for DFS high-level class."""
 
+import shutil
+
 import pytest
 import oaknut_dfs.acorn_encoding  # Register codec
 
@@ -7,6 +9,12 @@ from oaknut_dfs.dfs import DFS
 from oaknut_dfs.formats import (
     ACORN_DFS_40T_SINGLE_SIDED,
     ACORN_DFS_40T_DOUBLE_SIDED_INTERLEAVED,
+    ACORN_DFS_80T_SINGLE_SIDED,
+)
+
+GAME_IMAGE_FILEPATH = (
+    pytest.importorskip("pathlib").Path(__file__).parent
+    / "data" / "images" / "games" / "Disc003-Zalaga.ssd"
 )
 
 
@@ -844,3 +852,82 @@ class TestDFSIntegration:
 
         assert dfs.title == "MODIFIED"
         assert dfs.boot_option == 2
+
+
+class TestDFSFromFile:
+    """Tests for from_file() and context manager."""
+
+    def test_from_file_read_only(self):
+        """Test opening a disc image file read-only."""
+        with DFS.from_file(GAME_IMAGE_FILEPATH, ACORN_DFS_80T_SINGLE_SIDED) as dfs:
+            assert len(dfs.files) == 4
+            assert dfs.exists("$.!BOOT")
+
+    def test_from_file_reads_title(self):
+        """Test that disc title is read correctly from file."""
+        with DFS.from_file(GAME_IMAGE_FILEPATH, ACORN_DFS_80T_SINGLE_SIDED) as dfs:
+            assert dfs.title.rstrip("\x00").startswith("ZALAG")
+
+    def test_from_file_load_file(self):
+        """Test loading a file from a file-backed disc image."""
+        with DFS.from_file(GAME_IMAGE_FILEPATH, ACORN_DFS_80T_SINGLE_SIDED) as dfs:
+            data = dfs.load("$.!BOOT")
+            assert len(data) > 0
+
+    def test_from_file_read_write(self, tmp_path):
+        """Test opening a disc image in read-write mode."""
+        # Copy the game image to a temp location
+        tmp_filepath = tmp_path / "test.ssd"
+        shutil.copy2(GAME_IMAGE_FILEPATH, tmp_filepath)
+
+        # Modify via mmap
+        with DFS.from_file(tmp_filepath, ACORN_DFS_80T_SINGLE_SIDED, mode="r+b") as dfs:
+            original_title = dfs.title
+            dfs.title = "MODIFIED"
+            assert dfs.title == "MODIFIED"
+
+        # Re-open and verify the change persisted
+        with DFS.from_file(tmp_filepath, ACORN_DFS_80T_SINGLE_SIDED) as dfs:
+            assert dfs.title == "MODIFIED"
+
+    def test_from_file_invalid_mode(self):
+        """Test that invalid mode raises ValueError."""
+        with pytest.raises(ValueError, match="mode must be"):
+            with DFS.from_file(GAME_IMAGE_FILEPATH, ACORN_DFS_80T_SINGLE_SIDED, mode="wb"):
+                pass
+
+    def test_from_file_nonexistent(self):
+        """Test that missing file raises FileNotFoundError."""
+        with pytest.raises(FileNotFoundError):
+            with DFS.from_file("/nonexistent/disc.ssd", ACORN_DFS_80T_SINGLE_SIDED):
+                pass
+
+    def test_from_file_read_only_prevents_writes(self):
+        """Test that read-only mode prevents modifications."""
+        with DFS.from_file(GAME_IMAGE_FILEPATH, ACORN_DFS_80T_SINGLE_SIDED) as dfs:
+            with pytest.raises(TypeError):
+                dfs.title = "NOPE"
+
+    def test_from_file_with_side(self, tmp_path):
+        """Test from_file with side parameter for DSD images."""
+        from oaknut_dfs.formats import ACORN_DFS_40T_DOUBLE_SIDED_INTERLEAVED
+
+        # Create a minimal DSD
+        buf = bytearray(204800)
+        buf[0:8] = b"SIDE0   "
+        buf[256:260] = b"    "
+        buf[262] = 0x00
+        buf[263] = 200
+        buf[2560:2568] = b"SIDE1   "
+        buf[2560 + 256:2560 + 260] = b"    "
+        buf[2560 + 262] = 0x00
+        buf[2560 + 263] = 200
+
+        tmp_filepath = tmp_path / "test.dsd"
+        tmp_filepath.write_bytes(buf)
+
+        with DFS.from_file(tmp_filepath, ACORN_DFS_40T_DOUBLE_SIDED_INTERLEAVED, side=0) as dfs0:
+            assert dfs0.title == "SIDE0"
+
+        with DFS.from_file(tmp_filepath, ACORN_DFS_40T_DOUBLE_SIDED_INTERLEAVED, side=1) as dfs1:
+            assert dfs1.title == "SIDE1"
