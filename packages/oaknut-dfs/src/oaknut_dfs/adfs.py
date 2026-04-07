@@ -197,6 +197,55 @@ def _hard_disc_format(
     )
 
 
+def geometry_for_capacity(
+    capacity_bytes: int,
+    *,
+    heads: int = 4,
+    sectors_per_track: int = _SCSI_SECTORS_PER_TRACK,
+) -> _DSCGeometry:
+    """Compute a disc geometry that meets or exceeds a requested capacity.
+
+    Returns a ``_DSCGeometry`` with the minimum number of cylinders
+    needed to provide at least *capacity_bytes* of storage.
+
+    Args:
+        capacity_bytes: Minimum disc capacity in bytes.
+        heads: Number of heads (default 4).
+        sectors_per_track: Sectors per track (default 33).
+
+    Returns:
+        Geometry with cylinders computed from the capacity.
+
+    Raises:
+        ValueError: If capacity_bytes is not positive.
+    """
+    if capacity_bytes <= 0:
+        raise ValueError(f"capacity_bytes must be positive, got {capacity_bytes}")
+
+    bytes_per_cylinder = heads * sectors_per_track * _ADFS_BYTES_PER_SECTOR
+    cylinders = -(-capacity_bytes // bytes_per_cylinder)  # ceiling division
+    return _DSCGeometry(
+        cylinders=cylinders,
+        heads=heads,
+        sectors_per_track=sectors_per_track,
+    )
+
+
+def _write_dsc(filepath: Union[str, PathLike], geometry: _DSCGeometry) -> None:
+    """Write a 22-byte .dsc sidecar file with SCSI disc geometry."""
+    data = bytearray(_DSC_SIZE)
+    data[3] = 0x08       # Speed class
+    data[10] = 0x01      # Removable flag
+    data[12] = 0x01      # Stepping rate
+    data[13] = (geometry.cylinders >> 8) & 0xFF  # Cylinders high
+    data[14] = geometry.cylinders & 0xFF         # Cylinders low
+    data[15] = geometry.heads                    # Heads
+    data[17] = 0x80      # RWCC low
+    data[19] = 0x80      # Landing zone
+    data[21] = 0x01
+    Path(filepath).write_bytes(data)
+
+
 # --- Public value type ---
 
 
@@ -795,48 +844,147 @@ class ADFS:
     @contextmanager
     def create_file(
         filepath: Union[str, PathLike],
-        adfs_format: ADFSFormat,
+        adfs_format: ADFSFormat = None,
         *,
+        capacity_bytes: int = None,
+        cylinders: int = None,
+        heads: int = 4,
+        sectors_per_track: int = _SCSI_SECTORS_PER_TRACK,
         title: str = "",
         boot_option: int = 0,
     ) -> Iterator[ADFS]:
         """Create a new ADFS disc image file with an empty root directory.
 
-        The file is created at *filepath* and opened read-write via mmap.
-        Changes are flushed on exit.
+        For floppy images, pass an ``ADFSFormat``::
+
+            with ADFS.create_file("disc.adl", ADFS_L, title="MyDisc") as adfs:
+                ...
+
+        For hard disc images (``.dat``), specify either a capacity or
+        explicit geometry.  A companion ``.dsc`` sidecar file is written
+        automatically::
+
+            # By capacity (geometry chosen automatically)
+            with ADFS.create_file("scsi0.dat", capacity_bytes=10*1024*1024) as adfs:
+                ...
+
+            # By explicit geometry
+            with ADFS.create_file("scsi0.dat", cylinders=306, heads=4) as adfs:
+                ...
 
         Args:
             filepath: Path for the new disc image file.
-            adfs_format: ADFS format (ADFS_S, ADFS_M, or ADFS_L).
+            adfs_format: Floppy format (ADFS_S, ADFS_M, or ADFS_L).
+            capacity_bytes: Minimum hard disc capacity in bytes.
+            cylinders: Number of cylinders (hard disc).
+            heads: Number of heads (default 4, hard disc only).
+            sectors_per_track: Sectors per track (default 33, hard disc only).
             title: Disc title (default empty).
             boot_option: Boot option 0–3 (default 0).
 
         Yields:
             ADFS instance backed by the file.
         """
-        with open(filepath, "wb") as f:
-            f.write(b"\x00" * adfs_format.total_bytes)
+        p = Path(filepath)
+        ext = p.suffix.lower()
 
-        with open(filepath, "r+b") as f:
-            mm = mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_WRITE)
-            buffer = memoryview(mm)
-            disc_image = DiscImage(buffer, adfs_format.surface_specs)
-            unified = UnifiedDisc(disc_image)
+        if ext in (".dat", ".dsc"):
+            # Hard disc image — resolve geometry
+            if adfs_format is not None:
+                raise ValueError(
+                    "Cannot specify adfs_format for hard disc images; "
+                    "use capacity_bytes or cylinders/heads instead"
+                )
+            if capacity_bytes is not None and cylinders is not None:
+                raise ValueError(
+                    "Specify either capacity_bytes or cylinders, not both"
+                )
+            if capacity_bytes is not None:
+                geometry = geometry_for_capacity(
+                    capacity_bytes,
+                    heads=heads,
+                    sectors_per_track=sectors_per_track,
+                )
+            elif cylinders is not None:
+                geometry = _DSCGeometry(
+                    cylinders=cylinders,
+                    heads=heads,
+                    sectors_per_track=sectors_per_track,
+                )
+            else:
+                raise ValueError(
+                    "Hard disc images require either capacity_bytes "
+                    "or cylinders to be specified"
+                )
 
-            _initialise_old_free_space_map(
-                unified, adfs_format.total_sectors, boot_option
+            dat_filepath = p.with_suffix(".dat")
+            dsc_filepath = p.with_suffix(".dsc")
+
+            total_bytes = (
+                geometry.cylinders
+                * geometry.heads
+                * geometry.sectors_per_track
+                * _ADFS_BYTES_PER_SECTOR
             )
-            _initialise_old_root_directory(unified, title)
+            total_sectors = total_bytes // _ADFS_BYTES_PER_SECTOR
+            fmt = _hard_disc_format(geometry, total_bytes)
 
-            map_data = unified.sector_range(0, 2)
-            fsm = OldFreeSpaceMap(map_data)
-            dir_format = OldDirectoryFormat()
+            # Write .dsc sidecar
+            _write_dsc(dsc_filepath, geometry)
 
-            adfs = ADFS(unified, dir_format, fsm)
-            try:
-                yield adfs
-            finally:
-                mm.flush()
+            # Write blank .dat and initialise
+            with open(dat_filepath, "wb") as f:
+                f.write(b"\x00" * total_bytes)
+
+            with open(dat_filepath, "r+b") as f:
+                mm = mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_WRITE)
+                buffer = memoryview(mm)
+                disc_image = DiscImage(buffer, fmt.surface_specs)
+                unified = UnifiedDisc(disc_image)
+
+                _initialise_old_free_space_map(unified, total_sectors, boot_option)
+                _initialise_old_root_directory(unified, title)
+
+                map_data = unified.sector_range(0, 2)
+                fsm = OldFreeSpaceMap(map_data)
+                dir_format = OldDirectoryFormat()
+
+                adfs = ADFS(unified, dir_format, fsm)
+                try:
+                    yield adfs
+                finally:
+                    mm.flush()
+        else:
+            # Floppy image
+            if adfs_format is None:
+                raise ValueError(
+                    "Floppy disc images require an adfs_format "
+                    "(ADFS_S, ADFS_M, or ADFS_L)"
+                )
+
+            with open(filepath, "wb") as f:
+                f.write(b"\x00" * adfs_format.total_bytes)
+
+            with open(filepath, "r+b") as f:
+                mm = mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_WRITE)
+                buffer = memoryview(mm)
+                disc_image = DiscImage(buffer, adfs_format.surface_specs)
+                unified = UnifiedDisc(disc_image)
+
+                _initialise_old_free_space_map(
+                    unified, adfs_format.total_sectors, boot_option
+                )
+                _initialise_old_root_directory(unified, title)
+
+                map_data = unified.sector_range(0, 2)
+                fsm = OldFreeSpaceMap(map_data)
+                dir_format = OldDirectoryFormat()
+
+                adfs = ADFS(unified, dir_format, fsm)
+                try:
+                    yield adfs
+                finally:
+                    mm.flush()
 
     # --- Path factory ---
 
