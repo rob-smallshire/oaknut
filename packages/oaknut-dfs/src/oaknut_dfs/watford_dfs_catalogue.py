@@ -22,6 +22,52 @@ class WatfordDFSCatalogue(Catalogue):
         super().__init__(surface)
 
     @classmethod
+    def initialise(
+        cls,
+        surface: Surface,
+        total_sectors: int,
+        title: str = "",
+        boot_option: int = 0,
+    ) -> None:
+        """Initialise Watford DFS catalogue on sectors 0–3.
+
+        Section 1 (sectors 0–1): standard catalogue with title.
+        Section 2 (sectors 2–3): 0xAA markers + synchronised metadata.
+        """
+        sectors = surface.sector_range(0, 4)
+
+        # Clear all 4 sectors
+        sectors[:] = b"\x00" * 1024
+
+        # --- Section 1 (sectors 0–1) ---
+
+        # Title: first 8 chars in sector 0, next 2 in sector 1 (max 10 for Watford)
+        # Bytes 0x10A and 0x10B are reserved for catalogue chaining, leave as zero
+        title_padded = title.ljust(10)
+        sectors[0x000:0x008] = title_padded[:8].encode("acorn")
+        sectors[0x100:0x102] = title_padded[8:10].encode("acorn")
+
+        # Metadata in sector 1
+        sectors[0x104] = 0  # Cycle number
+        sectors[0x105] = 0  # Number of files × 8 (section 1)
+        sectors[0x106] = ((total_sectors >> 8) & 0x03) | (boot_option << 4)
+        sectors[0x107] = total_sectors & 0xFF
+
+        # --- Section 2 (sectors 2–3) ---
+
+        # 0xAA marker in first 12 bytes of sector 2
+        for i in range(12):
+            sectors[0x200 + i] = 0xAA
+
+        # Sector 3 bytes 0–3 are null (already zero)
+
+        # Synchronise metadata from section 1 to section 2
+        sectors[0x304] = sectors[0x104]  # Cycle number
+        sectors[0x305] = 0               # Number of files × 8 (section 2)
+        sectors[0x306] = sectors[0x106]  # Boot option + sector count high
+        sectors[0x307] = sectors[0x107]  # Sector count low
+
+    @classmethod
     def matches(cls, surface: Surface) -> bool:
         """
         Check if surface appears to be Watford DFS format.

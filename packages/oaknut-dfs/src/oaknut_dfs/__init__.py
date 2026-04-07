@@ -7,7 +7,7 @@ import oaknut_dfs.acorn_encoding  # noqa: F401
 import oaknut_dfs.acorn_dfs_catalogue  # noqa: F401
 import oaknut_dfs.watford_dfs_catalogue  # noqa: F401
 
-from oaknut_dfs.adfs import ADFS, ADFSPath, ADFSStat
+from oaknut_dfs.adfs import ADFS, ADFS_L, ADFS_M, ADFS_S, ADFSFormat, ADFSPath, ADFSStat
 from oaknut_dfs.boot_option import BootOption
 from oaknut_dfs.catalogue import DiskInfo, FileInfo
 from oaknut_dfs.dfs import DFS, DFSPath, DFSStat
@@ -28,6 +28,10 @@ __version_info__ = Version(*(__version__.split(".")))
 
 __all__ = [
     "ADFS",
+    "ADFS_S",
+    "ADFS_M",
+    "ADFS_L",
+    "ADFSFormat",
     "ADFSPath",
     "ADFSStat",
     "DFS",

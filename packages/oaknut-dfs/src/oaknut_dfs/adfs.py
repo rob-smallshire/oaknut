@@ -32,16 +32,89 @@ from oaknut_dfs.surface import DiscImage, SurfaceSpec
 from oaknut_dfs.unified_disc import UnifiedDisc
 
 
-# --- Known ADFS floppy image sizes ---
-_ADFS_S_SIZE = 1 * 40 * 16 * 256   # 163840  (160 KB)
-_ADFS_M_SIZE = 1 * 80 * 16 * 256   # 327680  (320 KB)
-_ADFS_L_SIZE = 2 * 80 * 16 * 256   # 655360  (640 KB)
-
 _ADFS_SECTORS_PER_TRACK = 16
 _ADFS_BYTES_PER_SECTOR = 256
 
 # Root directory sector address for old map formats
 _OLD_MAP_ROOT_SECTOR = 2
+_OLD_DIR_SECTORS = 5  # Old directory occupies 5 sectors
+_OLD_FSM_SECTORS = 2  # Old free space map occupies sectors 0-1
+
+
+# --- ADFS format constants ---
+
+
+@dataclass(frozen=True)
+class ADFSFormat:
+    """ADFS disc format specification."""
+
+    surface_specs: list[SurfaceSpec]
+    total_sectors: int
+    total_bytes: int
+    label: str
+
+    def __post_init__(self):
+        if not self.surface_specs:
+            raise ValueError("At least one surface_spec is required")
+
+
+def _single_sided_spec(num_tracks: int) -> SurfaceSpec:
+    track_size = _ADFS_SECTORS_PER_TRACK * _ADFS_BYTES_PER_SECTOR
+    return SurfaceSpec(
+        num_tracks=num_tracks,
+        sectors_per_track=_ADFS_SECTORS_PER_TRACK,
+        bytes_per_sector=_ADFS_BYTES_PER_SECTOR,
+        track_zero_offset_bytes=0,
+        track_stride_bytes=track_size,
+    )
+
+
+def _interleaved_double_sided_specs(num_tracks: int) -> list[SurfaceSpec]:
+    track_size = _ADFS_SECTORS_PER_TRACK * _ADFS_BYTES_PER_SECTOR
+    return [
+        SurfaceSpec(
+            num_tracks=num_tracks,
+            sectors_per_track=_ADFS_SECTORS_PER_TRACK,
+            bytes_per_sector=_ADFS_BYTES_PER_SECTOR,
+            track_zero_offset_bytes=0,
+            track_stride_bytes=2 * track_size,
+        ),
+        SurfaceSpec(
+            num_tracks=num_tracks,
+            sectors_per_track=_ADFS_SECTORS_PER_TRACK,
+            bytes_per_sector=_ADFS_BYTES_PER_SECTOR,
+            track_zero_offset_bytes=track_size,
+            track_stride_bytes=2 * track_size,
+        ),
+    ]
+
+
+ADFS_S = ADFSFormat(
+    surface_specs=[_single_sided_spec(40)],
+    total_sectors=640,
+    total_bytes=163840,
+    label="S",
+)
+
+ADFS_M = ADFSFormat(
+    surface_specs=[_single_sided_spec(80)],
+    total_sectors=1280,
+    total_bytes=327680,
+    label="M",
+)
+
+ADFS_L = ADFSFormat(
+    surface_specs=_interleaved_double_sided_specs(80),
+    total_sectors=2560,
+    total_bytes=655360,
+    label="L",
+)
+
+_ADFS_FORMATS_BY_SIZE = {
+    ADFS_S.total_bytes: ADFS_S,
+    ADFS_M.total_bytes: ADFS_M,
+    ADFS_L.total_bytes: ADFS_L,
+}
 
 
 # --- Public value type ---
@@ -343,65 +416,103 @@ class ADFSPath:
 # --- ADFS filesystem handle ---
 
 
-def _make_single_sided_specs(
-    num_tracks: int,
-) -> list[SurfaceSpec]:
-    """Create SurfaceSpecs for a single-sided ADFS floppy."""
-    track_size = _ADFS_SECTORS_PER_TRACK * _ADFS_BYTES_PER_SECTOR
-    return [
-        SurfaceSpec(
-            num_tracks=num_tracks,
-            sectors_per_track=_ADFS_SECTORS_PER_TRACK,
-            bytes_per_sector=_ADFS_BYTES_PER_SECTOR,
-            track_zero_offset_bytes=0,
-            track_stride_bytes=track_size,
-        )
-    ]
-
-
-def _make_interleaved_double_sided_specs(
-    num_tracks: int,
-) -> list[SurfaceSpec]:
-    """Create SurfaceSpecs for an interleaved double-sided ADFS floppy."""
-    track_size = _ADFS_SECTORS_PER_TRACK * _ADFS_BYTES_PER_SECTOR
-    return [
-        SurfaceSpec(
-            num_tracks=num_tracks,
-            sectors_per_track=_ADFS_SECTORS_PER_TRACK,
-            bytes_per_sector=_ADFS_BYTES_PER_SECTOR,
-            track_zero_offset_bytes=0,
-            track_stride_bytes=2 * track_size,
-        ),
-        SurfaceSpec(
-            num_tracks=num_tracks,
-            sectors_per_track=_ADFS_SECTORS_PER_TRACK,
-            bytes_per_sector=_ADFS_BYTES_PER_SECTOR,
-            track_zero_offset_bytes=track_size,
-            track_stride_bytes=2 * track_size,
-        ),
-    ]
-
-
-def _detect_surface_specs(buffer_size: int) -> list[SurfaceSpec]:
+def _detect_format(buffer_size: int) -> ADFSFormat:
     """Detect ADFS format from image file size.
-
-    Returns SurfaceSpecs appropriate for the image.
 
     Raises:
         ADFSError: If the size doesn't match any known ADFS floppy format.
     """
-    if buffer_size == _ADFS_S_SIZE:
-        return _make_single_sided_specs(40)
-    elif buffer_size == _ADFS_M_SIZE:
-        return _make_single_sided_specs(80)
-    elif buffer_size == _ADFS_L_SIZE:
-        return _make_interleaved_double_sided_specs(80)
-    else:
-        raise ADFSError(
-            f"Unrecognised ADFS image size: {buffer_size} bytes. "
-            f"Expected {_ADFS_S_SIZE} (S), {_ADFS_M_SIZE} (M), "
-            f"or {_ADFS_L_SIZE} (L)."
+    fmt = _ADFS_FORMATS_BY_SIZE.get(buffer_size)
+    if fmt is None:
+        sizes = ", ".join(
+            f"{f.total_bytes} ({f.label})" for f in _ADFS_FORMATS_BY_SIZE.values()
         )
+        raise ADFSError(
+            f"Unrecognised ADFS image size: {buffer_size} bytes. Expected {sizes}."
+        )
+    return fmt
+
+
+def _initialise_old_free_space_map(
+    unified: UnifiedDisc,
+    total_sectors: int,
+    boot_option: int = 0,
+) -> None:
+    """Write an empty old-format free space map to sectors 0–1."""
+    from oaknut_dfs.adfs_free_space_map import _calculate_old_map_checksum
+
+    data = unified.sector_range(0, 2)
+
+    # Single free space entry: everything after the root directory
+    used_sectors = _OLD_FSM_SECTORS + _OLD_DIR_SECTORS  # 7
+    free_start = used_sectors
+    free_length = total_sectors - used_sectors
+
+    # FreeStart[0] at 0x000 (3 bytes LE)
+    data[0x000] = free_start & 0xFF
+    data[0x001] = (free_start >> 8) & 0xFF
+    data[0x002] = (free_start >> 16) & 0xFF
+
+    # FreeLen[0] at 0x100 (3 bytes LE)
+    data[0x100] = free_length & 0xFF
+    data[0x101] = (free_length >> 8) & 0xFF
+    data[0x102] = (free_length >> 16) & 0xFF
+
+    # OldSize at 0x0FC (3 bytes LE)
+    data[0x0FC] = total_sectors & 0xFF
+    data[0x0FD] = (total_sectors >> 8) & 0xFF
+    data[0x0FE] = (total_sectors >> 16) & 0xFF
+
+    # Boot option at 0x1FD
+    data[0x1FD] = boot_option
+
+    # FreeEnd pointer at 0x1FE (1 entry × 3 bytes)
+    data[0x1FE] = 3
+
+    # Calculate and write checksums
+    data[0x0FF] = _calculate_old_map_checksum(data, 0x000)
+    data[0x1FF] = _calculate_old_map_checksum(data, 0x100)
+
+
+def _initialise_old_root_directory(
+    unified: UnifiedDisc,
+    title: str = "",
+) -> None:
+    """Write an empty old-format root directory to sectors 2–6."""
+    data = unified.sector_range(_OLD_MAP_ROOT_SECTOR, _OLD_DIR_SECTORS)
+
+    # Header
+    data[0x00] = 0  # StartMasSeq
+    data[0x01:0x05] = b"Hugo"  # StartName
+
+    # Entries area: all zeros (empty) — already zero from buffer init
+
+    # Tail at offset 0x4CB
+    tail = 0x4CB
+    data[tail] = 0x00  # OldDirLastMark
+
+    # Directory name: "$" + null padding
+    data[tail + 1] = ord("$")
+    # Bytes tail+2 through tail+10 are zero (already)
+
+    # Parent address: root's parent is itself (sector 2 = 0x000002)
+    data[tail + 11] = _OLD_MAP_ROOT_SECTOR & 0xFF
+    data[tail + 12] = (_OLD_MAP_ROOT_SECTOR >> 8) & 0xFF
+    data[tail + 13] = (_OLD_MAP_ROOT_SECTOR >> 16) & 0xFF
+
+    # Title (19 bytes, null-terminated)
+    title_bytes = title.encode("ascii")[:19]
+    for i, b in enumerate(title_bytes):
+        data[tail + 14 + i] = b
+
+    # Reserved (14 bytes): already zero
+
+    # EndMasSeq
+    data[tail + 47] = 0  # Must match StartMasSeq
+    # EndName
+    data[tail + 48:tail + 52] = b"Hugo"
+    # DirCheckByte: reserved, must be zero
+    data[tail + 52] = 0x00
 
 
 class ADFS:
@@ -480,8 +591,8 @@ class ADFS:
         Raises:
             ADFSError: If the image is not a valid ADFS disc.
         """
-        specs = _detect_surface_specs(len(buffer))
-        disc_image = DiscImage(buffer, specs)
+        fmt = _detect_format(len(buffer))
+        disc_image = DiscImage(buffer, fmt.surface_specs)
         unified = UnifiedDisc(disc_image)
 
         # Read free space map from sectors 0-1
@@ -492,6 +603,86 @@ class ADFS:
         dir_format = _detect_directory_format(unified)
 
         return cls(unified, dir_format, fsm)
+
+    @classmethod
+    def create(
+        cls,
+        adfs_format: ADFSFormat,
+        *,
+        title: str = "",
+        boot_option: int = 0,
+    ) -> ADFS:
+        """Create a new in-memory ADFS disc image with an empty root directory.
+
+        Args:
+            adfs_format: ADFS format (ADFS_S, ADFS_M, or ADFS_L).
+            title: Disc title (default empty).
+            boot_option: Boot option 0–3 (default 0).
+
+        Returns:
+            ADFS instance backed by an in-memory buffer.
+        """
+        buffer = memoryview(bytearray(adfs_format.total_bytes))
+        disc_image = DiscImage(buffer, adfs_format.surface_specs)
+        unified = UnifiedDisc(disc_image)
+
+        _initialise_old_free_space_map(
+            unified, adfs_format.total_sectors, boot_option
+        )
+        _initialise_old_root_directory(unified, title)
+
+        map_data = unified.sector_range(0, 2)
+        fsm = OldFreeSpaceMap(map_data)
+        dir_format = OldDirectoryFormat()
+
+        return cls(unified, dir_format, fsm)
+
+    @staticmethod
+    @contextmanager
+    def create_file(
+        filepath: Union[str, PathLike],
+        adfs_format: ADFSFormat,
+        *,
+        title: str = "",
+        boot_option: int = 0,
+    ) -> Iterator[ADFS]:
+        """Create a new ADFS disc image file with an empty root directory.
+
+        The file is created at *filepath* and opened read-write via mmap.
+        Changes are flushed on exit.
+
+        Args:
+            filepath: Path for the new disc image file.
+            adfs_format: ADFS format (ADFS_S, ADFS_M, or ADFS_L).
+            title: Disc title (default empty).
+            boot_option: Boot option 0–3 (default 0).
+
+        Yields:
+            ADFS instance backed by the file.
+        """
+        with open(filepath, "wb") as f:
+            f.write(b"\x00" * adfs_format.total_bytes)
+
+        with open(filepath, "r+b") as f:
+            mm = mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_WRITE)
+            buffer = memoryview(mm)
+            disc_image = DiscImage(buffer, adfs_format.surface_specs)
+            unified = UnifiedDisc(disc_image)
+
+            _initialise_old_free_space_map(
+                unified, adfs_format.total_sectors, boot_option
+            )
+            _initialise_old_root_directory(unified, title)
+
+            map_data = unified.sector_range(0, 2)
+            fsm = OldFreeSpaceMap(map_data)
+            dir_format = OldDirectoryFormat()
+
+            adfs = ADFS(unified, dir_format, fsm)
+            try:
+                yield adfs
+            finally:
+                mm.flush()
 
     # --- Path factory ---
 

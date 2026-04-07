@@ -20,6 +20,33 @@ class AcornDFSCatalogue(Catalogue):
         super().__init__(surface)
 
     @classmethod
+    def initialise(
+        cls,
+        surface: Surface,
+        total_sectors: int,
+        title: str = "",
+        boot_option: int = 0,
+    ) -> None:
+        """Initialise Acorn DFS catalogue on sectors 0–1."""
+        sector0 = surface.sector_range(0, 1)
+        sector1 = surface.sector_range(1, 1)
+
+        # Clear both sectors
+        sector0[:] = b"\x00" * 256
+        sector1[:] = b"\x00" * 256
+
+        # Title: first 8 chars in sector 0, next 4 in sector 1
+        title_padded = title.ljust(12)
+        sector0[0:8] = title_padded[:8].encode("acorn")
+        sector1[0:4] = title_padded[8:12].encode("acorn")
+
+        # Metadata in sector 1
+        sector1[4] = 0  # Cycle number
+        sector1[5] = 0  # Number of files × 8
+        sector1[6] = ((total_sectors >> 8) & 0x03) | (boot_option << 4)
+        sector1[7] = total_sectors & 0xFF
+
+    @classmethod
     def matches(cls, surface: Surface) -> bool:
         """
         Check if surface appears to be standard Acorn DFS format.

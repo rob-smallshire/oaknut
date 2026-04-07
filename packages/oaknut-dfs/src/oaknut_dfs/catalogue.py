@@ -114,6 +114,28 @@ class Catalogue(ABC):
 
     @classmethod
     @abstractmethod
+    def initialise(
+        cls,
+        surface: Surface,
+        total_sectors: int,
+        title: str = "",
+        boot_option: int = 0,
+    ) -> None:
+        """Initialise catalogue sectors on a blank surface.
+
+        Writes the catalogue structure (headers, metadata, empty file list)
+        to the appropriate sectors, producing a valid empty disc.
+
+        Args:
+            surface: The surface to initialise (must be writable).
+            total_sectors: Total number of sectors on this side of the disc.
+            title: Disc title (default empty).
+            boot_option: Boot option 0–3 (default 0).
+        """
+        pass
+
+    @classmethod
+    @abstractmethod
     def matches(cls, surface: Surface) -> bool:
         """
         Check if this catalogue type matches the given surface.

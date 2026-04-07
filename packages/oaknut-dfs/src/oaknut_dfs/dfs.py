@@ -432,6 +432,111 @@ class DFS:
 
         return cls(catalogued)
 
+    @classmethod
+    def create(
+        cls,
+        disk_format: DiskFormat,
+        *,
+        side: int = 0,
+        title: str = "",
+        boot_option: int = 0,
+    ) -> DFS:
+        """Create a new in-memory DFS disc image with an empty catalogue.
+
+        Args:
+            disk_format: DiskFormat specifying geometry and catalogue type.
+            side: Which surface to initialise (0-based, default 0).
+            title: Disc title (default empty).
+            boot_option: Boot option 0–3 (default 0).
+
+        Returns:
+            DFS instance backed by an in-memory buffer.
+        """
+        from oaknut_dfs.catalogue import Catalogue
+
+        # Calculate buffer size from the format's surface specs
+        specs = disk_format.surface_specs
+        buffer_size = 0
+        for spec in specs:
+            end = (
+                spec.track_zero_offset_bytes
+                + (spec.num_tracks - 1) * spec.track_stride_bytes
+                + spec.sectors_per_track * spec.bytes_per_sector
+            )
+            buffer_size = max(buffer_size, end)
+
+        buffer = memoryview(bytearray(buffer_size))
+        disc = DiscImage(buffer, specs)
+        surface = disc.surface(side)
+        total_sectors = surface.num_sectors
+
+        # Look up and initialise the catalogue
+        catalogue_class = Catalogue._registry[disk_format.catalogue_name]
+        catalogue_class.initialise(surface, total_sectors, title, boot_option)
+
+        catalogued = CataloguedSurface(surface, catalogue_class)
+        return cls(catalogued)
+
+    @staticmethod
+    @contextmanager
+    def create_file(
+        filepath: Union[str, PathLike],
+        disk_format: DiskFormat,
+        *,
+        side: int = 0,
+        title: str = "",
+        boot_option: int = 0,
+    ) -> Iterator[DFS]:
+        """Create a new DFS disc image file with an empty catalogue.
+
+        The file is created at *filepath* with the correct size and
+        opened read-write via mmap. Changes are flushed on exit.
+
+        Args:
+            filepath: Path for the new disc image file.
+            disk_format: DiskFormat specifying geometry and catalogue type.
+            side: Which surface to initialise (0-based, default 0).
+            title: Disc title (default empty).
+            boot_option: Boot option 0–3 (default 0).
+
+        Yields:
+            DFS instance backed by the file.
+        """
+        from oaknut_dfs.catalogue import Catalogue
+
+        # Calculate file size
+        specs = disk_format.surface_specs
+        file_size = 0
+        for spec in specs:
+            end = (
+                spec.track_zero_offset_bytes
+                + (spec.num_tracks - 1) * spec.track_stride_bytes
+                + spec.sectors_per_track * spec.bytes_per_sector
+            )
+            file_size = max(file_size, end)
+
+        # Write a blank file of the correct size
+        with open(filepath, "wb") as f:
+            f.write(b"\x00" * file_size)
+
+        # Reopen read-write with mmap
+        with open(filepath, "r+b") as f:
+            mm = mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_WRITE)
+            buffer = memoryview(mm)
+            disc = DiscImage(buffer, specs)
+            surface = disc.surface(side)
+            total_sectors = surface.num_sectors
+
+            catalogue_class = Catalogue._registry[disk_format.catalogue_name]
+            catalogue_class.initialise(surface, total_sectors, title, boot_option)
+
+            catalogued = CataloguedSurface(surface, catalogue_class)
+            dfs = DFS(catalogued)
+            try:
+                yield dfs
+            finally:
+                mm.flush()
+
     # Path API
     @property
     def root(self) -> DFSPath:
