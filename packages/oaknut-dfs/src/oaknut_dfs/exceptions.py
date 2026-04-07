@@ -84,3 +84,37 @@ class InvalidFormatError(DFSError):
     has invalid size, or contains malformed data structures.
     """
     pass
+
+
+# ADFS exceptions
+
+class ADFSError(Exception):
+    """Base exception for all ADFS errors."""
+    pass
+
+
+class ADFSDirectoryError(ADFSError):
+    """ADFS directory structure error.
+
+    Raised when a directory block has an invalid checksum,
+    unrecognised magic bytes, or other structural problems.
+    """
+    pass
+
+
+class ADFSMapError(ADFSError):
+    """ADFS free space map error.
+
+    Raised when the free space map has an invalid checksum
+    or inconsistent data.
+    """
+    pass
+
+
+class ADFSPathError(ADFSError):
+    """ADFS path error.
+
+    Raised for invalid paths, paths that do not exist,
+    or path components with forbidden characters.
+    """
+    pass

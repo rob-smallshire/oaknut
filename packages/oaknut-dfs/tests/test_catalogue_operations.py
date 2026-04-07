@@ -164,14 +164,14 @@ class TestLockUnlockFile:
 
         # Verify file is unlocked
         files = catalogue.list_files()
-        assert files[0].locked == False
+        assert not files[0].locked
 
         # Lock the file
         catalogue.lock_file("$.TEST")
 
         # Verify file is now locked
         files = catalogue.list_files()
-        assert files[0].locked == True
+        assert files[0].locked
         assert catalogue.get_disk_info().cycle_number == 1  # Cycle incremented
 
     def test_unlock_file(self):
@@ -204,14 +204,14 @@ class TestLockUnlockFile:
 
         # Verify file is locked
         files = catalogue.list_files()
-        assert files[0].locked == True
+        assert files[0].locked
 
         # Unlock the file
         catalogue.unlock_file("$.TEST")
 
         # Verify file is now unlocked
         files = catalogue.list_files()
-        assert files[0].locked == False
+        assert not files[0].locked
         assert catalogue.get_disk_info().cycle_number == 1
 
     def test_lock_nonexistent_file(self):
@@ -352,7 +352,7 @@ class TestRenameFile:
 
         # Verify locked status preserved
         files = catalogue.list_files()
-        assert files[0].locked == True
+        assert files[0].locked
 
     def test_rename_nonexistent_file(self):
         """Test renaming nonexistent file raises error."""

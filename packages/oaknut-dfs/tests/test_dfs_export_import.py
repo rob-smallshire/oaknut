@@ -1,13 +1,10 @@
 """Tests for DFS export/import operations (.inf files)."""
 
 import pytest
-from pathlib import Path
 
-import oaknut_dfs.acorn_encoding  # Register codec
 from oaknut_dfs.dfs import DFS
 from oaknut_dfs.formats import (
     ACORN_DFS_40T_SINGLE_SIDED,
-    ACORN_DFS_40T_DOUBLE_SIDED_INTERLEAVED,
 )
 
 
@@ -267,7 +264,7 @@ class TestImportFromInf:
         info = dfs.get_file_info("$.HELLO")
         assert info.load_address == 0x1900
         assert info.exec_address == 0x8023
-        assert info.locked == False
+        assert not info.locked
 
     def test_import_with_locked_flag(self, tmp_path):
         """Test importing locked file."""
@@ -294,7 +291,7 @@ class TestImportFromInf:
 
         # Check file is locked
         info = dfs.get_file_info("$.LOCKED")
-        assert info.locked == True
+        assert info.locked
 
     def test_import_without_inf_file(self, tmp_path):
         """Test importing file without .inf uses defaults."""
@@ -324,7 +321,7 @@ class TestImportFromInf:
         info = dfs.get_file_info("$.MYFILE")
         assert info.load_address == 0
         assert info.exec_address == 0
-        assert info.locked == False
+        assert not info.locked
 
     def test_import_with_explicit_inf_path(self, tmp_path):
         """Test importing with explicitly specified .inf path."""
@@ -417,4 +414,4 @@ class TestExportImportRoundTrip:
         assert prog_info.exec_address == 0x8023
 
         locked_info = dfs2.get_file_info("$.LOCKED")
-        assert locked_info.locked == True
+        assert locked_info.locked

@@ -1,7 +1,6 @@
 """Tests for Acorn character encoding."""
 
 import pytest
-import oaknut_dfs.acorn_encoding  # Register codec
 from oaknut_dfs.acorn_encoding import (
     acorn_to_unicode,
     unicode_to_acorn,

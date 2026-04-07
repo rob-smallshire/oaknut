@@ -4,7 +4,6 @@ These tests verify disk-level metadata (titles, boot options, catalog structure)
 matches the BBC BASIC generator specifications.
 """
 
-import pytest
 
 
 class TestDiskMetadata:

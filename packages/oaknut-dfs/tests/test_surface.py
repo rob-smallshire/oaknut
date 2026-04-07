@@ -2,7 +2,6 @@
 import pytest
 
 from oaknut_dfs.surface import (
-    Surface,
     SurfaceSpec,
     TrackFootprint,
     DiscImage,

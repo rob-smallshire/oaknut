@@ -1,14 +1,314 @@
 """High-level DFS filesystem operations."""
 
+from __future__ import annotations
+
 import mmap
 from contextlib import contextmanager
+from dataclasses import dataclass
 from os import PathLike
-from typing import Iterator, Optional, Union
+from typing import Iterator, Union
 
 from oaknut_dfs.catalogue import FileEntry
 from oaknut_dfs.catalogued_surface import CataloguedSurface
 from oaknut_dfs.formats import DiskFormat
-from oaknut_dfs.surface import DiscImage, SurfaceSpec
+from oaknut_dfs.surface import DiscImage
+
+
+# Valid DFS directory characters
+_DFS_DIRECTORY_CHARS = frozenset("$ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+
+
+@dataclass(frozen=True)
+class DFSStat:
+    """DFS file/directory metadata, analogous to os.stat_result."""
+
+    length: int
+    load_address: int
+    exec_address: int
+    locked: bool
+    start_sector: int
+    is_directory: bool
+
+
+class DFSPath:
+    """A path within a DFS filesystem, inspired by pathlib.Path.
+
+    DFS has a flat directory structure with single-letter directory
+    prefixes ($, A-Z). DFSPath models this as a virtual root containing
+    directory letters, each containing files::
+
+        (root)          path=""
+        ├── $           path="$"
+        │   └── HELLO   path="$.HELLO"
+        └── A           path="A"
+            └── GAME    path="A.GAME"
+
+    Navigate with the ``/`` operator::
+
+        dfs.root / "$" / "HELLO"    # → DFSPath("$.HELLO")
+    """
+
+    def __init__(self, dfs: DFS, path: str):
+        self._dfs = dfs
+        self._path = path
+
+    # --- Navigation ---
+
+    def __truediv__(self, name: str) -> DFSPath:
+        """Join path components."""
+        if self._path == "":
+            return DFSPath(self._dfs, name)
+        return DFSPath(self._dfs, f"{self._path}.{name}")
+
+    @property
+    def parent(self) -> DFSPath:
+        """Parent path: ``$.HELLO`` → ``$``; ``$`` → root; root → root."""
+        if "." in self._path:
+            return DFSPath(self._dfs, self._path.split(".")[0])
+        elif self._path:
+            return DFSPath(self._dfs, "")
+        return self
+
+    @property
+    def name(self) -> str:
+        """Final component: ``$.HELLO`` → ``HELLO``; ``$`` → ``$``; root → ``""``."""
+        if "." in self._path:
+            return self._path.split(".")[-1]
+        return self._path
+
+    @property
+    def parts(self) -> tuple[str, ...]:
+        """Path components as a tuple."""
+        if not self._path:
+            return ()
+        return tuple(self._path.split("."))
+
+    @property
+    def path(self) -> str:
+        """Full path string."""
+        return self._path
+
+    # --- Querying ---
+
+    def exists(self) -> bool:
+        """Check whether this path exists on disc."""
+        if not self._path:
+            return True  # Root always exists
+        if self._is_directory_path():
+            return any(
+                f.directory == self._path.upper()
+                for f in self._dfs.files
+            )
+        return self._dfs.exists(self._path)
+
+    def is_dir(self) -> bool:
+        """Check whether this path is a directory."""
+        if not self._path:
+            return True  # Root
+        return self._is_directory_path()
+
+    def is_file(self) -> bool:
+        """Check whether this path is a file (not a directory)."""
+        if not self._path or self._is_directory_path():
+            return False
+        return self._dfs.exists(self._path)
+
+    def stat(self) -> DFSStat:
+        """Return metadata for this path.
+
+        Raises:
+            FileNotFoundError: If the path does not exist.
+        """
+        if not self._path or self._is_directory_path():
+            return DFSStat(
+                length=0,
+                load_address=0,
+                exec_address=0,
+                locked=False,
+                start_sector=0,
+                is_directory=True,
+            )
+        entry = self._find_entry()
+        return DFSStat(
+            length=entry.length,
+            load_address=entry.load_address,
+            exec_address=entry.exec_address,
+            locked=entry.locked,
+            start_sector=entry.start_sector,
+            is_directory=False,
+        )
+
+    # --- Directory operations ---
+
+    def iterdir(self) -> Iterator[DFSPath]:
+        """Iterate over directory contents.
+
+        On root: yields a DFSPath for each directory letter that has files.
+        On a directory: yields a DFSPath for each file in that directory.
+
+        Raises:
+            ValueError: If this path is a file, not a directory.
+        """
+        if not self._path:
+            # Root: yield populated directory letters
+            seen = set()
+            for f in self._dfs.files:
+                if f.directory not in seen:
+                    seen.add(f.directory)
+                    yield DFSPath(self._dfs, f.directory)
+        elif self._is_directory_path():
+            dir_letter = self._path.upper()
+            for f in self._dfs.files:
+                if f.directory == dir_letter:
+                    yield DFSPath(self._dfs, f.path)
+        else:
+            raise ValueError(f"'{self._path}' is not a directory")
+
+    def walk(self) -> Iterator[tuple[DFSPath, list[str], list[str]]]:
+        """Walk directory tree, like ``os.walk()``.
+
+        Yields ``(dirpath, dirnames, filenames)`` tuples.
+        """
+        if not self._path:
+            # Root: directories are children, no files at root level
+            populated_dirs = sorted({f.directory for f in self._dfs.files})
+            yield self, populated_dirs, []
+            for dir_letter in populated_dirs:
+                dir_path = DFSPath(self._dfs, dir_letter)
+                filenames = [
+                    f.filename for f in self._dfs.files
+                    if f.directory == dir_letter
+                ]
+                yield dir_path, [], filenames
+        elif self._is_directory_path():
+            dir_letter = self._path.upper()
+            filenames = [
+                f.filename for f in self._dfs.files
+                if f.directory == dir_letter
+            ]
+            yield self, [], filenames
+
+    # --- File operations ---
+
+    def read_bytes(self) -> bytes:
+        """Read file contents (*LOAD).
+
+        Raises:
+            ValueError: If this path is a directory.
+            FileNotFoundError: If the file does not exist.
+        """
+        if not self._path or self._is_directory_path():
+            raise ValueError(f"Cannot read directory as file: '{self._path}'")
+        return self._dfs.load(self._path)
+
+    def write_bytes(
+        self,
+        data: bytes,
+        *,
+        load_address: int = 0,
+        exec_address: int = 0,
+        locked: bool = False,
+    ) -> None:
+        """Write file contents (*SAVE).
+
+        Raises:
+            ValueError: If this path is a directory or filename is invalid.
+        """
+        if not self._path or self._is_directory_path():
+            raise ValueError(f"Cannot write to directory: '{self._path}'")
+        self._dfs.save(self._path, data, load_address, exec_address, locked)
+
+    # --- Modification ---
+
+    def rename(self, target: Union[str, DFSPath]) -> DFSPath:
+        """Rename file, returns new DFSPath.
+
+        Raises:
+            FileNotFoundError: If this file doesn't exist.
+        """
+        target_path = target._path if isinstance(target, DFSPath) else target
+        self._dfs.rename(self._path, target_path)
+        return DFSPath(self._dfs, target_path)
+
+    def unlink(self) -> None:
+        """Delete file (*DELETE).
+
+        Raises:
+            FileNotFoundError: If the file doesn't exist.
+            PermissionError: If the file is locked.
+        """
+        if not self._path or self._is_directory_path():
+            raise ValueError(f"Cannot unlink directory: '{self._path}'")
+        self._dfs.delete(self._path)
+
+    def lock(self) -> None:
+        """Lock file (*ACCESS +L)."""
+        self._dfs.lock(self._path)
+
+    def unlock(self) -> None:
+        """Unlock file (*ACCESS -L)."""
+        self._dfs.unlock(self._path)
+
+    # --- Export ---
+
+    def export(
+        self,
+        target_filepath: Union[str, PathLike],
+        *,
+        preserve_metadata: bool = True,
+    ) -> None:
+        """Export file to host filesystem with optional .inf metadata."""
+        self._dfs.export_file(self._path, str(target_filepath), preserve_metadata)
+
+    # --- Protocols ---
+
+    def __str__(self) -> str:
+        return self._path
+
+    def __repr__(self) -> str:
+        return f"DFSPath({self._path!r})"
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, DFSPath):
+            return NotImplemented
+        return self._dfs is other._dfs and self._path.upper() == other._path.upper()
+
+    def __hash__(self) -> int:
+        return hash(self._path.upper())
+
+    def __iter__(self) -> Iterator[DFSPath]:
+        """Shorthand for ``iterdir()``."""
+        return self.iterdir()
+
+    def __contains__(self, name: str) -> bool:
+        """Check if *name* exists in this directory."""
+        if not self._path:
+            # Root: check if directory letter has files
+            return any(f.directory == name.upper() for f in self._dfs.files)
+        elif self._is_directory_path():
+            dir_letter = self._path.upper()
+            return any(
+                f.directory == dir_letter and f.filename.upper() == name.upper()
+                for f in self._dfs.files
+            )
+        return False
+
+    # --- Internal helpers ---
+
+    def _is_directory_path(self) -> bool:
+        """Check if this path represents a directory (single letter)."""
+        return len(self._path) == 1 and self._path.upper() in _DFS_DIRECTORY_CHARS
+
+    def _find_entry(self) -> FileEntry:
+        """Find the FileEntry for this path.
+
+        Raises:
+            FileNotFoundError: If file not found.
+        """
+        entry = self._dfs._catalogued_surface.find_file(self._path)
+        if entry is None:
+            raise FileNotFoundError(f"File not found: {self._path}")
+        return entry
 
 
 class DFS:
@@ -131,6 +431,20 @@ class DFS:
         catalogued = CataloguedSurface(surface, catalogue_class)
 
         return cls(catalogued)
+
+    # Path API
+    @property
+    def root(self) -> DFSPath:
+        """The virtual root directory containing all directory letters."""
+        return DFSPath(self, "")
+
+    def path(self, path: str) -> DFSPath:
+        """Create a DFSPath from a path string.
+
+        Args:
+            path: DFS path string, e.g. ``"$"``, ``"$.HELLO"``, or ``""`` for root.
+        """
+        return DFSPath(self, path)
 
     # File operations
     def load(self, filename: str) -> bytes:

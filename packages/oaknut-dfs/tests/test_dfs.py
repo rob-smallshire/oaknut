@@ -3,7 +3,6 @@
 import shutil
 
 import pytest
-import oaknut_dfs.acorn_encoding  # Register codec
 
 from oaknut_dfs.dfs import DFS
 from oaknut_dfs.formats import (
@@ -173,8 +172,8 @@ class TestDFSFileOperations:
 
         dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
-        assert dfs.exists("$.EXISTS") == True
-        assert dfs.exists("$.NOSUCHFILE") == False
+        assert dfs.exists("$.EXISTS")
+        assert not dfs.exists("$.NOSUCHFILE")
 
 
 class TestDFSRenameAndLock:
@@ -220,15 +219,15 @@ class TestDFSRenameAndLock:
         dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
         # Initially unlocked
-        assert dfs.files[0].locked == False
+        assert not dfs.files[0].locked
 
         # Lock it
         dfs.lock("$.TEST")
-        assert dfs.files[0].locked == True
+        assert dfs.files[0].locked
 
         # Unlock it
         dfs.unlock("$.TEST")
-        assert dfs.files[0].locked == False
+        assert not dfs.files[0].locked
 
 
 class TestDFSMetadata:
@@ -381,8 +380,8 @@ class TestDFSCopyFile:
         dfs.copy_file("$.LOCKED", "$.COPY2")
 
         # Both should be locked
-        assert dfs.get_file_info("$.LOCKED").locked == True
-        assert dfs.get_file_info("$.COPY2").locked == True
+        assert dfs.get_file_info("$.LOCKED").locked
+        assert dfs.get_file_info("$.COPY2").locked
 
     def test_copy_file_nonexistent_raises(self):
         """Test copying nonexistent file raises error."""
@@ -509,7 +508,7 @@ class TestDFSConvenienceMethods:
         # Verify
         info = dfs.get_file_info("$.PROG")
         assert info.load_address == 0x1900
-        assert info.locked == True
+        assert info.locked
 
     def test_save_from_file_nonexistent_raises(self):
         """Test save_from_file raises error for nonexistent source."""
@@ -840,7 +839,7 @@ class TestDFSIntegration:
 
         # Lock one
         dfs.lock("$.FILE2")
-        assert dfs.files[1].locked == True
+        assert dfs.files[1].locked
 
         # Delete unlocked file
         dfs.delete("$.RENAMED")
@@ -882,7 +881,6 @@ class TestDFSFromFile:
 
         # Modify via mmap
         with DFS.from_file(tmp_filepath, ACORN_DFS_80T_SINGLE_SIDED, mode="r+b") as dfs:
-            original_title = dfs.title
             dfs.title = "MODIFIED"
             assert dfs.title == "MODIFIED"
 

@@ -2,9 +2,8 @@
 
 import pytest
 
-import oaknut_dfs.acorn_encoding  # Register codec
 from oaknut_dfs.acorn_dfs_catalogue import AcornDFSCatalogue
-from oaknut_dfs.catalogue import Catalogue, DiskInfo, FileEntry
+from oaknut_dfs.catalogue import Catalogue
 from oaknut_dfs.surface import DiscImage, SurfaceSpec
 
 
@@ -269,7 +268,7 @@ class TestAcornDFSCatalogueListFiles:
         assert len(files) == 1
         assert files[0].filename == "HELLO"
         assert files[0].directory == "$"
-        assert files[0].locked == False
+        assert not files[0].locked
         assert files[0].load_address == 0x1000
         assert files[0].exec_address == 0x1000
         assert files[0].length == 100
@@ -1078,7 +1077,7 @@ class TestAcornDFSCatalogueMatches:
         disc = DiscImage(memoryview(buffer), [spec])
         surface = disc.surface(0)
 
-        assert AcornDFSCatalogue.matches(surface) == True
+        assert AcornDFSCatalogue.matches(surface)
 
     def test_matches_valid_acorn_dfs_with_files(self):
         """Test that valid Acorn DFS with files is recognized."""
@@ -1100,7 +1099,7 @@ class TestAcornDFSCatalogueMatches:
         disc = DiscImage(memoryview(buffer), [spec])
         surface = disc.surface(0)
 
-        assert AcornDFSCatalogue.matches(surface) == True
+        assert AcornDFSCatalogue.matches(surface)
 
     def test_matches_rejects_watford_dfs_aa_marker(self):
         """Test that Watford DFS with 0xAA marker is rejected."""
@@ -1126,7 +1125,7 @@ class TestAcornDFSCatalogueMatches:
         disc = DiscImage(memoryview(buffer), [spec])
         surface = disc.surface(0)
 
-        assert AcornDFSCatalogue.matches(surface) == False
+        assert not AcornDFSCatalogue.matches(surface)
 
     def test_matches_rejects_watford_dfs_full_markers(self):
         """Test that Watford DFS with full markers is rejected."""
@@ -1156,7 +1155,7 @@ class TestAcornDFSCatalogueMatches:
         disc = DiscImage(memoryview(buffer), [spec])
         surface = disc.surface(0)
 
-        assert AcornDFSCatalogue.matches(surface) == False
+        assert not AcornDFSCatalogue.matches(surface)
 
     def test_matches_rejects_invalid_title_chars_top_bit(self):
         """Test that title with top-bit-set chars is rejected."""
@@ -1178,7 +1177,7 @@ class TestAcornDFSCatalogueMatches:
         disc = DiscImage(memoryview(buffer), [spec])
         surface = disc.surface(0)
 
-        assert AcornDFSCatalogue.matches(surface) == False
+        assert not AcornDFSCatalogue.matches(surface)
 
     def test_matches_rejects_invalid_title_chars_control(self):
         """Test that title with control characters is rejected."""
@@ -1200,7 +1199,7 @@ class TestAcornDFSCatalogueMatches:
         disc = DiscImage(memoryview(buffer), [spec])
         surface = disc.surface(0)
 
-        assert AcornDFSCatalogue.matches(surface) == False
+        assert not AcornDFSCatalogue.matches(surface)
 
     def test_matches_accepts_null_padding_in_title(self):
         """Test that null bytes in title are accepted (padding)."""
@@ -1222,7 +1221,7 @@ class TestAcornDFSCatalogueMatches:
         disc = DiscImage(memoryview(buffer), [spec])
         surface = disc.surface(0)
 
-        assert AcornDFSCatalogue.matches(surface) == True
+        assert AcornDFSCatalogue.matches(surface)
 
     def test_matches_rejects_invalid_num_files_byte(self):
         """Test that invalid num_files byte (not multiple of 8) is rejected."""
@@ -1244,7 +1243,7 @@ class TestAcornDFSCatalogueMatches:
         disc = DiscImage(memoryview(buffer), [spec])
         surface = disc.surface(0)
 
-        assert AcornDFSCatalogue.matches(surface) == False
+        assert not AcornDFSCatalogue.matches(surface)
 
     def test_matches_rejects_invalid_boot_sectors_byte(self):
         """Test that invalid boot/sectors byte (bits 2,3,6,7 set) is rejected."""
@@ -1266,7 +1265,7 @@ class TestAcornDFSCatalogueMatches:
         disc = DiscImage(memoryview(buffer), [spec])
         surface = disc.surface(0)
 
-        assert AcornDFSCatalogue.matches(surface) == False
+        assert not AcornDFSCatalogue.matches(surface)
 
     def test_matches_rejects_sectors_not_divisible_by_10(self):
         """Test that sector count not divisible by 10 is rejected."""
@@ -1288,7 +1287,7 @@ class TestAcornDFSCatalogueMatches:
         disc = DiscImage(memoryview(buffer), [spec])
         surface = disc.surface(0)
 
-        assert AcornDFSCatalogue.matches(surface) == False
+        assert not AcornDFSCatalogue.matches(surface)
 
     def test_matches_rejects_zero_tracks(self):
         """Test that zero tracks is rejected."""
@@ -1310,7 +1309,7 @@ class TestAcornDFSCatalogueMatches:
         disc = DiscImage(memoryview(buffer), [spec])
         surface = disc.surface(0)
 
-        assert AcornDFSCatalogue.matches(surface) == False
+        assert not AcornDFSCatalogue.matches(surface)
 
     def test_matches_accepts_80_tracks(self):
         """Test that 80-track discs are accepted."""
@@ -1332,7 +1331,7 @@ class TestAcornDFSCatalogueMatches:
         disc = DiscImage(memoryview(buffer), [spec])
         surface = disc.surface(0)
 
-        assert AcornDFSCatalogue.matches(surface) == True
+        assert AcornDFSCatalogue.matches(surface)
 
     def test_matches_rejects_too_few_sectors(self):
         """Test that surface with < 4 sectors is rejected."""
@@ -1350,7 +1349,7 @@ class TestAcornDFSCatalogueMatches:
         disc = DiscImage(memoryview(buffer), [spec])
         surface = disc.surface(0)
 
-        assert AcornDFSCatalogue.matches(surface) == False
+        assert not AcornDFSCatalogue.matches(surface)
 
     def test_matches_rejects_sectors_exceeding_surface_size(self):
         """Test that claimed sectors exceeding surface size is rejected."""
@@ -1372,4 +1371,4 @@ class TestAcornDFSCatalogueMatches:
         disc = DiscImage(memoryview(buffer), [spec])
         surface = disc.surface(0)
 
-        assert AcornDFSCatalogue.matches(surface) == False
+        assert not AcornDFSCatalogue.matches(surface)

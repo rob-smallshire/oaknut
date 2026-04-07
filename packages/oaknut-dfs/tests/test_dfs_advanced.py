@@ -5,7 +5,6 @@ import pytest
 from oaknut_dfs.dfs import DFS
 from oaknut_dfs.formats import (
     ACORN_DFS_40T_SINGLE_SIDED,
-    ACORN_DFS_40T_DOUBLE_SIDED_INTERLEAVED,
 )
 
 
@@ -144,7 +143,7 @@ class TestFileInfo:
         assert file_info.name == "$.HELLO"
         assert file_info.directory == "$"
         assert file_info.filename == "HELLO"
-        assert file_info.locked == False
+        assert not file_info.locked
         assert file_info.load_address == 0x1900
         assert file_info.exec_address == 0x8023
         assert file_info.length == 12
