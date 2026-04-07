@@ -18,6 +18,7 @@ import mmap
 from contextlib import contextmanager
 from dataclasses import dataclass
 from os import PathLike
+from pathlib import Path
 from typing import Iterator, Union
 
 from oaknut_dfs.adfs_directory import (
@@ -115,6 +116,85 @@ _ADFS_FORMATS_BY_SIZE = {
     ADFS_M.total_bytes: ADFS_M,
     ADFS_L.total_bytes: ADFS_L,
 }
+
+
+# --- Hard disc (.dat/.dsc) support ---
+
+_DSC_SIZE = 22
+_SCSI_SECTORS_PER_TRACK = 33
+
+
+@dataclass(frozen=True)
+class _DSCGeometry:
+    """Disc geometry from a SCSI .dsc sidecar file."""
+
+    cylinders: int
+    heads: int
+    sectors_per_track: int = _SCSI_SECTORS_PER_TRACK
+
+
+def _parse_dsc(filepath: Union[str, PathLike]) -> _DSCGeometry:
+    """Parse a 22-byte .dsc sidecar file.
+
+    The .dsc file contains SCSI MODE SENSE data with disc geometry:
+      Bytes 13–14: cylinders (big-endian 16-bit)
+      Byte 15: number of heads
+      Sectors per track is always 33.
+    """
+    data = Path(filepath).read_bytes()
+    if len(data) != _DSC_SIZE:
+        raise ADFSError(
+            f"DSC file should be {_DSC_SIZE} bytes, got {len(data)}"
+        )
+    return _DSCGeometry(
+        cylinders=(data[13] << 8) | data[14],
+        heads=data[15],
+    )
+
+
+def _hard_disc_format(
+    geometry: _DSCGeometry, dat_size_bytes: int
+) -> ADFSFormat:
+    """Create an ADFSFormat for a hard disc image from geometry and file size.
+
+    ADFS addresses hard discs using linear SCSI LBA — sector N is at
+    byte offset N×256 in the .dat file.  The CHS geometry from the .dsc
+    file describes the physical drive but is not used for ADFS sector
+    addressing.  We model the image as a single flat surface matching
+    ADFS's linear view.  The geometry is recorded in the format for
+    metadata but doesn't affect addressing.
+    """
+    if dat_size_bytes % _ADFS_BYTES_PER_SECTOR != 0:
+        raise ADFSError(
+            f"Hard disc image size ({dat_size_bytes}) is not a multiple "
+            f"of the sector size ({_ADFS_BYTES_PER_SECTOR})"
+        )
+
+    total_sectors = dat_size_bytes // _ADFS_BYTES_PER_SECTOR
+
+    # Model as cylinders of (heads × sectors_per_track) sectors each,
+    # laid out sequentially — a single surface with the full linear
+    # sector space.
+    sectors_per_cylinder = geometry.heads * geometry.sectors_per_track
+    num_cylinders = total_sectors // sectors_per_cylinder
+    if num_cylinders == 0:
+        num_cylinders = 1
+        sectors_per_cylinder = total_sectors
+
+    spec = SurfaceSpec(
+        num_tracks=num_cylinders,
+        sectors_per_track=sectors_per_cylinder,
+        bytes_per_sector=_ADFS_BYTES_PER_SECTOR,
+        track_zero_offset_bytes=0,
+        track_stride_bytes=sectors_per_cylinder * _ADFS_BYTES_PER_SECTOR,
+    )
+
+    return ADFSFormat(
+        surface_specs=[spec],
+        total_sectors=total_sectors,
+        total_bytes=dat_size_bytes,
+        label="HardDisc",
+    )
 
 
 # --- Public value type ---
@@ -552,35 +632,78 @@ class ADFS:
     ) -> Iterator[ADFS]:
         """Open an ADFS disc image file as a context manager.
 
-        Auto-detects the ADFS format from the image size and content.
+        For floppy images (``.adf``, ``.adl``), auto-detects the format
+        from the image size.
+
+        For hard disc images (``.dat``), requires a companion ``.dsc``
+        sidecar file alongside it containing SCSI disc geometry.
+        Either the ``.dat`` or ``.dsc`` file may be specified — the
+        companion is located by swapping the extension.
 
         Args:
-            filepath: Path to the disc image file (.adf, .adl, .dat).
+            filepath: Path to the disc image file.
             mode: ``"rb"`` for read-only (default), ``"r+b"`` for read-write.
 
         Yields:
             ADFS instance backed by the file.
 
         Raises:
-            FileNotFoundError: If the file does not exist.
+            FileNotFoundError: If the file or its companion does not exist.
             ADFSError: If the image is not a valid ADFS disc.
         """
         if mode not in ("rb", "r+b"):
             raise ValueError(f"mode must be 'rb' or 'r+b', got {mode!r}")
 
-        access = mmap.ACCESS_READ if mode == "rb" else mmap.ACCESS_WRITE
-        with open(filepath, mode) as f:
-            mm = mmap.mmap(f.fileno(), 0, access=access)
-            adfs = ADFS.from_buffer(memoryview(mm))
-            try:
-                yield adfs
-            finally:
-                if mode == "r+b":
-                    mm.flush()
+        p = Path(filepath)
+        ext = p.suffix.lower()
+
+        if ext in (".dat", ".dsc"):
+            # Hard disc image pair
+            dat_filepath = p.with_suffix(".dat")
+            dsc_filepath = p.with_suffix(".dsc")
+
+            if not dat_filepath.exists():
+                raise FileNotFoundError(
+                    f"Hard disc data file not found: {dat_filepath}"
+                )
+            if not dsc_filepath.exists():
+                raise FileNotFoundError(
+                    f"Hard disc geometry file not found: {dsc_filepath}"
+                )
+
+            geometry = _parse_dsc(dsc_filepath)
+            dat_size = dat_filepath.stat().st_size
+            fmt = _hard_disc_format(geometry, dat_size)
+
+            access = mmap.ACCESS_READ if mode == "rb" else mmap.ACCESS_WRITE
+            dat_mode = mode if ext == ".dat" else "rb"
+            with open(dat_filepath, dat_mode) as f:
+                mm = mmap.mmap(f.fileno(), 0, access=access)
+                adfs = ADFS._from_buffer_with_format(memoryview(mm), fmt)
+                try:
+                    yield adfs
+                finally:
+                    if dat_mode == "r+b":
+                        mm.flush()
+        else:
+            # Floppy image
+            access = mmap.ACCESS_READ if mode == "rb" else mmap.ACCESS_WRITE
+            with open(filepath, mode) as f:
+                mm = mmap.mmap(f.fileno(), 0, access=access)
+                adfs = ADFS.from_buffer(memoryview(mm))
+                try:
+                    yield adfs
+                finally:
+                    if mode == "r+b":
+                        mm.flush()
 
     @classmethod
     def from_buffer(cls, buffer: memoryview) -> ADFS:
         """Create ADFS from a buffer, auto-detecting format.
+
+        For known floppy sizes (160KB, 320KB, 640KB), uses the
+        corresponding ADFS S/M/L format.  For other sizes, treats
+        the buffer as a flat hard disc image (single surface).
 
         Args:
             buffer: Disc image data.
@@ -591,7 +714,38 @@ class ADFS:
         Raises:
             ADFSError: If the image is not a valid ADFS disc.
         """
-        fmt = _detect_format(len(buffer))
+        buf_size = len(buffer)
+        fmt = _ADFS_FORMATS_BY_SIZE.get(buf_size)
+        if fmt is None:
+            # Not a known floppy size — treat as flat hard disc image
+            if buf_size % _ADFS_BYTES_PER_SECTOR != 0:
+                raise ADFSError(
+                    f"Buffer size ({buf_size}) is not a multiple "
+                    f"of the sector size ({_ADFS_BYTES_PER_SECTOR})"
+                )
+            total_sectors = buf_size // _ADFS_BYTES_PER_SECTOR
+            if total_sectors < _OLD_FSM_SECTORS + _OLD_DIR_SECTORS:
+                raise ADFSError(
+                    f"Buffer too small ({total_sectors} sectors) for ADFS "
+                    f"(minimum {_OLD_FSM_SECTORS + _OLD_DIR_SECTORS} sectors)"
+                )
+            fmt = ADFSFormat(
+                surface_specs=[SurfaceSpec(
+                    num_tracks=1,
+                    sectors_per_track=total_sectors,
+                    bytes_per_sector=_ADFS_BYTES_PER_SECTOR,
+                    track_zero_offset_bytes=0,
+                    track_stride_bytes=buf_size,
+                )],
+                total_sectors=total_sectors,
+                total_bytes=buf_size,
+                label="HardDisc",
+            )
+        return cls._from_buffer_with_format(buffer, fmt)
+
+    @classmethod
+    def _from_buffer_with_format(cls, buffer: memoryview, fmt: ADFSFormat) -> ADFS:
+        """Create ADFS from a buffer with an explicit format."""
         disc_image = DiscImage(buffer, fmt.surface_specs)
         unified = UnifiedDisc(disc_image)
 
