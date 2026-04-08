@@ -40,8 +40,9 @@ minversion = "8.0"
 testpaths = [
     "tests",
 ]
-pythonpath = [
-    "tests",
+norecursedirs = [
+    "tests/helpers",
+    "tests/data",
 ]
 
 [dependency-groups]
