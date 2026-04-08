@@ -51,7 +51,6 @@ def renumber_basic(input_filepath: Path, output_filepath: Path = None):
 
     # Renumber all non-blank lines
     new_line_num = 10
-    old_to_new = {}  # For updating GOTO references
     renumbered_lines = []
 
     for i, content in enumerate(content_lines):
@@ -85,7 +84,7 @@ def renumber_basic(input_filepath: Path, output_filepath: Path = None):
     with open(output_filepath, 'w') as f:
         f.writelines(renumbered_lines)
 
-    print(f"Renumbered {len([l for l in renumbered_lines if l.strip()])} lines")
+    print(f"Renumbered {len([line for line in renumbered_lines if line.strip()])} lines")
     if error_handler_line_index is not None:
         error_handler_new_line = (error_handler_line_index + 1) * 10
         print(f"Error handler at line {error_handler_new_line}")

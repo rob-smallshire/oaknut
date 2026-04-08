@@ -18,18 +18,14 @@ from jinja2 import Environment, FileSystemLoader
 # Register catalogue classes before using DFS
 import oaknut_dfs.acorn_dfs_catalogue  # noqa: F401
 
-from oaknut_dfs import DFS
-from oaknut_dfs.formats import (
-    ACORN_DFS_40T_DOUBLE_SIDED_INTERLEAVED,
-    ACORN_DFS_40T_SINGLE_SIDED,
-    ACORN_DFS_80T_SINGLE_SIDED,
-)
+from oaknut_dfs import DFS, ACORN_DFS_80T_SINGLE_SIDED
 
 REPO_DIRPATH = Path(__file__).resolve().parent.parent
 TEMPLATE_DIRPATH = REPO_DIRPATH / "scripts"
 TEMPLATE_FILENAME = "README.md.j2"
 OUTPUT_FILEPATH = REPO_DIRPATH / "README.md"
 FIXTURE_FILEPATH = REPO_DIRPATH / "tests" / "data" / "images" / "games" / "Disc003-Zalaga.ssd"
+ADFS_FIXTURE_FILEPATH = REPO_DIRPATH / "tests" / "images" / "MasterWelcome.adl"
 
 
 def _load_game_disc() -> DFS:
@@ -38,229 +34,151 @@ def _load_game_disc() -> DFS:
     return DFS.from_buffer(memoryview(buffer), ACORN_DFS_80T_SINGLE_SIDED)
 
 
-def _create_empty_ssd(title: str = "", total_sectors: int = 400) -> bytearray:
-    """Create a minimal 40-track SSD buffer with a valid empty catalogue."""
-    buffer = bytearray(total_sectors * 256)
-    encoded_title = title.encode("acorn")[:12].ljust(12, b" ")
-    buffer[0:8] = encoded_title[:8]
-    buffer[256:260] = encoded_title[8:12]
-    buffer[261] = 0
-    buffer[262] = (total_sectors >> 8) & 0x03
-    buffer[263] = total_sectors & 0xFF
-    return buffer
+# --- DFS examples ---
 
 
-def _create_empty_dsd(
-    title_side0: str = "", title_side1: str = "", total_sectors_per_side: int = 400
-) -> bytearray:
-    """Create a minimal 40-track interleaved DSD buffer with valid catalogues on both sides."""
-    num_tracks = total_sectors_per_side // 10
-    buffer = bytearray(num_tracks * 2 * 10 * 256)
-
-    encoded_title0 = title_side0.encode("acorn")[:12].ljust(12, b" ")
-    buffer[0:8] = encoded_title0[:8]
-    buffer[256:260] = encoded_title0[8:12]
-    buffer[261] = 0
-    buffer[262] = (total_sectors_per_side >> 8) & 0x03
-    buffer[263] = total_sectors_per_side & 0xFF
-
-    side1_offset = 2560
-    encoded_title1 = title_side1.encode("acorn")[:12].ljust(12, b" ")
-    buffer[side1_offset : side1_offset + 8] = encoded_title1[:8]
-    buffer[side1_offset + 256 : side1_offset + 260] = encoded_title1[8:12]
-    buffer[side1_offset + 261] = 0
-    buffer[side1_offset + 262] = (total_sectors_per_side >> 8) & 0x03
-    buffer[side1_offset + 263] = total_sectors_per_side & 0xFF
-
-    return buffer
-
-
-def capture_open_disc() -> str:
-    """Demonstrate opening an SSD file and reading the catalogue."""
+def capture_dfs_open() -> str:
     dfs = _load_game_disc()
-
     title = dfs.title.rstrip("\x00")
-
     lines = [
         "from oaknut_dfs import DFS, ACORN_DFS_80T_SINGLE_SIDED",
         "",
         'with DFS.from_file("Zalaga.ssd", ACORN_DFS_80T_SINGLE_SIDED) as dfs:',
         f"    print(dfs.title)   # {title!r}",
-        f"    print(len(dfs))    # {len(dfs)} files",
+        "",
+        "    # Navigate with pathlib-inspired API",
+        '    for entry in dfs.root / "$":',
+        "        s = entry.stat()",
+        '        print(f"{entry.name:10s}  {s.length:6d}  load={s.load_address:08X}")',
+        "",
+        "    # Read file data",
+        '    data = (dfs.root / "$" / "ZALAGA").read_bytes()',
     ]
     return "\n".join(lines)
 
 
-def capture_catalogue() -> str:
-    """Demonstrate reading the catalogue of a real game disc."""
-    dfs = _load_game_disc()
-
+def capture_dfs_create() -> str:
     lines = [
-        "for entry in dfs.files:",
-        '    lock = "L" if entry.locked else " "',
-        "    print(",
-        '        f"{lock} {entry.path:10s}"',
-        '        f"  load={entry.load_address:08X}"',
-        '        f"  exec={entry.exec_address:08X}"',
-        '        f"  length={entry.length:5d}"',
-        "    )",
+        "from oaknut_dfs import DFS, ACORN_DFS_80T_SINGLE_SIDED",
+        "",
+        'with DFS.create_file("demo.ssd", ACORN_DFS_80T_SINGLE_SIDED, title="DEMO") as dfs:',
+        '    dfs.save("$.HELLO", b"Hello, World!", load_address=0x1900)',
+        '    dfs.save("$.README", b"oaknut-dfs demo disc")',
     ]
-
-    for entry in dfs.files:
-        lock = "L" if entry.locked else " "
-        lines.append(
-            f"# {lock} {entry.path:10s}"
-            f"  load={entry.load_address:08X}"
-            f"  exec={entry.exec_address:08X}"
-            f"  length={entry.length:5d}"
-        )
-
     return "\n".join(lines)
 
 
-def capture_file_info() -> str:
-    """Demonstrate get_file_info() on a real file."""
-    dfs = _load_game_disc()
-    first_file = dfs.files[0]
-    info = dfs.get_file_info(first_file.path)
-
+def capture_dfs_dsd() -> str:
     lines = [
-        f'info = dfs.get_file_info("{first_file.path}")',
-        f"print(info.name)              # {info.name!r}",
-        f"print(hex(info.load_address)) # {hex(info.load_address)}",
-        f"print(hex(info.exec_address)) # {hex(info.exec_address)}",
-        f"print(info.length)            # {info.length}",
-        f"print(info.locked)            # {info.locked}",
-        f"print(info.start_sector)      # {info.start_sector}",
-        f"print(info.sectors)           # {info.sectors}",
+        "from oaknut_dfs import DFS, ACORN_DFS_80T_DOUBLE_SIDED_INTERLEAVED",
+        "",
+        'with DFS.from_file("game.dsd", ACORN_DFS_80T_DOUBLE_SIDED_INTERLEAVED) as side0:',
+        "    print(side0.title)",
+        "",
+        'with DFS.from_file("game.dsd", ACORN_DFS_80T_DOUBLE_SIDED_INTERLEAVED, side=1) as side1:',
+        "    print(side1.title)",
     ]
     return "\n".join(lines)
 
 
-def capture_load_file() -> str:
-    """Demonstrate loading a file and using its metadata."""
-    dfs = _load_game_disc()
-    info = dfs.get_file_info("$.ZALAGA")
-    data = dfs.load("$.ZALAGA")
-
+def capture_dfs_walk() -> str:
     lines = [
-        "# Get the catalogue entry for the main game binary",
-        'info = dfs.get_file_info("$.ZALAGA")',
-        f"print(hex(info.load_address))  # {hex(info.load_address)} — where to load in memory",
-        f"print(hex(info.exec_address))  # {hex(info.exec_address)} — entry point for execution",
-        f"print(info.length)             # {info.length} bytes",
-        "",
-        "# Load the file data",
-        'data = dfs.load("$.ZALAGA")',
-        f"print(len(data))               # {len(data)}",
+        'with DFS.from_file("disc.ssd", ACORN_DFS_80T_SINGLE_SIDED) as dfs:',
+        "    for dirpath, dirnames, filenames in dfs.root.walk():",
+        "        for name in filenames:",
+        "            print(dirpath / name)",
     ]
     return "\n".join(lines)
 
 
-def capture_disc_info() -> str:
-    """Demonstrate the .info property on a real disc."""
-    dfs = _load_game_disc()
-    info = dfs.info
+# --- ADFS floppy examples ---
 
+
+def capture_adfs_floppy_open() -> str:
     lines = [
-        "print(dfs.info)",
+        "from oaknut_dfs import ADFS",
+        "",
+        'with ADFS.from_file("MasterWelcome.adl") as adfs:',
     ]
-    formatted_items = [f"    {k!r}: {v!r}," for k, v in info.items()]
-    lines.append("# {")
-    for item in formatted_items:
-        lines.append(f"# {item}")
-    lines.append("# }")
 
+    from oaknut_dfs import ADFS
+    if ADFS_FIXTURE_FILEPATH.exists():
+        with ADFS.from_file(ADFS_FIXTURE_FILEPATH) as adfs:
+            lines.append(f'    print(adfs.title)   # {adfs.title!r}')
+    else:
+        lines.append("    print(adfs.title)   # '80T Welcome & Utils'")
+
+    lines.extend([
+        "",
+        "    # Navigate with / operator",
+        '    for entry in adfs.root / "LIBRARY":',
+        "        print(entry.name, entry.stat().length)",
+        "",
+        "    # Read a file",
+        '    data = (adfs.root / "HELP" / "aform").read_bytes()',
+    ])
     return "\n".join(lines)
 
 
-def capture_pythonic() -> str:
-    """Demonstrate Pythonic interface on a real disc."""
-    dfs = _load_game_disc()
-
+def capture_adfs_floppy_walk() -> str:
     lines = [
-        "# Check if a file exists",
-        f'print("$.!BOOT" in dfs)    # {"$.!BOOT" in dfs}',
-        f'print("$.MISSING" in dfs)  # {"$.MISSING" in dfs}',
-        "",
-        "# Number of files",
-        f"print(len(dfs))             # {len(dfs)}",
-        "",
-        "# Iterate over filenames",
-        "for entry in dfs:",
-        "    print(entry.path)",
+        'with ADFS.from_file("disc.adl") as adfs:',
+        "    for dirpath, dirnames, filenames in adfs.root.walk():",
+        "        for name in filenames:",
+        "            print(dirpath / name)",
     ]
-
-    for entry in dfs:
-        lines.append(f"# {entry.path}")
-
     return "\n".join(lines)
 
 
-def capture_save_load() -> str:
-    """Demonstrate creating a new disc and saving/loading files."""
-    buf = _create_empty_ssd("DEMO")
-    dfs = DFS.from_buffer(memoryview(buf), ACORN_DFS_40T_SINGLE_SIDED)
-
-    dfs.save("$.HELLO", b"Hello, World!", load_address=0x1200, exec_address=0x1200)
-    dfs.save("$.README", b"oaknut-dfs demo disc")
-
-    loaded = dfs.load("$.HELLO")
-
+def capture_adfs_floppy_create() -> str:
     lines = [
-        "from oaknut_dfs import ACORN_DFS_40T_SINGLE_SIDED",
+        "from oaknut_dfs import ADFS, ADFS_L",
         "",
-        "# Create an empty 40-track single-sided disc in memory",
-        "buffer = bytearray(102400)  # 40 tracks * 10 sectors * 256 bytes",
-        "# ... initialise catalogue sectors ...",
-        "",
-        "dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)",
-        "",
-        "# Save files with load and execution addresses",
-        'dfs.save("$.HELLO", b"Hello, World!", load_address=0x1200, exec_address=0x1200)',
-        'dfs.save("$.README", b"oaknut-dfs demo disc")',
-        "",
-        "# Load a file back",
-        'data = dfs.load("$.HELLO")',
-        f"print(data)   # {loaded!r}",
-        "",
-        f"print(repr(dfs))   # {dfs!r}",
+        'with ADFS.create_file("blank.adl", ADFS_L, title="My Disc") as adfs:',
+        "    pass  # empty formatted disc ready for use",
     ]
     return "\n".join(lines)
 
 
-def capture_dsd_example() -> str:
-    """Demonstrate double-sided disc access."""
-    buf = _create_empty_dsd("SIDE ZERO", "SIDE ONE")
-    dfs0 = DFS.from_buffer(memoryview(buf), ACORN_DFS_40T_DOUBLE_SIDED_INTERLEAVED, side=0)
-    dfs1 = DFS.from_buffer(memoryview(buf), ACORN_DFS_40T_DOUBLE_SIDED_INTERLEAVED, side=1)
+# --- ADFS hard disc examples ---
 
-    dfs0.save("$.FILE0", b"side 0 data", load_address=0x1200, exec_address=0x1200)
-    dfs1.save("$.FILE1", b"side 1 data", load_address=0x3000, exec_address=0x3000)
 
+def capture_adfs_hdd_open() -> str:
     lines = [
-        "from oaknut_dfs import ACORN_DFS_40T_DOUBLE_SIDED_INTERLEAVED",
+        "from oaknut_dfs import ADFS",
         "",
-        "# DSD images contain two independent sides, each with its own catalogue.",
-        "# This mirrors the BBC Micro, where double-sided discs were accessed as",
-        "# separate drives using *DRIVE 0 and *DRIVE 2.",
+        'with ADFS.from_file("scsi0.dat") as adfs:',
+        "    print(adfs.title)",
+        '    print(f"{adfs.total_size // 1024}KB, {adfs.free_space // 1024}KB free")',
         "",
-        "buffer = bytearray(204800)  # 40-track double-sided",
-        "# ... initialise catalogue sectors for both sides ...",
-        "",
-        "# Access each side independently",
-        "dfs0 = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_DOUBLE_SIDED_INTERLEAVED, side=0)",
-        "dfs1 = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_DOUBLE_SIDED_INTERLEAVED, side=1)",
-        "",
-        "# Each side has its own title, files, and catalogue",
-        f'print(dfs0.title)   # {dfs0.title!r}',
-        f'print(dfs1.title)   # {dfs1.title!r}',
-        "",
-        '# Files on one side are not visible from the other',
-        f'print("$.FILE0" in dfs0)   # {"$.FILE0" in dfs0}',
-        f'print("$.FILE0" in dfs1)   # {"$.FILE0" in dfs1}',
+        "    for dirpath, dirnames, filenames in adfs.root.walk():",
+        "        for name in filenames:",
+        "            p = dirpath / name",
+        '            print(f"{p}  {p.stat().length}")',
     ]
     return "\n".join(lines)
+
+
+def capture_adfs_hdd_create() -> str:
+    lines = [
+        "from oaknut_dfs import ADFS",
+        "",
+        "# Create a 20MB hard disc image",
+        'with ADFS.create_file("scsi0.dat", capacity_bytes=20 * 1024 * 1024, title="Data") as adfs:',
+        "    pass  # creates both scsi0.dat and scsi0.dsc",
+    ]
+    return "\n".join(lines)
+
+
+def capture_adfs_hdd_create_explicit() -> str:
+    lines = [
+        'with ADFS.create_file("scsi0.dat", cylinders=306, heads=4) as adfs:',
+        "    pass",
+    ]
+    return "\n".join(lines)
+
+
+# --- Main ---
 
 
 def generate() -> str:
@@ -272,14 +190,16 @@ def generate() -> str:
     template = env.get_template(TEMPLATE_FILENAME)
 
     return template.render(
-        open_disc=capture_open_disc(),
-        catalogue=capture_catalogue(),
-        file_info=capture_file_info(),
-        load_file=capture_load_file(),
-        disc_info=capture_disc_info(),
-        pythonic=capture_pythonic(),
-        save_load=capture_save_load(),
-        dsd_example=capture_dsd_example(),
+        dfs_open=capture_dfs_open(),
+        dfs_create=capture_dfs_create(),
+        dfs_dsd=capture_dfs_dsd(),
+        dfs_walk=capture_dfs_walk(),
+        adfs_floppy_open=capture_adfs_floppy_open(),
+        adfs_floppy_walk=capture_adfs_floppy_walk(),
+        adfs_floppy_create=capture_adfs_floppy_create(),
+        adfs_hdd_open=capture_adfs_hdd_open(),
+        adfs_hdd_create=capture_adfs_hdd_create(),
+        adfs_hdd_create_explicit=capture_adfs_hdd_create_explicit(),
     )
 
 
