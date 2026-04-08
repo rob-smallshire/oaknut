@@ -390,9 +390,9 @@ class AcornDFSCatalogue(Catalogue):
         # Pack high bits into extra byte
         extra_byte = (
             ((start_sector >> 8) & 0x03)
-            | (((load_address >> 14) & 0x03) << 2)
-            | (((length >> 12) & 0x03) << 4)
-            | (((exec_address >> 10) & 0x03) << 6)
+            | (((load_address >> 16) & 0x03) << 2)
+            | (((length >> 16) & 0x03) << 4)
+            | (((exec_address >> 16) & 0x03) << 6)
         )
         sector1[sector1_offset + 6] = extra_byte
         sector1[sector1_offset + 7] = start_sector & 0xFF
@@ -463,8 +463,8 @@ class AcornDFSCatalogue(Catalogue):
             extra_byte = (
                 ((entry.start_sector >> 8) & 0x03)
                 | (((entry.load_address >> 14) & 0x03) << 2)
-                | (((entry.length >> 12) & 0x03) << 4)
-                | (((entry.exec_address >> 10) & 0x03) << 6)
+                | (((entry.length >> 16) & 0x03) << 4)
+                | (((entry.exec_address >> 16) & 0x03) << 6)
             )
             sector1[sector1_offset + 6] = extra_byte
             sector1[sector1_offset + 7] = entry.start_sector & 0xFF

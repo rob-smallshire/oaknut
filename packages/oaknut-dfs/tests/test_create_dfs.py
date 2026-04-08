@@ -109,6 +109,25 @@ class TestDFSCreateRoundTrip:
         assert dfs.load("$.HELLO") == b"Hello, World!"
 
     @pytest.mark.parametrize("disk_format,expected_total_sectors,catalogue_sectors", ALL_FORMATS)
+    def test_catalogue_high_bits_round_trip(self, disk_format, expected_total_sectors, catalogue_sectors):
+        """Verify that the high bits (16-17) of load, exec, and length
+        are packed and unpacked correctly in the catalogue extra byte.
+
+        Regression test: the write path previously used wrong bit shifts
+        (>> 14, >> 12, >> 10 instead of >> 16), causing values with
+        non-zero bits 12-15 but zero bits 16-17 to be stored incorrectly.
+        """
+        dfs = DFS.create(disk_format)
+        # 15053 bytes — bits 12-13 of length are non-zero, bits 16-17 are zero
+        data = b"x" * 15053
+        dfs.save("$.PROG", data, load_address=0x0800, exec_address=0x8023)
+        entry = dfs.files[0]
+        assert entry.length == 15053
+        assert entry.load_address == 0x0800
+        assert entry.exec_address == 0x8023
+        assert dfs.load("$.PROG") == data
+
+    @pytest.mark.parametrize("disk_format,expected_total_sectors,catalogue_sectors", ALL_FORMATS)
     def test_save_and_load_via_path(self, disk_format, expected_total_sectors, catalogue_sectors):
         dfs = DFS.create(disk_format)
         (dfs.root / "$" / "DATA").write_bytes(b"test data", load_address=0x2000)
