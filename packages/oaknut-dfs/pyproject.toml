@@ -40,6 +40,9 @@ minversion = "8.0"
 testpaths = [
     "tests",
 ]
+pythonpath = [
+    "tests",
+]
 
 [dependency-groups]
 test = [

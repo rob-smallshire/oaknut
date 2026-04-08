@@ -221,17 +221,15 @@ class TestADFSHardDiscFromBuffer:
 
     def test_non_floppy_size_accepted(self):
         """A buffer larger than any floppy format should be accepted if valid ADFS."""
-        from tests.test_adfs import _make_old_free_space_map, _make_old_directory
+        from helpers.adfs_image import make_old_free_space_map, make_old_directory
 
         total_sectors = 4096
         buf = bytearray(total_sectors * 256)
 
-        # Write FSM
-        fsm = _make_old_free_space_map([(7, total_sectors - 7)], disc_size_sectors=total_sectors)
+        fsm = make_old_free_space_map([(7, total_sectors - 7)], disc_size_sectors=total_sectors)
         buf[0:512] = fsm
 
-        # Write root directory
-        root_dir = _make_old_directory([], dir_name="$", title="HardDisc")
+        root_dir = make_old_directory([], dir_name="$", title="HardDisc")
         buf[0x200:0x200 + 1280] = root_dir
 
         adfs = ADFS.from_buffer(memoryview(buf))
