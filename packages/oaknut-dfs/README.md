@@ -13,20 +13,10 @@ disc images, as used by the
 [Acorn Electron](https://en.wikipedia.org/wiki/Acorn_Electron),
 and [BBC Master](https://en.wikipedia.org/wiki/BBC_Master).
 
-## The problem
-
-Software for the BBC Micro and related Acorn 8-bit computers is commonly
-distributed as disc images. DFS images use SSD (single-sided) and DSD
-(double-sided) formats; ADFS images use ADF/ADL formats for floppies and
-DAT/DSC pairs for hard discs. These images encode filenames, load
-addresses, execution addresses, and file attributes in format-specific
-catalogue and directory structures.
-
-Working with these images programmatically --- extracting files, inspecting
-metadata, creating new images, or modifying existing ones --- requires
-understanding the low-level format details. oaknut-dfs provides a Pythonic
-API that handles these details, with pathlib-inspired navigation for both
-DFS and ADFS filesystems.
+With oaknut-dfs you can open DFS floppy images (SSD/DSD), ADFS floppy
+images (ADF/ADL), and ADFS hard disc images (DAT/DSC) to browse
+directories, read and write files, inspect metadata, and create new
+formatted disc images --- all from Python, with a pathlib-inspired API.
 
 ## Supported formats
 
