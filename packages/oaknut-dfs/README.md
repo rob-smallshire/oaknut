@@ -5,31 +5,46 @@
 [![Python versions](https://img.shields.io/pypi/pyversions/oaknut-dfs.svg)](https://pypi.org/project/oaknut-dfs/)
 [![License: MIT](https://img.shields.io/pypi/l/oaknut-dfs.svg)](https://github.com/rob-smallshire/oaknut-dfs/blob/master/LICENSE)
 
-A Python library for reading and writing
-[Acorn DFS](https://en.wikipedia.org/wiki/Disc_Filing_System) (Disc Filing
-System) disc images in SSD and DSD formats, as used by the
-[BBC Micro](https://en.wikipedia.org/wiki/BBC_Micro) and
-[Acorn Electron](https://en.wikipedia.org/wiki/Acorn_Electron).
+A Python library for reading, writing, and creating
+[Acorn DFS](https://en.wikipedia.org/wiki/Disc_Filing_System) and
+[ADFS](https://en.wikipedia.org/wiki/Advanced_Disc_Filing_System)
+disc images, as used by the
+[BBC Micro](https://en.wikipedia.org/wiki/BBC_Micro),
+[Acorn Electron](https://en.wikipedia.org/wiki/Acorn_Electron),
+and [BBC Master](https://en.wikipedia.org/wiki/BBC_Master).
 
 ## The problem
 
 Software for the BBC Micro and related Acorn 8-bit computers is commonly
-distributed as disc images in SSD (single-sided) and DSD (double-sided)
-formats. These images contain a DFS catalogue structure that encodes
-filenames, load addresses, execution addresses, and file attributes in a
-format specific to the Acorn Disc Filing System.
+distributed as disc images. DFS images use SSD (single-sided) and DSD
+(double-sided) formats; ADFS images use ADF/ADL formats for floppies and
+DAT/DSC pairs for hard discs. These images encode filenames, load
+addresses, execution addresses, and file attributes in format-specific
+catalogue and directory structures.
 
 Working with these images programmatically --- extracting files, inspecting
 metadata, creating new images, or modifying existing ones --- requires
-understanding the low-level catalogue format and sector layout. oaknut-dfs
-provides a Pythonic API that handles these details, letting you work with
-DFS disc images using familiar Python patterns.
+understanding the low-level format details. oaknut-dfs provides a Pythonic
+API that handles these details, with pathlib-inspired navigation for both
+DFS and ADFS filesystems.
 
 ## Supported formats
 
+### DFS (Disc Filing System)
+
 - **Acorn DFS**: 40-track and 80-track, single-sided (SSD) and double-sided (DSD)
-- **Watford DFS**: Extended catalogue supporting up to 62 files (format constants defined)
+- **Watford DFS**: Extended catalogue supporting up to 62 files
 - **DSD interleaving**: Both interleaved and sequential double-sided layouts
+
+### ADFS (Advanced Disc Filing System)
+
+- **ADFS S/M/L**: Single- and double-sided floppy images (ADF/ADL)
+- **ADFS hard disc**: SCSI hard disc images (DAT + DSC sidecar pairs)
+- **Hierarchical directories**: Full directory tree navigation with pathlib-inspired API
+- **Old map format**: Free space map parsing and validation
+
+### Common
+
 - **Acorn character encoding**: Custom codec for the BBC Micro character set (`£`, `¦`)
 
 ## Prerequisites
@@ -84,137 +99,142 @@ uv sync
 
 ## Usage
 
-### Opening a disc image
+### DFS disc images
+
+#### Opening and reading files
 
 ```python
 from oaknut_dfs import DFS, ACORN_DFS_80T_SINGLE_SIDED
 
 with DFS.from_file("Zalaga.ssd", ACORN_DFS_80T_SINGLE_SIDED) as dfs:
     print(dfs.title)   # 'ZALAG-L'
-    print(len(dfs))    # 4 files
+
+    # Navigate with pathlib-inspired API
+    for entry in dfs.root / "$":
+        s = entry.stat()
+        print(f"{entry.name:10s}  {s.length:6d}  load={s.load_address:08X}")
+
+    # Read file data
+    data = (dfs.root / "$" / "ZALAGA").read_bytes()
 ```
 
-### Reading the catalogue
+#### Creating a new DFS disc
 
 ```python
-for entry in dfs.files:
-    lock = "L" if entry.locked else " "
-    print(
-        f"{lock} {entry.path:10s}"
-        f"  load={entry.load_address:08X}"
-        f"  exec={entry.exec_address:08X}"
-        f"  length={entry.length:5d}"
-    )
-# L $.ZALAGA?   load=00003000  exec=00004522  length=11557
-# L $.ZALAGA    load=000023EE  exec=00002400  length= 2816
-# L $.ZALAG-L   load=00001900  exec=00001900  length= 3328
-# L $.!BOOT     load=00000000  exec=00000000  length=   48
+from oaknut_dfs import DFS, ACORN_DFS_80T_SINGLE_SIDED
+
+with DFS.create_file("demo.ssd", ACORN_DFS_80T_SINGLE_SIDED, title="DEMO") as dfs:
+    dfs.save("$.HELLO", b"Hello, World!", load_address=0x1900)
+    dfs.save("$.README", b"oaknut-dfs demo disc")
 ```
 
-### File information
+#### Double-sided discs (DSD)
+
+DSD images contain two independent sides, each with its own catalogue.
+This mirrors the BBC Micro, where double-sided discs were accessed as
+separate drives using `*DRIVE 0` and `*DRIVE 2`.
 
 ```python
-info = dfs.get_file_info("$.ZALAGA?")
-print(info.name)              # '$.ZALAGA?'
-print(hex(info.load_address)) # 0x3000
-print(hex(info.exec_address)) # 0x4522
-print(info.length)            # 11557
-print(info.locked)            # True
-print(info.start_sector)      # 27
-print(info.sectors)           # 46
+from oaknut_dfs import DFS, ACORN_DFS_80T_DOUBLE_SIDED_INTERLEAVED
+
+with DFS.from_file("game.dsd", ACORN_DFS_80T_DOUBLE_SIDED_INTERLEAVED) as side0:
+    print(side0.title)
+
+with DFS.from_file("game.dsd", ACORN_DFS_80T_DOUBLE_SIDED_INTERLEAVED, side=1) as side1:
+    print(side1.title)
 ```
 
-### Loading a file
+#### Walking the disc
+
+DFS directories (`$`, `A`--`Z`) appear as children of a virtual root:
 
 ```python
-# Get the catalogue entry for the main game binary
-info = dfs.get_file_info("$.ZALAGA")
-print(hex(info.load_address))  # 0x23ee — where to load in memory
-print(hex(info.exec_address))  # 0x2400 — entry point for execution
-print(info.length)             # 2816 bytes
-
-# Load the file data
-data = dfs.load("$.ZALAGA")
-print(len(data))               # 2816
+with DFS.from_file("disc.ssd", ACORN_DFS_80T_SINGLE_SIDED) as dfs:
+    for dirpath, dirnames, filenames in dfs.root.walk():
+        for name in filenames:
+            print(dirpath / name)
 ```
 
-### Disc information
+### ADFS floppy disc images
+
+#### Opening and navigating
+
+ADFS supports hierarchical directories. The format is auto-detected from
+the image size:
 
 ```python
-print(dfs.info)
-# {
-#     'title': 'ZALAG-L\x00\x00\x00\x00\x00',
-#     'num_files': 4,
-#     'total_sectors': 800,
-#     'free_sectors': 727,
-#     'boot_option': 3,
-# }
+from oaknut_dfs import ADFS
+
+with ADFS.from_file("MasterWelcome.adl") as adfs:
+    print(adfs.title)   # '80T Welcome & Utils'
+
+    # Navigate with / operator
+    for entry in adfs.root / "LIBRARY":
+        print(entry.name, entry.stat().length)
+
+    # Read a file
+    data = (adfs.root / "HELP" / "aform").read_bytes()
 ```
 
-### Pythonic interface
+#### Walking the directory tree
 
 ```python
-# Check if a file exists
-print("$.!BOOT" in dfs)    # True
-print("$.MISSING" in dfs)  # False
-
-# Number of files
-print(len(dfs))             # 4
-
-# Iterate over filenames
-for entry in dfs:
-    print(entry.path)
-# $.ZALAGA?
-# $.ZALAGA
-# $.ZALAG-L
-# $.!BOOT
+with ADFS.from_file("disc.adl") as adfs:
+    for dirpath, dirnames, filenames in adfs.root.walk():
+        for name in filenames:
+            print(dirpath / name)
 ```
 
-### Creating and writing disc images
+#### Creating a new ADFS floppy
 
 ```python
-from oaknut_dfs import ACORN_DFS_40T_SINGLE_SIDED
+from oaknut_dfs import ADFS, ADFS_L
 
-# Create an empty 40-track single-sided disc in memory
-buffer = bytearray(102400)  # 40 tracks * 10 sectors * 256 bytes
-# ... initialise catalogue sectors ...
-
-dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
-
-# Save files with load and execution addresses
-dfs.save("$.HELLO", b"Hello, World!", load_address=0x1200, exec_address=0x1200)
-dfs.save("$.README", b"oaknut-dfs demo disc")
-
-# Load a file back
-data = dfs.load("$.HELLO")
-print(data)   # b'Hello, World!'
-
-print(repr(dfs))   # DFS(title='DEMO', files=2, free_sectors=396)
+with ADFS.create_file("blank.adl", ADFS_L, title="My Disc") as adfs:
+    pass  # empty formatted disc ready for use
 ```
 
-### Double-sided discs (DSD)
+Available floppy formats: `ADFS_S` (160KB), `ADFS_M` (320KB), `ADFS_L` (640KB).
+
+### ADFS hard disc images
+
+Hard disc images consist of a `.dat` file (raw sector data) and a `.dsc`
+sidecar file (SCSI disc geometry). Pass either file to `from_file` ---
+the companion is located automatically.
+
+#### Opening a hard disc image
 
 ```python
-from oaknut_dfs import ACORN_DFS_40T_DOUBLE_SIDED_INTERLEAVED
+from oaknut_dfs import ADFS
 
-# DSD images contain two independent sides, each with its own catalogue.
-# This mirrors the BBC Micro, where double-sided discs were accessed as
-# separate drives using *DRIVE 0 and *DRIVE 2.
+with ADFS.from_file("scsi0.dat") as adfs:
+    print(adfs.title)
+    print(f"{adfs.total_size // 1024}KB, {adfs.free_space // 1024}KB free")
 
-buffer = bytearray(204800)  # 40-track double-sided
-# ... initialise catalogue sectors for both sides ...
+    for dirpath, dirnames, filenames in adfs.root.walk():
+        for name in filenames:
+            p = dirpath / name
+            print(f"{p}  {p.stat().length}")
+```
 
-# Access each side independently
-dfs0 = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_DOUBLE_SIDED_INTERLEAVED, side=0)
-dfs1 = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_DOUBLE_SIDED_INTERLEAVED, side=1)
+#### Creating a new hard disc image
 
-# Each side has its own title, files, and catalogue
-print(dfs0.title)   # 'SIDE ZERO'
-print(dfs1.title)   # 'SIDE ONE'
+Specify a capacity and the geometry is chosen automatically (4 heads,
+33 sectors/track --- the Acorn convention):
 
-# Files on one side are not visible from the other
-print("$.FILE0" in dfs0)   # True
-print("$.FILE0" in dfs1)   # False
+```python
+from oaknut_dfs import ADFS
+
+# Create a 20MB hard disc image
+with ADFS.create_file("scsi0.dat", capacity_bytes=20 * 1024 * 1024, title="Data") as adfs:
+    pass  # creates both scsi0.dat and scsi0.dsc
+```
+
+For explicit geometry control:
+
+```python
+with ADFS.create_file("scsi0.dat", cylinders=306, heads=4) as adfs:
+    pass
 ```
 
 ## Development
@@ -235,18 +255,21 @@ uv run --group test pytest tests/ -v
 
 The library uses a layered architecture with dependencies flowing downward:
 
-1. **Sector access** (`surface.py`, `sectors_view.py`) --- operates on buffers
-   to convert logical sector numbers to physical byte offsets. Handles disc
-   geometry and interleaving schemes.
+1. **Sector access** (`surface.py`, `sectors_view.py`, `unified_disc.py`) ---
+   operates on buffers to convert logical sector numbers to physical byte
+   offsets. Handles disc geometry, interleaving schemes, and multi-surface
+   aggregation.
 
-2. **Catalogue management** (`catalogue.py`, `acorn_dfs_catalogue.py`,
-   `watford_dfs_catalogue.py`) --- parses and manages the DFS catalogue
-   structure in sectors 0--1. Supports Acorn DFS (31 files) and Watford DFS
-   (62 files).
+2. **Catalogue and directory management** --- two parallel implementations:
+   - **DFS** (`catalogue.py`, `acorn_dfs_catalogue.py`,
+     `watford_dfs_catalogue.py`) --- flat catalogue in sectors 0--1. Supports
+     Acorn DFS (31 files) and Watford DFS (62 files).
+   - **ADFS** (`adfs_directory.py`, `adfs_free_space_map.py`) --- hierarchical
+     directories stored as disc objects, with an explicit free space map.
 
-3. **DFS API** (`dfs.py`) --- user-facing Pythonic interface mirroring BBC
-   Micro DFS star commands. Supports file operations, disc metadata, iteration,
-   and the `in` operator.
+3. **Filesystem API** --- user-facing interfaces with pathlib-inspired navigation:
+   - **DFS** (`dfs.py`) --- `DFS`, `DFSPath`, `DFSStat`
+   - **ADFS** (`adfs.py`) --- `ADFS`, `ADFSPath`, `ADFSStat`
 
 ## References
 
@@ -256,6 +279,10 @@ The library uses a layered architecture with dependencies flowing downward:
   BeebWiki specification for the Acorn DFS catalogue layout.
 - [Disc Filing System](https://en.wikipedia.org/wiki/Disc_Filing_System) ---
   Wikipedia overview of DFS and its variants.
+- [Advanced Disc Filing System](https://en.wikipedia.org/wiki/Advanced_Disc_Filing_System) ---
+  Wikipedia overview of ADFS and its evolution.
+- [Guide to Disc Formats](https://github.com/geraldholdsworth/DiscImageManager) ---
+  Gerald Holdsworth's detailed technical reference for DFS, ADFS, and other formats.
 - [INF file format](https://beebwiki.mdfs.net/INF_file_format) ---
   BeebWiki specification for the `.inf` sidecar metadata format.
 
