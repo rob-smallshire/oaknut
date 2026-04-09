@@ -1,0 +1,8 @@
+
+[dev]
+pytest>=8.0
+
+[xattr]
+
+[xattr:sys_platform == "darwin"]
+xattr>=1.0

@@ -1,0 +1,23 @@
+Metadata-Version: 2.4
+Name: oaknut-file
+Version: 0.1.0
+Summary: Acorn file metadata handling: INF sidecars, filename encoding, xattrs, and access flags
+Author-email: Robert Smallshire <robert@smallshire.org.uk>
+License-Expression: MIT
+Classifier: Development Status :: 3 - Alpha
+Classifier: Intended Audience :: Developers
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Programming Language :: Python :: 3.13
+Classifier: Topic :: System :: Filesystems
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+Provides-Extra: xattr
+Requires-Dist: xattr>=1.0; sys_platform == "darwin" and extra == "xattr"
+Provides-Extra: dev
+Requires-Dist: pytest>=8.0; extra == "dev"
+
+# oaknut-file
+
+Acorn file metadata handling for the oaknut package family.
