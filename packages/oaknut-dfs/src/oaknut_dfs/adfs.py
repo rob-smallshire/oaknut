@@ -405,6 +405,46 @@ class ADFSPath:
         _, entry = self._resolve()
         return _entry_to_stat(entry)
 
+    @property
+    def title(self) -> str:
+        """Directory title (up to 19 characters).
+
+        Distinct from the directory name: the name is the structural
+        component used in paths; the title is a human-readable label
+        stored inside the directory block.
+
+        Raises:
+            ADFSPathError: If this path is a file, not a directory.
+        """
+        directory = self._resolve_as_directory()
+        return directory.title
+
+    @title.setter
+    def title(self, value: str) -> None:
+        """Set directory title.
+
+        Raises:
+            ADFSPathError: If this path is a file, not a directory.
+        """
+        if self._path == "$":
+            disc_address = _OLD_MAP_ROOT_SECTOR
+        else:
+            _, entry = self._resolve()
+            if not entry.is_directory:
+                raise ADFSPathError(f"'{self._path}' is not a directory")
+            disc_address = entry.indirect_disc_address
+
+        directory = self._adfs._read_directory_at(disc_address)
+        updated = _ADFSDirectory(
+            name=directory.name,
+            title=value,
+            parent_address=directory.parent_address,
+            disc_address=directory.disc_address,
+            entries=directory.entries,
+            sequence_number=directory.sequence_number,
+        )
+        self._adfs._write_directory_at(updated, disc_address)
+
     # --- Directory operations ---
 
     def iterdir(self) -> Iterator[ADFSPath]:
@@ -1211,22 +1251,12 @@ class ADFS:
     @property
     def title(self) -> str:
         """Disc title (from root directory title field)."""
-        root = self._read_root_directory()
-        return root.title
+        return self.root.title
 
     @title.setter
     def title(self, value: str) -> None:
         """Set disc title by rewriting the root directory."""
-        root = self._read_root_directory()
-        updated = _ADFSDirectory(
-            name=root.name,
-            title=value,
-            parent_address=root.parent_address,
-            disc_address=root.disc_address,
-            entries=root.entries,
-            sequence_number=root.sequence_number,
-        )
-        self._write_directory_at(updated, _OLD_MAP_ROOT_SECTOR)
+        self.root.title = value
 
     @property
     def boot_option(self) -> int:
