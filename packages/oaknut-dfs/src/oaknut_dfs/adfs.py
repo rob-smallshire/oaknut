@@ -525,10 +525,10 @@ class ADFSPath:
             raise ADFSPathError("Cannot mkdir root directory")
         self._adfs._mkdir(self._path.split("."))
 
-    # --- Export ---
+    # --- Host filesystem transfer ---
 
-    def export(self, target_filepath: Union[str, PathLike], *,
-               preserve_metadata: bool = True) -> None:
+    def export_file(self, target_filepath: Union[str, PathLike], *,
+                    preserve_metadata: bool = True) -> None:
         """Export file to host filesystem, optionally with .inf metadata.
 
         Args:
@@ -536,9 +536,7 @@ class ADFSPath:
             preserve_metadata: If True, write a .inf sidecar file with
                 load/exec addresses and attributes.
         """
-        import pathlib
-
-        target = pathlib.Path(target_filepath)
+        target = Path(target_filepath)
         data = self.read_bytes()
         target.write_bytes(data)
 
@@ -550,6 +548,54 @@ class ADFSPath:
                 f"{self.name} {entry.load_address:08X} "
                 f"{entry.exec_address:08X} {entry.length:08X} {locked_str}\n"
             )
+
+    def import_file(
+        self,
+        source_filepath: Union[str, PathLike],
+        *,
+        inf_filepath: Union[str, PathLike, None] = None,
+    ) -> None:
+        """Import a file from the host filesystem.
+
+        The ADFS filename is taken from this path. Metadata (load/exec
+        addresses, locked flag) is read from an .inf sidecar file if
+        one exists alongside the source file.
+
+        Args:
+            source_filepath: Path to the source file on the host.
+            inf_filepath: Explicit path to .inf file. If None, looks
+                for ``<source_filepath>.inf`` automatically.
+        """
+        source = Path(source_filepath)
+        data = source.read_bytes()
+
+        # Resolve .inf sidecar
+        if inf_filepath is not None:
+            inf = Path(inf_filepath)
+        else:
+            inf = source.with_suffix(source.suffix + ".inf")
+
+        load_address = 0
+        exec_address = 0
+        locked = False
+
+        if inf.exists():
+            inf_text = inf.read_text().strip()
+            parts = inf_text.split()
+            # parts[0] is the original filename (ignored — we use the ADFSPath)
+            if len(parts) > 1:
+                load_address = int(parts[1], 16)
+            if len(parts) > 2:
+                exec_address = int(parts[2], 16)
+            # Length at parts[3] is ignored — derived from the data
+            locked = "L" in parts[4:] if len(parts) > 4 else False
+
+        self.write_bytes(
+            data,
+            load_address=load_address,
+            exec_address=exec_address,
+            locked=locked,
+        )
 
     # --- Protocols ---
 
@@ -1192,9 +1238,7 @@ class ADFS:
             target_dirpath: Host directory to export into.
             preserve_metadata: If True, write .inf sidecar files.
         """
-        import pathlib
-
-        target = pathlib.Path(target_dirpath)
+        target = Path(target_dirpath)
         target.mkdir(parents=True, exist_ok=True)
 
         for dirpath, dirnames, filenames in self.root.walk():
@@ -1209,7 +1253,7 @@ class ADFS:
             for filename in filenames:
                 adfs_path = dirpath / filename
                 host_filepath = host_dir / filename
-                adfs_path.export(host_filepath, preserve_metadata=preserve_metadata)
+                adfs_path.export_file(host_filepath, preserve_metadata=preserve_metadata)
 
     # --- Pythonic protocols ---
 
