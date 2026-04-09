@@ -26,9 +26,14 @@ from oaknut_dfs.adfs_directory import (
     OldDirectoryFormat,
     _ADFSDirectory,
     _ADFSDirectoryEntry,
+    _ADFSRawAttributes,
 )
 from oaknut_dfs.adfs_free_space_map import OldFreeSpaceMap
-from oaknut_dfs.exceptions import ADFSError, ADFSPathError
+from oaknut_dfs.exceptions import (
+    ADFSDirectoryFullError,
+    ADFSError,
+    ADFSPathError,
+)
 from oaknut_dfs.surface import DiscImage, SurfaceSpec
 from oaknut_dfs.unified_disc import UnifiedDisc
 
@@ -438,6 +443,63 @@ class ADFSPath:
         if entry.is_directory:
             raise ADFSPathError(f"'{self._path}' is a directory, not a file")
         return self._adfs._read_file_data(entry)
+
+    def write_bytes(
+        self,
+        data: bytes,
+        *,
+        load_address: int = 0,
+        exec_address: int = 0,
+        locked: bool = False,
+    ) -> None:
+        """Write file contents, creating or overwriting the file.
+
+        Args:
+            data: File contents.
+            load_address: Load address (default 0).
+            exec_address: Execution address (default 0).
+            locked: Whether to lock the file (default False).
+
+        Raises:
+            ADFSPathError: If this path is the root directory.
+            ADFSDiscFullError: If the disc has insufficient free space.
+            ADFSDirectoryFullError: If the parent directory is full.
+        """
+        if self._path == "$":
+            raise ADFSPathError("Cannot write to root directory")
+
+        parts = self._path.split(".")
+        if len(parts) < 2 or parts[0] != "$":
+            raise ADFSPathError(f"Invalid path: {self._path!r}")
+
+        self._adfs._write_file(
+            parts, data, load_address, exec_address, locked,
+        )
+
+    def write_text(
+        self,
+        text: str,
+        *,
+        encoding: str = "acorn",
+        load_address: int = 0,
+        exec_address: int = 0,
+        locked: bool = False,
+    ) -> None:
+        """Write text contents using the specified encoding.
+
+        Args:
+            text: Text to write.
+            encoding: Text encoding (default ``"acorn"``).
+            load_address: Load address (default 0).
+            exec_address: Execution address (default 0).
+            locked: Whether to lock the file (default False).
+        """
+        self.write_bytes(
+            text.encode(encoding),
+            load_address=load_address,
+            exec_address=exec_address,
+            locked=locked,
+        )
 
     # --- Export ---
 
@@ -1133,6 +1195,128 @@ class ADFS:
             return b""
         data = self._disc.sector_range(start_sector, num_sectors)
         return data[:entry.length]
+
+    def _write_directory_at(self, directory: _ADFSDirectory, disc_address: int) -> None:
+        """Serialize a directory back to its sectors on disc."""
+        num_sectors = self._dir_format.size_in_sectors
+        data = self._disc.sector_range(disc_address, num_sectors)
+        self._dir_format.serialize(directory, data)
+
+    def _write_file(
+        self,
+        path_parts: list[str],
+        data: bytes,
+        load_address: int,
+        exec_address: int,
+        locked: bool,
+    ) -> None:
+        """Write a file to the disc image.
+
+        Handles sector allocation, data writing, and directory update.
+        If a file with the same name already exists, it is overwritten
+        and its old sectors are freed.
+        """
+        filename = path_parts[-1]
+        # Navigate to the parent directory
+        parent_parts = path_parts[:-1]
+
+        if len(parent_parts) == 1:
+            # Parent is root
+            parent_dir = self._read_root_directory()
+            parent_disc_address = _OLD_MAP_ROOT_SECTOR
+        else:
+            # Navigate to the intermediate directory
+            current_dir = self._read_root_directory()
+            parent_disc_address = _OLD_MAP_ROOT_SECTOR
+            for component in parent_parts[1:]:
+                entry = current_dir.find(component)
+                if entry is None:
+                    raise ADFSPathError(f"Directory not found: {component!r}")
+                if not entry.is_directory:
+                    raise ADFSPathError(f"Not a directory: {component!r}")
+                parent_disc_address = entry.indirect_disc_address
+                current_dir = self._read_directory_at(parent_disc_address)
+            parent_dir = current_dir
+
+        # Check for existing file and free its sectors
+        existing = parent_dir.find(filename)
+        if existing is not None:
+            if existing.is_directory:
+                raise ADFSPathError(
+                    f"Cannot overwrite directory '{filename}' with a file"
+                )
+            old_sectors = (
+                (existing.length + _ADFS_BYTES_PER_SECTOR - 1)
+                // _ADFS_BYTES_PER_SECTOR
+            )
+            if old_sectors > 0:
+                self._fsm.free(existing.start_sector, old_sectors)
+
+        # Allocate sectors for the new data
+        num_sectors = (len(data) + _ADFS_BYTES_PER_SECTOR - 1) // _ADFS_BYTES_PER_SECTOR
+        if num_sectors > 0:
+            start_sector = self._fsm.allocate(num_sectors)
+        else:
+            start_sector = 0
+
+        # Write data to sectors (zero-padded to sector boundary)
+        if num_sectors > 0:
+            sector_data = self._disc.sector_range(start_sector, num_sectors)
+            padded = data + b"\x00" * (num_sectors * _ADFS_BYTES_PER_SECTOR - len(data))
+            sector_data[:] = padded
+
+        # Build the new directory entry
+        new_entry = _ADFSDirectoryEntry(
+            name=filename,
+            load_address=load_address,
+            exec_address=exec_address,
+            length=len(data),
+            indirect_disc_address=start_sector,
+            sequence_number=0,
+            attributes=_ADFSRawAttributes(
+                owner_read=True,
+                owner_write=True,
+                locked=locked,
+                directory=False,
+                owner_execute=False,
+                public_read=True,
+                public_write=False,
+                public_execute=False,
+                private=False,
+            ),
+        )
+
+        # Update the directory entries
+        if existing is not None:
+            # Replace the existing entry
+            new_entries = tuple(
+                new_entry if e.name.upper() == filename.upper() else e
+                for e in parent_dir.entries
+            )
+        else:
+            # Add a new entry
+            if len(parent_dir.entries) >= self._dir_format.max_entries:
+                # Undo the allocation before raising
+                if num_sectors > 0:
+                    self._fsm.free(start_sector, num_sectors)
+                raise ADFSDirectoryFullError(
+                    f"Directory full: maximum {self._dir_format.max_entries} entries"
+                )
+            new_entries = parent_dir.entries + (new_entry,)
+
+        # Increment sequence number
+        new_seq = (parent_dir.sequence_number + 1) & 0xFF
+
+        updated_dir = _ADFSDirectory(
+            name=parent_dir.name,
+            title=parent_dir.title,
+            parent_address=parent_dir.parent_address,
+            disc_address=parent_dir.disc_address,
+            entries=new_entries,
+            sequence_number=new_seq,
+        )
+
+        self._write_directory_at(updated_dir, parent_disc_address)
 
 
 def _detect_directory_format(unified: UnifiedDisc) -> ADFSDirectoryFormat:
