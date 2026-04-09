@@ -8,8 +8,27 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from enum import IntFlag
+
 from oaknut_dfs.exceptions import ADFSDirectoryError
 from oaknut_dfs.sectors_view import SectorsView
+
+
+# --- Access flags ---
+
+
+class Access(IntFlag):
+    """ADFS file access attributes.
+
+    Composable with ``|``::
+
+        Access.R | Access.W | Access.L
+    """
+
+    R = 1   # Owner read
+    W = 2   # Owner write
+    L = 4   # Locked (prevents delete, overwrite, rename)
+    E = 8   # Execute only
 
 
 # --- Internal data types ---

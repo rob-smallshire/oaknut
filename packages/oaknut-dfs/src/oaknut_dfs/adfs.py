@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Iterator, Union
 
 from oaknut_dfs.adfs_directory import (
+    Access,
     ADFSDirectoryFormat,
     OldDirectoryFormat,
     _ADFSDirectory,
@@ -622,6 +623,27 @@ class ADFSPath:
         if self._path == "$":
             raise ADFSPathError("Cannot unlock root directory")
         self._adfs._set_locked(self._path.split("."), False)
+
+    def chmod(self, access: int) -> None:
+        """Set access attributes, replacing the current ones.
+
+        Uses the ``Access`` IntFlag enum::
+
+            from oaknut_dfs.adfs_directory import Access
+            path.chmod(Access.R | Access.W | Access.L)
+
+        Only the owner R, W, L, and E attributes are affected.
+        Public/private NFS attributes are preserved.
+
+        Args:
+            access: Combination of ``Access`` flags.
+
+        Raises:
+            ADFSPathError: If the path is root or doesn't exist.
+        """
+        if self._path == "$":
+            raise ADFSPathError("Cannot chmod root directory")
+        self._adfs._chmod(self._path.split("."), access)
 
     # --- Host filesystem transfer ---
 
@@ -1896,6 +1918,55 @@ class ADFS:
             locked=locked,
             directory=existing.attributes.directory,
             owner_execute=existing.attributes.owner_execute,
+            public_read=existing.attributes.public_read,
+            public_write=existing.attributes.public_write,
+            public_execute=existing.attributes.public_execute,
+            private=existing.attributes.private,
+        )
+
+        updated_entry = _ADFSDirectoryEntry(
+            name=existing.name,
+            load_address=existing.load_address,
+            exec_address=existing.exec_address,
+            length=existing.length,
+            indirect_disc_address=existing.indirect_disc_address,
+            sequence_number=existing.sequence_number,
+            attributes=updated_attrs,
+        )
+
+        new_entries = tuple(
+            updated_entry if e.name.upper() == filename.upper() else e
+            for e in parent_dir.entries
+        )
+        new_seq = (parent_dir.sequence_number + 1) & 0xFF
+
+        updated_dir = _ADFSDirectory(
+            name=parent_dir.name,
+            title=parent_dir.title,
+            parent_address=parent_dir.parent_address,
+            disc_address=parent_dir.disc_address,
+            entries=new_entries,
+            sequence_number=new_seq,
+        )
+        self._write_directory_at(updated_dir, parent_disc_address)
+
+    def _chmod(self, path_parts: list[str], access: int) -> None:
+        """Set access attributes on a file or directory."""
+        filename = path_parts[-1]
+        parent_dir, parent_disc_address = self._resolve_parent(path_parts)
+
+        existing = parent_dir.find(filename)
+        if existing is None:
+            raise ADFSPathError(f"'{filename}' not found")
+
+        # Replace owner R, W, L, E from the Access flags;
+        # preserve D, public, and private bits from the existing entry
+        updated_attrs = _ADFSRawAttributes(
+            owner_read=bool(access & Access.R),
+            owner_write=bool(access & Access.W),
+            locked=bool(access & Access.L),
+            directory=existing.attributes.directory,
+            owner_execute=bool(access & Access.E),
             public_read=existing.attributes.public_read,
             public_write=existing.attributes.public_write,
             public_execute=existing.attributes.public_execute,

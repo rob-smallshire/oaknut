@@ -17,6 +17,7 @@ from oaknut_dfs.adfs import (
     ADFSStat,
     geometry_for_capacity,
 )
+from oaknut_dfs.adfs_directory import Access
 from oaknut_dfs.boot_option import BootOption
 from oaknut_dfs.exceptions import FSError
 from oaknut_dfs.catalogue import DiskInfo
@@ -37,6 +38,7 @@ __version__ = "2.0.1"
 __version_info__ = Version(*(__version__.split(".")))
 
 __all__ = [
+    "Access",
     "ADFS",
     "ADFS_S",
     "ADFS_M",
