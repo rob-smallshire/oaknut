@@ -18,6 +18,7 @@ from oaknut_dfs.adfs import (
     geometry_for_capacity,
 )
 from oaknut_dfs.boot_option import BootOption
+from oaknut_dfs.exceptions import FSError
 from oaknut_dfs.catalogue import DiskInfo, FileInfo
 from oaknut_dfs.dfs import DFS, DFSPath, DFSStat
 from oaknut_dfs.formats import (
@@ -57,4 +58,5 @@ __all__ = [
     "BootOption",
     "FileInfo",
     "DiskInfo",
+    "FSError",
 ]

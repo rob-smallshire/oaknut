@@ -5,7 +5,7 @@ Parses the old-format free space map (ADFS S/M/L/D) from sectors 0–1.
 
 from __future__ import annotations
 
-from oaknut_dfs.exceptions import ADFSMapError
+from oaknut_dfs.exceptions import ADFSDiscFullError, ADFSMapError
 from oaknut_dfs.sectors_view import SectorsView
 
 
@@ -236,7 +236,7 @@ class OldFreeSpaceMap:
                 self._recalculate_checksums()
                 return start
 
-        raise ADFSMapError(
+        raise ADFSDiscFullError(
             f"No free space region large enough for {num_sectors} sectors"
         )
 

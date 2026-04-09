@@ -8,7 +8,7 @@ import pytest
 
 from helpers.adfs_image import make_old_free_space_map as _make_old_free_space_map
 from oaknut_dfs.adfs_free_space_map import OldFreeSpaceMap
-from oaknut_dfs.exceptions import ADFSMapError
+from oaknut_dfs.exceptions import ADFSDiscFullError
 from oaknut_dfs.sectors_view import SectorsView
 
 
@@ -68,12 +68,12 @@ class TestAllocate:
     def test_allocate_too_large_raises(self):
         """Allocating more than any single free region raises."""
         fsm = _make_fsm([(7, 5), (20, 10)])
-        with pytest.raises(ADFSMapError, match="[Nn]o free space"):
+        with pytest.raises(ADFSDiscFullError, match="[Nn]o free space"):
             fsm.allocate(11)
 
     def test_allocate_from_empty_map_raises(self):
         fsm = _make_fsm([])
-        with pytest.raises(ADFSMapError, match="[Nn]o free space"):
+        with pytest.raises(ADFSDiscFullError, match="[Nn]o free space"):
             fsm.allocate(1)
 
     def test_allocate_zero_raises(self):

@@ -1,29 +1,50 @@
 """Exception hierarchy for oaknut_dfs library.
 
-This module defines custom exceptions for domain-specific errors in DFS operations.
-Using custom exceptions provides:
-1. Clear error categories for library users
-2. Ability to catch broad (DFSError) or specific (CatalogFullError) exceptions
-3. Better API documentation through explicit exception types
-4. More precise error handling than generic ValueError or RuntimeError
+All exceptions derive from FSError, the common root for both DFS and ADFS
+filesystem errors. This allows callers to catch all library errors with a
+single handler, or to catch DFS-specific or ADFS-specific errors separately.
+
+Hierarchy:
+
+    FSError
+    ├── DFSError
+    │   ├── CatalogError
+    │   │   ├── CatalogReadError
+    │   │   ├── CatalogFullError
+    │   │   └── FileExistsError
+    │   ├── DiskFullError
+    │   ├── FileLocked
+    │   └── InvalidFormatError
+    └── ADFSError
+        ├── ADFSDirectoryError
+        │   └── ADFSDirectoryFullError
+        ├── ADFSMapError
+        │   └── ADFSDiscFullError
+        ├── ADFSPathError
+        └── ADFSFileLockedError
 """
 
 
-class DFSError(Exception):
-    """Base exception for all oaknut_dfs errors.
+class FSError(Exception):
+    """Base exception for all oaknut_dfs filesystem errors.
 
-    All custom exceptions in this library derive from DFSError,
-    allowing callers to catch all library-specific errors with a single handler.
+    Catches both DFS and ADFS errors with a single handler.
     """
     pass
 
 
-# Catalog-related exceptions
+# --- DFS exceptions ---
+
+
+class DFSError(FSError):
+    """Base exception for all DFS errors."""
+    pass
+
 
 class CatalogError(DFSError):
     """Base exception for catalog-related errors.
 
-    Raised when operations on the disk catalog fail.
+    Raised when operations on the disc catalog fail.
     """
     pass
 
@@ -32,7 +53,7 @@ class CatalogReadError(CatalogError):
     """Failed to read or parse catalog structure.
 
     Raised when the catalog data is corrupted, invalid, or cannot be decoded.
-    This typically indicates disk corruption or an unsupported format variant.
+    This typically indicates disc corruption or an unsupported format variant.
     """
     pass
 
@@ -55,10 +76,8 @@ class FileExistsError(CatalogError):
     pass
 
 
-# Disk space and file operation exceptions
-
 class DiskFullError(DFSError):
-    """Insufficient free space on disk.
+    """Insufficient free space on disc.
 
     Raised when attempting to save a file but there aren't enough
     free sectors available.
@@ -75,20 +94,19 @@ class FileLocked(DFSError):
     pass
 
 
-# Format and validation exceptions
-
 class InvalidFormatError(DFSError):
-    """Disk image format is invalid or unrecognized.
+    """Disc image format is invalid or unrecognised.
 
-    Raised when the disk image doesn't match expected DFS format,
+    Raised when the disc image doesn't match expected DFS format,
     has invalid size, or contains malformed data structures.
     """
     pass
 
 
-# ADFS exceptions
+# --- ADFS exceptions ---
 
-class ADFSError(Exception):
+
+class ADFSError(FSError):
     """Base exception for all ADFS errors."""
     pass
 
@@ -102,6 +120,15 @@ class ADFSDirectoryError(ADFSError):
     pass
 
 
+class ADFSDirectoryFullError(ADFSDirectoryError):
+    """ADFS directory is full and cannot accept more entries.
+
+    Raised when attempting to add an entry to a directory that has
+    reached its maximum capacity (47 entries for old-format directories).
+    """
+    pass
+
+
 class ADFSMapError(ADFSError):
     """ADFS free space map error.
 
@@ -111,10 +138,28 @@ class ADFSMapError(ADFSError):
     pass
 
 
+class ADFSDiscFullError(ADFSMapError):
+    """Insufficient free space on ADFS disc.
+
+    Raised when attempting to allocate sectors but no free space
+    region is large enough.
+    """
+    pass
+
+
 class ADFSPathError(ADFSError):
     """ADFS path error.
 
     Raised for invalid paths, paths that do not exist,
     or path components with forbidden characters.
+    """
+    pass
+
+
+class ADFSFileLockedError(ADFSError):
+    """Operation not permitted on locked ADFS file.
+
+    Raised when attempting to delete, rename, or modify a file
+    that has the locked attribute set.
     """
     pass
