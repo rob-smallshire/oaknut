@@ -1298,6 +1298,154 @@ class ADFS:
 
         return errors
 
+    def compact(self) -> int:
+        """Defragment the disc by rebuilding with sequential sector allocation.
+
+        Reads all files and directories into memory, reinitialises the
+        disc structures, and writes everything back with contiguous
+        sector allocation.  The result is a single free space region
+        at the end of the disc.
+
+        Returns:
+            Number of objects (files and directories, excluding root) written.
+        """
+        # 1. Snapshot the current state
+        title = self.title
+        boot_option = self.boot_option
+        total_sectors = self._fsm.total_sectors
+
+        tree = self._snapshot_directory(self._read_root_directory())
+
+        # 2. Reinitialise disc structures
+        _initialise_old_free_space_map(self._disc, total_sectors, boot_option)
+        _initialise_old_root_directory(self._disc, title)
+
+        # Re-read the FSM so it reflects the fresh state
+        map_data = self._disc.sector_range(0, 2)
+        self._fsm = OldFreeSpaceMap(map_data)
+
+        # 3. Rewrite all objects
+        count = self._restore_directory(
+            tree, _OLD_MAP_ROOT_SECTOR, title,
+        )
+        return count
+
+    def _snapshot_directory(self, directory: _ADFSDirectory) -> list:
+        """Recursively snapshot a directory tree into memory.
+
+        Returns a list of dicts, each representing a file or subdirectory.
+        Subdirectories include a recursive 'children' key.
+        """
+        items = []
+        for entry in directory.entries:
+            item = {
+                "name": entry.name,
+                "load_address": entry.load_address,
+                "exec_address": entry.exec_address,
+                "attributes": entry.attributes,
+                "sequence_number": entry.sequence_number,
+            }
+            if entry.is_directory:
+                subdir = self._read_directory_at(entry.indirect_disc_address)
+                item["is_directory"] = True
+                item["title"] = subdir.title
+                item["children"] = self._snapshot_directory(subdir)
+            else:
+                item["is_directory"] = False
+                item["data"] = self._read_file_data(entry)
+            items.append(item)
+        return items
+
+    def _restore_directory(
+        self,
+        items: list,
+        parent_disc_address: int,
+        parent_title: str,
+    ) -> int:
+        """Recursively restore a directory tree to the disc.
+
+        Returns the number of objects written (files + directories).
+        """
+        parent_dir = self._read_directory_at(parent_disc_address)
+        count = 0
+
+        for item in items:
+            if item["is_directory"]:
+                # Allocate sectors for the subdirectory
+                dir_sectors = self._dir_format.size_in_sectors
+                start_sector = self._fsm.allocate(dir_sectors)
+
+                # Initialise the subdirectory block
+                subdir = _ADFSDirectory(
+                    name=item["name"],
+                    title=item["title"],
+                    parent_address=parent_disc_address,
+                    disc_address=start_sector,
+                    entries=(),
+                    sequence_number=0,
+                )
+                dir_data = self._disc.sector_range(start_sector, dir_sectors)
+                self._dir_format.serialize(subdir, dir_data)
+
+                # Add entry to parent
+                entry = _ADFSDirectoryEntry(
+                    name=item["name"],
+                    load_address=item["load_address"],
+                    exec_address=item["exec_address"],
+                    length=self._dir_format.size_in_bytes,
+                    indirect_disc_address=start_sector,
+                    sequence_number=item["sequence_number"],
+                    attributes=item["attributes"],
+                )
+                self._add_entry_to_directory(parent_disc_address, entry)
+
+                # Recurse into children
+                count += 1
+                count += self._restore_directory(
+                    item["children"], start_sector, item["title"],
+                )
+            else:
+                # Allocate sectors for file data
+                data = item["data"]
+                num_sectors = (len(data) + _ADFS_BYTES_PER_SECTOR - 1) // _ADFS_BYTES_PER_SECTOR
+                if num_sectors > 0:
+                    start_sector = self._fsm.allocate(num_sectors)
+                    sector_data = self._disc.sector_range(start_sector, num_sectors)
+                    padded = data + b"\x00" * (num_sectors * _ADFS_BYTES_PER_SECTOR - len(data))
+                    sector_data[:] = padded
+                else:
+                    start_sector = 0
+
+                entry = _ADFSDirectoryEntry(
+                    name=item["name"],
+                    load_address=item["load_address"],
+                    exec_address=item["exec_address"],
+                    length=len(data),
+                    indirect_disc_address=start_sector,
+                    sequence_number=item["sequence_number"],
+                    attributes=item["attributes"],
+                )
+                self._add_entry_to_directory(parent_disc_address, entry)
+                count += 1
+
+        return count
+
+    def _add_entry_to_directory(
+        self, disc_address: int, entry: _ADFSDirectoryEntry,
+    ) -> None:
+        """Add an entry to a directory and write it back."""
+        directory = self._read_directory_at(disc_address)
+        new_entries = directory.entries + (entry,)
+        updated = _ADFSDirectory(
+            name=directory.name,
+            title=directory.title,
+            parent_address=directory.parent_address,
+            disc_address=directory.disc_address,
+            entries=new_entries,
+            sequence_number=directory.sequence_number,
+        )
+        self._write_directory_at(updated, disc_address)
+
     # --- Bulk operations ---
 
     def export_all(
