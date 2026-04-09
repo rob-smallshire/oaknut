@@ -1,6 +1,7 @@
 """Tests for DFS high-level class."""
 
 import shutil
+from pathlib import Path
 
 import pytest
 
@@ -100,10 +101,10 @@ class TestDFSFileOperations:
 
         # Save a file
         file_data = b"Hello, World!"
-        dfs.save("$.HELLO", file_data, load_address=0x1000, exec_address=0x2000)
+        (dfs.root / "$" / "HELLO").write_bytes(file_data, load_address=0x1000, exec_address=0x2000)
 
         # Load it back
-        loaded = dfs.load("$.HELLO")
+        loaded = (dfs.root / "$" / "HELLO").read_bytes()
         assert loaded == file_data
 
         # Verify it's in the file list
@@ -125,7 +126,7 @@ class TestDFSFileOperations:
 
         dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
-        dfs.save("TEST", b"data")
+        (dfs.root / "$" / "TEST").write_bytes(b"data")
 
         assert len(dfs.files) == 1
         assert dfs.files[0].directory == "$"
@@ -151,7 +152,7 @@ class TestDFSFileOperations:
 
         assert len(dfs.files) == 1
 
-        dfs.delete("$.TODEL")
+        (dfs.root / "$" / "TODEL").unlink()
 
         assert len(dfs.files) == 0
 
@@ -172,8 +173,8 @@ class TestDFSFileOperations:
 
         dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
-        assert dfs.exists("$.EXISTS")
-        assert not dfs.exists("$.NOSUCHFILE")
+        assert (dfs.root / "$" / "EXISTS").exists()
+        assert not (dfs.root / "$" / "NOSUCHFILE").exists()
 
 
 class TestDFSRenameAndLock:
@@ -196,7 +197,7 @@ class TestDFSRenameAndLock:
 
         dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
-        dfs.rename("$.OLDNAME", "$.NEWNAME")
+        (dfs.root / "$" / "OLDNAME").rename("$.NEWNAME")
 
         assert len(dfs.files) == 1
         assert dfs.files[0].filename == "NEWNAME"
@@ -222,11 +223,11 @@ class TestDFSRenameAndLock:
         assert not dfs.files[0].locked
 
         # Lock it
-        dfs.lock("$.TEST")
+        (dfs.root / "$" / "TEST").lock()
         assert dfs.files[0].locked
 
         # Unlock it
-        dfs.unlock("$.TEST")
+        (dfs.root / "$" / "TEST").unlock()
         assert not dfs.files[0].locked
 
 
@@ -316,21 +317,28 @@ class TestDFSCopyFile:
 
         # Save file with specific metadata
         original_data = b"Test file contents"
-        dfs.save("$.ORIG", original_data, load_address=0x1900, exec_address=0x8023)
+        (dfs.root / "$" / "ORIG").write_bytes(original_data, load_address=0x1900, exec_address=0x8023)
 
         # Copy it
-        dfs.copy_file("$.ORIG", "$.COPY")
+        orig_path = dfs.root / "$" / "ORIG"
+        orig_stat = orig_path.stat()
+        (dfs.root / "$" / "COPY").write_bytes(
+            orig_path.read_bytes(),
+            load_address=orig_stat.load_address,
+            exec_address=orig_stat.exec_address,
+            locked=orig_stat.locked,
+        )
 
         # Both files should exist
-        assert dfs.exists("$.ORIG")
-        assert dfs.exists("$.COPY")
+        assert (dfs.root / "$" / "ORIG").exists()
+        assert (dfs.root / "$" / "COPY").exists()
 
         # Copy should have same data
-        assert dfs.load("$.COPY") == original_data
+        assert (dfs.root / "$" / "COPY").read_bytes() == original_data
 
         # Copy should have same metadata
-        original_info = dfs.get_file_info("$.ORIG")
-        copy_info = dfs.get_file_info("$.COPY")
+        original_info = (dfs.root / "$" / "ORIG").stat()
+        copy_info = (dfs.root / "$" / "COPY").stat()
 
         assert copy_info.load_address == original_info.load_address
         assert copy_info.exec_address == original_info.exec_address
@@ -349,11 +357,18 @@ class TestDFSCopyFile:
 
         dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
-        dfs.save("$.FILE", b"data")
-        dfs.copy_file("$.FILE", "A.FILE")
+        (dfs.root / "$" / "FILE").write_bytes(b"data")
+        src_path = dfs.root / "$" / "FILE"
+        src_stat = src_path.stat()
+        (dfs.root / "A" / "FILE").write_bytes(
+            src_path.read_bytes(),
+            load_address=src_stat.load_address,
+            exec_address=src_stat.exec_address,
+            locked=src_stat.locked,
+        )
 
-        assert dfs.exists("$.FILE")
-        assert dfs.exists("A.FILE")
+        assert (dfs.root / "$" / "FILE").exists()
+        assert (dfs.root / "A" / "FILE").exists()
 
         # Check directory
         files = dfs.files
@@ -374,14 +389,21 @@ class TestDFSCopyFile:
         dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
         # Save and lock file
-        dfs.save("$.LOCKED", b"data", locked=True)
+        (dfs.root / "$" / "LOCKED").write_bytes(b"data", locked=True)
 
         # Copy it
-        dfs.copy_file("$.LOCKED", "$.COPY2")
+        src_path = dfs.root / "$" / "LOCKED"
+        src_stat = src_path.stat()
+        (dfs.root / "$" / "COPY2").write_bytes(
+            src_path.read_bytes(),
+            load_address=src_stat.load_address,
+            exec_address=src_stat.exec_address,
+            locked=src_stat.locked,
+        )
 
         # Both should be locked
-        assert dfs.get_file_info("$.LOCKED").locked
-        assert dfs.get_file_info("$.COPY2").locked
+        assert (dfs.root / "$" / "LOCKED").stat().locked
+        assert (dfs.root / "$" / "COPY2").stat().locked
 
     def test_copy_file_nonexistent_raises(self):
         """Test copying nonexistent file raises error."""
@@ -397,7 +419,7 @@ class TestDFSCopyFile:
         dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
         with pytest.raises(FileNotFoundError):
-            dfs.copy_file("$.NOSUCHFILE", "$.COPY")
+            (dfs.root / "$" / "NOSUCHFILE").read_bytes()
 
 
 class TestDFSConvenienceMethods:
@@ -417,10 +439,10 @@ class TestDFSConvenienceMethods:
         dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
         text = "Hello, World!"
-        dfs.save_text("$.TEXT", text)
+        (dfs.root / "$" / "TEXT").write_text(text)
 
         # Load and decode
-        loaded = dfs.load("$.TEXT")
+        loaded = (dfs.root / "$" / "TEXT").read_bytes()
         assert loaded.decode("utf-8") == text
 
     def test_save_text_with_encoding(self):
@@ -437,9 +459,9 @@ class TestDFSConvenienceMethods:
         dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
         text = "ASCII text"
-        dfs.save_text("$.ASCII", text, encoding="ascii")
+        (dfs.root / "$" / "ASCII").write_text(text, encoding="ascii")
 
-        loaded = dfs.load("$.ASCII")
+        loaded = (dfs.root / "$" / "ASCII").read_bytes()
         assert loaded.decode("ascii") == text
 
     def test_save_text_with_metadata(self):
@@ -455,9 +477,9 @@ class TestDFSConvenienceMethods:
 
         dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
-        dfs.save_text("$.PROG", "PRINT", load_address=0x1900, exec_address=0x8023)
+        (dfs.root / "$" / "PROG").write_text("PRINT", load_address=0x1900, exec_address=0x8023)
 
-        info = dfs.get_file_info("$.PROG")
+        info = (dfs.root / "$" / "PROG").stat()
         assert info.load_address == 0x1900
         assert info.exec_address == 0x8023
 
@@ -480,10 +502,11 @@ class TestDFSConvenienceMethods:
         source_file.write_bytes(source_data)
 
         # Save from file
-        dfs.save_from_file("$.COPY", str(source_file))
+        data = Path(source_file).read_bytes()
+        (dfs.root / "$" / "COPY").write_bytes(data)
 
         # Verify
-        assert dfs.load("$.COPY") == source_data
+        assert (dfs.root / "$" / "COPY").read_bytes() == source_data
 
     def test_save_from_file_with_metadata(self, tmp_path):
         """Test save_from_file passes through metadata kwargs."""
@@ -503,10 +526,11 @@ class TestDFSConvenienceMethods:
         source_file.write_bytes(b"CODE")
 
         # Save with metadata
-        dfs.save_from_file("$.PROG", str(source_file), load_address=0x1900, locked=True)
+        data = Path(source_file).read_bytes()
+        (dfs.root / "$" / "PROG").write_bytes(data, load_address=0x1900, locked=True)
 
         # Verify
-        info = dfs.get_file_info("$.PROG")
+        info = (dfs.root / "$" / "PROG").stat()
         assert info.load_address == 0x1900
         assert info.locked
 
@@ -524,7 +548,8 @@ class TestDFSConvenienceMethods:
         dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
         with pytest.raises(FileNotFoundError):
-            dfs.save_from_file("$.TEST", "/nonexistent/file.bin")
+            data = Path("/nonexistent/file.bin").read_bytes()
+            (dfs.root / "$" / "TEST").write_bytes(data)
 
 
 class TestDFSDirectoryNavigation:
@@ -619,10 +644,10 @@ class TestDFSDirectoryNavigation:
         dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
         # Add files to different directories
-        dfs.save("$.FILE1", b"data1")
-        dfs.save("$.FILE2", b"data2")
-        dfs.save("A.FILE3", b"data3")
-        dfs.save("B.FILE4", b"data4")
+        (dfs.root / "$" / "FILE1").write_bytes(b"data1")
+        (dfs.root / "$" / "FILE2").write_bytes(b"data2")
+        (dfs.root / "A" / "FILE3").write_bytes(b"data3")
+        (dfs.root / "B" / "FILE4").write_bytes(b"data4")
 
         # List current (default $)
         files = dfs.list_directory()
@@ -643,9 +668,9 @@ class TestDFSDirectoryNavigation:
 
         dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
-        dfs.save("$.FILE1", b"data1")
-        dfs.save("A.FILE2", b"data2")
-        dfs.save("A.FILE3", b"data3")
+        (dfs.root / "$" / "FILE1").write_bytes(b"data1")
+        (dfs.root / "A" / "FILE2").write_bytes(b"data2")
+        (dfs.root / "A" / "FILE3").write_bytes(b"data3")
 
         # List directory A
         files = dfs.list_directory("A")
@@ -666,8 +691,8 @@ class TestDFSDirectoryNavigation:
 
         dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
-        dfs.save("$.FILE1", b"data1")
-        dfs.save("A.FILE2", b"data2")
+        (dfs.root / "$" / "FILE1").write_bytes(b"data1")
+        (dfs.root / "A" / "FILE2").write_bytes(b"data2")
 
         # Change to directory A
         dfs.change_directory("A")
@@ -691,7 +716,7 @@ class TestDFSDirectoryNavigation:
 
         dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
-        dfs.save("$.FILE1", b"data1")
+        (dfs.root / "$" / "FILE1").write_bytes(b"data1")
 
         # List directory A (no files)
         files = dfs.list_directory("A")
@@ -714,10 +739,10 @@ class TestDFSPythonicProtocols:
 
         dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
-        dfs.save("$.EXISTS", b"data")
+        (dfs.root / "$" / "EXISTS").write_bytes(b"data")
 
-        assert "$.EXISTS" in dfs
-        assert "$.NOSUCH" not in dfs
+        assert "EXISTS" in (dfs.root / "$")
+        assert "NOSUCH" not in (dfs.root / "$")
 
     def test_iteration(self):
         """Test iterating over files."""
@@ -732,9 +757,9 @@ class TestDFSPythonicProtocols:
 
         dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
-        dfs.save("$.FILE1", b"data1")
-        dfs.save("$.FILE2", b"data2")
-        dfs.save("A.FILE3", b"data3")
+        (dfs.root / "$" / "FILE1").write_bytes(b"data1")
+        (dfs.root / "$" / "FILE2").write_bytes(b"data2")
+        (dfs.root / "A" / "FILE3").write_bytes(b"data3")
 
         # Iterate over files
         filenames = [f.filename for f in dfs]
@@ -756,13 +781,13 @@ class TestDFSPythonicProtocols:
 
         assert len(dfs) == 0
 
-        dfs.save("$.FILE1", b"data")
+        (dfs.root / "$" / "FILE1").write_bytes(b"data")
         assert len(dfs) == 1
 
-        dfs.save("$.FILE2", b"data")
+        (dfs.root / "$" / "FILE2").write_bytes(b"data")
         assert len(dfs) == 2
 
-        dfs.delete("$.FILE1")
+        (dfs.root / "$" / "FILE1").unlink()
         assert len(dfs) == 1
 
     def test_repr(self):
@@ -778,7 +803,7 @@ class TestDFSPythonicProtocols:
 
         dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
-        dfs.save("$.FILE1", b"data")
+        (dfs.root / "$" / "FILE1").write_bytes(b"data")
 
         r = repr(dfs)
         assert "DFS(" in r
@@ -799,8 +824,8 @@ class TestDFSPythonicProtocols:
 
         dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
-        dfs.save("$.FILE1", b"data")
-        dfs.save("$.FILE2", b"data")
+        (dfs.root / "$" / "FILE1").write_bytes(b"data")
+        (dfs.root / "$" / "FILE2").write_bytes(b"data")
 
         s = str(dfs)
         assert "MYDISK" in s
@@ -826,23 +851,23 @@ class TestDFSIntegration:
         dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
         # Add some files
-        dfs.save("$.FILE1", b"Contents of file 1")
-        dfs.save("$.FILE2", b"Contents of file 2")
-        dfs.save("A.FILE3", b"Contents of file 3")
+        (dfs.root / "$" / "FILE1").write_bytes(b"Contents of file 1")
+        (dfs.root / "$" / "FILE2").write_bytes(b"Contents of file 2")
+        (dfs.root / "A" / "FILE3").write_bytes(b"Contents of file 3")
 
         assert len(dfs.files) == 3
 
         # Rename one
-        dfs.rename("$.FILE1", "$.RENAMED")
-        assert dfs.exists("$.RENAMED")
-        assert not dfs.exists("$.FILE1")
+        (dfs.root / "$" / "FILE1").rename("$.RENAMED")
+        assert (dfs.root / "$" / "RENAMED").exists()
+        assert not (dfs.root / "$" / "FILE1").exists()
 
         # Lock one
-        dfs.lock("$.FILE2")
+        (dfs.root / "$" / "FILE2").lock()
         assert dfs.files[1].locked
 
         # Delete unlocked file
-        dfs.delete("$.RENAMED")
+        (dfs.root / "$" / "RENAMED").unlink()
         assert len(dfs.files) == 2
 
         # Change metadata
@@ -860,7 +885,7 @@ class TestDFSFromFile:
         """Test opening a disc image file read-only."""
         with DFS.from_file(GAME_IMAGE_FILEPATH, ACORN_DFS_80T_SINGLE_SIDED) as dfs:
             assert len(dfs.files) == 4
-            assert dfs.exists("$.!BOOT")
+            assert (dfs.root / "$" / "!BOOT").exists()
 
     def test_from_file_reads_title(self):
         """Test that disc title is read correctly from file."""
@@ -870,7 +895,7 @@ class TestDFSFromFile:
     def test_from_file_load_file(self):
         """Test loading a file from a file-backed disc image."""
         with DFS.from_file(GAME_IMAGE_FILEPATH, ACORN_DFS_80T_SINGLE_SIDED) as dfs:
-            data = dfs.load("$.!BOOT")
+            data = (dfs.root / "$" / "!BOOT").read_bytes()
             assert len(data) > 0
 
     def test_from_file_read_write(self, tmp_path):

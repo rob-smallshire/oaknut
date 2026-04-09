@@ -21,9 +21,9 @@ def _make_empty_dfs():
 def _make_dfs_with_files():
     """Create a DFS instance with files in $ and A directories."""
     dfs = _make_empty_dfs()
-    dfs.save("$.HELLO", b"Hello, World!", load_address=0x1900, exec_address=0x8000)
-    dfs.save("$.README", b"Read me please", load_address=0x2000)
-    dfs.save("A.GAME", b"Game data here!", load_address=0x3000, exec_address=0x3000)
+    (dfs.root / "$" / "HELLO").write_bytes(b"Hello, World!", load_address=0x1900, exec_address=0x8000)
+    (dfs.root / "$" / "README").write_bytes(b"Read me please", load_address=0x2000)
+    (dfs.root / "A" / "GAME").write_bytes(b"Game data here!", load_address=0x3000, exec_address=0x3000)
     return dfs
 
 

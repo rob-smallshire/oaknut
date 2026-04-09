@@ -104,9 +104,9 @@ class TestDFSCreateRoundTrip:
     @pytest.mark.parametrize("disk_format,expected_total_sectors,catalogue_sectors", ALL_FORMATS)
     def test_save_and_load(self, disk_format, expected_total_sectors, catalogue_sectors):
         dfs = DFS.create(disk_format)
-        dfs.save("$.HELLO", b"Hello, World!", load_address=0x1900)
+        (dfs.root / "$" / "HELLO").write_bytes(b"Hello, World!", load_address=0x1900)
         assert len(dfs.files) == 1
-        assert dfs.load("$.HELLO") == b"Hello, World!"
+        assert (dfs.root / "$" / "HELLO").read_bytes() == b"Hello, World!"
 
     @pytest.mark.parametrize("disk_format,expected_total_sectors,catalogue_sectors", ALL_FORMATS)
     def test_catalogue_high_bits_round_trip(self, disk_format, expected_total_sectors, catalogue_sectors):
@@ -120,12 +120,12 @@ class TestDFSCreateRoundTrip:
         dfs = DFS.create(disk_format)
         # 15053 bytes — bits 12-13 of length are non-zero, bits 16-17 are zero
         data = b"x" * 15053
-        dfs.save("$.PROG", data, load_address=0x0800, exec_address=0x8023)
-        entry = dfs.files[0]
-        assert entry.length == 15053
-        assert entry.load_address == 0x0800
-        assert entry.exec_address == 0x8023
-        assert dfs.load("$.PROG") == data
+        (dfs.root / "$" / "PROG").write_bytes(data, load_address=0x0800, exec_address=0x8023)
+        stat = (dfs.root / "$" / "PROG").stat()
+        assert stat.length == 15053
+        assert stat.load_address == 0x0800
+        assert stat.exec_address == 0x8023
+        assert (dfs.root / "$" / "PROG").read_bytes() == data
 
     @pytest.mark.parametrize("disk_format,expected_total_sectors,catalogue_sectors", ALL_FORMATS)
     def test_save_and_load_via_path(self, disk_format, expected_total_sectors, catalogue_sectors):
@@ -138,15 +138,15 @@ class TestDFSCreateRoundTrip:
     def test_free_sectors_decrease_after_save(self, disk_format, expected_total_sectors, catalogue_sectors):
         dfs = DFS.create(disk_format)
         initial_free = dfs.free_sectors
-        dfs.save("$.FILE", b"x" * 512)  # 2 sectors
+        (dfs.root / "$" / "FILE").write_bytes(b"x" * 512)  # 2 sectors
         assert dfs.free_sectors == initial_free - 2
 
     @pytest.mark.parametrize("disk_format,expected_total_sectors,catalogue_sectors", ALL_FORMATS)
     def test_save_delete_roundtrip(self, disk_format, expected_total_sectors, catalogue_sectors):
         dfs = DFS.create(disk_format)
         initial_free = dfs.free_sectors
-        dfs.save("$.TEMP", b"temporary")
-        dfs.delete("$.TEMP")
+        (dfs.root / "$" / "TEMP").write_bytes(b"temporary")
+        (dfs.root / "$" / "TEMP").unlink()
         assert len(dfs.files) == 0
         # Free sectors restored after compaction
         dfs.compact()
@@ -171,11 +171,11 @@ class TestDFSCreateFile:
     def test_create_file_with_data(self, disk_format, expected_total_sectors, catalogue_sectors, tmp_path):
         filepath = tmp_path / "test.ssd"
         with DFS.create_file(filepath, disk_format) as dfs:
-            dfs.save("$.HELLO", b"Hello!")
+            (dfs.root / "$" / "HELLO").write_bytes(b"Hello!")
 
         # Reopen and verify file data
         with DFS.from_file(filepath, disk_format) as dfs:
-            assert dfs.load("$.HELLO") == b"Hello!"
+            assert (dfs.root / "$" / "HELLO").read_bytes() == b"Hello!"
 
     @pytest.mark.parametrize("disk_format,expected_total_sectors,catalogue_sectors", ALL_FORMATS)
     def test_created_file_size(self, disk_format, expected_total_sectors, catalogue_sectors, tmp_path):
@@ -199,12 +199,12 @@ class TestDFSCreateEdgeCases:
     def test_create_double_sided_each_side_independent(self):
         """Each side of a DSD is independent — creating gives side 0."""
         dfs = DFS.create(ACORN_DFS_80T_DOUBLE_SIDED_INTERLEAVED)
-        dfs.save("$.SIDE0", b"side zero data")
-        assert dfs.load("$.SIDE0") == b"side zero data"
+        (dfs.root / "$" / "SIDE0").write_bytes(b"side zero data")
+        assert (dfs.root / "$" / "SIDE0").read_bytes() == b"side zero data"
 
     def test_create_with_side_parameter(self):
         """Creating with side=1 should give an empty side 1."""
         dfs = DFS.create(ACORN_DFS_80T_DOUBLE_SIDED_INTERLEAVED, side=1)
         assert len(dfs.files) == 0
-        dfs.save("$.SIDE1", b"side one data")
-        assert dfs.load("$.SIDE1") == b"side one data"
+        (dfs.root / "$" / "SIDE1").write_bytes(b"side one data")
+        assert (dfs.root / "$" / "SIDE1").read_bytes() == b"side one data"

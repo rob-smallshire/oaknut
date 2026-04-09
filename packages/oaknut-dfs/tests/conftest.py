@@ -102,7 +102,7 @@ def writable_copy(tmp_path):
         def test_something(writable_copy):
             disk, path = writable_copy("03-fragmented.ssd")
             # disk is a DFS instance, path is the temp file location
-            disk.save("$.NEW", b"data")  # OK - working on copy
+            (disk.root / "$" / "NEW").write_bytes(b"data")  # OK - working on copy
 
     Args:
         reference_name: Image filename

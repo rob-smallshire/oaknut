@@ -243,7 +243,7 @@ class TestL3UtilsDSD:
 
     def test_all_files_readable(self, dfs):
         for f in dfs.files:
-            data = dfs.load(f.path)
+            data = dfs.path(f.path).read_bytes()
             assert len(data) == f.length
 
 

@@ -124,7 +124,7 @@ class TestGameDiscFileLoading:
     def test_load_all_files(self, game_disc):
         """Every file listed in the catalogue can be loaded."""
         for entry in game_disc.files:
-            data = game_disc.load(entry.path)
+            data = game_disc.path(entry.path).read_bytes()
             assert len(data) == entry.length, (
                 f"File {entry.path}: loaded {len(data)} bytes, "
                 f"expected {entry.length}"
@@ -133,8 +133,8 @@ class TestGameDiscFileLoading:
     def test_load_preserves_data(self, game_disc):
         """Loading the same file twice returns identical data."""
         for entry in game_disc.files:
-            data1 = game_disc.load(entry.path)
-            data2 = game_disc.load(entry.path)
+            data1 = game_disc.path(entry.path).read_bytes()
+            data2 = game_disc.path(entry.path).read_bytes()
             assert data1 == data2, f"File {entry.path}: non-deterministic load"
 
 
@@ -142,17 +142,14 @@ class TestGameDiscFileInfo:
     """Verify get_file_info() works for every file on each game disc."""
 
     def test_file_info_for_all_files(self, game_disc):
-        """get_file_info() returns consistent metadata for every file."""
+        """stat() returns consistent metadata for every file."""
         for entry in game_disc.files:
-            info = game_disc.get_file_info(entry.path)
-            assert info.name == entry.path
-            assert info.filename == entry.filename
-            assert info.directory == entry.directory
-            assert info.locked == entry.locked
-            assert info.load_address == entry.load_address
-            assert info.exec_address == entry.exec_address
-            assert info.length == entry.length
-            assert info.start_sector == entry.start_sector
+            stat = game_disc.path(entry.path).stat()
+            assert stat.locked == entry.locked
+            assert stat.load_address == entry.load_address
+            assert stat.exec_address == entry.exec_address
+            assert stat.length == entry.length
+            assert stat.start_sector == entry.start_sector
 
 
 class TestGameDiscPythonicInterface:

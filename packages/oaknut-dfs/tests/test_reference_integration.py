@@ -41,68 +41,67 @@ class TestBasicValidationImage:
 
     def test_text_file_content(self, disk):
         """Verify TEXT file contains expected content."""
-        content = disk.load("$.TEXT")
+        content = (disk.root / "$" / "TEXT").read_bytes()
         assert content == b"Simple text content"
 
     def test_multiline_file_content(self, disk):
         """Verify MULTI file has multiple lines with CR+LF."""
-        content = disk.load("$.MULTI")
+        content = (disk.root / "$" / "MULTI").read_bytes()
         # BBC BASIC uses CHR$(13)+CHR$(10) for line endings
         expected = b"Line 1\r\nLine 2\r\nLine 3"
         assert content == expected
 
     def test_single_char_filename(self, disk):
         """Verify single-character filename X exists."""
-        assert disk.exists("$.X")
-        content = disk.load("$.X")
+        assert (disk.root / "$" / "X").exists()
+        content = (disk.root / "$" / "X").read_bytes()
         assert content == b"Short name"
 
     def test_max_length_filename(self, disk):
         """Verify 7-character filename ABCDEFG exists."""
-        assert disk.exists("$.ABCDEFG")
-        entry = disk.get_file_info("$.ABCDEFG")
-        assert entry.filename == "ABCDEFG"
-        assert len(entry.filename) == 7  # Max allowed
-        content = disk.load("$.ABCDEFG")
+        assert (disk.root / "$" / "ABCDEFG").exists()
+        stat = (disk.root / "$" / "ABCDEFG").stat()
+        assert stat.length == len(b"Seven character filename test")
+        content = (disk.root / "$" / "ABCDEFG").read_bytes()
         assert content == b"Seven character filename test"
 
     def test_binary_file_content_and_metadata(self, disk):
         """Verify BINARY file has sequential bytes 0-255 and load address 0x2000."""
-        entry = disk.get_file_info("$.BINARY")
-        assert entry.load_address == 0x2000
-        assert entry.exec_address == 0x2000
-        assert entry.length == 256
+        stat = (disk.root / "$" / "BINARY").stat()
+        assert stat.load_address == 0x2000
+        assert stat.exec_address == 0x2000
+        assert stat.length == 256
 
-        content = disk.load("$.BINARY")
+        content = (disk.root / "$" / "BINARY").read_bytes()
         assert len(content) == 256
         # Verify sequential bytes 0-255
         assert content == bytes(range(256))
 
     def test_locked_file_status(self, disk):
         """Verify LOCKED file has locked flag set."""
-        assert disk.exists("$.LOCKED")
-        entry = disk.get_file_info("$.LOCKED")
-        assert entry.locked is True
-        content = disk.load("$.LOCKED")
+        assert (disk.root / "$" / "LOCKED").exists()
+        stat = (disk.root / "$" / "LOCKED").stat()
+        assert stat.locked is True
+        content = (disk.root / "$" / "LOCKED").read_bytes()
         assert content == b"This file is locked and cannot be deleted"
 
     def test_directory_a_files(self, disk):
         """Verify directory A contains DATA1, DATA2, DATA3 with correct content."""
-        assert disk.exists("A.DATA1")
-        assert disk.exists("A.DATA2")
-        assert disk.exists("A.DATA3")
+        assert (disk.root / "A" / "DATA1").exists()
+        assert (disk.root / "A" / "DATA2").exists()
+        assert (disk.root / "A" / "DATA3").exists()
 
-        assert disk.load("A.DATA1") == b"Directory A, file 1"
-        assert disk.load("A.DATA2") == b"Directory A, file 2"
-        assert disk.load("A.DATA3") == b"Directory A, file 3"
+        assert (disk.root / "A" / "DATA1").read_bytes() == b"Directory A, file 1"
+        assert (disk.root / "A" / "DATA2").read_bytes() == b"Directory A, file 2"
+        assert (disk.root / "A" / "DATA3").read_bytes() == b"Directory A, file 3"
 
     def test_directory_b_files(self, disk):
         """Verify directory B contains FILE1, FILE2 with correct content."""
-        assert disk.exists("B.FILE1")
-        assert disk.exists("B.FILE2")
+        assert (disk.root / "B" / "FILE1").exists()
+        assert (disk.root / "B" / "FILE2").exists()
 
-        assert disk.load("B.FILE1") == b"Directory B, file 1"
-        assert disk.load("B.FILE2") == b"Directory B, file 2"
+        assert (disk.root / "B" / "FILE1").read_bytes() == b"Directory B, file 1"
+        assert (disk.root / "B" / "FILE2").read_bytes() == b"Directory B, file 2"
 
     def test_all_filenames_present(self, disk):
         """Verify all expected filenames are present."""
@@ -141,29 +140,27 @@ class TestEdgeCasesImage:
 
     def test_boot_file_with_exclamation(self, disk):
         """Verify !BOOT file exists (! prefix allowed at start)."""
-        assert disk.exists("$.!BOOT")
-        entry = disk.get_file_info("$.!BOOT")
-        assert entry.filename == "!BOOT"
+        assert (disk.root / "$" / "!BOOT").exists()
 
     def test_hyphen_in_filename(self, disk):
         """Verify TEST-1 file exists (hyphen allowed)."""
-        assert disk.exists("$.TEST-1")
+        assert (disk.root / "$" / "TEST-1").exists()
 
     def test_file_numbering_sequence(self, disk):
         """Verify FILE0-FILE27, !BOOT, TEST-1, FILE31 naming sequence."""
         # $ directory: FILE0-FILE9, !BOOT, TEST-1
         for i in range(10):
-            assert disk.exists(f"$.FILE{i}")
-        assert disk.exists("$.!BOOT")
-        assert disk.exists("$.TEST-1")
+            assert (disk.root / "$" / f"FILE{i}").exists()
+        assert (disk.root / "$" / "!BOOT").exists()
+        assert (disk.root / "$" / "TEST-1").exists()
 
         # A directory: FILE10-FILE19
         for i in range(10, 20):
-            assert disk.exists(f"A.FILE{i}")
+            assert (disk.root / "A" / f"FILE{i}").exists()
 
         # B directory: FILE20-FILE27, FILE31
         for i in range(20, 28):
-            assert disk.exists(f"B.FILE{i}")
+            assert (disk.root / "B" / f"FILE{i}").exists()
 
 
 class TestFragmentedImage:
@@ -188,20 +185,20 @@ class TestFragmentedImage:
 
     def test_surviving_files_after_deletions(self, disk):
         """Verify FILEA, FILEC, FILEE, MARKER remain (B and D deleted)."""
-        assert disk.exists("$.FILEA")
-        assert not disk.exists("$.FILEB")  # Deleted
-        assert disk.exists("$.FILEC")
-        assert not disk.exists("$.FILED")  # Deleted
-        assert disk.exists("$.FILEE")
-        assert disk.exists("$.MARKER")
+        assert (disk.root / "$" / "FILEA").exists()
+        assert not (disk.root / "$" / "FILEB").exists()  # Deleted
+        assert (disk.root / "$" / "FILEC").exists()
+        assert not (disk.root / "$" / "FILED").exists()  # Deleted
+        assert (disk.root / "$" / "FILEE").exists()
+        assert (disk.root / "$" / "MARKER").exists()
         assert len(disk.files) == 4
 
     def test_file_sizes(self, disk):
         """Verify file sizes match generator specifications."""
-        assert disk.get_file_info("$.FILEA").length == 512  # 2 sectors
-        assert disk.get_file_info("$.FILEC").length == 512  # 2 sectors
-        assert disk.get_file_info("$.FILEE").length == 512  # 2 sectors
-        assert disk.get_file_info("$.MARKER").length > 0
+        assert (disk.root / "$" / "FILEA").stat().length == 512  # 2 sectors
+        assert (disk.root / "$" / "FILEC").stat().length == 512  # 2 sectors
+        assert (disk.root / "$" / "FILEE").stat().length == 512  # 2 sectors
+        assert (disk.root / "$" / "MARKER").stat().length > 0
 
     def test_fragmentation_detected(self, disk):
         """Verify free space is fragmented (multiple gaps exist)."""
@@ -263,29 +260,29 @@ class TestDoubleSidedImage:
     def test_side0_small_files(self, disk_side0):
         """Verify side 0 has 5 small files (1 sector = 256 bytes each)."""
         for i in range(1, 6):
-            assert disk_side0.exists(f"$.SMALL{i}")
-            entry = disk_side0.get_file_info(f"$.SMALL{i}")
-            assert entry.sectors == 1
+            p = disk_side0.root / "$" / f"SMALL{i}"
+            assert p.exists()
+            assert (p.stat().length + 255) // 256 == 1
 
     def test_side0_medium_files(self, disk_side0):
         """Verify side 0 has 3 medium files (10 sectors = 2560 bytes each)."""
         for i in range(1, 4):
-            assert disk_side0.exists(f"$.MED{i}")
-            entry = disk_side0.get_file_info(f"$.MED{i}")
-            assert entry.sectors == 10
+            p = disk_side0.root / "$" / f"MED{i}"
+            assert p.exists()
+            assert (p.stat().length + 255) // 256 == 10
 
     def test_side1_large_files(self, disk_side1):
         """Verify side 1 has 3 large files (20 sectors = 5120 bytes each)."""
         for i in range(1, 4):
-            assert disk_side1.exists(f"$.LARGE{i}")
-            entry = disk_side1.get_file_info(f"$.LARGE{i}")
-            assert entry.sectors == 20
+            p = disk_side1.root / "$" / f"LARGE{i}"
+            assert p.exists()
+            assert (p.stat().length + 255) // 256 == 20
 
     def test_side1_very_large_file(self, disk_side1):
         """Verify side 1 has 1 very large file (50 sectors = 12800 bytes)."""
-        assert disk_side1.exists("$.HUGE")
-        entry = disk_side1.get_file_info("$.HUGE")
-        assert entry.sectors == 50
+        p = disk_side1.root / "$" / "HUGE"
+        assert p.exists()
+        assert (p.stat().length + 255) // 256 == 50
 
     def test_independent_catalogs(self, disk_side0, disk_side1):
         """Verify sides have completely independent catalogs."""

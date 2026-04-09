@@ -8,28 +8,38 @@ from oaknut_dfs.formats import (
 )
 
 
+def _make_dfs(buffer):
+    """Create a DFS instance from a pre-initialised buffer."""
+    return DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
+
+
+def _blank_buffer(title=b"DISK    "):
+    """Return a 100K bytearray initialised as an empty DFS disc."""
+    buffer = bytearray(102400)
+    buffer[0:8] = title
+    buffer[256:260] = b"    "
+    buffer[260] = 0
+    buffer[261] = 0
+    buffer[262] = 0x00
+    buffer[263] = 200
+    return buffer
+
+
 class TestExportFile:
     """Tests for export_file()."""
 
     def test_export_file_with_metadata(self, tmp_path):
         """Test exporting single file with .inf metadata."""
-        buffer = bytearray(102400)
-
-        buffer[0:8] = b"DISK    "
-        buffer[256:260] = b"    "
-        buffer[260] = 0
-        buffer[261] = 0
-        buffer[262] = 0x00
-        buffer[263] = 200
-
-        dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
+        dfs = _make_dfs(_blank_buffer())
 
         # Add a file
-        dfs.save("$.HELLO", b"Hello World", load_address=0x1900, exec_address=0x8023)
+        (dfs.root / "$" / "HELLO").write_bytes(
+            b"Hello World", load_address=0x1900, exec_address=0x8023
+        )
 
         # Export single file
         target_file = tmp_path / "HELLO.bin"
-        dfs.export_file("$.HELLO", str(target_file))
+        (dfs.root / "$" / "HELLO").export_file(target_file)
 
         # Check file was created
         assert target_file.exists()
@@ -45,22 +55,13 @@ class TestExportFile:
 
     def test_export_file_without_metadata(self, tmp_path):
         """Test exporting file without .inf metadata."""
-        buffer = bytearray(102400)
+        dfs = _make_dfs(_blank_buffer())
 
-        buffer[0:8] = b"DISK    "
-        buffer[256:260] = b"    "
-        buffer[260] = 0
-        buffer[261] = 0
-        buffer[262] = 0x00
-        buffer[263] = 200
-
-        dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
-
-        dfs.save("$.TEST", b"data")
+        (dfs.root / "$" / "TEST").write_bytes(b"data")
 
         # Export without metadata
         target_file = tmp_path / "test.bin"
-        dfs.export_file("$.TEST", str(target_file), preserve_metadata=False)
+        (dfs.root / "$" / "TEST").export_file(target_file, preserve_metadata=False)
 
         # Check file was created
         assert target_file.exists()
@@ -71,38 +72,20 @@ class TestExportFile:
 
     def test_export_file_nonexistent_raises(self, tmp_path):
         """Test exporting nonexistent file raises error."""
-        buffer = bytearray(102400)
-
-        buffer[0:8] = b"DISK    "
-        buffer[256:260] = b"    "
-        buffer[260] = 0
-        buffer[261] = 0
-        buffer[262] = 0x00
-        buffer[263] = 200
-
-        dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
+        dfs = _make_dfs(_blank_buffer())
 
         with pytest.raises(FileNotFoundError):
-            dfs.export_file("$.NOSUCH", str(tmp_path / "file.bin"))
+            (dfs.root / "$" / "NOSUCH").export_file(tmp_path / "file.bin")
 
     def test_export_file_creates_parent_directories(self, tmp_path):
         """Test export_file creates parent directories if needed."""
-        buffer = bytearray(102400)
+        dfs = _make_dfs(_blank_buffer())
 
-        buffer[0:8] = b"DISK    "
-        buffer[256:260] = b"    "
-        buffer[260] = 0
-        buffer[261] = 0
-        buffer[262] = 0x00
-        buffer[263] = 200
-
-        dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
-
-        dfs.save("$.FILE", b"data")
+        (dfs.root / "$" / "FILE").write_bytes(b"data")
 
         # Export to nested path
         target_file = tmp_path / "nested" / "path" / "file.bin"
-        dfs.export_file("$.FILE", str(target_file))
+        (dfs.root / "$" / "FILE").export_file(target_file)
 
         # Check file was created
         assert target_file.exists()
@@ -114,21 +97,16 @@ class TestExportAll:
 
     def test_export_all_with_metadata(self, tmp_path):
         """Test exporting all files with .inf metadata."""
-        buffer = bytearray(102400)
-
-        buffer[0:8] = b"DISK    "
-        buffer[256:260] = b"    "
-        buffer[260] = 0
-        buffer[261] = 0
-        buffer[262] = 0x00
-        buffer[263] = 200
-
-        dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
+        dfs = _make_dfs(_blank_buffer())
 
         # Add some files
-        dfs.save("$.FILE1", b"Contents 1", load_address=0x1900, exec_address=0x8023)
-        dfs.save("$.FILE2", b"Contents 2", load_address=0x2000, exec_address=0x3000)
-        dfs.save("A.FILE3", b"Contents 3", locked=True)
+        (dfs.root / "$" / "FILE1").write_bytes(
+            b"Contents 1", load_address=0x1900, exec_address=0x8023
+        )
+        (dfs.root / "$" / "FILE2").write_bytes(
+            b"Contents 2", load_address=0x2000, exec_address=0x3000
+        )
+        (dfs.root / "A" / "FILE3").write_bytes(b"Contents 3", locked=True)
 
         # Export
         target = tmp_path / "export"
@@ -162,18 +140,9 @@ class TestExportAll:
 
     def test_export_all_without_metadata(self, tmp_path):
         """Test exporting files without .inf metadata."""
-        buffer = bytearray(102400)
+        dfs = _make_dfs(_blank_buffer())
 
-        buffer[0:8] = b"DISK    "
-        buffer[256:260] = b"    "
-        buffer[260] = 0
-        buffer[261] = 0
-        buffer[262] = 0x00
-        buffer[263] = 200
-
-        dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
-
-        dfs.save("$.TEST", b"data")
+        (dfs.root / "$" / "TEST").write_bytes(b"data")
 
         # Export without metadata
         target = tmp_path / "export"
@@ -187,18 +156,9 @@ class TestExportAll:
 
     def test_export_all_creates_directory(self, tmp_path):
         """Test export_all creates target directory if it doesn't exist."""
-        buffer = bytearray(102400)
+        dfs = _make_dfs(_blank_buffer())
 
-        buffer[0:8] = b"DISK    "
-        buffer[256:260] = b"    "
-        buffer[260] = 0
-        buffer[261] = 0
-        buffer[262] = 0x00
-        buffer[263] = 200
-
-        dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
-
-        dfs.save("$.TEST", b"data")
+        (dfs.root / "$" / "TEST").write_bytes(b"data")
 
         # Export to non-existent nested directory
         target = tmp_path / "nested" / "path" / "export"
@@ -210,16 +170,7 @@ class TestExportAll:
 
     def test_export_all_empty_disk(self, tmp_path):
         """Test exporting empty disk."""
-        buffer = bytearray(102400)
-
-        buffer[0:8] = b"EMPTY   "
-        buffer[256:260] = b"    "
-        buffer[260] = 0
-        buffer[261] = 0
-        buffer[262] = 0x00
-        buffer[263] = 200
-
-        dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
+        dfs = _make_dfs(_blank_buffer(title=b"EMPTY   "))
 
         # Export
         target = tmp_path / "export"
@@ -231,20 +182,11 @@ class TestExportAll:
 
 
 class TestImportFromInf:
-    """Tests for import_from_inf()."""
+    """Tests for import_file()."""
 
     def test_import_with_inf_file(self, tmp_path):
         """Test importing file with .inf metadata."""
-        buffer = bytearray(102400)
-
-        buffer[0:8] = b"DISK    "
-        buffer[256:260] = b"    "
-        buffer[260] = 0
-        buffer[261] = 0
-        buffer[262] = 0x00
-        buffer[263] = 200
-
-        dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
+        dfs = _make_dfs(_blank_buffer())
 
         # Create test files
         data_file = tmp_path / "TEST"
@@ -253,31 +195,22 @@ class TestImportFromInf:
         inf_file = tmp_path / "TEST.inf"
         inf_file.write_text("$.HELLO 00001900 00008023 00000009\n")
 
-        # Import
-        dfs.import_from_inf(str(data_file))
+        # Import — the .inf says $.HELLO, but DFSPath uses the path explicitly
+        (dfs.root / "$" / "HELLO").import_file(data_file)
 
         # Check file was imported
-        assert dfs.exists("$.HELLO")
-        assert dfs.load("$.HELLO") == b"Test data"
+        assert (dfs.root / "$" / "HELLO").exists()
+        assert (dfs.root / "$" / "HELLO").read_bytes() == b"Test data"
 
         # Check metadata
-        info = dfs.get_file_info("$.HELLO")
+        info = (dfs.root / "$" / "HELLO").stat()
         assert info.load_address == 0x1900
         assert info.exec_address == 0x8023
         assert not info.locked
 
     def test_import_with_locked_flag(self, tmp_path):
         """Test importing locked file."""
-        buffer = bytearray(102400)
-
-        buffer[0:8] = b"DISK    "
-        buffer[256:260] = b"    "
-        buffer[260] = 0
-        buffer[261] = 0
-        buffer[262] = 0x00
-        buffer[263] = 200
-
-        dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
+        dfs = _make_dfs(_blank_buffer())
 
         # Create test files
         data_file = tmp_path / "TEST"
@@ -287,54 +220,36 @@ class TestImportFromInf:
         inf_file.write_text("$.LOCKED 00001900 00008023 00000004 Locked\n")
 
         # Import
-        dfs.import_from_inf(str(data_file))
+        (dfs.root / "$" / "LOCKED").import_file(data_file)
 
         # Check file is locked
-        info = dfs.get_file_info("$.LOCKED")
+        info = (dfs.root / "$" / "LOCKED").stat()
         assert info.locked
 
     def test_import_without_inf_file(self, tmp_path):
         """Test importing file without .inf uses defaults."""
-        buffer = bytearray(102400)
-
-        buffer[0:8] = b"DISK    "
-        buffer[256:260] = b"    "
-        buffer[260] = 0
-        buffer[261] = 0
-        buffer[262] = 0x00
-        buffer[263] = 200
-
-        dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
+        dfs = _make_dfs(_blank_buffer())
 
         # Create test file without .inf
         data_file = tmp_path / "MYFILE"
         data_file.write_bytes(b"data")
 
-        # Import
-        dfs.import_from_inf(str(data_file))
+        # Import — no .inf, so defaults are used
+        (dfs.root / "$" / "MYFILE").import_file(data_file)
 
         # Check file was imported with defaults
-        assert dfs.exists("$.MYFILE")
-        assert dfs.load("$.MYFILE") == b"data"
+        assert (dfs.root / "$" / "MYFILE").exists()
+        assert (dfs.root / "$" / "MYFILE").read_bytes() == b"data"
 
         # Check default metadata
-        info = dfs.get_file_info("$.MYFILE")
+        info = (dfs.root / "$" / "MYFILE").stat()
         assert info.load_address == 0
         assert info.exec_address == 0
         assert not info.locked
 
     def test_import_with_explicit_inf_path(self, tmp_path):
         """Test importing with explicitly specified .inf path."""
-        buffer = bytearray(102400)
-
-        buffer[0:8] = b"DISK    "
-        buffer[256:260] = b"    "
-        buffer[260] = 0
-        buffer[261] = 0
-        buffer[262] = 0x00
-        buffer[263] = 200
-
-        dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
+        dfs = _make_dfs(_blank_buffer())
 
         # Create files in different locations
         data_file = tmp_path / "data" / "FILE"
@@ -346,11 +261,11 @@ class TestImportFromInf:
         inf_file.write_text("$.CUSTOM 00001900 00008023 00000004\n")
 
         # Import with explicit inf path
-        dfs.import_from_inf(str(data_file), str(inf_file))
+        (dfs.root / "$" / "CUSTOM").import_file(data_file, inf_filepath=inf_file)
 
         # Check file was imported with metadata from explicit path
-        assert dfs.exists("$.CUSTOM")
-        info = dfs.get_file_info("$.CUSTOM")
+        assert (dfs.root / "$" / "CUSTOM").exists()
+        info = (dfs.root / "$" / "CUSTOM").stat()
         assert info.load_address == 0x1900
 
 
@@ -359,59 +274,58 @@ class TestExportImportRoundTrip:
 
     def test_round_trip_preserves_everything(self, tmp_path):
         """Test exporting and re-importing preserves all data and metadata."""
-        # Create original disk
-        buffer1 = bytearray(102400)
-        buffer1[0:8] = b"ORIG    "
-        buffer1[256:260] = b"    "
-        buffer1[260] = 0
-        buffer1[261] = 0
-        buffer1[262] = 0x00
-        buffer1[263] = 200
-
-        dfs1 = DFS.from_buffer(memoryview(buffer1), ACORN_DFS_40T_SINGLE_SIDED)
+        # Create original disc
+        dfs1 = _make_dfs(_blank_buffer(title=b"ORIG    "))
 
         # Add files with various metadata
-        dfs1.save("$.PROG", b"Program code", load_address=0x1900, exec_address=0x8023)
-        dfs1.save("$.DATA", b"Data file", load_address=0x2000, exec_address=0x2000)
-        dfs1.save("$.LOCKED", b"Protected", locked=True)
-        dfs1.save("A.FILE", b"In directory A")
+        (dfs1.root / "$" / "PROG").write_bytes(
+            b"Program code", load_address=0x1900, exec_address=0x8023
+        )
+        (dfs1.root / "$" / "DATA").write_bytes(
+            b"Data file", load_address=0x2000, exec_address=0x2000
+        )
+        (dfs1.root / "$" / "LOCKED").write_bytes(b"Protected", locked=True)
+        (dfs1.root / "A" / "FILE").write_bytes(b"In directory A")
 
         # Export
         export_path = tmp_path / "export"
         dfs1.export_all(str(export_path))
 
-        # Create new disk and import
-        buffer2 = bytearray(102400)
-        buffer2[0:8] = b"NEW     "
-        buffer2[256:260] = b"    "
-        buffer2[260] = 0
-        buffer2[261] = 0
-        buffer2[262] = 0x00
-        buffer2[263] = 200
+        # Create new disc and import
+        dfs2 = _make_dfs(_blank_buffer(title=b"NEW     "))
 
-        dfs2 = DFS.from_buffer(memoryview(buffer2), ACORN_DFS_40T_SINGLE_SIDED)
-
-        # Import all files
+        # Import all files — export_all writes .inf with $.NAME for all files,
+        # so A.FILE's .inf says $.FILE. Parse each .inf to determine the
+        # correct DFS path for import.
         for filepath in export_path.glob("*"):
-            if not filepath.name.endswith(".inf"):
-                dfs2.import_from_inf(str(filepath))
+            if filepath.name.endswith(".inf"):
+                continue
+            inf_path = filepath.with_suffix(filepath.suffix + ".inf")
+            if inf_path.exists():
+                inf_text = inf_path.read_text().strip()
+                dfs_name = inf_text.split()[0]  # e.g. "$.PROG"
+                directory, filename = dfs_name.split(".")
+                (dfs2.root / directory / filename).import_file(filepath)
+            else:
+                # No .inf — use the host filename stem
+                (dfs2.root / "$" / filepath.stem).import_file(filepath)
 
-        # Verify all files exist
-        assert dfs2.exists("$.PROG")
-        assert dfs2.exists("$.DATA")
-        assert dfs2.exists("$.LOCKED")
-        assert dfs2.exists("$.FILE")  # Note: directory info is in .inf, not filename
+        # Verify all files exist — note: A.FILE was exported with $.FILE in .inf
+        assert (dfs2.root / "$" / "PROG").exists()
+        assert (dfs2.root / "$" / "DATA").exists()
+        assert (dfs2.root / "$" / "LOCKED").exists()
+        assert (dfs2.root / "$" / "FILE").exists()
 
         # Verify data
-        assert dfs2.load("$.PROG") == b"Program code"
-        assert dfs2.load("$.DATA") == b"Data file"
-        assert dfs2.load("$.LOCKED") == b"Protected"
-        assert dfs2.load("$.FILE") == b"In directory A"
+        assert (dfs2.root / "$" / "PROG").read_bytes() == b"Program code"
+        assert (dfs2.root / "$" / "DATA").read_bytes() == b"Data file"
+        assert (dfs2.root / "$" / "LOCKED").read_bytes() == b"Protected"
+        assert (dfs2.root / "$" / "FILE").read_bytes() == b"In directory A"
 
         # Verify metadata
-        prog_info = dfs2.get_file_info("$.PROG")
+        prog_info = (dfs2.root / "$" / "PROG").stat()
         assert prog_info.load_address == 0x1900
         assert prog_info.exec_address == 0x8023
 
-        locked_info = dfs2.get_file_info("$.LOCKED")
+        locked_info = (dfs2.root / "$" / "LOCKED").stat()
         assert locked_info.locked

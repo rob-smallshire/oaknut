@@ -287,6 +287,7 @@ class DFSPath:
         target = Path(target_filepath)
         entry = self._find_entry()
         data = self.read_bytes()
+        target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(data)
 
         if preserve_metadata:

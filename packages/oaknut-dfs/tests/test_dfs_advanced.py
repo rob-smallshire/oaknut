@@ -43,11 +43,11 @@ class TestFreeSpace:
         dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
         # Add a 100-byte file (takes 1 sector)
-        dfs.save("$.FILE1", b"X" * 100)
+        (dfs.root / "$" / "FILE1").write_bytes(b"X" * 100)
         assert dfs.free_sectors == 397  # 398 - 1
 
         # Add a 300-byte file (takes 2 sectors)
-        dfs.save("$.FILE2", b"Y" * 300)
+        (dfs.root / "$" / "FILE2").write_bytes(b"Y" * 300)
         assert dfs.free_sectors == 395  # 397 - 2
 
     def test_get_free_map_empty_disk(self):
@@ -83,11 +83,11 @@ class TestFreeSpace:
         dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
         # Add files to create gaps
-        dfs.save("$.FILE1", b"X" * 256)  # 1 sector at sector 2
-        dfs.save("$.FILE2", b"Y" * 256)  # 1 sector at sector 3
+        (dfs.root / "$" / "FILE1").write_bytes(b"X" * 256)  # 1 sector at sector 2
+        (dfs.root / "$" / "FILE2").write_bytes(b"Y" * 256)  # 1 sector at sector 3
 
         # Delete first file to create gap
-        dfs.delete("$.FILE1")
+        (dfs.root / "$" / "FILE1").unlink()
 
         free_map = dfs._catalogued_surface.get_free_map()
 
@@ -135,20 +135,16 @@ class TestFileInfo:
         dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
         # Save a file
-        dfs.save("$.HELLO", b"Test content", load_address=0x1900, exec_address=0x8023)
+        (dfs.root / "$" / "HELLO").write_bytes(b"Test content", load_address=0x1900, exec_address=0x8023)
 
         # Get file info
-        file_info = dfs.get_file_info("$.HELLO")
+        st = (dfs.root / "$" / "HELLO").stat()
 
-        assert file_info.name == "$.HELLO"
-        assert file_info.directory == "$"
-        assert file_info.filename == "HELLO"
-        assert not file_info.locked
-        assert file_info.load_address == 0x1900
-        assert file_info.exec_address == 0x8023
-        assert file_info.length == 12
-        assert file_info.start_sector == 2
-        assert file_info.sectors == 1
+        assert not st.locked
+        assert st.load_address == 0x1900
+        assert st.exec_address == 0x8023
+        assert st.length == 12
+        assert st.start_sector == 2
 
     def test_get_file_info_not_found(self):
         """Test get_file_info for nonexistent file."""
@@ -164,7 +160,7 @@ class TestFileInfo:
         dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
         with pytest.raises(FileNotFoundError):
-            dfs.get_file_info("$.NOSUCHFILE")
+            (dfs.root / "$" / "NOSUCHFILE").stat()
 
 
 class TestValidation:
@@ -184,8 +180,8 @@ class TestValidation:
         dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
         # Add some files
-        dfs.save("$.FILE1", b"data1")
-        dfs.save("$.FILE2", b"data2")
+        (dfs.root / "$" / "FILE1").write_bytes(b"data1")
+        (dfs.root / "$" / "FILE2").write_bytes(b"data2")
 
         errors = dfs.validate()
         assert errors == []
@@ -237,12 +233,12 @@ class TestCompaction:
         dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
         # Create fragmentation
-        dfs.save("$.FILE1", b"A" * 256)  # Sector 2
-        dfs.save("$.FILE2", b"B" * 256)  # Sector 3
-        dfs.save("$.FILE3", b"C" * 256)  # Sector 4
+        (dfs.root / "$" / "FILE1").write_bytes(b"A" * 256)  # Sector 2
+        (dfs.root / "$" / "FILE2").write_bytes(b"B" * 256)  # Sector 3
+        (dfs.root / "$" / "FILE3").write_bytes(b"C" * 256)  # Sector 4
 
         # Delete middle file
-        dfs.delete("$.FILE2")
+        (dfs.root / "$" / "FILE2").unlink()
 
         # Now we have: FILE1 at 2, gap at 3, FILE3 at 4
 
@@ -258,8 +254,8 @@ class TestCompaction:
         assert files[1].start_sector == 3  # No more gap
 
         # Verify data is intact
-        assert dfs.load("$.FILE1") == b"A" * 256
-        assert dfs.load("$.FILE3") == b"C" * 256
+        assert (dfs.root / "$" / "FILE1").read_bytes() == b"A" * 256
+        assert (dfs.root / "$" / "FILE3").read_bytes() == b"C" * 256
 
     def test_compact_with_locked_files_raises(self):
         """Test compact raises error if locked files present."""
@@ -275,7 +271,7 @@ class TestCompaction:
         dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
         # Add a locked file
-        dfs.save("$.LOCKED", b"data", locked=True)
+        (dfs.root / "$" / "LOCKED").write_bytes(b"data", locked=True)
 
         with pytest.raises(PermissionError, match="locked files present"):
             dfs.compact()
@@ -294,8 +290,8 @@ class TestCompaction:
         dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
         # Add files sequentially
-        dfs.save("$.FILE1", b"A" * 100)
-        dfs.save("$.FILE2", b"B" * 100)
+        (dfs.root / "$" / "FILE1").write_bytes(b"A" * 100)
+        (dfs.root / "$" / "FILE2").write_bytes(b"B" * 100)
 
         # Already compact
         moved = dfs.compact()
@@ -331,17 +327,17 @@ class TestCompaction:
         dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
         # Add file with specific metadata
-        dfs.save("$.PROG", b"X" * 500, load_address=0x1900, exec_address=0x8023)
+        (dfs.root / "$" / "PROG").write_bytes(b"X" * 500, load_address=0x1900, exec_address=0x8023)
 
         # Add another file then delete it to create fragmentation
-        dfs.save("$.TEMP", b"Y" * 100)
-        dfs.delete("$.TEMP")
+        (dfs.root / "$" / "TEMP").write_bytes(b"Y" * 100)
+        (dfs.root / "$" / "TEMP").unlink()
 
         # Compact
         dfs.compact()
 
         # Verify metadata preserved
-        file_info = dfs.get_file_info("$.PROG")
-        assert file_info.load_address == 0x1900
-        assert file_info.exec_address == 0x8023
-        assert file_info.length == 500
+        st = (dfs.root / "$" / "PROG").stat()
+        assert st.load_address == 0x1900
+        assert st.exec_address == 0x8023
+        assert st.length == 500
