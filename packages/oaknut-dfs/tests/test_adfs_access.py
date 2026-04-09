@@ -145,6 +145,69 @@ class TestChmod:
         assert stat.owner_execute is False
 
 
+class TestStatAccess:
+
+    def test_default_file_access(self):
+        adfs = ADFS.create(ADFS_S)
+        (adfs.root / "File").write_bytes(b"data")
+        stat = (adfs.root / "File").stat()
+        assert stat.access == Access.R | Access.W
+
+    def test_locked_file_access(self):
+        adfs = ADFS.create(ADFS_S)
+        (adfs.root / "File").write_bytes(b"data", locked=True)
+        stat = (adfs.root / "File").stat()
+        assert stat.access == Access.R | Access.W | Access.L
+
+    def test_read_only_access(self):
+        adfs = ADFS.create(ADFS_S)
+        (adfs.root / "File").write_bytes(b"data")
+        (adfs.root / "File").chmod(Access.R)
+        assert (adfs.root / "File").stat().access == Access.R
+
+    def test_execute_only_access(self):
+        adfs = ADFS.create(ADFS_S)
+        (adfs.root / "File").write_bytes(b"data")
+        (adfs.root / "File").chmod(Access.E)
+        assert (adfs.root / "File").stat().access == Access.E
+
+    def test_no_access(self):
+        adfs = ADFS.create(ADFS_S)
+        (adfs.root / "File").write_bytes(b"data")
+        (adfs.root / "File").chmod(Access(0))
+        assert (adfs.root / "File").stat().access == Access(0)
+
+    def test_all_flags(self):
+        adfs = ADFS.create(ADFS_S)
+        (adfs.root / "File").write_bytes(b"data")
+        all_flags = Access.R | Access.W | Access.L | Access.E
+        (adfs.root / "File").chmod(all_flags)
+        assert (adfs.root / "File").stat().access == all_flags
+
+    def test_round_trip_chmod_stat(self):
+        """chmod then stat().access should return the same flags."""
+        adfs = ADFS.create(ADFS_S)
+        (adfs.root / "File").write_bytes(b"data")
+        flags = Access.R | Access.L
+        (adfs.root / "File").chmod(flags)
+        assert (adfs.root / "File").stat().access == flags
+
+    def test_copy_access_between_files(self):
+        """stat().access from one file can be passed to chmod() on another."""
+        adfs = ADFS.create(ADFS_S)
+        (adfs.root / "Src").write_bytes(b"src")
+        (adfs.root / "Src").chmod(Access.R | Access.L)
+        (adfs.root / "Dst").write_bytes(b"dst")
+        (adfs.root / "Dst").chmod((adfs.root / "Src").stat().access)
+        assert (adfs.root / "Dst").stat().access == Access.R | Access.L
+
+    def test_directory_access(self):
+        adfs = ADFS.create(ADFS_S)
+        (adfs.root / "Dir").mkdir()
+        (adfs.root / "Dir").chmod(Access.L)
+        assert (adfs.root / "Dir").stat().access == Access.L
+
+
 class TestLockUnlockWithChmod:
 
     def test_lock_is_shorthand_for_adding_L(self):

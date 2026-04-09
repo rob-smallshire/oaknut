@@ -272,6 +272,20 @@ class ADFSStat:
     public_execute: bool
     is_directory: bool
 
+    @property
+    def access(self) -> Access:
+        """Access flags as an ``Access`` IntFlag, suitable for ``chmod()``."""
+        flags = Access(0)
+        if self.owner_read:
+            flags |= Access.R
+        if self.owner_write:
+            flags |= Access.W
+        if self.locked:
+            flags |= Access.L
+        if self.owner_execute:
+            flags |= Access.E
+        return flags
+
 
 def _entry_to_stat(entry: _ADFSDirectoryEntry) -> ADFSStat:
     """Convert an internal directory entry to a public ADFSStat."""
