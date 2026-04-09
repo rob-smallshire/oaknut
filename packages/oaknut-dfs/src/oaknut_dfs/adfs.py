@@ -525,6 +525,50 @@ class ADFSPath:
             raise ADFSPathError("Cannot mkdir root directory")
         self._adfs._mkdir(self._path.split("."))
 
+    def rename(self, target: Union[str, ADFSPath]) -> ADFSPath:
+        """Rename this file or directory, returning the new path.
+
+        Args:
+            target: New path (ADFSPath or string like ``"$.NewName"``).
+
+        Returns:
+            ADFSPath for the new location.
+
+        Raises:
+            ADFSPathError: If this path doesn't exist, or target already exists.
+        """
+        if self._path == "$":
+            raise ADFSPathError("Cannot rename root directory")
+
+        if isinstance(target, ADFSPath):
+            target_path = target._path
+        else:
+            target_path = target
+
+        target_parts = target_path.split(".")
+        self._adfs._rename(self._path.split("."), target_parts)
+        return ADFSPath(self._adfs, target_path)
+
+    def lock(self) -> None:
+        """Lock this file.
+
+        Raises:
+            ADFSPathError: If the path is root or doesn't exist.
+        """
+        if self._path == "$":
+            raise ADFSPathError("Cannot lock root directory")
+        self._adfs._set_locked(self._path.split("."), True)
+
+    def unlock(self) -> None:
+        """Unlock this file.
+
+        Raises:
+            ADFSPathError: If the path is root or doesn't exist.
+        """
+        if self._path == "$":
+            raise ADFSPathError("Cannot unlock root directory")
+        self._adfs._set_locked(self._path.split("."), False)
+
     # --- Host filesystem transfer ---
 
     def export_file(self, target_filepath: Union[str, PathLike], *,
@@ -1520,6 +1564,100 @@ class ADFS:
             sequence_number=new_seq,
         )
         self._write_directory_at(updated_parent, parent_disc_address)
+
+    def _rename(self, old_parts: list[str], new_parts: list[str]) -> None:
+        """Rename a file or directory within its parent directory.
+
+        Currently only supports renaming within the same directory
+        (changing the leaf name).
+        """
+        old_name = old_parts[-1]
+        new_name = new_parts[-1]
+
+        parent_dir, parent_disc_address = self._resolve_parent(old_parts)
+
+        existing = parent_dir.find(old_name)
+        if existing is None:
+            raise ADFSPathError(f"'{old_name}' not found")
+
+        # Check target doesn't already exist
+        if parent_dir.find(new_name) is not None:
+            raise ADFSPathError(f"'{new_name}' already exists")
+
+        # Build renamed entry
+        renamed = _ADFSDirectoryEntry(
+            name=new_name,
+            load_address=existing.load_address,
+            exec_address=existing.exec_address,
+            length=existing.length,
+            indirect_disc_address=existing.indirect_disc_address,
+            sequence_number=existing.sequence_number,
+            attributes=existing.attributes,
+        )
+
+        new_entries = tuple(
+            renamed if e.name.upper() == old_name.upper() else e
+            for e in parent_dir.entries
+        )
+        new_seq = (parent_dir.sequence_number + 1) & 0xFF
+
+        updated_dir = _ADFSDirectory(
+            name=parent_dir.name,
+            title=parent_dir.title,
+            parent_address=parent_dir.parent_address,
+            disc_address=parent_dir.disc_address,
+            entries=new_entries,
+            sequence_number=new_seq,
+        )
+        self._write_directory_at(updated_dir, parent_disc_address)
+
+    def _set_locked(self, path_parts: list[str], locked: bool) -> None:
+        """Set or clear the locked attribute on a file."""
+        filename = path_parts[-1]
+        parent_dir, parent_disc_address = self._resolve_parent(path_parts)
+
+        existing = parent_dir.find(filename)
+        if existing is None:
+            raise ADFSPathError(f"'{filename}' not found")
+
+        # Build entry with updated locked flag
+        updated_attrs = _ADFSRawAttributes(
+            owner_read=existing.attributes.owner_read,
+            owner_write=existing.attributes.owner_write,
+            locked=locked,
+            directory=existing.attributes.directory,
+            owner_execute=existing.attributes.owner_execute,
+            public_read=existing.attributes.public_read,
+            public_write=existing.attributes.public_write,
+            public_execute=existing.attributes.public_execute,
+            private=existing.attributes.private,
+        )
+
+        updated_entry = _ADFSDirectoryEntry(
+            name=existing.name,
+            load_address=existing.load_address,
+            exec_address=existing.exec_address,
+            length=existing.length,
+            indirect_disc_address=existing.indirect_disc_address,
+            sequence_number=existing.sequence_number,
+            attributes=updated_attrs,
+        )
+
+        new_entries = tuple(
+            updated_entry if e.name.upper() == filename.upper() else e
+            for e in parent_dir.entries
+        )
+        new_seq = (parent_dir.sequence_number + 1) & 0xFF
+
+        updated_dir = _ADFSDirectory(
+            name=parent_dir.name,
+            title=parent_dir.title,
+            parent_address=parent_dir.parent_address,
+            disc_address=parent_dir.disc_address,
+            entries=new_entries,
+            sequence_number=new_seq,
+        )
+        self._write_directory_at(updated_dir, parent_disc_address)
 
 
 def _detect_directory_format(unified: UnifiedDisc) -> ADFSDirectoryFormat:
