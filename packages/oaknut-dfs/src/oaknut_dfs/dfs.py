@@ -6,6 +6,7 @@ import mmap
 from contextlib import contextmanager
 from dataclasses import dataclass
 from os import PathLike
+from pathlib import Path
 from typing import Iterator, Union
 
 from oaknut_dfs.catalogue import FileEntry
@@ -218,6 +219,31 @@ class DFSPath:
             raise ValueError(f"Cannot write to directory: '{self._path}'")
         self._dfs.save(self._path, data, load_address, exec_address, locked)
 
+    def write_text(
+        self,
+        text: str,
+        *,
+        encoding: str = "acorn",
+        load_address: int = 0,
+        exec_address: int = 0,
+        locked: bool = False,
+    ) -> None:
+        """Write text contents using the specified encoding.
+
+        Args:
+            text: Text to write.
+            encoding: Text encoding (default ``"acorn"``).
+            load_address: Load address (default 0).
+            exec_address: Execution address (default 0).
+            locked: Whether to lock the file (default False).
+        """
+        self.write_bytes(
+            text.encode(encoding),
+            load_address=load_address,
+            exec_address=exec_address,
+            locked=locked,
+        )
+
     # --- Modification ---
 
     def rename(self, target: Union[str, DFSPath]) -> DFSPath:
@@ -249,16 +275,77 @@ class DFSPath:
         """Unlock file (*ACCESS -L)."""
         self._dfs.unlock(self._path)
 
-    # --- Export ---
+    # --- Host filesystem transfer ---
 
-    def export(
+    def export_file(
         self,
         target_filepath: Union[str, PathLike],
         *,
         preserve_metadata: bool = True,
     ) -> None:
         """Export file to host filesystem with optional .inf metadata."""
-        self._dfs.export_file(self._path, str(target_filepath), preserve_metadata)
+        target = Path(target_filepath)
+        entry = self._find_entry()
+        data = self.read_bytes()
+        target.write_bytes(data)
+
+        if preserve_metadata:
+            inf_filepath = target.with_suffix(target.suffix + ".inf")
+            locked_str = " Locked" if entry.locked else ""
+            inf_filepath.write_text(
+                f"{entry.path} "
+                f"{entry.load_address:08X} "
+                f"{entry.exec_address:08X} "
+                f"{entry.length:08X}"
+                f"{locked_str}\n"
+            )
+
+    def import_file(
+        self,
+        source_filepath: Union[str, PathLike],
+        *,
+        inf_filepath: Union[str, PathLike, None] = None,
+    ) -> None:
+        """Import a file from the host filesystem.
+
+        The DFS filename is taken from this path. Metadata (load/exec
+        addresses, locked flag) is read from an .inf sidecar file if
+        one exists alongside the source file.
+
+        Args:
+            source_filepath: Path to the source file on the host.
+            inf_filepath: Explicit path to .inf file. If None, looks
+                for ``<source_filepath>.inf`` automatically.
+        """
+        source = Path(source_filepath)
+        data = source.read_bytes()
+
+        if inf_filepath is not None:
+            inf = Path(inf_filepath)
+        else:
+            inf = source.with_suffix(source.suffix + ".inf")
+
+        load_address = 0
+        exec_address = 0
+        locked = False
+
+        if inf.exists():
+            inf_text = inf.read_text().strip()
+            parts = inf_text.split()
+            # parts[0] is the original filename (ignored — we use the DFSPath)
+            if len(parts) > 1:
+                load_address = int(parts[1], 16)
+            if len(parts) > 2:
+                exec_address = int(parts[2], 16)
+            # Length at parts[3] is ignored — derived from the data
+            locked = "Locked" in inf_text
+
+        self.write_bytes(
+            data,
+            load_address=load_address,
+            exec_address=exec_address,
+            locked=locked,
+        )
 
     # --- Protocols ---
 
