@@ -198,6 +198,11 @@ class OldFreeSpaceMap:
         """Boot option (0–3)."""
         return self._data[_OLD_BOOT_OFFSET]
 
+    def set_boot_option(self, value: int) -> None:
+        """Set boot option and recalculate checksums."""
+        self._data[_OLD_BOOT_OFFSET] = value & 0xFF
+        self._recalculate_checksums()
+
     # --- Mutation ---
 
     def allocate(self, num_sectors: int) -> int:

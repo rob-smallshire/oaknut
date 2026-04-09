@@ -32,6 +32,7 @@ from oaknut_dfs.adfs_free_space_map import OldFreeSpaceMap
 from oaknut_dfs.exceptions import (
     ADFSDirectoryFullError,
     ADFSError,
+    ADFSFileLockedError,
     ADFSPathError,
 )
 from oaknut_dfs.surface import DiscImage, SurfaceSpec
@@ -500,6 +501,29 @@ class ADFSPath:
             exec_address=exec_address,
             locked=locked,
         )
+
+    def unlink(self) -> None:
+        """Delete this file.
+
+        Raises:
+            ADFSPathError: If the path is root, doesn't exist, or is a directory.
+            ADFSFileLockedError: If the file is locked.
+        """
+        if self._path == "$":
+            raise ADFSPathError("Cannot unlink root directory")
+        self._adfs._unlink_file(self._path.split("."))
+
+    def mkdir(self) -> None:
+        """Create a new directory at this path.
+
+        Raises:
+            ADFSPathError: If the path is root, already exists, or parent not found.
+            ADFSDiscFullError: If the disc has insufficient free space.
+            ADFSDirectoryFullError: If the parent directory is full.
+        """
+        if self._path == "$":
+            raise ADFSPathError("Cannot mkdir root directory")
+        self._adfs._mkdir(self._path.split("."))
 
     # --- Export ---
 
@@ -1100,10 +1124,31 @@ class ADFS:
         root = self._read_root_directory()
         return root.title
 
+    @title.setter
+    def title(self, value: str) -> None:
+        """Set disc title by rewriting the root directory."""
+        root = self._read_root_directory()
+        updated = _ADFSDirectory(
+            name=root.name,
+            title=value,
+            parent_address=root.parent_address,
+            disc_address=root.disc_address,
+            entries=root.entries,
+            sequence_number=root.sequence_number,
+        )
+        self._write_directory_at(updated, _OLD_MAP_ROOT_SECTOR)
+
     @property
     def boot_option(self) -> int:
         """Boot option (0–3)."""
         return self._fsm.boot_option
+
+    @boot_option.setter
+    def boot_option(self, value: int) -> None:
+        """Set boot option (0–3)."""
+        if not 0 <= value <= 3:
+            raise ValueError(f"Boot option must be 0–3, got {value}")
+        self._fsm.set_boot_option(value)
 
     @property
     def free_space(self) -> int:
@@ -1217,26 +1262,7 @@ class ADFS:
         and its old sectors are freed.
         """
         filename = path_parts[-1]
-        # Navigate to the parent directory
-        parent_parts = path_parts[:-1]
-
-        if len(parent_parts) == 1:
-            # Parent is root
-            parent_dir = self._read_root_directory()
-            parent_disc_address = _OLD_MAP_ROOT_SECTOR
-        else:
-            # Navigate to the intermediate directory
-            current_dir = self._read_root_directory()
-            parent_disc_address = _OLD_MAP_ROOT_SECTOR
-            for component in parent_parts[1:]:
-                entry = current_dir.find(component)
-                if entry is None:
-                    raise ADFSPathError(f"Directory not found: {component!r}")
-                if not entry.is_directory:
-                    raise ADFSPathError(f"Not a directory: {component!r}")
-                parent_disc_address = entry.indirect_disc_address
-                current_dir = self._read_directory_at(parent_disc_address)
-            parent_dir = current_dir
+        parent_dir, parent_disc_address = self._resolve_parent(path_parts)
 
         # Check for existing file and free its sectors
         existing = parent_dir.find(filename)
@@ -1317,6 +1343,139 @@ class ADFS:
         )
 
         self._write_directory_at(updated_dir, parent_disc_address)
+
+    def _resolve_parent(
+        self, path_parts: list[str],
+    ) -> tuple[_ADFSDirectory, int]:
+        """Navigate to the parent directory of a path.
+
+        Args:
+            path_parts: Path components, e.g. ["$", "Games", "Elite"].
+
+        Returns:
+            (parent_directory, parent_disc_address) tuple.
+        """
+        parent_parts = path_parts[:-1]
+        if len(parent_parts) == 1:
+            return self._read_root_directory(), _OLD_MAP_ROOT_SECTOR
+
+        current_dir = self._read_root_directory()
+        parent_disc_address = _OLD_MAP_ROOT_SECTOR
+        for component in parent_parts[1:]:
+            entry = current_dir.find(component)
+            if entry is None:
+                raise ADFSPathError(f"Directory not found: {component!r}")
+            if not entry.is_directory:
+                raise ADFSPathError(f"Not a directory: {component!r}")
+            parent_disc_address = entry.indirect_disc_address
+            current_dir = self._read_directory_at(parent_disc_address)
+        return current_dir, parent_disc_address
+
+    def _unlink_file(self, path_parts: list[str]) -> None:
+        """Delete a file from the disc image."""
+        filename = path_parts[-1]
+        parent_dir, parent_disc_address = self._resolve_parent(path_parts)
+
+        existing = parent_dir.find(filename)
+        if existing is None:
+            raise ADFSPathError(f"'{filename}' not found")
+        if existing.is_directory:
+            raise ADFSPathError(
+                f"'{filename}' is a directory, use rmdir"
+            )
+        if existing.attributes.locked:
+            raise ADFSFileLockedError(f"'{filename}' is locked")
+
+        # Free sectors
+        num_sectors = (
+            (existing.length + _ADFS_BYTES_PER_SECTOR - 1)
+            // _ADFS_BYTES_PER_SECTOR
+        )
+        if num_sectors > 0:
+            self._fsm.free(existing.start_sector, num_sectors)
+
+        # Remove entry from directory
+        new_entries = tuple(
+            e for e in parent_dir.entries
+            if e.name.upper() != filename.upper()
+        )
+        new_seq = (parent_dir.sequence_number + 1) & 0xFF
+
+        updated_dir = _ADFSDirectory(
+            name=parent_dir.name,
+            title=parent_dir.title,
+            parent_address=parent_dir.parent_address,
+            disc_address=parent_dir.disc_address,
+            entries=new_entries,
+            sequence_number=new_seq,
+        )
+        self._write_directory_at(updated_dir, parent_disc_address)
+
+    def _mkdir(self, path_parts: list[str]) -> None:
+        """Create a new directory on the disc image."""
+        dirname = path_parts[-1]
+        parent_dir, parent_disc_address = self._resolve_parent(path_parts)
+
+        # Check for name collision
+        existing = parent_dir.find(dirname)
+        if existing is not None:
+            raise ADFSPathError(f"'{dirname}' already exists")
+
+        # Check directory capacity
+        if len(parent_dir.entries) >= self._dir_format.max_entries:
+            raise ADFSDirectoryFullError(
+                f"Directory full: maximum {self._dir_format.max_entries} entries"
+            )
+
+        # Allocate sectors for the new directory
+        dir_sectors = self._dir_format.size_in_sectors
+        start_sector = self._fsm.allocate(dir_sectors)
+
+        # Initialise the new directory block on disc
+        dir_data = self._disc.sector_range(start_sector, dir_sectors)
+        new_directory = _ADFSDirectory(
+            name=dirname,
+            title=dirname,
+            parent_address=parent_disc_address,
+            disc_address=start_sector,
+            entries=(),
+            sequence_number=0,
+        )
+        self._dir_format.serialize(new_directory, dir_data)
+
+        # Add directory entry to parent
+        new_entry = _ADFSDirectoryEntry(
+            name=dirname,
+            load_address=0,
+            exec_address=0,
+            length=self._dir_format.size_in_bytes,
+            indirect_disc_address=start_sector,
+            sequence_number=0,
+            attributes=_ADFSRawAttributes(
+                owner_read=True,
+                owner_write=True,
+                locked=False,
+                directory=True,
+                owner_execute=False,
+                public_read=True,
+                public_write=False,
+                public_execute=False,
+                private=False,
+            ),
+        )
+
+        new_entries = parent_dir.entries + (new_entry,)
+        new_seq = (parent_dir.sequence_number + 1) & 0xFF
+
+        updated_parent = _ADFSDirectory(
+            name=parent_dir.name,
+            title=parent_dir.title,
+            parent_address=parent_dir.parent_address,
+            disc_address=parent_dir.disc_address,
+            entries=new_entries,
+            sequence_number=new_seq,
+        )
+        self._write_directory_at(updated_parent, parent_disc_address)
 
 
 def _detect_directory_format(unified: UnifiedDisc) -> ADFSDirectoryFormat:
