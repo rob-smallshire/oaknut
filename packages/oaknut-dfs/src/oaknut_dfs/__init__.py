@@ -19,7 +19,7 @@ from oaknut_dfs.adfs import (
 )
 from oaknut_dfs.boot_option import BootOption
 from oaknut_dfs.exceptions import FSError
-from oaknut_dfs.catalogue import DiskInfo, FileInfo
+from oaknut_dfs.catalogue import DiskInfo
 from oaknut_dfs.dfs import DFS, DFSPath, DFSStat
 from oaknut_dfs.formats import (
     ACORN_DFS_40T_DOUBLE_SIDED_INTERLEAVED,
@@ -56,7 +56,6 @@ __all__ = [
     "ACORN_DFS_80T_DOUBLE_SIDED_INTERLEAVED",
     "ACORN_DFS_80T_DOUBLE_SIDED_SEQUENTIAL",
     "BootOption",
-    "FileInfo",
     "DiskInfo",
     "FSError",
 ]

@@ -42,21 +42,6 @@ class DiskInfo:
 
 
 @dataclass(frozen=True)
-class FileInfo:
-    """User-facing file information."""
-
-    name: str  # Full name like "$.HELLO"
-    directory: str
-    filename: str
-    locked: bool
-    load_address: int
-    exec_address: int
-    length: int
-    start_sector: int
-    sectors: int  # Number of sectors occupied
-
-
-@dataclass(frozen=True)
 class ParsedFilename:
     """Validated and parsed filename components."""
 
