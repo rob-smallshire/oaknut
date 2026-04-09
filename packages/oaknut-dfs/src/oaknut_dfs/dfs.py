@@ -100,7 +100,7 @@ class DFSPath:
                 f.directory == self._path.upper()
                 for f in self._dfs.files
             )
-        return self._dfs.exists(self._path)
+        return self._dfs._catalogued_surface.find_file(self._path) is not None
 
     def is_dir(self) -> bool:
         """Check whether this path is a directory."""
@@ -112,7 +112,7 @@ class DFSPath:
         """Check whether this path is a file (not a directory)."""
         if not self._path or self._is_directory_path():
             return False
-        return self._dfs.exists(self._path)
+        return self._dfs._catalogued_surface.find_file(self._path) is not None
 
     def stat(self) -> DFSStat:
         """Return metadata for this path.
@@ -200,7 +200,7 @@ class DFSPath:
         """
         if not self._path or self._is_directory_path():
             raise ValueError(f"Cannot read directory as file: '{self._path}'")
-        return self._dfs.load(self._path)
+        return self._dfs._catalogued_surface.read_file(self._path)
 
     def write_bytes(
         self,
@@ -217,7 +217,10 @@ class DFSPath:
         """
         if not self._path or self._is_directory_path():
             raise ValueError(f"Cannot write to directory: '{self._path}'")
-        self._dfs.save(self._path, data, load_address, exec_address, locked)
+        parsed = self._dfs._catalogued_surface.catalogue.parse_filename(self._path)
+        self._dfs._catalogued_surface.write_file(
+            parsed.filename, parsed.directory, data, load_address, exec_address, locked
+        )
 
     def write_text(
         self,
@@ -253,7 +256,7 @@ class DFSPath:
             FileNotFoundError: If this file doesn't exist.
         """
         target_path = target._path if isinstance(target, DFSPath) else target
-        self._dfs.rename(self._path, target_path)
+        self._dfs._catalogued_surface.catalogue.rename_file(self._path, target_path)
         return DFSPath(self._dfs, target_path)
 
     def unlink(self) -> None:
@@ -265,15 +268,15 @@ class DFSPath:
         """
         if not self._path or self._is_directory_path():
             raise ValueError(f"Cannot unlink directory: '{self._path}'")
-        self._dfs.delete(self._path)
+        self._dfs._catalogued_surface.delete_file(self._path)
 
     def lock(self) -> None:
         """Lock file (*ACCESS +L)."""
-        self._dfs.lock(self._path)
+        self._dfs._catalogued_surface.catalogue.lock_file(self._path)
 
     def unlock(self) -> None:
         """Unlock file (*ACCESS -L)."""
-        self._dfs.unlock(self._path)
+        self._dfs._catalogued_surface.catalogue.unlock_file(self._path)
 
     # --- Host filesystem transfer ---
 
@@ -446,11 +449,11 @@ class DFS:
             # Read-only access
             with DFS.from_file("Zalaga.ssd", ACORN_DFS_80T_SINGLE_SIDED) as dfs:
                 print(dfs.title)
-                data = dfs.load("$.ZALAGA")
+                data = (dfs.root / "$" / "ZALAGA").read_bytes()
 
             # Read-write access
             with DFS.from_file("disc.ssd", ACORN_DFS_40T_SINGLE_SIDED, mode="r+b") as dfs:
-                dfs.save("$.HELLO", b"Hello!")
+                (dfs.root / "$" / "HELLO").write_bytes(b"Hello!")
         """
         if mode not in ("rb", "r+b"):
             raise ValueError(f"mode must be 'rb' or 'r+b', got {mode!r}")
@@ -639,163 +642,7 @@ class DFS:
         """
         return DFSPath(self, path)
 
-    # File operations
-    def load(self, filename: str) -> bytes:
-        """
-        Load file data (*LOAD).
-
-        Args:
-            filename: File to load (e.g., "$.HELLO" or "HELLO")
-
-        Returns:
-            File contents
-
-        Raises:
-            FileNotFoundError: If file doesn't exist
-        """
-        return self._catalogued_surface.read_file(filename)
-
-    def save(
-        self,
-        filename: str,
-        data: bytes,
-        load_address: int = 0,
-        exec_address: int = 0,
-        locked: bool = False,
-    ) -> None:
-        """
-        Save file (*SAVE).
-
-        Args:
-            filename: Filename (e.g., "$.HELLO" or "HELLO")
-            data: File contents
-            load_address: Load address (default 0)
-            exec_address: Execution address (default 0)
-            locked: Whether to lock the file (default False)
-
-        Raises:
-            ValueError: If filename invalid or disk full
-        """
-        parsed = self._catalogued_surface.catalogue.parse_filename(filename)
-        self._catalogued_surface.write_file(
-            parsed.filename, parsed.directory, data, load_address, exec_address, locked
-        )
-
-    def save_text(
-        self, filename: str, text: str, encoding: str = "utf-8", **kwargs
-    ) -> None:
-        """
-        Save text string to file.
-
-        Args:
-            filename: Filename
-            text: Text content
-            encoding: Text encoding (default utf-8)
-            **kwargs: Additional arguments for save() (load_address, exec_address, locked)
-
-        Raises:
-            ValueError: If filename invalid or disk full
-        """
-        data = text.encode(encoding)
-        self.save(filename, data, **kwargs)
-
-    def save_from_file(self, filename: str, source_filepath: str, **kwargs) -> None:
-        """
-        Save file from host filesystem.
-
-        Args:
-            filename: DFS filename
-            source_filepath: Path to source file on host
-            **kwargs: Additional arguments for save() (load_address, exec_address, locked)
-
-        Raises:
-            FileNotFoundError: If source file doesn't exist
-            ValueError: If filename invalid or disk full
-        """
-        from pathlib import Path
-
-        data = Path(source_filepath).read_bytes()
-        self.save(filename, data, **kwargs)
-
-    def delete(self, filename: str) -> None:
-        """
-        Delete file (*DELETE).
-
-        Args:
-            filename: File to delete
-
-        Raises:
-            FileNotFoundError: If file doesn't exist
-            PermissionError: If file is locked
-        """
-        self._catalogued_surface.delete_file(filename)
-
-    def rename(self, old_name: str, new_name: str) -> None:
-        """
-        Rename file (*RENAME).
-
-        Args:
-            old_name: Current filename
-            new_name: New filename
-
-        Raises:
-            FileNotFoundError: If old file doesn't exist
-            ValueError: If new filename invalid
-        """
-        self._catalogued_surface.catalogue.rename_file(old_name, new_name)
-
-    def lock(self, filename: str) -> None:
-        """
-        Lock file (*ACCESS +L).
-
-        Args:
-            filename: File to lock
-
-        Raises:
-            FileNotFoundError: If file doesn't exist
-        """
-        self._catalogued_surface.catalogue.lock_file(filename)
-
-    def unlock(self, filename: str) -> None:
-        """
-        Unlock file (*ACCESS -L).
-
-        Args:
-            filename: File to unlock
-
-        Raises:
-            FileNotFoundError: If file doesn't exist
-        """
-        self._catalogued_surface.catalogue.unlock_file(filename)
-
-    def copy_file(self, source: str, dest: str) -> None:
-        """
-        Copy file within disk.
-
-        Args:
-            source: Source filename
-            dest: Destination filename
-
-        Raises:
-            FileNotFoundError: If source doesn't exist
-            ValueError: If destination filename invalid or disk full
-        """
-        entry = self._catalogued_surface.find_file(source)
-        if entry is None:
-            raise FileNotFoundError(f"File not found: {source}")
-
-        # Read file data
-        data = self._catalogued_surface.read_file(source)
-
-        # Parse destination using catalogue
-        parsed = self._catalogued_surface.catalogue.parse_filename(dest)
-
-        # Write to new location with same metadata
-        self._catalogued_surface.write_file(
-            parsed.filename, parsed.directory, data, entry.load_address, entry.exec_address, entry.locked
-        )
-
-    # Disk metadata
+    # Disc metadata
     @property
     def title(self) -> str:
         """Get disk title."""
@@ -885,49 +732,6 @@ class DFS:
             "boot_option": disk_info.boot_option,
         }
 
-    def exists(self, filename: str) -> bool:
-        """
-        Check if file exists.
-
-        Args:
-            filename: File to check
-
-        Returns:
-            True if file exists, False otherwise
-        """
-        return self._catalogued_surface.find_file(filename) is not None
-
-    def get_file_info(self, filename: str):
-        """
-        Get detailed file information.
-
-        Args:
-            filename: File to query
-
-        Returns:
-            FileInfo with complete metadata
-
-        Raises:
-            FileNotFoundError: If file doesn't exist
-        """
-        from oaknut_dfs.catalogue import FileInfo
-
-        entry = self._catalogued_surface.find_file(filename)
-        if entry is None:
-            raise FileNotFoundError(f"File not found: {filename}")
-
-        return FileInfo(
-            name=entry.path,
-            directory=entry.directory,
-            filename=entry.filename,
-            locked=entry.locked,
-            load_address=entry.load_address,
-            exec_address=entry.exec_address,
-            length=entry.length,
-            start_sector=entry.start_sector,
-            sectors=entry.sectors_required,
-        )
-
     def validate(self) -> list[str]:
         """
         Validate disk integrity.
@@ -954,46 +758,6 @@ class DFS:
         """
         return self._catalogued_surface.catalogue.compact()
 
-    def export_file(
-        self, filename: str, target_filepath: str, preserve_metadata: bool = True
-    ) -> None:
-        """
-        Export single file to host filesystem with optional .inf metadata file.
-
-        Args:
-            filename: DFS filename to export (e.g., "$.HELLO")
-            target_filepath: Path to export file to
-            preserve_metadata: Create .inf file with DFS metadata (default True)
-
-        Raises:
-            FileNotFoundError: If file doesn't exist on DFS disk
-            OSError: If file cannot be written
-        """
-        from pathlib import Path
-
-        entry = self._catalogued_surface.find_file(filename)
-        if entry is None:
-            raise FileNotFoundError(f"File not found: {filename}")
-
-        # Export file data
-        data = self.load(entry.path)
-        file_path = Path(target_filepath)
-        file_path.parent.mkdir(parents=True, exist_ok=True)
-        file_path.write_bytes(data)
-
-        # Export metadata
-        if preserve_metadata:
-            inf_path = Path(str(target_filepath) + ".inf")
-            locked_str = " Locked" if entry.locked else ""
-            inf_content = (
-                f"$.{entry.filename} "
-                f"{entry.load_address:08X} "
-                f"{entry.exec_address:08X} "
-                f"{entry.length:08X}"
-                f"{locked_str}\n"
-            )
-            inf_path.write_text(inf_content)
-
     def export_all(self, target_dirpath: str, preserve_metadata: bool = True) -> None:
         """
         Export all files to directory with optional .inf metadata files.
@@ -1011,8 +775,7 @@ class DFS:
         target.mkdir(parents=True, exist_ok=True)
 
         for entry in self.files:
-            # Export file data
-            data = self.load(entry.path)
+            data = self._catalogued_surface.read_file(entry.path)
             file_path = target / f"{entry.directory}.{entry.filename}"
             file_path.write_bytes(data)
 
@@ -1029,46 +792,10 @@ class DFS:
                 )
                 inf_path.write_text(inf_content)
 
-    def import_from_inf(self, data_filepath: str, inf_filepath: str = None) -> None:
-        """
-        Import file with metadata from .inf file.
-
-        Args:
-            data_filepath: Path to data file
-            inf_filepath: Path to .inf file (defaults to data_filepath + '.inf')
-
-        Raises:
-            FileNotFoundError: If data file doesn't exist
-            OSError: If files cannot be read
-        """
-        from pathlib import Path
-
-        data_file = Path(data_filepath)
-        inf_file = Path(inf_filepath) if inf_filepath else Path(str(data_filepath) + ".inf")
-
-        # Read data
-        data = data_file.read_bytes()
-
-        # Parse .inf if it exists
-        if inf_file.exists():
-            inf_line = inf_file.read_text().strip()
-            parts = inf_line.split()
-            filename = parts[0]
-            load_addr = int(parts[1], 16) if len(parts) > 1 else 0
-            exec_addr = int(parts[2], 16) if len(parts) > 2 else 0
-            locked = "Locked" in inf_line
-        else:
-            filename = f"$.{data_file.stem}"
-            load_addr = 0
-            exec_addr = 0
-            locked = False
-
-        self.save(filename, data, load_addr, exec_addr, locked)
-
     # Pythonic protocols
     def __contains__(self, filename: str) -> bool:
         """Support 'in' operator for file existence."""
-        return self.exists(filename)
+        return self._catalogued_surface.find_file(filename) is not None
 
     def __iter__(self):
         """Iterate over files."""
