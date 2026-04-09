@@ -565,8 +565,22 @@ class ADFSPath:
             raise ADFSPathError("Cannot mkdir root directory")
         self._adfs._mkdir(self._path.split("."))
 
+    def rmdir(self) -> None:
+        """Remove an empty directory.
+
+        Raises:
+            ADFSPathError: If the path is root, doesn't exist, is not a
+                directory, or is not empty.
+            ADFSFileLockedError: If the directory is locked.
+        """
+        if self._path == "$":
+            raise ADFSPathError("Cannot rmdir root directory")
+        self._adfs._rmdir(self._path.split("."))
+
     def rename(self, target: Union[str, ADFSPath]) -> ADFSPath:
         """Rename this file or directory, returning the new path.
+
+        Moving across directories is supported.
 
         Args:
             target: New path (ADFSPath or string like ``"$.NewName"``).
@@ -1743,39 +1757,32 @@ class ADFS:
         )
         self._write_directory_at(updated_parent, parent_disc_address)
 
-    def _rename(self, old_parts: list[str], new_parts: list[str]) -> None:
-        """Rename a file or directory within its parent directory.
+    def _rmdir(self, path_parts: list[str]) -> None:
+        """Remove an empty directory from the disc image."""
+        dirname = path_parts[-1]
+        parent_dir, parent_disc_address = self._resolve_parent(path_parts)
 
-        Currently only supports renaming within the same directory
-        (changing the leaf name).
-        """
-        old_name = old_parts[-1]
-        new_name = new_parts[-1]
-
-        parent_dir, parent_disc_address = self._resolve_parent(old_parts)
-
-        existing = parent_dir.find(old_name)
+        existing = parent_dir.find(dirname)
         if existing is None:
-            raise ADFSPathError(f"'{old_name}' not found")
+            raise ADFSPathError(f"'{dirname}' not found")
+        if not existing.is_directory:
+            raise ADFSPathError(f"'{dirname}' is not a directory")
+        if existing.attributes.locked:
+            raise ADFSFileLockedError(f"'{dirname}' is locked")
 
-        # Check target doesn't already exist
-        if parent_dir.find(new_name) is not None:
-            raise ADFSPathError(f"'{new_name}' already exists")
+        # Check the directory is empty
+        subdir = self._read_directory_at(existing.indirect_disc_address)
+        if subdir.entries:
+            raise ADFSPathError(f"'{dirname}' is not empty")
 
-        # Build renamed entry
-        renamed = _ADFSDirectoryEntry(
-            name=new_name,
-            load_address=existing.load_address,
-            exec_address=existing.exec_address,
-            length=existing.length,
-            indirect_disc_address=existing.indirect_disc_address,
-            sequence_number=existing.sequence_number,
-            attributes=existing.attributes,
-        )
+        # Free the directory's sectors
+        dir_sectors = self._dir_format.size_in_sectors
+        self._fsm.free(existing.indirect_disc_address, dir_sectors)
 
+        # Remove entry from parent
         new_entries = tuple(
-            renamed if e.name.upper() == old_name.upper() else e
-            for e in parent_dir.entries
+            e for e in parent_dir.entries
+            if e.name.upper() != dirname.upper()
         )
         new_seq = (parent_dir.sequence_number + 1) & 0xFF
 
@@ -1788,6 +1795,90 @@ class ADFS:
             sequence_number=new_seq,
         )
         self._write_directory_at(updated_dir, parent_disc_address)
+
+    def _rename(self, old_parts: list[str], new_parts: list[str]) -> None:
+        """Rename or move a file or directory.
+
+        Supports both same-directory renames and cross-directory moves.
+        No data is copied — only directory entries are updated.
+        """
+        old_name = old_parts[-1]
+        new_name = new_parts[-1]
+
+        src_dir, src_disc_address = self._resolve_parent(old_parts)
+        dst_dir, dst_disc_address = self._resolve_parent(new_parts)
+
+        existing = src_dir.find(old_name)
+        if existing is None:
+            raise ADFSPathError(f"'{old_name}' not found")
+
+        # Check target doesn't already exist
+        if dst_dir.find(new_name) is not None:
+            raise ADFSPathError(f"'{new_name}' already exists")
+
+        # Build the entry with the new name
+        renamed = _ADFSDirectoryEntry(
+            name=new_name,
+            load_address=existing.load_address,
+            exec_address=existing.exec_address,
+            length=existing.length,
+            indirect_disc_address=existing.indirect_disc_address,
+            sequence_number=existing.sequence_number,
+            attributes=existing.attributes,
+        )
+
+        if src_disc_address == dst_disc_address:
+            # Same directory — replace in place
+            new_entries = tuple(
+                renamed if e.name.upper() == old_name.upper() else e
+                for e in src_dir.entries
+            )
+            new_seq = (src_dir.sequence_number + 1) & 0xFF
+            updated = _ADFSDirectory(
+                name=src_dir.name,
+                title=src_dir.title,
+                parent_address=src_dir.parent_address,
+                disc_address=src_dir.disc_address,
+                entries=new_entries,
+                sequence_number=new_seq,
+            )
+            self._write_directory_at(updated, src_disc_address)
+        else:
+            # Cross-directory move: check capacity, remove from source, add to destination
+            if len(dst_dir.entries) >= self._dir_format.max_entries:
+                raise ADFSDirectoryFullError(
+                    f"Destination directory full: maximum {self._dir_format.max_entries} entries"
+                )
+
+            # Remove from source
+            src_entries = tuple(
+                e for e in src_dir.entries
+                if e.name.upper() != old_name.upper()
+            )
+            src_seq = (src_dir.sequence_number + 1) & 0xFF
+            updated_src = _ADFSDirectory(
+                name=src_dir.name,
+                title=src_dir.title,
+                parent_address=src_dir.parent_address,
+                disc_address=src_dir.disc_address,
+                entries=src_entries,
+                sequence_number=src_seq,
+            )
+            self._write_directory_at(updated_src, src_disc_address)
+
+            # Add to destination (re-read since it may have changed if nested)
+            dst_dir = self._read_directory_at(dst_disc_address)
+            dst_entries = dst_dir.entries + (renamed,)
+            dst_seq = (dst_dir.sequence_number + 1) & 0xFF
+            updated_dst = _ADFSDirectory(
+                name=dst_dir.name,
+                title=dst_dir.title,
+                parent_address=dst_dir.parent_address,
+                disc_address=dst_dir.disc_address,
+                entries=dst_entries,
+                sequence_number=dst_seq,
+            )
+            self._write_directory_at(updated_dst, dst_disc_address)
 
     def _set_locked(self, path_parts: list[str], locked: bool) -> None:
         """Set or clear the locked attribute on a file."""
