@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.backends._legacy:_Backend"
+
+[project]
+name = "oaknut-file"
+version = "0.1.0"
+authors = [{ name = "Robert Smallshire", email = "robert@smallshire.org.uk" }]
+description = "Acorn file metadata handling: INF sidecars, filename encoding, xattrs, and access flags"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: System :: Filesystems",
+]
+dependencies = []
+
+[project.optional-dependencies]
+xattr = ["xattr>=1.0; sys_platform == 'darwin'"]
+dev = ["pytest>=8.0"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
