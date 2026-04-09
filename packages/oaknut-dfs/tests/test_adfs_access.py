@@ -10,10 +10,10 @@ from oaknut_dfs.exceptions import ADFSPathError
 class TestAccessEnum:
 
     def test_individual_flags(self):
-        assert Access.R.value == 1
-        assert Access.W.value == 2
-        assert Access.L.value == 4
-        assert Access.E.value == 8
+        assert Access.R.value == 0x01
+        assert Access.W.value == 0x02
+        assert Access.E.value == 0x04
+        assert Access.L.value == 0x08
 
     def test_combination(self):
         rw = Access.R | Access.W
@@ -31,6 +31,35 @@ class TestAccessEnum:
         assert Access.W not in empty
         assert Access.L not in empty
         assert Access.E not in empty
+
+
+class TestAccessOsfileCompatibility:
+    """Verify bit values match the Acorn OSFILE API convention."""
+
+    def test_owner_read_is_bit_0(self):
+        assert Access.R == 0x01
+
+    def test_owner_write_is_bit_1(self):
+        assert Access.W == 0x02
+
+    def test_execute_only_is_bit_2(self):
+        assert Access.E == 0x04
+
+    def test_locked_is_bit_3(self):
+        assert Access.L == 0x08
+
+    def test_wr_matches_pieb_default_owner_bits(self):
+        """WR (0x03) matches the owner bits of PiEconetBridge's default perm."""
+        assert int(Access.R | Access.W) == 0x03
+
+    def test_integer_round_trip(self):
+        """Access flags can be constructed from an integer attribute byte."""
+        attr_byte = 0x0B  # R | W | L
+        flags = Access(attr_byte)
+        assert Access.R in flags
+        assert Access.W in flags
+        assert Access.L in flags
+        assert Access.E not in flags
 
 
 class TestChmod:
