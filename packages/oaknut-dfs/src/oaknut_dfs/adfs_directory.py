@@ -96,6 +96,16 @@ class ADFSDirectoryFormat(ABC):
         """
         ...
 
+    @abstractmethod
+    def serialize(self, directory: _ADFSDirectory, data: SectorsView) -> None:
+        """Serialize a directory to its on-disc representation.
+
+        Args:
+            directory: The directory structure to serialize.
+            data: SectorsView to write into (must be at least size_in_bytes).
+        """
+        ...
+
     @property
     @abstractmethod
     def size_in_bytes(self) -> int:
@@ -197,6 +207,13 @@ def _read_24bit_le(data: SectorsView | bytes, offset: int) -> int:
     return data[offset] | (data[offset + 1] << 8) | (data[offset + 2] << 16)
 
 
+def _write_24bit_le(data: SectorsView, offset: int, value: int) -> None:
+    """Write a 24-bit little-endian value."""
+    data[offset] = value & 0xFF
+    data[offset + 1] = (value >> 8) & 0xFF
+    data[offset + 2] = (value >> 16) & 0xFF
+
+
 def _parse_old_entry(data: SectorsView, entry_offset: int) -> _ADFSDirectoryEntry | None:
     """Parse a single old-format directory entry.
 
@@ -233,6 +250,50 @@ def _parse_old_entry(data: SectorsView, entry_offset: int) -> _ADFSDirectoryEntr
         sequence_number=sequence_number,
         attributes=attributes,
     )
+
+
+def _serialize_old_entry(
+    entry: _ADFSDirectoryEntry,
+    data: SectorsView,
+    entry_offset: int,
+) -> None:
+    """Serialize a single old-format directory entry at the given offset."""
+    # Encode name (up to 10 chars, CR-padded)
+    name_bytes = entry.name.encode("ascii")[:10].ljust(10, b"\r")
+
+    # Set attribute bits in top bit of each name character
+    attr_bits = [
+        entry.attributes.owner_read,
+        entry.attributes.owner_write,
+        entry.attributes.locked,
+        entry.attributes.directory,
+        entry.attributes.owner_execute,
+        entry.attributes.public_read,
+        entry.attributes.public_write,
+        entry.attributes.public_execute,
+        entry.attributes.private,
+        False,  # char 9 unused
+    ]
+    for i in range(10):
+        data[entry_offset + i] = name_bytes[i] | (0x80 if attr_bits[i] else 0x00)
+
+    # Load address (32-bit LE)
+    for i in range(4):
+        data[entry_offset + 0x0A + i] = (entry.load_address >> (i * 8)) & 0xFF
+
+    # Exec address (32-bit LE)
+    for i in range(4):
+        data[entry_offset + 0x0E + i] = (entry.exec_address >> (i * 8)) & 0xFF
+
+    # Length (32-bit LE)
+    for i in range(4):
+        data[entry_offset + 0x12 + i] = (entry.length >> (i * 8)) & 0xFF
+
+    # Indirect disc address (24-bit LE)
+    _write_24bit_le(data, entry_offset + 0x16, entry.indirect_disc_address)
+
+    # Sequence number
+    data[entry_offset + 0x19] = entry.sequence_number & 0xFF
 
 
 class OldDirectoryFormat(ADFSDirectoryFormat):
@@ -321,3 +382,60 @@ class OldDirectoryFormat(ADFSDirectoryFormat):
             entries=tuple(entries),
             sequence_number=start_mas_seq,
         )
+
+    def serialize(self, directory: _ADFSDirectory, data: SectorsView) -> None:
+        """Serialize an old-format directory to sector data.
+
+        Writes the complete 1280-byte directory block into *data*,
+        including header, entries, and tail.
+        """
+        if len(data) < _OLD_DIR_SIZE:
+            raise ADFSDirectoryError(
+                f"Output data too short: {len(data)} bytes, need {_OLD_DIR_SIZE}"
+            )
+        if len(directory.entries) > _OLD_DIR_MAX_ENTRIES:
+            raise ADFSDirectoryError(
+                f"Too many entries: {len(directory.entries)}, "
+                f"maximum is {_OLD_DIR_MAX_ENTRIES}"
+            )
+
+        # Clear the buffer
+        for i in range(_OLD_DIR_SIZE):
+            data[i] = 0
+
+        # Header
+        data[0x00] = directory.sequence_number & 0xFF
+        data[0x01:0x05] = _HUGO
+
+        # Entries
+        for i, entry in enumerate(directory.entries):
+            offset = _OLD_DIR_ENTRIES_OFFSET + i * _OLD_DIR_ENTRY_SIZE
+            _serialize_old_entry(entry, data, offset)
+
+        # End-of-entries marker (already zero from clearing)
+
+        # Tail
+        tail = _OLD_DIR_TAIL_OFFSET
+        data[tail + _OLD_TAIL_LAST_MARK] = 0x00
+
+        # Directory name (10 bytes, CR-padded)
+        dir_name_bytes = directory.name.encode("ascii")[:10].ljust(10, b"\r")
+        for i, b in enumerate(dir_name_bytes):
+            data[tail + _OLD_TAIL_DIR_NAME + i] = b
+
+        # Parent address (3 bytes LE)
+        _write_24bit_le(data, tail + _OLD_TAIL_PARENT, directory.parent_address)
+
+        # Title (19 bytes, CR-padded)
+        title_bytes = directory.title.encode("ascii")[:19].ljust(19, b"\r")
+        for i, b in enumerate(title_bytes):
+            data[tail + _OLD_TAIL_TITLE + i] = b
+
+        # Reserved (14 bytes) — already zero
+
+        # EndMasSeq
+        data[tail + _OLD_TAIL_END_MAS_SEQ] = directory.sequence_number & 0xFF
+        # EndName
+        data[tail + _OLD_TAIL_END_NAME:tail + _OLD_TAIL_END_NAME + 4] = _HUGO
+        # DirCheckByte: reserved, must be zero
+        data[tail + _OLD_TAIL_CHECK_BYTE] = 0x00
