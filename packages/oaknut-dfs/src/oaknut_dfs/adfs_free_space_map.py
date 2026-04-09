@@ -34,6 +34,13 @@ def _read_24bit_le(data: SectorsView, offset: int) -> int:
     return data[offset] | (data[offset + 1] << 8) | (data[offset + 2] << 16)
 
 
+def _write_24bit_le(data: SectorsView, offset: int, value: int) -> None:
+    """Write a 24-bit little-endian value."""
+    data[offset] = value & 0xFF
+    data[offset + 1] = (value >> 8) & 0xFF
+    data[offset + 2] = (value >> 16) & 0xFF
+
+
 def _calculate_old_map_checksum(data: SectorsView, start: int) -> int:
     """Calculate the old map checksum for a 256-byte block.
 
@@ -190,3 +197,152 @@ class OldFreeSpaceMap:
     def boot_option(self) -> int:
         """Boot option (0–3)."""
         return self._data[_OLD_BOOT_OFFSET]
+
+    # --- Mutation ---
+
+    def allocate(self, num_sectors: int) -> int:
+        """Allocate contiguous sectors using first-fit.
+
+        Args:
+            num_sectors: Number of sectors to allocate.
+
+        Returns:
+            Start sector of the allocated region.
+
+        Raises:
+            ValueError: If num_sectors is not positive.
+            ADFSMapError: If no free region is large enough.
+        """
+        if num_sectors <= 0:
+            raise ValueError(f"num_sectors must be positive, got {num_sectors}")
+
+        n = self.num_entries
+        for i in range(n):
+            offset = i * _BYTES_PER_ENTRY
+            start = _read_24bit_le(self._data, _FREE_START_OFFSET + offset)
+            length = _read_24bit_le(self._data, _FREE_LEN_OFFSET + offset)
+
+            if length >= num_sectors:
+                if length == num_sectors:
+                    # Exact fit — remove this entry by shifting subsequent ones down
+                    self._remove_entry(i, n)
+                else:
+                    # Partial fit — shrink this entry
+                    new_start = start + num_sectors
+                    new_length = length - num_sectors
+                    _write_24bit_le(self._data, _FREE_START_OFFSET + offset, new_start)
+                    _write_24bit_le(self._data, _FREE_LEN_OFFSET + offset, new_length)
+
+                self._recalculate_checksums()
+                return start
+
+        raise ADFSMapError(
+            f"No free space region large enough for {num_sectors} sectors"
+        )
+
+    def free(self, start_sector: int, num_sectors: int) -> None:
+        """Release sectors back to the free space map.
+
+        Merges with adjacent free entries where possible.
+
+        Args:
+            start_sector: First sector to free.
+            num_sectors: Number of sectors to free.
+
+        Raises:
+            ValueError: If num_sectors is not positive.
+        """
+        if num_sectors <= 0:
+            raise ValueError(f"num_sectors must be positive, got {num_sectors}")
+
+        end_sector = start_sector + num_sectors
+        n = self.num_entries
+
+        # Find entries that are adjacent to the freed region
+        merge_before = None  # Index of entry ending at start_sector
+        merge_after = None   # Index of entry starting at end_sector
+
+        for i in range(n):
+            offset = i * _BYTES_PER_ENTRY
+            entry_start = _read_24bit_le(self._data, _FREE_START_OFFSET + offset)
+            entry_length = _read_24bit_le(self._data, _FREE_LEN_OFFSET + offset)
+            entry_end = entry_start + entry_length
+
+            if entry_end == start_sector:
+                merge_before = i
+            if entry_start == end_sector:
+                merge_after = i
+
+        if merge_before is not None and merge_after is not None:
+            # Merge all three: extend the before-entry to cover the after-entry too
+            before_offset = merge_before * _BYTES_PER_ENTRY
+            after_offset = merge_after * _BYTES_PER_ENTRY
+            before_start = _read_24bit_le(self._data, _FREE_START_OFFSET + before_offset)
+            before_length = _read_24bit_le(self._data, _FREE_LEN_OFFSET + before_offset)
+            after_length = _read_24bit_le(self._data, _FREE_LEN_OFFSET + after_offset)
+            new_length = before_length + num_sectors + after_length
+            _write_24bit_le(self._data, _FREE_LEN_OFFSET + before_offset, new_length)
+            # Remove the after-entry
+            self._remove_entry(merge_after, n)
+        elif merge_before is not None:
+            # Extend the before-entry
+            before_offset = merge_before * _BYTES_PER_ENTRY
+            before_length = _read_24bit_le(self._data, _FREE_LEN_OFFSET + before_offset)
+            _write_24bit_le(self._data, _FREE_LEN_OFFSET + before_offset, before_length + num_sectors)
+        elif merge_after is not None:
+            # Extend the after-entry backward
+            after_offset = merge_after * _BYTES_PER_ENTRY
+            after_length = _read_24bit_le(self._data, _FREE_LEN_OFFSET + after_offset)
+            _write_24bit_le(self._data, _FREE_START_OFFSET + after_offset, start_sector)
+            _write_24bit_le(self._data, _FREE_LEN_OFFSET + after_offset, after_length + num_sectors)
+        else:
+            # Insert a new entry in sorted order
+            insert_at = 0
+            for i in range(n):
+                offset = i * _BYTES_PER_ENTRY
+                entry_start = _read_24bit_le(self._data, _FREE_START_OFFSET + offset)
+                if entry_start > start_sector:
+                    break
+                insert_at = i + 1
+            self._insert_entry(insert_at, n, start_sector, num_sectors)
+
+        self._recalculate_checksums()
+
+    def _remove_entry(self, index: int, num_entries: int) -> None:
+        """Remove free space entry at index, shifting subsequent entries down."""
+        for i in range(index, num_entries - 1):
+            src = (i + 1) * _BYTES_PER_ENTRY
+            dst = i * _BYTES_PER_ENTRY
+            for b in range(_BYTES_PER_ENTRY):
+                self._data[_FREE_START_OFFSET + dst + b] = self._data[_FREE_START_OFFSET + src + b]
+                self._data[_FREE_LEN_OFFSET + dst + b] = self._data[_FREE_LEN_OFFSET + src + b]
+        # Clear the last slot
+        last = (num_entries - 1) * _BYTES_PER_ENTRY
+        for b in range(_BYTES_PER_ENTRY):
+            self._data[_FREE_START_OFFSET + last + b] = 0
+            self._data[_FREE_LEN_OFFSET + last + b] = 0
+        # Decrement FreeEnd
+        self._data[_FREE_END_OFFSET] = (num_entries - 1) * _BYTES_PER_ENTRY
+
+    def _insert_entry(self, index: int, num_entries: int, start: int, length: int) -> None:
+        """Insert a new free space entry at index, shifting subsequent entries up."""
+        # Shift entries up
+        for i in range(num_entries - 1, index - 1, -1):
+            src = i * _BYTES_PER_ENTRY
+            dst = (i + 1) * _BYTES_PER_ENTRY
+            for b in range(_BYTES_PER_ENTRY):
+                self._data[_FREE_START_OFFSET + dst + b] = self._data[_FREE_START_OFFSET + src + b]
+                self._data[_FREE_LEN_OFFSET + dst + b] = self._data[_FREE_LEN_OFFSET + src + b]
+        # Write new entry
+        offset = index * _BYTES_PER_ENTRY
+        _write_24bit_le(self._data, _FREE_START_OFFSET + offset, start)
+        _write_24bit_le(self._data, _FREE_LEN_OFFSET + offset, length)
+        # Increment FreeEnd
+        self._data[_FREE_END_OFFSET] = (num_entries + 1) * _BYTES_PER_ENTRY
+
+    def _recalculate_checksums(self) -> None:
+        """Recalculate and write both sector checksums."""
+        self._data[_CHECK_0_OFFSET] = 0
+        self._data[_CHECK_1_OFFSET] = 0
+        self._data[_CHECK_0_OFFSET] = _calculate_old_map_checksum(self._data, 0x000)
+        self._data[_CHECK_1_OFFSET] = _calculate_old_map_checksum(self._data, 0x100)
