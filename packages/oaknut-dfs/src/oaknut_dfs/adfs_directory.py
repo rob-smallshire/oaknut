@@ -18,7 +18,7 @@ from oaknut_dfs.sectors_view import SectorsView
 
 
 class Access(IntFlag):
-    """ADFS file access attributes.
+    """Acorn file access attributes.
 
     Bit values match the Acorn OSFILE/filing system API convention,
     ensuring compatibility with PiEconetBridge ``perm`` and the
@@ -27,12 +27,18 @@ class Access(IntFlag):
     Composable with ``|``::
 
         Access.R | Access.W | Access.L
+        Access.R | Access.W | Access.PR  # with public read
+
+    The integer value of a combination is the standard Acorn
+    attribute byte, suitable for storage in xattrs or INF files.
     """
 
-    R = 0x01  # Owner read
-    W = 0x02  # Owner write
-    E = 0x04  # Execute only
-    L = 0x08  # Locked (prevents delete, overwrite, rename)
+    R  = 0x01  # Owner read
+    W  = 0x02  # Owner write
+    E  = 0x04  # Execute only
+    L  = 0x08  # Locked (prevents delete, overwrite, rename)
+    PR = 0x10  # Public read
+    PW = 0x20  # Public write
 
 
 # --- Internal data types ---

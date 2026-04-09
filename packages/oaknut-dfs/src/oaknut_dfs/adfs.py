@@ -280,10 +280,14 @@ class ADFSStat:
             flags |= Access.R
         if self.owner_write:
             flags |= Access.W
-        if self.locked:
-            flags |= Access.L
         if self.owner_execute:
             flags |= Access.E
+        if self.locked:
+            flags |= Access.L
+        if self.public_read:
+            flags |= Access.PR
+        if self.public_write:
+            flags |= Access.PW
         return flags
 
 
@@ -1973,16 +1977,16 @@ class ADFS:
         if existing is None:
             raise ADFSPathError(f"'{filename}' not found")
 
-        # Replace owner R, W, L, E from the Access flags;
-        # preserve D, public, and private bits from the existing entry
+        # Replace R, W, E, L, PR, PW from the Access flags;
+        # preserve D, public_execute, and private from the existing entry
         updated_attrs = _ADFSRawAttributes(
             owner_read=bool(access & Access.R),
             owner_write=bool(access & Access.W),
             locked=bool(access & Access.L),
             directory=existing.attributes.directory,
             owner_execute=bool(access & Access.E),
-            public_read=existing.attributes.public_read,
-            public_write=existing.attributes.public_write,
+            public_read=bool(access & Access.PR),
+            public_write=bool(access & Access.PW),
             public_execute=existing.attributes.public_execute,
             private=existing.attributes.private,
         )

@@ -48,9 +48,25 @@ class TestAccessOsfileCompatibility:
     def test_locked_is_bit_3(self):
         assert Access.L == 0x08
 
+    def test_public_read_is_bit_4(self):
+        assert Access.PR == 0x10
+
+    def test_public_write_is_bit_5(self):
+        assert Access.PW == 0x20
+
     def test_wr_matches_pieb_default_owner_bits(self):
         """WR (0x03) matches the owner bits of PiEconetBridge's default perm."""
         assert int(Access.R | Access.W) == 0x03
+
+    def test_pieb_default_perm(self):
+        """PiEconetBridge default perm 0x17 = PR | E | W | R."""
+        flags = Access(0x17)
+        assert Access.R in flags
+        assert Access.W in flags
+        assert Access.E in flags
+        assert Access.L not in flags
+        assert Access.PR in flags
+        assert Access.PW not in flags
 
     def test_integer_round_trip(self):
         """Access flags can be constructed from an integer attribute byte."""
@@ -60,6 +76,17 @@ class TestAccessOsfileCompatibility:
         assert Access.W in flags
         assert Access.L in flags
         assert Access.E not in flags
+
+    def test_full_byte_round_trip(self):
+        """Full attribute byte with public bits."""
+        attr_byte = 0x33  # R | W | PR | PW
+        flags = Access(attr_byte)
+        assert Access.R in flags
+        assert Access.W in flags
+        assert Access.PR in flags
+        assert Access.PW in flags
+        assert Access.L not in flags
+        assert int(flags) == 0x33
 
 
 class TestChmod:
@@ -153,15 +180,23 @@ class TestChmod:
         (adfs.root / "File").chmod(Access.R | Access.W | Access.L)
         assert adfs.validate() == []
 
-    def test_chmod_preserves_public_bits(self):
-        """chmod should not disturb the public/private NFS attributes."""
+    def test_chmod_sets_public_bits(self):
+        """chmod sets public read/write via PR and PW flags."""
         adfs = ADFS.create(ADFS_S)
         (adfs.root / "File").write_bytes(b"data")
-        # Default attributes include public_read=True
-        stat_before = (adfs.root / "File").stat()
-        (adfs.root / "File").chmod(Access.R | Access.L)
-        stat_after = (adfs.root / "File").stat()
-        assert stat_after.public_read == stat_before.public_read
+        (adfs.root / "File").chmod(Access.R | Access.W | Access.PR)
+        stat = (adfs.root / "File").stat()
+        assert stat.public_read is True
+        assert stat.public_write is False
+
+    def test_chmod_clears_public_bits(self):
+        """chmod without PR/PW clears those bits."""
+        adfs = ADFS.create(ADFS_S)
+        (adfs.root / "File").write_bytes(b"data")
+        # Default has public_read=True
+        assert (adfs.root / "File").stat().public_read is True
+        (adfs.root / "File").chmod(Access.R | Access.W)
+        assert (adfs.root / "File").stat().public_read is False
 
     def test_default_file_attributes(self):
         """New files get WR by default (per ADFS User Guide)."""
@@ -180,13 +215,13 @@ class TestStatAccess:
         adfs = ADFS.create(ADFS_S)
         (adfs.root / "File").write_bytes(b"data")
         stat = (adfs.root / "File").stat()
-        assert stat.access == Access.R | Access.W
+        assert stat.access == Access.R | Access.W | Access.PR
 
     def test_locked_file_access(self):
         adfs = ADFS.create(ADFS_S)
         (adfs.root / "File").write_bytes(b"data", locked=True)
         stat = (adfs.root / "File").stat()
-        assert stat.access == Access.R | Access.W | Access.L
+        assert stat.access == Access.R | Access.W | Access.L | Access.PR
 
     def test_read_only_access(self):
         adfs = ADFS.create(ADFS_S)
