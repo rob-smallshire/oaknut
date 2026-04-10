@@ -12,6 +12,7 @@ from typing import Iterator, Union
 
 from oaknut_file import Access, AcornMeta, MetaFormat
 
+from oaknut_dfs import basic
 from oaknut_dfs.catalogue import FileEntry
 from oaknut_dfs.catalogued_surface import CataloguedSurface
 from oaknut_dfs.formats import DiskFormat
@@ -241,6 +242,55 @@ class DFSPath:
         parsed = self._dfs._catalogued_surface.catalogue.parse_filename(self._path)
         self._dfs._catalogued_surface.write_file(
             parsed.filename, parsed.directory, data, load_address, exec_address, locked
+        )
+
+    def read_basic(self) -> str:
+        """Read a BBC BASIC program and return its detokenised source.
+
+        Composes :meth:`read_bytes` with
+        :func:`oaknut_dfs.basic.detokenise`. Never compose a BASIC
+        program with :meth:`read_text` — tokenised BASIC is bytecode,
+        not text, and decoding it through a character codec will
+        produce garbage.
+
+        Raises:
+            ValueError: If this path is a directory.
+            FileNotFoundError: If the file does not exist.
+            NotImplementedError: Until the detokeniser is implemented.
+        """
+        return basic.detokenise(self.read_bytes())
+
+    def write_basic(
+        self,
+        source: str,
+        *,
+        load_address: int = basic.BBC_BASIC_LOAD_ADDRESS,
+        exec_address: int = 0,
+        locked: bool = False,
+    ) -> None:
+        """Write a BBC BASIC program, tokenising the source first.
+
+        Composes :func:`oaknut_dfs.basic.tokenise` with
+        :meth:`write_bytes`. Defaults the load address to the BBC
+        Micro's canonical ``0x1900``; pass
+        :data:`oaknut_dfs.basic.ELECTRON_BASIC_LOAD_ADDRESS` for
+        Electron programs.
+
+        Args:
+            source: BBC BASIC source text.
+            load_address: Load address (default ``0x1900``).
+            exec_address: Execution address (default 0).
+            locked: Whether to lock the file (default False).
+
+        Raises:
+            ValueError: If this path is a directory or filename is invalid.
+            NotImplementedError: Until the tokeniser is implemented.
+        """
+        self.write_bytes(
+            basic.tokenise(source),
+            load_address=load_address,
+            exec_address=exec_address,
+            locked=locked,
         )
 
     def write_text(

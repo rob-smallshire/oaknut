@@ -2,7 +2,8 @@
 
 import pytest
 
-from oaknut_dfs.dfs import DFS, DFSPath
+from oaknut_dfs import basic
+from oaknut_dfs.dfs import DFS
 from oaknut_dfs.formats import ACORN_DFS_40T_SINGLE_SIDED
 
 
@@ -54,6 +55,84 @@ class TestReadText:
         dfs = _make_empty_dfs()
         (dfs.root / "$" / "UTF").write_bytes("Héllo".encode("utf-8"))
         assert (dfs.root / "$" / "UTF").read_text(encoding="utf-8") == "Héllo"
+
+
+class TestWriteBasic:
+
+    def test_write_basic_propagates_not_implemented(self):
+        dfs = _make_empty_dfs()
+        with pytest.raises(NotImplementedError):
+            (dfs.root / "$" / "PROG").write_basic("10 PRINT")
+
+    def test_write_basic_composes_tokenise_then_write_bytes(self, monkeypatch):
+        monkeypatch.setattr(basic, "tokenise", lambda src: b"\x0d\xff\x0d")
+        dfs = _make_empty_dfs()
+        (dfs.root / "$" / "PROG").write_basic("10 PRINT")
+        assert (dfs.root / "$" / "PROG").read_bytes() == b"\x0d\xff\x0d"
+
+    def test_write_basic_forwards_source_to_tokenise(self, monkeypatch):
+        captured = []
+
+        def stub(source):
+            captured.append(source)
+            return b"\x00"
+
+        monkeypatch.setattr(basic, "tokenise", stub)
+        dfs = _make_empty_dfs()
+        (dfs.root / "$" / "PROG").write_basic('10 PRINT "Hello"')
+        assert captured == ['10 PRINT "Hello"']
+
+    def test_write_basic_default_load_address_is_bbc(self, monkeypatch):
+        monkeypatch.setattr(basic, "tokenise", lambda src: b"\x00")
+        dfs = _make_empty_dfs()
+        (dfs.root / "$" / "PROG").write_basic("10 PRINT")
+        assert (dfs.root / "$" / "PROG").stat().load_address == 0x1900
+
+    def test_write_basic_explicit_electron_load_address(self, monkeypatch):
+        monkeypatch.setattr(basic, "tokenise", lambda src: b"\x00")
+        dfs = _make_empty_dfs()
+        (dfs.root / "$" / "PROG").write_basic(
+            "10 PRINT", load_address=basic.ELECTRON_BASIC_LOAD_ADDRESS,
+        )
+        assert (dfs.root / "$" / "PROG").stat().load_address == 0x0E00
+
+    def test_write_basic_forwards_exec_and_locked(self, monkeypatch):
+        monkeypatch.setattr(basic, "tokenise", lambda src: b"\x00")
+        dfs = _make_empty_dfs()
+        (dfs.root / "$" / "PROG").write_basic(
+            "10 PRINT", exec_address=0x8023, locked=True,
+        )
+        stat = (dfs.root / "$" / "PROG").stat()
+        assert stat.exec_address == 0x8023
+        assert stat.locked is True
+
+
+class TestReadBasic:
+
+    def test_read_basic_propagates_not_implemented(self):
+        dfs = _make_empty_dfs()
+        (dfs.root / "$" / "PROG").write_bytes(b"\x0d\xff")
+        with pytest.raises(NotImplementedError):
+            (dfs.root / "$" / "PROG").read_basic()
+
+    def test_read_basic_composes_read_bytes_then_detokenise(self, monkeypatch):
+        monkeypatch.setattr(basic, "detokenise", lambda data: "10 PRINT")
+        dfs = _make_empty_dfs()
+        (dfs.root / "$" / "PROG").write_bytes(b"\x0d\xff")
+        assert (dfs.root / "$" / "PROG").read_basic() == "10 PRINT"
+
+    def test_read_basic_forwards_bytes_to_detokenise(self, monkeypatch):
+        captured = []
+
+        def stub(data):
+            captured.append(bytes(data))
+            return ""
+
+        monkeypatch.setattr(basic, "detokenise", stub)
+        dfs = _make_empty_dfs()
+        (dfs.root / "$" / "PROG").write_bytes(b"\x0d\xff\x12\x34")
+        (dfs.root / "$" / "PROG").read_basic()
+        assert captured == [b"\x0d\xff\x12\x34"]
 
 
 class TestExportFile:
