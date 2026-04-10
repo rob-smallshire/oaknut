@@ -5,7 +5,7 @@ parsing/formatting, filename encoding schemes, extended attributes,
 and access flag management.
 """
 
-__version__ = "0.1.2"
+__version__ = "0.1.3"
 
 from oaknut_file.access import Access, format_access_hex, format_access_text
 from oaknut_file.meta import AcornMeta
