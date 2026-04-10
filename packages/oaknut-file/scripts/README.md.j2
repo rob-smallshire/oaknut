@@ -19,15 +19,19 @@ Acorn file metadata handling for the oaknut package family.
 
 ## Installation
 
+Using [uv](https://docs.astral.sh/uv/) (recommended):
+
 ```bash
-pip install oaknut-file
+uv add oaknut-file
 ```
 
 For extended attribute support on macOS:
 
 ```bash
-pip install "oaknut-file[xattr]"
+uv add "oaknut-file[xattr]"
 ```
+
+`pip install oaknut-file` and `pip install "oaknut-file[xattr]"` also work.
 
 ## Quick start
 
