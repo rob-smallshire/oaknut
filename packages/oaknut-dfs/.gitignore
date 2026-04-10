@@ -61,3 +61,6 @@ dmypy.json
 
 .idea
 .claude/
+
+# Library package — lockfile is for applications only
+uv.lock
