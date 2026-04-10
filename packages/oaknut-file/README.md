@@ -25,13 +25,12 @@ Using [uv](https://docs.astral.sh/uv/) (recommended):
 uv add oaknut-file
 ```
 
-For extended attribute support on macOS:
+`pip install oaknut-file` also works.
 
-```bash
-uv add "oaknut-file[xattr]"
-```
-
-`pip install oaknut-file` and `pip install "oaknut-file[xattr]"` also work.
+The `xattr` package is automatically installed on macOS, where it is
+required for extended attribute support. Linux uses `os.setxattr` from
+the standard library and needs no additional dependency. Windows does
+not support extended attributes; the xattr functions will raise on use.
 
 ## Quick start
 

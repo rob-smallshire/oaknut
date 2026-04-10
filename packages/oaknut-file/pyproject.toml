@@ -20,21 +20,19 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
     "Topic :: System :: Filesystems",
 ]
-dependencies = []
+dependencies = [
+    "xattr>=1.0; sys_platform == 'darwin'",
+]
 
 [project.urls]
 Homepage = "https://github.com/rob-smallshire/oaknut-file"
 Repository = "https://github.com/rob-smallshire/oaknut-file"
 Issues = "https://github.com/rob-smallshire/oaknut-file/issues"
 
-[project.optional-dependencies]
-xattr = ["xattr>=1.0; sys_platform == 'darwin'"]
-
 [dependency-groups]
 test = [
     "pytest>=8.0",
     "jinja2>=3.0",
-    "xattr>=1.0; sys_platform == 'darwin'",
 ]
 dev = [
     "bump-my-version>=0.28.0",
