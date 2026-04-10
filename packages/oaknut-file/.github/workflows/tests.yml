@@ -20,7 +20,7 @@ jobs:
       - uses: astral-sh/setup-uv@v5
 
       - name: Run tests
-        run: uv run --python 3.13 --extra dev python -m pytest tests/ -v
+        run: uv run --python 3.13 --group test python -m pytest tests/ -v
 
   readme-check:
     runs-on: macos-latest
@@ -30,4 +30,4 @@ jobs:
       - uses: astral-sh/setup-uv@v5
 
       - name: Check README is up-to-date
-        run: uv run --extra dev python scripts/generate_readme.py --check
+        run: uv run --group test python scripts/generate_readme.py --check

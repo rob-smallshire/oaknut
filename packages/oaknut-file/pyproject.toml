@@ -23,12 +23,17 @@ dependencies = []
 
 [project.optional-dependencies]
 xattr = ["xattr>=1.0; sys_platform == 'darwin'"]
-dev = [
+
+[dependency-groups]
+test = [
     "pytest>=8.0",
     "jinja2>=3.0",
+    "xattr>=1.0; sys_platform == 'darwin'",
+]
+dev = [
     "bump-my-version>=0.28.0",
     "pre-commit>=3.0",
-    "xattr>=1.0; sys_platform == 'darwin'",
+    {include-group = "test"},
 ]
 
 [tool.setuptools.dynamic]
@@ -52,3 +57,7 @@ files = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.uv]
+index-url = "https://pypi.org/simple/"
+publish-url = "https://upload.pypi.org/legacy/"

@@ -342,6 +342,11 @@ name = "oaknut-file"
 source = { editable = "." }
 
 [package.optional-dependencies]
+xattr = [
+    { name = "xattr", marker = "sys_platform == 'darwin'" },
+]
+
+[package.dev-dependencies]
 dev = [
     { name = "bump-my-version" },
     { name = "jinja2" },
@@ -349,20 +354,29 @@ dev = [
     { name = "pytest" },
     { name = "xattr", marker = "sys_platform == 'darwin'" },
 ]
-xattr = [
+test = [
+    { name = "jinja2" },
+    { name = "pytest" },
     { name = "xattr", marker = "sys_platform == 'darwin'" },
 ]
 
 [package.metadata]
-requires-dist = [
-    { name = "bump-my-version", marker = "extra == 'dev'", specifier = ">=0.28.0" },
-    { name = "jinja2", marker = "extra == 'dev'", specifier = ">=3.0" },
-    { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=3.0" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
-    { name = "xattr", marker = "sys_platform == 'darwin' and extra == 'dev'", specifier = ">=1.0" },
-    { name = "xattr", marker = "sys_platform == 'darwin' and extra == 'xattr'", specifier = ">=1.0" },
+requires-dist = [{ name = "xattr", marker = "sys_platform == 'darwin' and extra == 'xattr'", specifier = ">=1.0" }]
+provides-extras = ["xattr"]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "bump-my-version", specifier = ">=0.28.0" },
+    { name = "jinja2", specifier = ">=3.0" },
+    { name = "pre-commit", specifier = ">=3.0" },
+    { name = "pytest", specifier = ">=8.0" },
+    { name = "xattr", marker = "sys_platform == 'darwin'", specifier = ">=1.0" },
 ]
-provides-extras = ["xattr", "dev"]
+test = [
+    { name = "jinja2", specifier = ">=3.0" },
+    { name = "pytest", specifier = ">=8.0" },
+    { name = "xattr", marker = "sys_platform == 'darwin'", specifier = ">=1.0" },
+]
 
 [[package]]
 name = "packaging"

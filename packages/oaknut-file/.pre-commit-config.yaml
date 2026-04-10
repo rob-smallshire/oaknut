@@ -3,7 +3,7 @@ repos:
     hooks:
       - id: readme-check
         name: Check README is up-to-date
-        entry: uv run --extra dev python scripts/generate_readme.py --check
+        entry: uv run --group test python scripts/generate_readme.py --check
         language: system
         files: ^(scripts/README\.md\.j2|scripts/generate_readme\.py|src/oaknut_file/)
         pass_filenames: false
