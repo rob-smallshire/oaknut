@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "oaknut-file"
-version = "0.1.0"
+dynamic = ["version"]
 authors = [{ name = "Robert Smallshire", email = "robert@smallshire.org.uk" }]
 description = "Acorn file metadata handling: INF sidecars, filename encoding, xattrs, and access flags"
 readme = "README.md"
@@ -26,11 +26,29 @@ xattr = ["xattr>=1.0; sys_platform == 'darwin'"]
 dev = [
     "pytest>=8.0",
     "jinja2>=3.0",
+    "bump-my-version>=0.28.0",
+    "pre-commit>=3.0",
     "xattr>=1.0; sys_platform == 'darwin'",
 ]
 
+[tool.setuptools.dynamic]
+version = { attr = "oaknut_file.__version__" }
+
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.bumpversion]
+current_version = "0.1.0"
+parse = "(?P<major>\\d+)\\.(?P<minor>\\d+)\\.(?P<patch>\\d+)"
+serialize = ["{major}.{minor}.{patch}"]
+tag = true
+commit = true
+message = "Bump version: {current_version} → {new_version}"
+tag_name = "v{new_version}"
+tag_message = "Bump version: {current_version} → {new_version}"
+files = [
+    { filename = "src/oaknut_file/__init__.py" },
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
