@@ -40,59 +40,50 @@ def parse_inf_line(line: str) -> tuple[str, AcornMeta] | None:
         return None
 
     parts = line.split()
-    if len(parts) < 3:
+    if len(parts) < 4:
         return None
 
-    # Heuristic: if the first field is not hex, or if the fourth
-    # field (when present) is exactly 8 hex digits, it's traditional.
     first_is_hex = _is_hex(parts[0])
 
-    if len(parts) >= 4 and len(parts[3]) == 8 and _is_hex(parts[3]):
-        # Traditional: filename load exec length [attr|L|Locked]
-        load_addr = int(parts[1], 16)
-        exec_addr = int(parts[2], 16)
-        attr = None
+    try:
+        if not first_is_hex:
+            # First field is the filename — must be traditional INF
+            return _parse_trad_inf(parts)
 
-        if len(parts) > 4:
-            token = parts[4]
-            if _is_hex(token) and token not in ("L", "Locked"):
-                attr = int(token, 16)
-            elif token == "L" or token == "Locked":
-                attr = int(Access.R | Access.W | Access.L)
+        # All fields could be hex. Distinguish by field[3] width:
+        # Traditional INF length field is always 8-digit hex; PiEB perm
+        # is short (1-2 digits).
+        if len(parts[3]) == 8 and _is_hex(parts[3]):
+            return _parse_trad_inf(parts)
 
-        return SOURCE_INF_TRAD, AcornMeta(
-            load_addr=load_addr, exec_addr=exec_addr, attr=attr,
-        )
-
-    elif first_is_hex and len(parts) >= 4:
         # PiEconetBridge: owner load exec perm
         load_addr = int(parts[1], 16)
         exec_addr = int(parts[2], 16)
-        attr = int(parts[3], 16) if _is_hex(parts[3]) else None
+        attr = int(parts[3], 16)
+        meta = AcornMeta(load_addr=load_addr, exec_addr=exec_addr, attr=attr)
+        meta.filetype = meta.infer_filetype()
+        return SOURCE_INF_PIEB, meta
+    except (ValueError, IndexError):
+        return None
 
-        return SOURCE_INF_PIEB, AcornMeta(
-            load_addr=load_addr, exec_addr=exec_addr, attr=attr,
-        )
 
-    elif not first_is_hex and len(parts) >= 4:
-        # Traditional with non-standard length field
-        if _is_hex(parts[1]) and _is_hex(parts[2]):
-            load_addr = int(parts[1], 16)
-            exec_addr = int(parts[2], 16)
-            attr = None
+def _parse_trad_inf(parts: list[str]) -> tuple[str, AcornMeta] | None:
+    """Parse a traditional INF line that has already been split."""
+    load_addr = int(parts[1], 16)
+    exec_addr = int(parts[2], 16)
+    # parts[3] is length, informational only
+    attr = None
 
-            if len(parts) > 3:
-                token = parts[3]
-                if token == "L" or token == "Locked":
-                    attr = int(Access.R | Access.W | Access.L)
-                elif _is_hex(token) and len(token) <= 2:
-                    attr = int(token, 16)
+    if len(parts) > 4:
+        token = parts[4]
+        if token == "L" or token == "Locked":
+            attr = int(Access.R | Access.W | Access.L)
+        else:
+            attr = int(token, 16)
 
-            return SOURCE_INF_TRAD, AcornMeta(
-                load_addr=load_addr, exec_addr=exec_addr, attr=attr,
-            )
-
-    return None
+    meta = AcornMeta(load_addr=load_addr, exec_addr=exec_addr, attr=attr)
+    meta.filetype = meta.infer_filetype()
+    return SOURCE_INF_TRAD, meta
 
 
 def format_trad_inf_line(
@@ -123,7 +114,7 @@ def format_pieb_inf_line(
     Returns a string like ``"0 ffffdd00 ffffdd00 17"``.
     """
     perm = attr if attr is not None else 0x17
-    return f"{owner} {load_addr:x} {exec_addr:x} {perm:x}"
+    return f"{owner:x} {load_addr:x} {exec_addr:x} {perm:x}"
 
 
 def read_inf_file(filepath: Path) -> tuple[str, AcornMeta] | None:

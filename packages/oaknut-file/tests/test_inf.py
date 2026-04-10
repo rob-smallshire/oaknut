@@ -104,6 +104,11 @@ class TestFormatPiebInfLine:
         line = format_pieb_inf_line(0x1900, 0x8023, owner=5)
         assert line.startswith("5 ")
 
+    def test_owner_formatted_as_hex(self):
+        """Owner is formatted in lowercase hex, not decimal."""
+        line = format_pieb_inf_line(0x1900, 0x8023, owner=42)
+        assert line.startswith("2a ")  # 42 in hex
+
 
 class TestInfRoundTrip:
 
