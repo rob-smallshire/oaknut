@@ -333,3 +333,52 @@ class TestCodecInterface:
         reader = io.TextIOWrapper(buffer, encoding='acorn')
         result = reader.read()
         assert result == "£100"
+
+
+class TestCodecRegistry:
+    """Exercise the bits of codec registry integration beyond str.encode."""
+
+    def test_codecs_lookup_returns_info(self):
+        import codecs
+        info = codecs.lookup("acorn")
+        assert info.name == "acorn"
+
+    def test_codec_aliases_resolve(self):
+        import codecs
+        assert codecs.lookup("acorn-bbc").name == "acorn"
+        assert codecs.lookup("bbc-micro").name == "acorn"
+
+    def test_incremental_encoder_streams_chunks(self):
+        """The incremental encoder handles chunked input correctly."""
+        import codecs
+        encoder = codecs.getincrementalencoder("acorn")()
+        out = b""
+        out += encoder.encode("COST")
+        out += encoder.encode("£")
+        out += encoder.encode("100", final=True)
+        assert out == b"COST\x60100"
+
+    def test_incremental_decoder_streams_chunks(self):
+        import codecs
+        decoder = codecs.getincrementaldecoder("acorn")()
+        out = ""
+        out += decoder.decode(b"COST")
+        out += decoder.decode(b"\x60")
+        out += decoder.decode(b"100", final=True)
+        assert out == "COST£100"
+
+    def test_incremental_encoder_respects_errors(self):
+        import codecs
+        encoder = codecs.getincrementalencoder("acorn")(errors="replace")
+        assert encoder.encode("A\u0100B") == b"A?B"
+
+    def test_iterencode_and_iterdecode(self):
+        """codecs.iterencode / iterdecode walk the incremental path."""
+        import codecs
+        chunks = iter(["COST", "£", "100"])
+        out = b"".join(codecs.iterencode(chunks, "acorn"))
+        assert out == b"COST\x60100"
+
+        byte_chunks = iter([b"COST", b"\x60", b"100"])
+        text = "".join(codecs.iterdecode(byte_chunks, "acorn"))
+        assert text == "COST£100"

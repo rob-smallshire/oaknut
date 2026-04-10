@@ -96,12 +96,19 @@ class AcornCodec(codecs.Codec):
         return ''.join(output), len(input)
 
 
+# The Acorn codec is byte-for-byte stateless, so a single shared
+# instance backs every registry entry point — the incremental encoder
+# and decoder, the stream reader/writer, and the non-incremental
+# encode/decode callables.
+_SHARED_ACORN_CODEC = AcornCodec()
+
+
 class AcornIncrementalEncoder(codecs.IncrementalEncoder):
     """Incremental encoder for Acorn encoding."""
 
     def encode(self, input: str, final: bool = False) -> bytes:
         """Encode incrementally."""
-        return AcornCodec().encode(input, self.errors)[0]
+        return _SHARED_ACORN_CODEC.encode(input, self.errors)[0]
 
 
 class AcornIncrementalDecoder(codecs.IncrementalDecoder):
@@ -109,7 +116,7 @@ class AcornIncrementalDecoder(codecs.IncrementalDecoder):
 
     def decode(self, input: bytes, final: bool = False) -> str:
         """Decode incrementally."""
-        return AcornCodec().decode(input, self.errors)[0]
+        return _SHARED_ACORN_CODEC.decode(input, self.errors)[0]
 
 
 class AcornStreamWriter(AcornCodec, codecs.StreamWriter):
@@ -128,8 +135,8 @@ def getregentry(name: str = None) -> codecs.CodecInfo:
     """Get codec registry entry."""
     return codecs.CodecInfo(
         name='acorn',
-        encode=AcornCodec().encode,
-        decode=AcornCodec().decode,
+        encode=_SHARED_ACORN_CODEC.encode,
+        decode=_SHARED_ACORN_CODEC.decode,
         incrementalencoder=AcornIncrementalEncoder,
         incrementaldecoder=AcornIncrementalDecoder,
         streamreader=AcornStreamReader,
@@ -138,8 +145,14 @@ def getregentry(name: str = None) -> codecs.CodecInfo:
 
 
 def search_function(encoding: str) -> codecs.CodecInfo | None:
-    """Search function for codec registry."""
-    if encoding.lower() in ('acorn', 'acorn-bbc', 'bbc-micro'):
+    """Search function for codec registry.
+
+    Python normalises encoding names before dispatching to registered
+    search functions: letters are lowercased and any non-alphanumeric
+    character is replaced with ``_``. We therefore match against the
+    normalised forms, not the user-facing names with hyphens.
+    """
+    if encoding.lower() in ('acorn', 'acorn_bbc', 'bbc_micro'):
         return getregentry(encoding)
     return None
 
