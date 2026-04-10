@@ -20,6 +20,7 @@ classifiers = [
 ]
 dependencies = [
     "click>=8.1.7",
+    "oaknut-file",
     "typename>=1.0.4",
 ]
 
@@ -74,6 +75,9 @@ files = [
 [tool.uv]
 index-url = "https://pypi.org/simple/"
 publish-url = "https://upload.pypi.org/legacy/"
+
+[tool.uv.sources]
+oaknut-file = { path = "../oaknut-file", editable = true }
 
 [build-system]
 requires = ["setuptools>=61.0", "wheel"]

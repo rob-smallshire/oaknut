@@ -295,6 +295,7 @@ name = "oaknut-dfs"
 source = { editable = "." }
 dependencies = [
     { name = "click" },
+    { name = "oaknut-file" },
     { name = "typename" },
 ]
 
@@ -313,6 +314,7 @@ test = [
 [package.metadata]
 requires-dist = [
     { name = "click", specifier = ">=8.1.7" },
+    { name = "oaknut-file", editable = "../oaknut-file" },
     { name = "typename", specifier = ">=1.0.4" },
 ]
 
@@ -325,6 +327,19 @@ dev = [
     { name = "ruff", specifier = ">=0.9.1" },
 ]
 test = [{ name = "pytest", specifier = ">=8.3.4" }]
+
+[[package]]
+name = "oaknut-file"
+version = "0.1.0"
+source = { editable = "../oaknut-file" }
+
+[package.metadata]
+requires-dist = [
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
+    { name = "xattr", marker = "sys_platform == 'darwin' and extra == 'dev'", specifier = ">=1.0" },
+    { name = "xattr", marker = "sys_platform == 'darwin' and extra == 'xattr'", specifier = ">=1.0" },
+]
+provides-extras = ["xattr", "dev"]
 
 [[package]]
 name = "packaging"

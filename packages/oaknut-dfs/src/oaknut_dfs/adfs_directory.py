@@ -8,37 +8,14 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from enum import IntFlag
+
+from oaknut_file import Access  # re-exported for backward compatibility
 
 from oaknut_dfs.exceptions import ADFSDirectoryError
 from oaknut_dfs.sectors_view import SectorsView
 
 
-# --- Access flags ---
-
-
-class Access(IntFlag):
-    """Acorn file access attributes.
-
-    Bit values match the Acorn OSFILE/filing system API convention,
-    ensuring compatibility with PiEconetBridge ``perm`` and the
-    ``user.acorn.attr`` extended attribute.
-
-    Composable with ``|``::
-
-        Access.R | Access.W | Access.L
-        Access.R | Access.W | Access.PR  # with public read
-
-    The integer value of a combination is the standard Acorn
-    attribute byte, suitable for storage in xattrs or INF files.
-    """
-
-    R  = 0x01  # Owner read
-    W  = 0x02  # Owner write
-    E  = 0x04  # Execute only
-    L  = 0x08  # Locked (prevents delete, overwrite, rename)
-    PR = 0x10  # Public read
-    PW = 0x20  # Public write
+__all__ = ["Access"]
 
 
 # --- Internal data types ---
