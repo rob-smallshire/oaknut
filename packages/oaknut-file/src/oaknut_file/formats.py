@@ -15,7 +15,8 @@ class MetaFormat(str, Enum):
 
     INF_TRAD = "inf-trad"
     INF_PIEB = "inf-pieb"
-    XATTR = "xattr"
+    XATTR_ACORN = "xattr-acorn"
+    XATTR_PIEB = "xattr-pieb"
     FILENAME_RISCOS = "filename-riscos"
     FILENAME_MOS = "filename-mos"
 

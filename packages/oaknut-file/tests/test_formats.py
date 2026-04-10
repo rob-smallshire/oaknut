@@ -15,9 +15,14 @@ class TestMetaFormat:
     def test_values(self):
         assert MetaFormat.INF_TRAD == "inf-trad"
         assert MetaFormat.INF_PIEB == "inf-pieb"
-        assert MetaFormat.XATTR == "xattr"
+        assert MetaFormat.XATTR_ACORN == "xattr-acorn"
+        assert MetaFormat.XATTR_PIEB == "xattr-pieb"
         assert MetaFormat.FILENAME_RISCOS == "filename-riscos"
         assert MetaFormat.FILENAME_MOS == "filename-mos"
+
+    def test_xattr_variants_are_distinct(self):
+        """The two xattr namespaces are distinct output formats."""
+        assert MetaFormat.XATTR_ACORN != MetaFormat.XATTR_PIEB
 
     def test_is_string(self):
         assert isinstance(MetaFormat.INF_TRAD, str)
