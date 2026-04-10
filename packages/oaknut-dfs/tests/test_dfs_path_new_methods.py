@@ -37,6 +37,25 @@ class TestWriteText:
         assert stat.exec_address == 0x8023
 
 
+class TestReadText:
+
+    def test_read_text_default_acorn_encoding(self):
+        dfs = _make_empty_dfs()
+        (dfs.root / "$" / "TEXT").write_text("Hello")
+        assert (dfs.root / "$" / "TEXT").read_text() == "Hello"
+
+    def test_read_text_pound_sign(self):
+        """The pound sign round-trips via Acorn encoding (0x60)."""
+        dfs = _make_empty_dfs()
+        (dfs.root / "$" / "PRICE").write_text("\u00a3")  # £
+        assert (dfs.root / "$" / "PRICE").read_text() == "\u00a3"
+
+    def test_read_text_explicit_encoding(self):
+        dfs = _make_empty_dfs()
+        (dfs.root / "$" / "UTF").write_bytes("Héllo".encode("utf-8"))
+        assert (dfs.root / "$" / "UTF").read_text(encoding="utf-8") == "Héllo"
+
+
 class TestExportFile:
 
     def test_export_file_writes_data(self, tmp_path):

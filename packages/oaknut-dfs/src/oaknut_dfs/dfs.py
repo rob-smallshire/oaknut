@@ -211,6 +211,18 @@ class DFSPath:
             raise ValueError(f"Cannot read directory as file: '{self._path}'")
         return self._dfs._catalogued_surface.read_file(self._path)
 
+    def read_text(self, *, encoding: str = "acorn") -> str:
+        """Read file contents as text using the specified encoding.
+
+        Args:
+            encoding: Text encoding (default ``"acorn"``).
+
+        Raises:
+            ValueError: If this path is a directory.
+            FileNotFoundError: If the file does not exist.
+        """
+        return self.read_bytes().decode(encoding)
+
     def write_bytes(
         self,
         data: bytes,

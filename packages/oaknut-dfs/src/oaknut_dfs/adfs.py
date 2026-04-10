@@ -513,6 +513,17 @@ class ADFSPath:
             raise ADFSPathError(f"'{self._path}' is a directory, not a file")
         return self._adfs._read_file_data(entry)
 
+    def read_text(self, *, encoding: str = "acorn") -> str:
+        """Read file contents as text using the specified encoding.
+
+        Args:
+            encoding: Text encoding (default ``"acorn"``).
+
+        Raises:
+            ADFSPathError: If the path doesn't exist or is a directory.
+        """
+        return self.read_bytes().decode(encoding)
+
     def write_bytes(
         self,
         data: bytes,

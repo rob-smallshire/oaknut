@@ -158,6 +158,30 @@ class TestWriteText:
         assert (adfs.root / "Utf").read_bytes() == b"Hello"
 
 
+class TestReadText:
+
+    def test_read_text_default_acorn_encoding(self):
+        adfs = ADFS.create(ADFS_S)
+        (adfs.root / "Text").write_text("Hello")
+        assert (adfs.root / "Text").read_text() == "Hello"
+
+    def test_read_text_pound_sign(self):
+        """The pound sign round-trips via Acorn encoding (0x60)."""
+        adfs = ADFS.create(ADFS_S)
+        (adfs.root / "Price").write_text("\u00a3")  # £
+        assert (adfs.root / "Price").read_text() == "\u00a3"
+
+    def test_read_text_explicit_encoding(self):
+        adfs = ADFS.create(ADFS_S)
+        (adfs.root / "Utf").write_bytes("Héllo".encode("utf-8"))
+        assert (adfs.root / "Utf").read_text(encoding="utf-8") == "Héllo"
+
+    def test_read_text_round_trip_utf8(self):
+        adfs = ADFS.create(ADFS_S)
+        (adfs.root / "Utf").write_text("Héllo", encoding="utf-8")
+        assert (adfs.root / "Utf").read_text(encoding="utf-8") == "Héllo"
+
+
 class TestDirectoryFull:
 
     def test_directory_full_raises(self):
