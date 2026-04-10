@@ -25,6 +25,7 @@ dependencies = []
 xattr = ["xattr>=1.0; sys_platform == 'darwin'"]
 dev = [
     "pytest>=8.0",
+    "jinja2>=3.0",
     "xattr>=1.0; sys_platform == 'darwin'",
 ]
 

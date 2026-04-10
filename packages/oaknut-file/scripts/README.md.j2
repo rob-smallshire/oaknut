@@ -41,8 +41,8 @@ from oaknut_file import Access
 
 # Compose flags with bitwise OR
 flags = Access.R | Access.W | Access.L
-print(repr(flags))   # <Access.R|W|L: 11>
-print(hex(flags))    # 0x0B
+print(repr(flags))   # {{ access_example }}
+print(hex(flags))    # {{ access_int }}
 ```
 
 | Flag | Value | Meaning |
@@ -74,7 +74,7 @@ trad = format_trad_inf_line(
     attr=int(Access.R | Access.W),
 )
 print(trad)
-# HELLO       00001900 00008023 00000100 03
+# {{ trad_line }}
 
 # PiEconetBridge INF: owner load exec perm
 pieb = format_pieb_inf_line(
@@ -83,16 +83,16 @@ pieb = format_pieb_inf_line(
     attr=int(Access.R | Access.W | Access.L | Access.PR),
 )
 print(pieb)
-# 0 ffffdd00 ffffdd00 1b
+# {{ pieb_line }}
 
 # Auto-detect format on parse
 source, meta = parse_inf_line(trad)
 print(meta)
-# AcornMeta(load_addr=0x1900, exec_addr=0x8023, attr=0x03)
+# AcornMeta({{ trad_parsed }})
 
 source, meta = parse_inf_line(pieb)
 print(meta)
-# AcornMeta(load_addr=0xFFFFDD00, exec_addr=0xFFFFDD00, attr=0x1B, filetype=0xFDD)
+# AcornMeta({{ pieb_parsed }})
 ```
 
 ### Filename metadata encoding
@@ -106,12 +106,12 @@ from oaknut_file import parse_encoded_filename
 # RISC OS filetype suffix (3 hex digits)
 clean, meta = parse_encoded_filename("PROG,ffb")
 print(clean, meta.infer_filetype())
-# ('PROG', filetype=0xFFB)
+# {{ filename_parsed }}
 
 # MOS load-exec suffix (variable-width hex)
 clean, meta = parse_encoded_filename("PROG,1900-801f")
 print(clean, meta.load_addr, meta.exec_addr)
-# ('PROG', load_addr=0x1900, exec_addr=0x801F)
+# {{ mos_parsed }}
 ```
 
 ### Filetype-stamped load addresses
@@ -124,7 +124,7 @@ from oaknut_file import AcornMeta
 
 meta = AcornMeta(load_addr=0xFFFF0E10)
 print(meta.is_filetype_stamped, hex(meta.infer_filetype()))
-# is_filetype_stamped=True, infer_filetype()=0xF0E
+# {{ filetype_demo }}
 ```
 
 ### Extended attributes
