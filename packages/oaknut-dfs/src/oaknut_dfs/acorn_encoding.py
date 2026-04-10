@@ -145,14 +145,8 @@ def getregentry(name: str = None) -> codecs.CodecInfo:
 
 
 def search_function(encoding: str) -> codecs.CodecInfo | None:
-    """Search function for codec registry.
-
-    Python normalises encoding names before dispatching to registered
-    search functions: letters are lowercased and any non-alphanumeric
-    character is replaced with ``_``. We therefore match against the
-    normalised forms, not the user-facing names with hyphens.
-    """
-    if encoding.lower() in ('acorn', 'acorn_bbc', 'bbc_micro'):
+    """Search function for codec registry."""
+    if encoding.lower() == 'acorn':
         return getregentry(encoding)
     return None
 

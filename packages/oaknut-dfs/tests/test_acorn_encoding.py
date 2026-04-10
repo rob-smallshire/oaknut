@@ -343,11 +343,6 @@ class TestCodecRegistry:
         info = codecs.lookup("acorn")
         assert info.name == "acorn"
 
-    def test_codec_aliases_resolve(self):
-        import codecs
-        assert codecs.lookup("acorn-bbc").name == "acorn"
-        assert codecs.lookup("bbc-micro").name == "acorn"
-
     def test_incremental_encoder_streams_chunks(self):
         """The incremental encoder handles chunked input correctly."""
         import codecs
