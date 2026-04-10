@@ -22,6 +22,11 @@ classifiers = [
 ]
 dependencies = []
 
+[project.urls]
+Homepage = "https://github.com/rob-smallshire/oaknut-file"
+Repository = "https://github.com/rob-smallshire/oaknut-file"
+Issues = "https://github.com/rob-smallshire/oaknut-file/issues"
+
 [project.optional-dependencies]
 xattr = ["xattr>=1.0; sys_platform == 'darwin'"]
 
