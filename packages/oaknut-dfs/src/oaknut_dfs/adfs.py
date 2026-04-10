@@ -674,6 +674,8 @@ class ADFSPath:
             preserve_metadata: If True, write a .inf sidecar file with
                 load/exec addresses and attributes.
         """
+        from oaknut_file import format_trad_inf_line, write_inf_file
+
         target = Path(target_filepath)
         data = self.read_bytes()
         target.write_bytes(data)
@@ -681,11 +683,15 @@ class ADFSPath:
         if preserve_metadata:
             _, entry = self._resolve()
             inf_filepath = target.with_suffix(target.suffix + ".inf")
-            locked_str = "L" if entry.attributes.locked else ""
-            inf_filepath.write_text(
-                f"{self.name} {entry.load_address:08X} "
-                f"{entry.exec_address:08X} {entry.length:08X} {locked_str}\n"
+            attr = int(_entry_to_stat(entry).access)
+            line = format_trad_inf_line(
+                filename=self.name,
+                load_addr=entry.load_address,
+                exec_addr=entry.exec_address,
+                length=entry.length,
+                attr=attr,
             )
+            write_inf_file(inf_filepath, line)
 
     def import_file(
         self,
@@ -704,6 +710,8 @@ class ADFSPath:
             inf_filepath: Explicit path to .inf file. If None, looks
                 for ``<source_filepath>.inf`` automatically.
         """
+        from oaknut_file import read_inf_file
+
         source = Path(source_filepath)
         data = source.read_bytes()
 
@@ -717,16 +725,15 @@ class ADFSPath:
         exec_address = 0
         locked = False
 
-        if inf.exists():
-            inf_text = inf.read_text().strip()
-            parts = inf_text.split()
-            # parts[0] is the original filename (ignored — we use the ADFSPath)
-            if len(parts) > 1:
-                load_address = int(parts[1], 16)
-            if len(parts) > 2:
-                exec_address = int(parts[2], 16)
-            # Length at parts[3] is ignored — derived from the data
-            locked = "L" in parts[4:] if len(parts) > 4 else False
+        result = read_inf_file(inf)
+        if result is not None:
+            _, meta = result
+            if meta.load_addr is not None:
+                load_address = meta.load_addr
+            if meta.exec_addr is not None:
+                exec_address = meta.exec_addr
+            if meta.attr is not None:
+                locked = bool(meta.attr & Access.L)
 
         self.write_bytes(
             data,

@@ -33,7 +33,11 @@ class TestExportFile:
         inf_text = inf_filepath.read_text()
         assert "00001900" in inf_text
         assert "00008023" in inf_text
-        assert "L" in inf_text
+        # Attribute byte includes L (0x08); default is R|W|PR (0x13);
+        # locked file is R|W|L|PR (0x1B)
+        parts = inf_text.split()
+        attr_byte = int(parts[-1], 16)
+        assert attr_byte & 0x08  # L bit set
 
     def test_export_file_no_metadata(self, tmp_path):
         adfs = ADFS.create(ADFS_S)

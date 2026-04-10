@@ -20,8 +20,14 @@ classifiers = [
 ]
 dependencies = [
     "click>=8.1.7",
+    "oaknut-file>=0.1.3",
     "typename>=1.0.4",
 ]
+
+[project.urls]
+Homepage = "https://github.com/rob-smallshire/oaknut-dfs"
+Repository = "https://github.com/rob-smallshire/oaknut-dfs"
+Issues = "https://github.com/rob-smallshire/oaknut-dfs/issues"
 
 # [project.scripts]
 # oaknut-dfs = "oaknut_dfs.cli:cli"
@@ -74,6 +80,7 @@ files = [
 [tool.uv]
 index-url = "https://pypi.org/simple/"
 publish-url = "https://upload.pypi.org/legacy/"
+
 
 [build-system]
 requires = ["setuptools>=61.0", "wheel"]
