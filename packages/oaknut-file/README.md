@@ -1,8 +1,9 @@
 # oaknut-file
 
+[![PyPI version](https://img.shields.io/pypi/v/oaknut-file.svg)](https://pypi.org/project/oaknut-file/)
 [![CI](https://github.com/rob-smallshire/oaknut-file/actions/workflows/tests.yml/badge.svg)](https://github.com/rob-smallshire/oaknut-file/actions/workflows/tests.yml)
-[![Python versions](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/)
-[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![Python versions](https://img.shields.io/pypi/pyversions/oaknut-file.svg)](https://pypi.org/project/oaknut-file/)
+[![License: MIT](https://img.shields.io/pypi/l/oaknut-file.svg)](https://github.com/rob-smallshire/oaknut-file/blob/master/LICENSE)
 
 Acorn file metadata handling for the oaknut package family.
 
