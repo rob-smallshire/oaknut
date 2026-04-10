@@ -24,6 +24,11 @@ dependencies = [
     "typename>=1.0.4",
 ]
 
+[project.urls]
+Homepage = "https://github.com/rob-smallshire/oaknut-dfs"
+Repository = "https://github.com/rob-smallshire/oaknut-dfs"
+Issues = "https://github.com/rob-smallshire/oaknut-dfs/issues"
+
 # [project.scripts]
 # oaknut-dfs = "oaknut_dfs.cli:cli"
 
