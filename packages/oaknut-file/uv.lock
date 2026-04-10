@@ -63,6 +63,7 @@ source = { editable = "." }
 [package.optional-dependencies]
 dev = [
     { name = "pytest" },
+    { name = "xattr", marker = "sys_platform == 'darwin'" },
 ]
 xattr = [
     { name = "xattr", marker = "sys_platform == 'darwin'" },
@@ -71,6 +72,7 @@ xattr = [
 [package.metadata]
 requires-dist = [
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
+    { name = "xattr", marker = "sys_platform == 'darwin' and extra == 'dev'", specifier = ">=1.0" },
     { name = "xattr", marker = "sys_platform == 'darwin' and extra == 'xattr'", specifier = ">=1.0" },
 ]
 provides-extras = ["xattr", "dev"]

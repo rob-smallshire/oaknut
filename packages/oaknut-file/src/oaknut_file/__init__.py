@@ -29,6 +29,12 @@ from oaknut_file.filename_encoding import (
     build_mos_filename_suffix,
     parse_encoded_filename,
 )
+from oaknut_file.xattr import (
+    read_acorn_xattrs,
+    read_econet_xattrs,
+    write_acorn_xattrs,
+    write_econet_xattrs,
+)
 
 __all__ = [
     "Access",
@@ -47,6 +53,10 @@ __all__ = [
     "format_trad_inf_line",
     "parse_encoded_filename",
     "parse_inf_line",
+    "read_acorn_xattrs",
+    "read_econet_xattrs",
     "read_inf_file",
+    "write_acorn_xattrs",
+    "write_econet_xattrs",
     "write_inf_file",
 ]

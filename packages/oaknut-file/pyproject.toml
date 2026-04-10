@@ -23,7 +23,10 @@ dependencies = []
 
 [project.optional-dependencies]
 xattr = ["xattr>=1.0; sys_platform == 'darwin'"]
-dev = ["pytest>=8.0"]
+dev = [
+    "pytest>=8.0",
+    "xattr>=1.0; sys_platform == 'darwin'",
+]
 
 [tool.setuptools.packages.find]
 where = ["src"]
