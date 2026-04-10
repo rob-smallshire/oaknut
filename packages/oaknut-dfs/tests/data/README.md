@@ -170,49 +170,48 @@ Creates a temporary copy of a reference image and returns a `DFS` instance.
 
 **Example:**
 ```python
-def test_basic_validation_disk(reference_image):
-    """Test against reference disk created by emulator."""
-    disk = reference_image("01-basic-validation.ssd")
+def test_basic_validation_disc(reference_image):
+    """Test against reference disc created by emulator."""
+    disc = reference_image("01-basic-validation.ssd")
 
     # Verify expected files exist
-    assert disk.exists("$.TEXT")
-    assert disk.exists("$.BINARY")
-    assert disk.exists("$.LOCKED")
+    assert (disc.root / "$" / "TEXT").exists()
+    assert (disc.root / "$" / "BINARY").exists()
+    assert (disc.root / "$" / "LOCKED").exists()
 
     # Verify content
-    text_data = disk.load("$.TEXT")
+    text_data = (disc.root / "$" / "TEXT").read_bytes()
     assert text_data == b"Simple text content"
 
     # Verify binary data (0-255 sequence)
-    binary_data = disk.load("$.BINARY")
+    binary_data = (disc.root / "$" / "BINARY").read_bytes()
     assert len(binary_data) == 256
     assert binary_data == bytes(range(256))
 
     # Verify metadata
-    info = disk.get_file_info("$.BINARY")
-    assert info.load_address == 0x2000
-    assert info.exec_address == 0x2000
+    stat = (disc.root / "$" / "BINARY").stat()
+    assert stat.load_address == 0x2000
+    assert stat.exec_address == 0x2000
 
     # Verify locked status
-    info = disk.get_file_info("$.LOCKED")
-    assert info.locked is True
+    assert (disc.root / "$" / "LOCKED").stat().locked is True
 ```
 
-**For double-sided disks:**
+**For double-sided discs:**
 ```python
-def test_double_sided_disk(reference_image):
+def test_double_sided_disc(reference_image):
     """Test both sides of a DSD image."""
-    disk0 = reference_image("04-double-sided.dsd", side=0)
-    disk1 = reference_image("04-double-sided.dsd", side=1)
+    disc0 = reference_image("04-double-sided.dsd", side=0)
+    disc1 = reference_image("04-double-sided.dsd", side=1)
 
-    # Each side has independent catalog
-    assert len(disk0.files) == 13
-    assert len(disk1.files) == 9
+    # Each side has independent catalogue
+    assert len(disc0.files) == 13
+    assert len(disc1.files) == 9
 ```
 
 #### `writable_copy(name, side=0)` - Writable Access
 
-Creates a writable temporary copy for tests that modify disk content.
+Creates a writable temporary copy for tests that modify disc content.
 
 - **Returns:** Tuple of `(DFS instance, Path to temp file)`
 - **Use for:** Testing write operations, compaction, deletion, etc.
@@ -220,16 +219,16 @@ Creates a writable temporary copy for tests that modify disk content.
 **Example:**
 ```python
 def test_compaction(writable_copy):
-    """Test disk compaction on fragmented disk."""
-    disk, path = writable_copy("03-fragmented.ssd")
+    """Test disc compaction on fragmented disc."""
+    disc, path = writable_copy("03-fragmented.ssd")
 
     # Test modification operations
-    files_moved = disk.compact()
+    files_moved = disc.compact()
     assert files_moved > 0
 
     # Add new files
-    disk.save("$.NEWFILE", b"test data")
-    assert disk.exists("$.NEWFILE")
+    (disc.root / "$" / "NEWFILE").write_bytes(b"test data")
+    assert (disc.root / "$" / "NEWFILE").exists()
 ```
 
 ### Test Organization
