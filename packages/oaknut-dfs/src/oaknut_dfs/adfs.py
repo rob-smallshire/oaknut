@@ -15,11 +15,14 @@ Example usage:
 from __future__ import annotations
 
 import mmap
+from collections.abc import Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 from os import PathLike
 from pathlib import Path
 from typing import Iterator, Union
+
+from oaknut_file import AcornMeta, MetaFormat
 
 from oaknut_dfs.adfs_directory import (
     Access,
@@ -28,6 +31,12 @@ from oaknut_dfs.adfs_directory import (
     _ADFSDirectory,
     _ADFSDirectoryEntry,
     _ADFSRawAttributes,
+)
+from oaknut_dfs.host_bridge import (
+    DEFAULT_EXPORT_META_FORMAT,
+    DEFAULT_IMPORT_META_FORMATS,
+    export_with_metadata,
+    import_with_metadata,
 )
 from oaknut_dfs.adfs_free_space_map import OldFreeSpaceMap
 from oaknut_dfs.exceptions import (
@@ -665,75 +674,71 @@ class ADFSPath:
 
     # --- Host filesystem transfer ---
 
-    def export_file(self, target_filepath: Union[str, PathLike], *,
-                    preserve_metadata: bool = True) -> None:
-        """Export file to host filesystem, optionally with .inf metadata.
+    def export_file(
+        self,
+        target_filepath: Union[str, PathLike],
+        *,
+        meta_format: MetaFormat | None = DEFAULT_EXPORT_META_FORMAT,
+        owner: int = 0,
+    ) -> Path:
+        """Export file to host filesystem, emitting Acorn metadata.
 
         Args:
-            target_filepath: Destination path on the host filesystem.
-            preserve_metadata: If True, write a .inf sidecar file with
-                load/exec addresses and attributes.
+            target_filepath: Destination path on the host.
+            meta_format: How to encode metadata. Defaults to traditional
+                INF sidecar. Pass ``None`` to write only the data.
+                Filename-encoded formats rewrite the target filename.
+            owner: Econet owner ID, used only by PiEconetBridge formats.
+
+        Returns:
+            The actual path that was written. Equal to *target_filepath*
+            except for filename-encoded formats.
         """
-        from oaknut_file import format_trad_inf_line, write_inf_file
-
-        target = Path(target_filepath)
+        _, entry = self._resolve()
         data = self.read_bytes()
-        target.write_bytes(data)
-
-        if preserve_metadata:
-            _, entry = self._resolve()
-            inf_filepath = target.with_suffix(target.suffix + ".inf")
-            attr = int(_entry_to_stat(entry).access)
-            line = format_trad_inf_line(
-                filename=self.name,
-                load_addr=entry.load_address,
-                exec_addr=entry.exec_address,
-                length=entry.length,
-                attr=attr,
-            )
-            write_inf_file(inf_filepath, line)
+        meta = AcornMeta(
+            load_addr=entry.load_address,
+            exec_addr=entry.exec_address,
+            attr=int(_entry_to_stat(entry).access),
+        )
+        return export_with_metadata(
+            data,
+            Path(target_filepath),
+            meta,
+            meta_format=meta_format,
+            owner=owner,
+            filename=self.name,
+        )
 
     def import_file(
         self,
         source_filepath: Union[str, PathLike],
         *,
-        inf_filepath: Union[str, PathLike, None] = None,
+        meta_formats: Sequence[MetaFormat] = DEFAULT_IMPORT_META_FORMATS,
     ) -> None:
         """Import a file from the host filesystem.
 
-        The ADFS filename is taken from this path. Metadata (load/exec
-        addresses, locked flag) is read from an .inf sidecar file if
-        one exists alongside the source file.
+        The ADFS filename is taken from this ``ADFSPath``, not from the
+        source file or any sidecar. Metadata is resolved by trying
+        *meta_formats* in order; the first reader to match wins. The
+        full Acorn attribute byte (R/W/E/L/PR/PW) is applied via
+        :meth:`chmod` after the data has been written, so owner-execute
+        and public permissions round-trip losslessly via
+        ``MetaFormat.INF_PIEB`` or either xattr format.
 
         Args:
             source_filepath: Path to the source file on the host.
-            inf_filepath: Explicit path to .inf file. If None, looks
-                for ``<source_filepath>.inf`` automatically.
+            meta_formats: Ordered cascade of metadata schemes to try.
+                Defaults to ``DEFAULT_IMPORT_META_FORMATS``.
         """
-        from oaknut_file import read_inf_file
-
         source = Path(source_filepath)
         data = source.read_bytes()
+        _, _, meta = import_with_metadata(source, meta_formats=meta_formats)
 
-        # Resolve .inf sidecar
-        if inf_filepath is not None:
-            inf = Path(inf_filepath)
-        else:
-            inf = source.with_suffix(source.suffix + ".inf")
-
-        load_address = 0
-        exec_address = 0
-        locked = False
-
-        result = read_inf_file(inf)
-        if result is not None:
-            _, meta = result
-            if meta.load_addr is not None:
-                load_address = meta.load_addr
-            if meta.exec_addr is not None:
-                exec_address = meta.exec_addr
-            if meta.attr is not None:
-                locked = bool(meta.attr & Access.L)
+        load_address = meta.load_addr or 0
+        exec_address = meta.exec_addr or 0
+        attr = meta.attr
+        locked = bool((attr or 0) & int(Access.L))
 
         self.write_bytes(
             data,
@@ -741,6 +746,14 @@ class ADFSPath:
             exec_address=exec_address,
             locked=locked,
         )
+
+        # If the resolved metadata carries richer Acorn attributes than
+        # the write_bytes locked flag covers (owner R/W/E, public R/W),
+        # apply them via chmod so they actually land in the directory
+        # entry. write_bytes has set a default R|W for the owner via
+        # the internal _write_file path, so a no-op chmod is harmless.
+        if attr is not None:
+            self.chmod(attr)
 
     # --- Protocols ---
 

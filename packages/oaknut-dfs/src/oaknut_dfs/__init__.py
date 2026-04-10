@@ -7,6 +7,16 @@ import oaknut_dfs.acorn_encoding  # noqa: F401
 import oaknut_dfs.acorn_dfs_catalogue  # noqa: F401
 import oaknut_dfs.watford_dfs_catalogue  # noqa: F401
 
+from oaknut_file import (
+    AcornMeta,
+    MetaFormat,
+    SOURCE_DIR,
+    SOURCE_FILENAME,
+    SOURCE_INF_PIEB,
+    SOURCE_INF_TRAD,
+    SOURCE_SPARKFS,
+)
+
 from oaknut_dfs.adfs import (
     ADFS,
     ADFS_L,
@@ -31,6 +41,14 @@ from oaknut_dfs.formats import (
     ACORN_DFS_80T_SINGLE_SIDED,
     DiskFormat,
 )
+from oaknut_dfs.host_bridge import (
+    DEFAULT_EXPORT_META_FORMAT,
+    DEFAULT_IMPORT_META_FORMATS,
+    SOURCE_XATTR_ACORN,
+    SOURCE_XATTR_PIEB,
+    export_with_metadata,
+    import_with_metadata,
+)
 
 Version = namedtuple("Version", ["major", "minor", "patch"])
 
@@ -39,6 +57,7 @@ __version_info__ = Version(*(__version__.split(".")))
 
 __all__ = [
     "Access",
+    "AcornMeta",
     "ADFS",
     "ADFS_S",
     "ADFS_M",
@@ -60,4 +79,16 @@ __all__ = [
     "BootOption",
     "DiskInfo",
     "FSError",
+    "MetaFormat",
+    "SOURCE_DIR",
+    "SOURCE_FILENAME",
+    "SOURCE_INF_PIEB",
+    "SOURCE_INF_TRAD",
+    "SOURCE_SPARKFS",
+    "SOURCE_XATTR_ACORN",
+    "SOURCE_XATTR_PIEB",
+    "DEFAULT_EXPORT_META_FORMAT",
+    "DEFAULT_IMPORT_META_FORMATS",
+    "export_with_metadata",
+    "import_with_metadata",
 ]

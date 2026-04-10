@@ -3,15 +3,24 @@
 from __future__ import annotations
 
 import mmap
+from collections.abc import Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 from os import PathLike
 from pathlib import Path
 from typing import Iterator, Union
 
+from oaknut_file import Access, AcornMeta, MetaFormat
+
 from oaknut_dfs.catalogue import FileEntry
 from oaknut_dfs.catalogued_surface import CataloguedSurface
 from oaknut_dfs.formats import DiskFormat
+from oaknut_dfs.host_bridge import (
+    DEFAULT_EXPORT_META_FORMAT,
+    DEFAULT_IMPORT_META_FORMATS,
+    export_with_metadata,
+    import_with_metadata,
+)
 from oaknut_dfs.surface import DiscImage
 
 
@@ -284,71 +293,68 @@ class DFSPath:
         self,
         target_filepath: Union[str, PathLike],
         *,
-        preserve_metadata: bool = True,
-    ) -> None:
-        """Export file to host filesystem with optional .inf metadata."""
-        from oaknut_file import Access, format_trad_inf_line, write_inf_file
+        meta_format: MetaFormat | None = DEFAULT_EXPORT_META_FORMAT,
+        owner: int = 0,
+    ) -> Path:
+        """Export file to host filesystem, emitting Acorn metadata.
 
-        target = Path(target_filepath)
+        Args:
+            target_filepath: Destination path on the host.
+            meta_format: How to encode metadata. Defaults to traditional
+                INF sidecar. Pass ``None`` to write only the data.
+                Filename-encoded formats rewrite the target filename.
+            owner: Econet owner ID, used only by PiEconetBridge formats.
+
+        Returns:
+            The actual path that was written. Equal to *target_filepath*
+            except for filename-encoded formats.
+        """
         entry = self._find_entry()
         data = self.read_bytes()
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_bytes(data)
-
-        if preserve_metadata:
-            inf_filepath = target.with_suffix(target.suffix + ".inf")
-            attr = int(Access.R | Access.W)
-            if entry.locked:
-                attr |= int(Access.L)
-            line = format_trad_inf_line(
-                filename=entry.path,
-                load_addr=entry.load_address,
-                exec_addr=entry.exec_address,
-                length=entry.length,
-                attr=attr,
-            )
-            write_inf_file(inf_filepath, line)
+        attr = int(Access.R | Access.W)
+        if entry.locked:
+            attr |= int(Access.L)
+        meta = AcornMeta(
+            load_addr=entry.load_address,
+            exec_addr=entry.exec_address,
+            attr=attr,
+        )
+        return export_with_metadata(
+            data,
+            Path(target_filepath),
+            meta,
+            meta_format=meta_format,
+            owner=owner,
+            filename=entry.path,
+        )
 
     def import_file(
         self,
         source_filepath: Union[str, PathLike],
         *,
-        inf_filepath: Union[str, PathLike, None] = None,
+        meta_formats: Sequence[MetaFormat] = DEFAULT_IMPORT_META_FORMATS,
     ) -> None:
         """Import a file from the host filesystem.
 
-        The DFS filename is taken from this path. Metadata (load/exec
-        addresses, locked flag) is read from an .inf sidecar file if
-        one exists alongside the source file.
+        The DFS filename is taken from this ``DFSPath``, not from the
+        source file or any sidecar. Metadata (load/exec addresses,
+        locked flag) is resolved by trying *meta_formats* in order;
+        the first reader to match wins. DFS only stores the locked
+        attribute bit, so public/execute attributes from the source
+        metadata are silently discarded.
 
         Args:
             source_filepath: Path to the source file on the host.
-            inf_filepath: Explicit path to .inf file. If None, looks
-                for ``<source_filepath>.inf`` automatically.
+            meta_formats: Ordered cascade of metadata schemes to try.
+                Defaults to ``DEFAULT_IMPORT_META_FORMATS``.
         """
-        from oaknut_file import Access, read_inf_file
-
         source = Path(source_filepath)
         data = source.read_bytes()
+        _, _, meta = import_with_metadata(source, meta_formats=meta_formats)
 
-        if inf_filepath is not None:
-            inf = Path(inf_filepath)
-        else:
-            inf = source.with_suffix(source.suffix + ".inf")
-
-        load_address = 0
-        exec_address = 0
-        locked = False
-
-        result = read_inf_file(inf)
-        if result is not None:
-            _, meta = result
-            if meta.load_addr is not None:
-                load_address = meta.load_addr
-            if meta.exec_addr is not None:
-                exec_address = meta.exec_addr
-            if meta.attr is not None:
-                locked = bool(meta.attr & Access.L)
+        load_address = meta.load_addr or 0
+        exec_address = meta.exec_addr or 0
+        locked = bool((meta.attr or 0) & int(Access.L))
 
         self.write_bytes(
             data,
@@ -764,39 +770,36 @@ class DFS:
         """
         return self._catalogued_surface.catalogue.compact()
 
-    def export_all(self, target_dirpath: str, preserve_metadata: bool = True) -> None:
-        """
-        Export all files to directory with optional .inf metadata files.
+    def export_all(
+        self,
+        target_dirpath: Union[str, PathLike],
+        *,
+        meta_format: MetaFormat | None = DEFAULT_EXPORT_META_FORMAT,
+        owner: int = 0,
+    ) -> None:
+        """Export all files in the catalogue to a host directory.
 
         Args:
-            target_dirpath: Directory path to export to
-            preserve_metadata: Create .inf files with DFS metadata (default True)
+            target_dirpath: Directory to export into. Created if missing.
+            meta_format: Metadata encoding. Defaults to traditional INF.
+                ``None`` suppresses metadata (data files only). See
+                :func:`oaknut_dfs.host_bridge.export_with_metadata`.
+            owner: Econet owner ID, used only by PiEconetBridge formats.
 
         Raises:
-            OSError: If directory cannot be created or files cannot be written
+            OSError: If directory cannot be created or files cannot be written.
         """
-        from pathlib import Path
-
         target = Path(target_dirpath)
         target.mkdir(parents=True, exist_ok=True)
 
         for entry in self.files:
-            data = self._catalogued_surface.read_file(entry.path)
-            file_path = target / f"{entry.directory}.{entry.filename}"
-            file_path.write_bytes(data)
-
-            # Export metadata
-            if preserve_metadata:
-                inf_path = target / f"{entry.directory}.{entry.filename}.inf"
-                locked_str = " Locked" if entry.locked else ""
-                inf_content = (
-                    f"$.{entry.filename} "
-                    f"{entry.load_address:08X} "
-                    f"{entry.exec_address:08X} "
-                    f"{entry.length:08X}"
-                    f"{locked_str}\n"
-                )
-                inf_path.write_text(inf_content)
+            target_filepath = target / f"{entry.directory}.{entry.filename}"
+            path = DFSPath(self, entry.path)
+            path.export_file(
+                target_filepath,
+                meta_format=meta_format,
+                owner=owner,
+            )
 
     # Pythonic protocols
     def __contains__(self, filename: str) -> bool:

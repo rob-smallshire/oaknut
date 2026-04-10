@@ -1,6 +1,7 @@
 """Tests for ADFSPath.export_file() and import_file()."""
 
 import pytest
+from oaknut_file import Access, MetaFormat
 
 from oaknut_dfs.adfs import ADFS, ADFS_S
 
@@ -43,7 +44,7 @@ class TestExportFile:
         adfs = ADFS.create(ADFS_S)
         (adfs.root / "Plain").write_bytes(b"data")
         target = tmp_path / "Plain"
-        (adfs.root / "Plain").export_file(target, preserve_metadata=False)
+        (adfs.root / "Plain").export_file(target, meta_format=None)
         assert target.read_bytes() == b"data"
         assert not (tmp_path / "Plain.inf").exists()
 
@@ -93,15 +94,16 @@ class TestImportFile:
         assert stat.load_address == 0
         assert stat.exec_address == 0
 
-    def test_import_file_explicit_inf_path(self, tmp_path):
+    def test_import_file_sibling_inf(self, tmp_path):
         source = tmp_path / "data.bin"
         source.write_bytes(b"test")
 
-        inf = tmp_path / "metadata.inf"
-        inf.write_text("Ignored 0000FF00 0000FF00 00000004\n")
+        (tmp_path / "data.bin.inf").write_text(
+            "Ignored 0000FF00 0000FF00 00000004\n"
+        )
 
         adfs = ADFS.create(ADFS_S)
-        (adfs.root / "File").import_file(source, inf_filepath=inf)
+        (adfs.root / "File").import_file(source)
         stat = (adfs.root / "File").stat()
         assert stat.load_address == 0xFF00
 
@@ -159,3 +161,58 @@ class TestExportImportRoundTrip:
         adfs2 = ADFS.create(ADFS_S)
         (adfs2.root / "Sec").import_file(export_path)
         assert (adfs2.root / "Sec").stat().locked is True
+
+
+class TestMetaFormatRoundTrip:
+    """Per-format smoke tests — ADFSPath.export_file / import_file."""
+
+    @pytest.mark.parametrize(
+        "fmt",
+        [
+            MetaFormat.INF_TRAD,
+            MetaFormat.INF_PIEB,
+            MetaFormat.FILENAME_RISCOS,
+            MetaFormat.FILENAME_MOS,
+        ],
+    )
+    def test_adfs_round_trip_per_format(self, tmp_path, fmt):
+        adfs1 = ADFS.create(ADFS_S)
+        (adfs1.root / "Code").write_bytes(
+            b"hello", load_address=0x1900, exec_address=0x8023,
+        )
+
+        target = tmp_path / "Code"
+        written = (adfs1.root / "Code").export_file(target, meta_format=fmt)
+        assert written.read_bytes() == b"hello"
+
+        adfs2 = ADFS.create(ADFS_S)
+        (adfs2.root / "Code").import_file(written, meta_formats=(fmt,))
+
+        assert (adfs2.root / "Code").read_bytes() == b"hello"
+        stat = (adfs2.root / "Code").stat()
+        assert stat.load_address == 0x1900
+        assert stat.exec_address == 0x8023
+
+    def test_adfs_public_read_round_trip_inf_pieb(self, tmp_path):
+        """Public-read attribute survives an INF_PIEB round-trip.
+
+        INF_PIEB is the only format that carries the full Acorn attribute
+        byte losslessly. This test asserts the ADFS PR bit round-trips
+        via the host_bridge.
+        """
+        adfs1 = ADFS.create(ADFS_S)
+        (adfs1.root / "Shared").write_bytes(b"data")
+        (adfs1.root / "Shared").chmod(Access.R | Access.W | Access.PR)
+
+        target = tmp_path / "Shared"
+        (adfs1.root / "Shared").export_file(target, meta_format=MetaFormat.INF_PIEB)
+
+        adfs2 = ADFS.create(ADFS_S)
+        (adfs2.root / "Shared").import_file(
+            target, meta_formats=(MetaFormat.INF_PIEB,),
+        )
+
+        stat = (adfs2.root / "Shared").stat()
+        assert stat.public_read is True
+        assert stat.owner_read is True
+        assert stat.owner_write is True

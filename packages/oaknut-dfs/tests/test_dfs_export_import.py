@@ -1,6 +1,7 @@
 """Tests for DFS export/import operations (.inf files)."""
 
 import pytest
+from oaknut_file import MetaFormat
 
 from oaknut_dfs.dfs import DFS
 from oaknut_dfs.formats import (
@@ -61,7 +62,7 @@ class TestExportFile:
 
         # Export without metadata
         target_file = tmp_path / "test.bin"
-        (dfs.root / "$" / "TEST").export_file(target_file, preserve_metadata=False)
+        (dfs.root / "$" / "TEST").export_file(target_file, meta_format=None)
 
         # Check file was created
         assert target_file.exists()
@@ -110,7 +111,7 @@ class TestExportAll:
 
         # Export
         target = tmp_path / "export"
-        dfs.export_all(str(target), preserve_metadata=True)
+        dfs.export_all(str(target))
 
         # Check files were created
         assert (target / "$.FILE1").exists()
@@ -132,11 +133,15 @@ class TestExportAll:
         assert "$.FILE1" in inf1
         assert "00001900" in inf1
         assert "00008023" in inf1
-        assert "Locked" not in inf1
 
+        # Regression: files in non-$ directories must record their real
+        # directory in the INF filename field, not "$.NAME".
         inf3 = (target / "A.FILE3.inf").read_text()
-        assert "$.FILE3" in inf3
-        assert "Locked" in inf3
+        assert "A.FILE3" in inf3
+        assert "$.FILE3" not in inf3
+        # Locked bit is recorded as an attribute hex byte.
+        attr_byte = int(inf3.split()[-1], 16)
+        assert attr_byte & 0x08  # Access.L
 
     def test_export_all_without_metadata(self, tmp_path):
         """Test exporting files without .inf metadata."""
@@ -146,7 +151,7 @@ class TestExportAll:
 
         # Export without metadata
         target = tmp_path / "export"
-        dfs.export_all(str(target), preserve_metadata=False)
+        dfs.export_all(str(target), meta_format=None)
 
         # Check file was created
         assert (target / "$.TEST").exists()
@@ -247,23 +252,16 @@ class TestImportFromInf:
         assert info.exec_address == 0
         assert not info.locked
 
-    def test_import_with_explicit_inf_path(self, tmp_path):
-        """Test importing with explicitly specified .inf path."""
+    def test_import_with_sibling_inf(self, tmp_path):
+        """Test that a sibling .inf is picked up when present."""
         dfs = _make_dfs(_blank_buffer())
 
-        # Create files in different locations
-        data_file = tmp_path / "data" / "FILE"
-        data_file.parent.mkdir()
+        data_file = tmp_path / "FILE"
         data_file.write_bytes(b"data")
+        (tmp_path / "FILE.inf").write_text("$.CUSTOM 00001900 00008023 00000004\n")
 
-        inf_file = tmp_path / "metadata" / "FILE.inf"
-        inf_file.parent.mkdir()
-        inf_file.write_text("$.CUSTOM 00001900 00008023 00000004\n")
+        (dfs.root / "$" / "CUSTOM").import_file(data_file)
 
-        # Import with explicit inf path
-        (dfs.root / "$" / "CUSTOM").import_file(data_file, inf_filepath=inf_file)
-
-        # Check file was imported with metadata from explicit path
         assert (dfs.root / "$" / "CUSTOM").exists()
         info = (dfs.root / "$" / "CUSTOM").stat()
         assert info.load_address == 0x1900
@@ -273,11 +271,14 @@ class TestExportImportRoundTrip:
     """Tests for export/import round-trip."""
 
     def test_round_trip_preserves_everything(self, tmp_path):
-        """Test exporting and re-importing preserves all data and metadata."""
-        # Create original disc
+        """Test exporting and re-importing preserves all data and metadata.
+
+        Now that export_all records the real DFS directory in each INF
+        filename field, the INF can be parsed to recover the original
+        DFS path directly.
+        """
         dfs1 = _make_dfs(_blank_buffer(title=b"ORIG    "))
 
-        # Add files with various metadata
         (dfs1.root / "$" / "PROG").write_bytes(
             b"Program code", load_address=0x1900, exec_address=0x8023
         )
@@ -287,45 +288,77 @@ class TestExportImportRoundTrip:
         (dfs1.root / "$" / "LOCKED").write_bytes(b"Protected", locked=True)
         (dfs1.root / "A" / "FILE").write_bytes(b"In directory A")
 
-        # Export
         export_path = tmp_path / "export"
         dfs1.export_all(str(export_path))
 
-        # Create new disc and import
         dfs2 = _make_dfs(_blank_buffer(title=b"NEW     "))
 
-        # Import all files — export_all writes .inf with $.NAME for all files,
-        # so A.FILE's .inf says $.FILE. Parse each .inf to determine the
-        # correct DFS path for import.
         for filepath in export_path.glob("*"):
             if filepath.name.endswith(".inf"):
                 continue
             inf_path = filepath.with_suffix(filepath.suffix + ".inf")
-            if inf_path.exists():
-                inf_text = inf_path.read_text().strip()
-                dfs_name = inf_text.split()[0]  # e.g. "$.PROG"
-                directory, filename = dfs_name.split(".")
-                (dfs2.root / directory / filename).import_file(filepath)
-            else:
-                # No .inf — use the host filename stem
-                (dfs2.root / "$" / filepath.stem).import_file(filepath)
+            inf_text = inf_path.read_text().strip()
+            dfs_name = inf_text.split()[0]  # e.g. "$.PROG" or "A.FILE"
+            directory, filename = dfs_name.split(".")
+            (dfs2.root / directory / filename).import_file(filepath)
 
-        # Verify all files exist — note: A.FILE was exported with $.FILE in .inf
         assert (dfs2.root / "$" / "PROG").exists()
         assert (dfs2.root / "$" / "DATA").exists()
         assert (dfs2.root / "$" / "LOCKED").exists()
-        assert (dfs2.root / "$" / "FILE").exists()
+        assert (dfs2.root / "A" / "FILE").exists()
 
-        # Verify data
         assert (dfs2.root / "$" / "PROG").read_bytes() == b"Program code"
         assert (dfs2.root / "$" / "DATA").read_bytes() == b"Data file"
         assert (dfs2.root / "$" / "LOCKED").read_bytes() == b"Protected"
-        assert (dfs2.root / "$" / "FILE").read_bytes() == b"In directory A"
+        assert (dfs2.root / "A" / "FILE").read_bytes() == b"In directory A"
 
-        # Verify metadata
         prog_info = (dfs2.root / "$" / "PROG").stat()
         assert prog_info.load_address == 0x1900
         assert prog_info.exec_address == 0x8023
 
         locked_info = (dfs2.root / "$" / "LOCKED").stat()
         assert locked_info.locked
+
+
+class TestMetaFormatRoundTrip:
+    """Per-format smoke tests — DFSPath.export_file / import_file."""
+
+    @pytest.mark.parametrize(
+        "fmt",
+        [
+            MetaFormat.INF_TRAD,
+            MetaFormat.INF_PIEB,
+            MetaFormat.FILENAME_RISCOS,
+            MetaFormat.FILENAME_MOS,
+        ],
+    )
+    def test_dfs_round_trip_per_format(self, tmp_path, fmt):
+        """DFSPath export/import round-trip for each non-xattr MetaFormat."""
+        dfs1 = _make_dfs(_blank_buffer())
+        (dfs1.root / "$" / "PROG").write_bytes(
+            b"code", load_address=0x1900, exec_address=0x8023
+        )
+
+        target = tmp_path / "PROG"
+        written = (dfs1.root / "$" / "PROG").export_file(target, meta_format=fmt)
+        assert written.read_bytes() == b"code"
+
+        dfs2 = _make_dfs(_blank_buffer())
+        (dfs2.root / "$" / "PROG").import_file(written, meta_formats=(fmt,))
+
+        assert (dfs2.root / "$" / "PROG").read_bytes() == b"code"
+        stat = (dfs2.root / "$" / "PROG").stat()
+        assert stat.load_address == 0x1900
+        assert stat.exec_address == 0x8023
+
+    def test_dfs_locked_round_trip_inf_trad(self, tmp_path):
+        """Locked bit survives INF_TRAD round-trip."""
+        dfs1 = _make_dfs(_blank_buffer())
+        (dfs1.root / "$" / "SEC").write_bytes(b"secret", locked=True)
+
+        target = tmp_path / "SEC"
+        (dfs1.root / "$" / "SEC").export_file(target)
+
+        dfs2 = _make_dfs(_blank_buffer())
+        (dfs2.root / "$" / "SEC").import_file(target)
+        assert (dfs2.root / "$" / "SEC").stat().locked

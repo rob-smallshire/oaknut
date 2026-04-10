@@ -64,7 +64,7 @@ class TestExportFile:
         dfs = _make_empty_dfs()
         (dfs.root / "$" / "PLAIN").write_bytes(b"data")
         target = tmp_path / "PLAIN"
-        (dfs.root / "$" / "PLAIN").export_file(target, preserve_metadata=False)
+        (dfs.root / "$" / "PLAIN").export_file(target, meta_format=None)
         assert target.read_bytes() == b"data"
         assert not (tmp_path / "PLAIN.inf").exists()
 
@@ -107,15 +107,16 @@ class TestImportFile:
         assert stat.load_address == 0
         assert stat.exec_address == 0
 
-    def test_import_file_explicit_inf(self, tmp_path):
+    def test_import_file_sibling_inf(self, tmp_path):
         source = tmp_path / "data.bin"
         source.write_bytes(b"test")
 
-        inf = tmp_path / "meta.inf"
-        inf.write_text("$.IGNORED 0000FF00 0000FF00 00000004\n")
+        (tmp_path / "data.bin.inf").write_text(
+            "$.IGNORED 0000FF00 0000FF00 00000004\n"
+        )
 
         dfs = _make_empty_dfs()
-        (dfs.root / "$" / "FILE").import_file(source, inf_filepath=inf)
+        (dfs.root / "$" / "FILE").import_file(source)
         stat = (dfs.root / "$" / "FILE").stat()
         assert stat.load_address == 0xFF00
 
