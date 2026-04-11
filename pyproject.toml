@@ -45,6 +45,7 @@ dependencies = [
     "oaknut-basic>=1.0",
     "oaknut-dfs>=4.0",
     "oaknut-adfs>=1.0",
+    "oaknut-afs>=0.1",
     "oaknut-zip>=2.0",
 ]
 
@@ -66,6 +67,7 @@ oaknut-discimage = { workspace = true }
 oaknut-basic = { workspace = true }
 oaknut-dfs   = { workspace = true }
 oaknut-adfs  = { workspace = true }
+oaknut-afs   = { workspace = true }
 oaknut-zip   = { workspace = true }
 
 [tool.uv]
@@ -97,6 +99,7 @@ testpaths = [
     "packages/oaknut-basic/tests",
     "packages/oaknut-dfs/tests",
     "packages/oaknut-adfs/tests",
+    "packages/oaknut-afs/tests",
     "packages/oaknut-zip/tests",
 ]
 # The workspace-root tests/ directory holds shared test data and a
