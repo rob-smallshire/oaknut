@@ -9,11 +9,8 @@ Tests cover:
 
 
 import pytest
-from oaknut.dfs.adfs import (
-    ADFS,
-    _parse_dsc,
-    geometry_for_capacity,
-)
+from oaknut.adfs import ADFS, geometry_for_capacity
+from oaknut.adfs.adfs import _parse_dsc
 
 # --- geometry_for_capacity tests ---
 

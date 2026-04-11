@@ -1,7 +1,7 @@
 """Tests for ADFSPath.title property on directories."""
 
 import pytest
-from oaknut.dfs.adfs import ADFS, ADFS_M, ADFS_S
+from oaknut.adfs import ADFS, ADFS_M, ADFS_S
 from oaknut.dfs.exceptions import ADFSPathError
 
 

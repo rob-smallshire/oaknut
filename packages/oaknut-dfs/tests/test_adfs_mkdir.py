@@ -1,7 +1,7 @@
 """Tests for ADFSPath.mkdir() — creating directories in ADFS disc images."""
 
 import pytest
-from oaknut.dfs.adfs import ADFS, ADFS_M, ADFS_S
+from oaknut.adfs import ADFS, ADFS_M, ADFS_S
 from oaknut.dfs.exceptions import (
     ADFSDirectoryFullError,
     ADFSDiscFullError,

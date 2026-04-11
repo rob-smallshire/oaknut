@@ -8,7 +8,8 @@ structure is identical to floppy ADFS (old map, old directory).
 from pathlib import Path
 
 import pytest
-from oaknut.dfs.adfs import ADFS, _hard_disc_format, _parse_dsc
+from oaknut.adfs import ADFS
+from oaknut.adfs.adfs import _hard_disc_format, _parse_dsc
 from oaknut.dfs.exceptions import ADFSError
 
 IMAGES_DIR = Path(__file__).parent / "images"
@@ -51,7 +52,7 @@ class TestParseDSC:
 class TestHardDiscFormat:
 
     def test_format_from_geometry(self):
-        from oaknut.dfs.adfs import _DSCGeometry
+        from oaknut.adfs.adfs import _DSCGeometry
 
         geom = _DSCGeometry(cylinders=306, heads=4)
         dat_size = 306 * 4 * 33 * 256  # Full size
@@ -63,7 +64,7 @@ class TestHardDiscFormat:
 
     def test_format_uses_cylinder_geometry(self):
         """Cylinders reflect heads × sectors_per_track grouped together."""
-        from oaknut.dfs.adfs import _DSCGeometry
+        from oaknut.adfs.adfs import _DSCGeometry
 
         geom = _DSCGeometry(cylinders=10, heads=2)
         dat_size = 10 * 2 * 33 * 256
@@ -75,7 +76,7 @@ class TestHardDiscFormat:
 
     def test_format_truncated_dat(self):
         """A .dat smaller than full geometry uses fewer cylinders."""
-        from oaknut.dfs.adfs import _DSCGeometry
+        from oaknut.adfs.adfs import _DSCGeometry
 
         geom = _DSCGeometry(cylinders=306, heads=4)
         # Only 10 complete cylinders of data
@@ -84,7 +85,7 @@ class TestHardDiscFormat:
         assert fmt.surface_specs[0].num_tracks == 10
 
     def test_format_not_multiple_of_sector_raises(self):
-        from oaknut.dfs.adfs import _DSCGeometry
+        from oaknut.adfs.adfs import _DSCGeometry
 
         geom = _DSCGeometry(cylinders=10, heads=1)
         with pytest.raises(ADFSError):

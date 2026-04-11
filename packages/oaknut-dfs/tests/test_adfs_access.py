@@ -1,8 +1,8 @@
 """Tests for ADFSPath.chmod() and the Access IntFlag enum."""
 
 import pytest
-from oaknut.dfs.adfs import ADFS, ADFS_S
-from oaknut.dfs.adfs_directory import Access
+from oaknut.adfs import ADFS, ADFS_S
+from oaknut.adfs.directory import Access
 from oaknut.dfs.exceptions import ADFSPathError
 
 

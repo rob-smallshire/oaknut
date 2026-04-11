@@ -1,7 +1,7 @@
 """Tests for ADFSPath.unlink() — deleting files from ADFS disc images."""
 
 import pytest
-from oaknut.dfs.adfs import ADFS, ADFS_S
+from oaknut.adfs import ADFS, ADFS_S
 from oaknut.dfs.exceptions import ADFSFileLockedError, ADFSPathError
 
 
@@ -72,7 +72,7 @@ class TestUnlink:
         """unlink() should not delete directories — use rmdir for that."""
         ADFS.create(ADFS_S)
         # We need mkdir for this test, so skip if not available
-        pytest.importorskip("oaknut.dfs.adfs")
+        pytest.importorskip("oaknut.adfs")
         # Write a file, then try to unlink root (a directory)
         # This is already covered by test_unlink_root_raises, but
         # let's also test with a subdirectory once mkdir is available

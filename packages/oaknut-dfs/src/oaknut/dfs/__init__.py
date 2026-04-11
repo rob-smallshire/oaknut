@@ -6,7 +6,7 @@ import oaknut.dfs.watford_dfs_catalogue  # noqa: F401
 
 # Import acorn_encoding to register the codec
 import oaknut.file.acorn_encoding  # noqa: F401
-from oaknut.dfs.adfs import (
+from oaknut.adfs import (
     ADFS,
     ADFS_L,
     ADFS_M,
@@ -16,7 +16,7 @@ from oaknut.dfs.adfs import (
     ADFSStat,
     geometry_for_capacity,
 )
-from oaknut.dfs.adfs_directory import Access
+from oaknut.adfs.directory import Access
 from oaknut.dfs.catalogue import DiskInfo
 from oaknut.dfs.dfs import DFS, DFSPath, DFSStat
 from oaknut.dfs.exceptions import FSError

@@ -1,7 +1,7 @@
 """Tests for ADFS title and boot_option property setters."""
 
 import pytest
-from oaknut.dfs.adfs import ADFS, ADFS_S
+from oaknut.adfs import ADFS, ADFS_S
 
 
 class TestTitleSetter:

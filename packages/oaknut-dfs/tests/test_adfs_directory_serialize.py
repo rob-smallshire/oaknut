@@ -12,7 +12,7 @@ from helpers.adfs_image import (
 from helpers.adfs_image import (
     make_old_directory as _make_old_directory,
 )
-from oaknut.dfs.adfs_directory import (
+from oaknut.adfs.directory import (
     OldDirectoryFormat,
     _ADFSDirectory,
     _ADFSDirectoryEntry,

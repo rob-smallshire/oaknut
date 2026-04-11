@@ -22,8 +22,7 @@ from os import PathLike
 from pathlib import Path
 from typing import Iterator, Union
 
-from oaknut.dfs import basic
-from oaknut.dfs.adfs_directory import (
+from oaknut.adfs.directory import (
     Access,
     ADFSDirectoryFormat,
     OldDirectoryFormat,
@@ -31,7 +30,8 @@ from oaknut.dfs.adfs_directory import (
     _ADFSDirectoryEntry,
     _ADFSRawAttributes,
 )
-from oaknut.dfs.adfs_free_space_map import OldFreeSpaceMap
+from oaknut.adfs.free_space_map import OldFreeSpaceMap
+from oaknut.dfs import basic
 from oaknut.dfs.exceptions import (
     ADFSDirectoryFullError,
     ADFSError,
@@ -716,7 +716,7 @@ class ADFSPath:
 
         Uses the ``Access`` IntFlag enum::
 
-            from oaknut.dfs.adfs_directory import Access
+            from oaknut.adfs.directory import Access
             path.chmod(Access.R | Access.W | Access.L)
 
         Only the owner R, W, L, and E attributes are affected.
@@ -918,7 +918,7 @@ def _initialise_old_free_space_map(
     boot_option: int = 0,
 ) -> None:
     """Write an empty old-format free space map to sectors 0–1."""
-    from oaknut.dfs.adfs_free_space_map import _calculate_old_map_checksum
+    from oaknut.adfs.free_space_map import _calculate_old_map_checksum
 
     data = unified.sector_range(0, 2)
 
