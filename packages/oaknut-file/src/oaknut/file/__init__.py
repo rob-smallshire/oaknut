@@ -10,6 +10,7 @@ __version__ = "1.0.0"
 # Side-effect import registers the 'acorn' text codec on package import.
 import oaknut.file.acorn_encoding  # noqa: F401
 from oaknut.file.access import Access, format_access_hex, format_access_text
+from oaknut.file.boot_option import BootOption
 from oaknut.file.filename_encoding import (
     build_filename_suffix,
     build_mos_filename_suffix,
@@ -41,6 +42,7 @@ from oaknut.file.xattr import (
 __all__ = [
     "Access",
     "AcornMeta",
+    "BootOption",
     "MetaFormat",
     "SOURCE_DIR",
     "SOURCE_FILENAME",

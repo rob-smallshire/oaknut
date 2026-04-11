@@ -17,7 +17,6 @@ from oaknut.dfs.adfs import (
     geometry_for_capacity,
 )
 from oaknut.dfs.adfs_directory import Access
-from oaknut.dfs.boot_option import BootOption
 from oaknut.dfs.catalogue import DiskInfo
 from oaknut.dfs.dfs import DFS, DFSPath, DFSStat
 from oaknut.dfs.exceptions import FSError
@@ -47,6 +46,7 @@ from oaknut.file import (
     AcornMeta,
     MetaFormat,
 )
+from oaknut.file.boot_option import BootOption
 
 Version = namedtuple("Version", ["major", "minor", "patch"])
 
