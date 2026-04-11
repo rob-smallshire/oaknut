@@ -17,6 +17,7 @@ Most callers will only touch :func:`initialise` and the
 
 from __future__ import annotations
 
+from oaknut.afs.wfsinit.driver import initialise
 from oaknut.afs.wfsinit.layout import InitSpec, UserSpec
 from oaknut.afs.wfsinit.partition import (
     AFSSizeSpec,
@@ -31,5 +32,6 @@ __all__ = [
     "RepartitionPlan",
     "UserSpec",
     "apply",
+    "initialise",
     "plan",
 ]
