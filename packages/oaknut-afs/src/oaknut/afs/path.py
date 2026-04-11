@@ -239,3 +239,133 @@ class AFSPath:
 
     def __iter__(self) -> Iterator[AFSPath]:
         return self.iterdir()
+
+    # ------------------------------------------------------------------
+    # Write path — phases 11-13
+    # ------------------------------------------------------------------
+
+    def write_bytes(
+        self,
+        data: bytes,
+        *,
+        load_address: int = 0,
+        exec_address: int = 0,
+        access=None,
+        date=None,
+    ) -> None:
+        """Create or replace a file at this path with ``data``.
+
+        If an object already exists at this path it is freed first,
+        its directory entry is rewritten, and the new content is
+        placed in freshly-allocated sectors. Allocator-level rollback
+        on space exhaustion is handled by the lower layers.
+
+        ``access`` defaults to ``"LR/R"``; ``date`` defaults to
+        today's date.
+        """
+        import datetime
+
+        from oaknut.afs.access import AFSAccess
+        from oaknut.afs.types import AfsDate
+
+        afs = self._require_afs()
+        if self.is_root():
+            raise AFSPathError("cannot write_bytes to the root directory")
+        if access is None:
+            # ACCDEF at Uade01:271 — owner R+W, no public access,
+            # unlocked. Matches what the ROM's create path defaults to.
+            access = AFSAccess.from_string("WR/")
+        if date is None:
+            date = AfsDate(datetime.date.today())
+
+        parent_sin, name = afs._resolve_parent_and_name(self)
+        afs._write_file(
+            parent_sin,
+            name,
+            data,
+            load_address=load_address,
+            exec_address=exec_address,
+            access=access,
+            date=date,
+        )
+
+    def mkdir(
+        self,
+        *,
+        access=None,
+        date=None,
+    ) -> None:
+        """Create an empty directory at this path.
+
+        A directory is an object whose data is a valid empty
+        directory byte image (DRENTS=0, free list spanning every
+        slot, trailing seq byte matching leading). Its access byte
+        has the directory-type bit set.
+        """
+        import datetime
+
+        from oaknut.afs.access import AFSAccess
+        from oaknut.afs.directory import build_directory_bytes
+        from oaknut.afs.types import AfsDate
+
+        afs = self._require_afs()
+        if self.is_root():
+            raise AFSPathError("cannot mkdir the root directory")
+        if access is None:
+            access = AFSAccess.from_string("D/")
+        if date is None:
+            date = AfsDate(datetime.date.today())
+
+        parent_sin, name = afs._resolve_parent_and_name(self)
+
+        # A fresh directory: default 2-sector, 19-slot capacity,
+        # name = the final path component, seq = 0.
+        dir_bytes = build_directory_bytes(
+            name=name,
+            master_sequence_number=0,
+            entries=[],
+            size_in_bytes=512,
+        )
+        afs._write_file(
+            parent_sin,
+            name,
+            dir_bytes,
+            load_address=0,
+            exec_address=0,
+            access=access,
+            date=date,
+        )
+
+    def unlink(self) -> None:
+        """Delete this file (or empty directory) from its parent.
+
+        Frees the underlying object's sectors and removes the
+        directory entry. Refuses non-empty directories, matching
+        ``DELCHK`` at ``Uade0D:1218``.
+        """
+        from oaknut.afs.directory import AfsDirectory, delete_entry
+        from oaknut.afs.exceptions import AFSDirectoryNotEmptyError, AFSFileLockedError
+
+        afs = self._require_afs()
+        if self.is_root():
+            raise AFSPathError("cannot unlink the root directory")
+        parent_sin, name = afs._resolve_parent_and_name(self)
+        parent_raw = afs._read_object_bytes(parent_sin)
+        parent_dir = AfsDirectory.from_bytes(parent_raw)
+        entry = parent_dir[name]
+        if entry.is_locked:
+            raise AFSFileLockedError(f"{self} is locked (L bit set)")
+        if entry.is_directory:
+            child_raw = afs._read_object_bytes(entry.sin)
+            child_dir = AfsDirectory.from_bytes(child_raw)
+            if len(child_dir) > 0:
+                raise AFSDirectoryNotEmptyError(
+                    f"{self} is not empty ({len(child_dir)} entries)"
+                )
+        afs._delete_object(entry.sin)
+        new_parent = delete_entry(parent_raw, name)
+        afs._write_object_bytes(parent_sin, new_parent)
+
+    def rmdir(self) -> None:
+        """Alias for :meth:`unlink` — the empty-dir check is shared."""
+        self.unlink()

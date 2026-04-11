@@ -466,6 +466,174 @@ class AFS:
         return chain.total_sectors() + additional_sectors
 
     # ------------------------------------------------------------------
+    # Object creation / destruction — phase 11+
+    # ------------------------------------------------------------------
+
+    def _create_object(
+        self,
+        data: bytes,
+    ) -> SystemInternalName:
+        """Allocate a new file or directory object from ``data`` bytes.
+
+        Mirrors ``MPCRSP`` (``Uade10.asm:84-255``): allocate one
+        sector for the JesMap map block, allocate enough data
+        sectors to cover ``data``, build the map block with the
+        extents + BILB, write the map block and all data sectors
+        to disc, and return the map block's SIN.
+
+        For phase 11 this handles objects that fit in a single map
+        block (up to 48 data extents × 0xFFFF sectors each). The
+        empty-object case (``data == b""``) is allowed and produces
+        a map block with zero data extents.
+        """
+        allocator = self._allocator()
+
+        # Allocate data extents first — if this fails we haven't
+        # consumed the map-block SIN yet.
+        n_data_sectors = (len(data) + MAP_SECTOR_SIZE - 1) // MAP_SECTOR_SIZE
+        data_extents: list[Extent] = []
+        if n_data_sectors > 0:
+            data_extents = allocator.allocate(n_data_sectors)
+
+        # Now take the map block SIN.
+        try:
+            map_sin = allocator.allocate_sector()
+        except Exception:
+            if data_extents:
+                allocator.free_extents(data_extents)
+            raise
+
+        if len(data_extents) > 48:
+            # Chain expansion — phase 11 refuses this.
+            allocator.free_extents(data_extents)
+            allocator.free_sector(map_sin)
+            raise AFSError(
+                f"object needs {len(data_extents)} extents; "
+                f"chain-expansion create not implemented in phase 11"
+            )
+
+        # Coalesce adjacent extents (the allocator already tries to
+        # do this in-cylinder, but runs in separate cylinders don't
+        # get merged by it).
+        coalesced: list[Extent] = []
+        for extent in data_extents:
+            if coalesced and int(coalesced[-1].end) == int(extent.start):
+                prev = coalesced[-1]
+                coalesced[-1] = Extent(
+                    start=prev.start,
+                    length=prev.length + extent.length,
+                )
+            else:
+                coalesced.append(extent)
+
+        last_sector_bytes = len(data) % MAP_SECTOR_SIZE
+        map_block = MapSector(
+            sin=SystemInternalName(map_sin),
+            extents=tuple(coalesced),
+            last_sector_bytes=last_sector_bytes,
+            sequence_number=0,
+            next_sin=None,
+        )
+        self._write_sector(int(map_sin), map_block.to_bytes())
+
+        # Write data sectors (tail-padded if needed).
+        cursor = 0
+        for extent in coalesced:
+            for offset in range(extent.length):
+                chunk = data[cursor : cursor + MAP_SECTOR_SIZE]
+                if len(chunk) < MAP_SECTOR_SIZE:
+                    chunk = chunk + b"\x00" * (MAP_SECTOR_SIZE - len(chunk))
+                self._write_sector(int(extent.start) + offset, chunk)
+                cursor += MAP_SECTOR_SIZE
+
+        # Flush the bitmap shadow so the allocations are persistent.
+        self._bitmap_shadow().flush()
+
+        return SystemInternalName(map_sin)
+
+    def _delete_object(self, sin: SystemInternalName) -> None:
+        """Free every sector belonging to the object at ``sin``.
+
+        Walks the map chain, releases each data extent back to the
+        allocator, then releases every map block in the chain.
+        Mirrors ``CLRBLK`` + ``DAGRP`` (``Uade12.asm:891``/``1116``).
+        """
+        allocator = self._allocator()
+        chain = self._read_map_chain(sin)
+        for block in chain.blocks:
+            for extent in block.extents:
+                allocator.free_extent(extent)
+            allocator.free_sector(int(block.sin))
+        self._bitmap_shadow().flush()
+
+    # ------------------------------------------------------------------
+    # High-level file write — phase 11
+    # ------------------------------------------------------------------
+
+    def _write_file(
+        self,
+        parent_dir_sin: SystemInternalName,
+        name: str,
+        data: bytes,
+        *,
+        load_address: int,
+        exec_address: int,
+        access,
+        date,
+    ) -> SystemInternalName:
+        """Create a new file object and link it into ``parent_dir_sin``.
+
+        If an entry with ``name`` already exists in the parent, its
+        old object is freed first and the directory entry is rewritten
+        to point at the new one — matching the RETANB replace path at
+        ``Uade0E.asm:806`` semantically (though the ROM's version
+        preserves access byte; we honour the caller's).
+        """
+        from oaknut.afs.directory import DirectoryEntry as _DirectoryEntry
+        from oaknut.afs.directory import delete_entry as _delete_entry_bytes
+
+        parent_raw = self._read_object_bytes(parent_dir_sin)
+        parent_dir = AfsDirectory.from_bytes(parent_raw)
+        if parent_dir.contains(name):
+            existing = parent_dir[name]
+            self._delete_object(existing.sin)
+            updated_parent = _delete_entry_bytes(parent_raw, name)
+            self._write_object_bytes(parent_dir_sin, updated_parent)
+
+        new_sin = self._create_object(data)
+
+        entry = _DirectoryEntry(
+            name=name,
+            load_address=load_address,
+            exec_address=exec_address,
+            access=access,
+            date=date,
+            sin=new_sin,
+        )
+        self.insert_into_directory(parent_dir_sin, entry)
+        return new_sin
+
+    def _resolve_parent_and_name(
+        self,
+        path: AFSPath,
+    ) -> tuple[SystemInternalName, str]:
+        """Return ``(parent_dir_sin, final_name)`` for a non-root path.
+
+        Raises :class:`AFSPathError` if ``path`` is the root, or if
+        the parent cannot be resolved.
+        """
+        if path.is_root():
+            raise AFSPathError("cannot operate on the root directory this way")
+        if len(path.parts) == 2:
+            # Child of root.
+            return SystemInternalName(int(self._info.root_sin)), path.parts[1]
+        parent_path = path.parent
+        _, parent_entry = self._resolve(parent_path)
+        if not parent_entry.is_directory:
+            raise AFSPathError(f"parent {parent_path} is a file, not a directory")
+        return SystemInternalName(int(parent_entry.sin)), path.parts[-1]
+
+    # ------------------------------------------------------------------
     # Directory insert with auto-grow — phase 10
     # ------------------------------------------------------------------
 
