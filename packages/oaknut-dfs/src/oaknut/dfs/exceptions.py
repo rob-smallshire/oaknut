@@ -1,4 +1,4 @@
-"""Exception hierarchy for oaknut_dfs library.
+"""Exception hierarchy for oaknut.dfs library.
 
 All exceptions derive from FSError, the common root for both DFS and ADFS
 filesystem errors. This allows callers to catch all library errors with a
@@ -26,7 +26,7 @@ Hierarchy:
 
 
 class FSError(Exception):
-    """Base exception for all oaknut_dfs filesystem errors.
+    """Base exception for all oaknut.dfs filesystem errors.
 
     Catches both DFS and ADFS errors with a single handler.
     """

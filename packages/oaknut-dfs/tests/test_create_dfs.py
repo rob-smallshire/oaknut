@@ -8,8 +8,8 @@ and that files can be written and read back.
 
 import pytest
 
-from oaknut_dfs.dfs import DFS
-from oaknut_dfs.formats import (
+from oaknut.dfs.dfs import DFS
+from oaknut.dfs.formats import (
     ACORN_DFS_40T_SINGLE_SIDED,
     ACORN_DFS_40T_DOUBLE_SIDED_INTERLEAVED,
     ACORN_DFS_40T_DOUBLE_SIDED_SEQUENTIAL,

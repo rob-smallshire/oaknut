@@ -1,7 +1,7 @@
 """Tests for custom exception hierarchy."""
 
 import pytest
-from oaknut_dfs.exceptions import (
+from oaknut.dfs.exceptions import (
     FSError,
     DFSError,
     CatalogError,

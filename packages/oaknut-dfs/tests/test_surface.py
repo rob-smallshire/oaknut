@@ -1,7 +1,7 @@
 """Tests for the surface module."""
 import pytest
 
-from oaknut_dfs.surface import (
+from oaknut.dfs.surface import (
     SurfaceSpec,
     TrackFootprint,
     DiscImage,

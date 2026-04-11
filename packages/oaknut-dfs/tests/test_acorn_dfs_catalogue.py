@@ -2,9 +2,9 @@
 
 import pytest
 
-from oaknut_dfs.acorn_dfs_catalogue import AcornDFSCatalogue
-from oaknut_dfs.catalogue import Catalogue
-from oaknut_dfs.surface import DiscImage, SurfaceSpec
+from oaknut.dfs.acorn_dfs_catalogue import AcornDFSCatalogue
+from oaknut.dfs.catalogue import Catalogue
+from oaknut.dfs.surface import DiscImage, SurfaceSpec
 
 
 class TestCatalogueRegistry:

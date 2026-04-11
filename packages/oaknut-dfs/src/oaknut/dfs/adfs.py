@@ -22,10 +22,10 @@ from os import PathLike
 from pathlib import Path
 from typing import Iterator, Union
 
-from oaknut_file import AcornMeta, MetaFormat
+from oaknut.file import AcornMeta, MetaFormat
 
-from oaknut_dfs import basic
-from oaknut_dfs.adfs_directory import (
+from oaknut.dfs import basic
+from oaknut.dfs.adfs_directory import (
     Access,
     ADFSDirectoryFormat,
     OldDirectoryFormat,
@@ -33,21 +33,21 @@ from oaknut_dfs.adfs_directory import (
     _ADFSDirectoryEntry,
     _ADFSRawAttributes,
 )
-from oaknut_dfs.host_bridge import (
+from oaknut.dfs.host_bridge import (
     DEFAULT_EXPORT_META_FORMAT,
     DEFAULT_IMPORT_META_FORMATS,
     export_with_metadata,
     import_with_metadata,
 )
-from oaknut_dfs.adfs_free_space_map import OldFreeSpaceMap
-from oaknut_dfs.exceptions import (
+from oaknut.dfs.adfs_free_space_map import OldFreeSpaceMap
+from oaknut.dfs.exceptions import (
     ADFSDirectoryFullError,
     ADFSError,
     ADFSFileLockedError,
     ADFSPathError,
 )
-from oaknut_dfs.surface import DiscImage, SurfaceSpec
-from oaknut_dfs.unified_disc import UnifiedDisc
+from oaknut.dfs.surface import DiscImage, SurfaceSpec
+from oaknut.dfs.unified_disc import UnifiedDisc
 
 
 _ADFS_SECTORS_PER_TRACK = 16
@@ -529,7 +529,7 @@ class ADFSPath:
         """Read a BBC BASIC program and return its detokenised source.
 
         Composes :meth:`read_bytes` with
-        :func:`oaknut_dfs.basic.detokenise`. Never compose a BASIC
+        :func:`oaknut.dfs.basic.detokenise`. Never compose a BASIC
         program with :meth:`read_text` — tokenised BASIC is bytecode,
         not text, and decoding it through a character codec will
         produce garbage.
@@ -607,10 +607,10 @@ class ADFSPath:
     ) -> None:
         """Write a BBC BASIC program, tokenising the source first.
 
-        Composes :func:`oaknut_dfs.basic.tokenise` with
+        Composes :func:`oaknut.dfs.basic.tokenise` with
         :meth:`write_bytes`. Defaults the load address to the BBC
         Micro's canonical ``0x1900``; pass
-        :data:`oaknut_dfs.basic.ELECTRON_BASIC_LOAD_ADDRESS` for
+        :data:`oaknut.dfs.basic.ELECTRON_BASIC_LOAD_ADDRESS` for
         Electron programs.
 
         Args:
@@ -718,7 +718,7 @@ class ADFSPath:
 
         Uses the ``Access`` IntFlag enum::
 
-            from oaknut_dfs.adfs_directory import Access
+            from oaknut.dfs.adfs_directory import Access
             path.chmod(Access.R | Access.W | Access.L)
 
         Only the owner R, W, L, and E attributes are affected.
@@ -920,7 +920,7 @@ def _initialise_old_free_space_map(
     boot_option: int = 0,
 ) -> None:
     """Write an empty old-format free space map to sectors 0–1."""
-    from oaknut_dfs.adfs_free_space_map import _calculate_old_map_checksum
+    from oaknut.dfs.adfs_free_space_map import _calculate_old_map_checksum
 
     data = unified.sector_range(0, 2)
 

@@ -11,13 +11,13 @@ from helpers.adfs_image import (
     make_old_dir_entry as _make_old_dir_entry,
     make_old_directory as _make_old_directory,
 )
-from oaknut_dfs.adfs_directory import (
+from oaknut.dfs.adfs_directory import (
     OldDirectoryFormat,
     _ADFSDirectory,
     _ADFSDirectoryEntry,
     _ADFSRawAttributes,
 )
-from oaknut_dfs.sectors_view import SectorsView
+from oaknut.dfs.sectors_view import SectorsView
 
 
 class TestOldDirectorySerializeRoundTrip:

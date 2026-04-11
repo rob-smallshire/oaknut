@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from oaknut_dfs.dfs import DFS
-from oaknut_dfs.formats import (
+from oaknut.dfs.dfs import DFS
+from oaknut.dfs.formats import (
     ACORN_DFS_40T_SINGLE_SIDED,
     ACORN_DFS_40T_DOUBLE_SIDED_INTERLEAVED,
     ACORN_DFS_80T_SINGLE_SIDED,
@@ -933,7 +933,7 @@ class TestDFSFromFile:
 
     def test_from_file_with_side(self, tmp_path):
         """Test from_file with side parameter for DSD images."""
-        from oaknut_dfs.formats import ACORN_DFS_40T_DOUBLE_SIDED_INTERLEAVED
+        from oaknut.dfs.formats import ACORN_DFS_40T_DOUBLE_SIDED_INTERLEAVED
 
         # Create a minimal DSD
         buf = bytearray(204800)

@@ -1,4 +1,4 @@
-"""Tests for the oaknut_dfs.basic module.
+"""Tests for the oaknut.dfs.basic module.
 
 The tokeniser and detokeniser are stubs that raise NotImplementedError
 until the real implementation lands. These tests lock in the module's
@@ -8,7 +8,7 @@ without disturbing callers.
 
 import pytest
 
-from oaknut_dfs import basic
+from oaknut.dfs import basic
 
 
 class TestConstants:
@@ -45,7 +45,7 @@ class TestDetokeniseStub:
 class TestModuleIsolation:
     """The basic module is destined for a standalone oaknut-basic
     package, so it must not import anything from the rest of
-    oaknut_dfs. Guard against regressions."""
+    oaknut.dfs. Guard against regressions."""
 
     def test_no_oaknut_dfs_imports_in_basic(self):
         import ast
@@ -57,11 +57,11 @@ class TestModuleIsolation:
         for node in ast.walk(tree):
             if isinstance(node, ast.ImportFrom):
                 assert node.module is None or not node.module.startswith(
-                    "oaknut_dfs"
-                ), f"basic.py must not import from oaknut_dfs: {ast.dump(node)}"
+                    "oaknut.dfs"
+                ), f"basic.py must not import from oaknut.dfs: {ast.dump(node)}"
             elif isinstance(node, ast.Import):
                 for alias in node.names:
-                    assert not alias.name.startswith("oaknut_dfs"), (
-                        f"basic.py must not import from oaknut_dfs: "
+                    assert not alias.name.startswith("oaknut.dfs"), (
+                        f"basic.py must not import from oaknut.dfs: "
                         f"{alias.name}"
                     )

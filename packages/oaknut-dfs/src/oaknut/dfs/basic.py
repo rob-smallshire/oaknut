@@ -16,7 +16,7 @@ disc image is ``DFSPath.read_basic`` / ``write_basic``, which wrap
 these functions with the correct load-address default.
 
 This module is deliberately self-contained — it imports nothing
-from the rest of ``oaknut_dfs`` — so it can later be lifted into a
+from the rest of ``oaknut.dfs`` — so it can later be lifted into a
 dedicated ``oaknut-basic`` package without refactoring.
 """
 

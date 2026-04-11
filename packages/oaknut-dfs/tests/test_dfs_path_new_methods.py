@@ -2,9 +2,9 @@
 
 import pytest
 
-from oaknut_dfs import basic
-from oaknut_dfs.dfs import DFS
-from oaknut_dfs.formats import ACORN_DFS_40T_SINGLE_SIDED
+from oaknut.dfs import basic
+from oaknut.dfs.dfs import DFS
+from oaknut.dfs.formats import ACORN_DFS_40T_SINGLE_SIDED
 
 
 def _make_empty_dfs():

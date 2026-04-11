@@ -1,17 +1,17 @@
 """Bridge between Acorn filesystem images and the host filesystem.
 
-Centralises all contact with ``oaknut_file`` for import/export of files
+Centralises all contact with ``oaknut.file`` for import/export of files
 to/from DFS and ADFS disc images. Both ``DFSPath`` and ``ADFSPath``
 delegate here so that widening the set of supported metadata schemes
 is a single-file change.
 
 Two schemes are modelled, mirroring ``oaknut_zip``:
 
-- **Export** takes one :class:`~oaknut_file.MetaFormat` (or ``None`` for
+- **Export** takes one :class:`~oaknut.file.MetaFormat` (or ``None`` for
   data-only). The chosen format determines where the metadata lands —
   traditional or PiEconetBridge INF sidecar, xattr on the data file,
   or a RISC OS / MOS filename suffix.
-- **Import** takes an ordered sequence of :class:`~oaknut_file.MetaFormat`
+- **Import** takes an ordered sequence of :class:`~oaknut.file.MetaFormat`
   values and tries each reader in turn, returning the first hit.
   ``DEFAULT_IMPORT_META_FORMATS`` is a sensible cascade that most
   callers won't need to override.
@@ -26,7 +26,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from pathlib import Path
 
-from oaknut_file import (
+from oaknut.file import (
     AcornMeta,
     MetaFormat,
     SOURCE_FILENAME,
@@ -44,8 +44,8 @@ from oaknut_file import (
 )
 
 
-# Xattr source labels — oaknut_file doesn't (yet) define these, so we
-# use the MetaFormat value strings directly. If oaknut_file later grows
+# Xattr source labels — oaknut.file doesn't (yet) define these, so we
+# use the MetaFormat value strings directly. If oaknut.file later grows
 # SOURCE_XATTR_* constants, swap these for them.
 SOURCE_XATTR_ACORN = MetaFormat.XATTR_ACORN.value
 SOURCE_XATTR_PIEB = MetaFormat.XATTR_PIEB.value
@@ -261,7 +261,7 @@ def import_with_metadata(
         * ``clean_source_path`` equals *source_filepath* unless the
           filename-encoded reader matched, in which case the encoded
           suffix has been stripped.
-        * ``source_label`` is one of oaknut_file's ``SOURCE_*``
+        * ``source_label`` is one of oaknut.file's ``SOURCE_*``
           constants, ``"xattr-acorn"`` / ``"xattr-pieb"``, or ``None``
           if no reader matched.
         * ``meta`` is the resolved :class:`AcornMeta`, or an empty
@@ -269,7 +269,7 @@ def import_with_metadata(
 
     The dialect-equivalent pairs (``INF_TRAD``/``INF_PIEB`` and
     ``FILENAME_RISCOS``/``FILENAME_MOS``) dispatch to the same reader;
-    oaknut_file's parsers auto-detect the dialect, so listing both is
+    oaknut.file's parsers auto-detect the dialect, so listing both is
     harmless but redundant.
     """
     source_filepath = Path(source_filepath)

@@ -8,10 +8,10 @@ from pathlib import Path
 
 import pytest
 
-from oaknut_dfs.adfs import ADFS
-from oaknut_dfs.dfs import DFS
-from oaknut_dfs.formats import DiskFormat
-from oaknut_dfs.surface import SurfaceSpec
+from oaknut.dfs.adfs import ADFS
+from oaknut.dfs.dfs import DFS
+from oaknut.dfs.formats import DiskFormat
+from oaknut.dfs.surface import SurfaceSpec
 
 
 IMAGES_DIR = Path(__file__).parent / "images"

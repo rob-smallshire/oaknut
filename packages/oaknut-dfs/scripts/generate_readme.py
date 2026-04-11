@@ -16,9 +16,9 @@ from pathlib import Path
 from jinja2 import Environment, FileSystemLoader
 
 # Register catalogue classes before using DFS
-import oaknut_dfs.acorn_dfs_catalogue  # noqa: F401
+import oaknut.dfs.acorn_dfs_catalogue  # noqa: F401
 
-from oaknut_dfs import DFS, ACORN_DFS_80T_SINGLE_SIDED
+from oaknut.dfs import DFS, ACORN_DFS_80T_SINGLE_SIDED
 
 REPO_DIRPATH = Path(__file__).resolve().parent.parent
 TEMPLATE_DIRPATH = REPO_DIRPATH / "scripts"
@@ -41,7 +41,7 @@ def capture_dfs_open() -> str:
     dfs = _load_game_disc()
     title = dfs.title.rstrip("\x00")
     lines = [
-        "from oaknut_dfs import DFS, ACORN_DFS_80T_SINGLE_SIDED",
+        "from oaknut.dfs import DFS, ACORN_DFS_80T_SINGLE_SIDED",
         "",
         'with DFS.from_file("Zalaga.ssd", ACORN_DFS_80T_SINGLE_SIDED) as dfs:',
         f"    print(dfs.title)   # {title!r}",
@@ -59,7 +59,7 @@ def capture_dfs_open() -> str:
 
 def capture_dfs_create() -> str:
     lines = [
-        "from oaknut_dfs import DFS, ACORN_DFS_80T_SINGLE_SIDED",
+        "from oaknut.dfs import DFS, ACORN_DFS_80T_SINGLE_SIDED",
         "",
         'with DFS.create_file("demo.ssd", ACORN_DFS_80T_SINGLE_SIDED, title="DEMO") as dfs:',
         '    dfs.save("$.HELLO", b"Hello, World!", load_address=0x1900)',
@@ -70,7 +70,7 @@ def capture_dfs_create() -> str:
 
 def capture_dfs_dsd() -> str:
     lines = [
-        "from oaknut_dfs import DFS, ACORN_DFS_80T_DOUBLE_SIDED_INTERLEAVED",
+        "from oaknut.dfs import DFS, ACORN_DFS_80T_DOUBLE_SIDED_INTERLEAVED",
         "",
         'with DFS.from_file("game.dsd", ACORN_DFS_80T_DOUBLE_SIDED_INTERLEAVED) as side0:',
         "    print(side0.title)",
@@ -96,12 +96,12 @@ def capture_dfs_walk() -> str:
 
 def capture_adfs_floppy_open() -> str:
     lines = [
-        "from oaknut_dfs import ADFS",
+        "from oaknut.dfs import ADFS",
         "",
         'with ADFS.from_file("MasterWelcome.adl") as adfs:',
     ]
 
-    from oaknut_dfs import ADFS
+    from oaknut.dfs import ADFS
     if ADFS_FIXTURE_FILEPATH.exists():
         with ADFS.from_file(ADFS_FIXTURE_FILEPATH) as adfs:
             lines.append(f'    print(adfs.title)   # {adfs.title!r}')
@@ -132,7 +132,7 @@ def capture_adfs_floppy_walk() -> str:
 
 def capture_adfs_floppy_create() -> str:
     lines = [
-        "from oaknut_dfs import ADFS, ADFS_L",
+        "from oaknut.dfs import ADFS, ADFS_L",
         "",
         'with ADFS.create_file("blank.adl", ADFS_L, title="My Disc") as adfs:',
         "    pass  # empty formatted disc ready for use",
@@ -145,7 +145,7 @@ def capture_adfs_floppy_create() -> str:
 
 def capture_adfs_hdd_open() -> str:
     lines = [
-        "from oaknut_dfs import ADFS",
+        "from oaknut.dfs import ADFS",
         "",
         'with ADFS.from_file("scsi0.dat") as adfs:',
         "    print(adfs.title)",
@@ -161,7 +161,7 @@ def capture_adfs_hdd_open() -> str:
 
 def capture_adfs_hdd_create() -> str:
     lines = [
-        "from oaknut_dfs import ADFS",
+        "from oaknut.dfs import ADFS",
         "",
         "# Create a 20MB hard disc image",
         'with ADFS.create_file("scsi0.dat", capacity_bytes=20 * 1024 * 1024, title="Data") as adfs:',

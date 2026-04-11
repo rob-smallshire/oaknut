@@ -19,10 +19,10 @@ import shutil
 import stat
 
 # Import to ensure catalogue classes are registered
-import oaknut_dfs.acorn_dfs_catalogue  # noqa: F401
+import oaknut.dfs.acorn_dfs_catalogue  # noqa: F401
 
-from oaknut_dfs import DFS
-from oaknut_dfs.formats import (
+from oaknut.dfs import DFS
+from oaknut.dfs.formats import (
     ACORN_DFS_40T_DOUBLE_SIDED_INTERLEAVED,
     ACORN_DFS_40T_SINGLE_SIDED,
     ACORN_DFS_80T_DOUBLE_SIDED_INTERLEAVED,

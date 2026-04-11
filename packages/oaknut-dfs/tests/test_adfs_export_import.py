@@ -1,12 +1,12 @@
 """Tests for ADFSPath.export_file() and import_file()."""
 
 import pytest
-from oaknut_file import Access, MetaFormat
+from oaknut.file import Access, MetaFormat
 
-from oaknut_dfs.adfs import ADFS, ADFS_S
+from oaknut.dfs.adfs import ADFS, ADFS_S
 
 # Ensure acorn codec is registered
-import oaknut_dfs.acorn_encoding  # noqa: F401
+import oaknut.dfs.acorn_encoding  # noqa: F401
 
 
 class TestExportFile:

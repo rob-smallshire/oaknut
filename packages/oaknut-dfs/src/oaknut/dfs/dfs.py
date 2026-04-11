@@ -10,19 +10,19 @@ from os import PathLike
 from pathlib import Path
 from typing import Iterator, Union
 
-from oaknut_file import Access, AcornMeta, MetaFormat
+from oaknut.file import Access, AcornMeta, MetaFormat
 
-from oaknut_dfs import basic
-from oaknut_dfs.catalogue import FileEntry
-from oaknut_dfs.catalogued_surface import CataloguedSurface
-from oaknut_dfs.formats import DiskFormat
-from oaknut_dfs.host_bridge import (
+from oaknut.dfs import basic
+from oaknut.dfs.catalogue import FileEntry
+from oaknut.dfs.catalogued_surface import CataloguedSurface
+from oaknut.dfs.formats import DiskFormat
+from oaknut.dfs.host_bridge import (
     DEFAULT_EXPORT_META_FORMAT,
     DEFAULT_IMPORT_META_FORMATS,
     export_with_metadata,
     import_with_metadata,
 )
-from oaknut_dfs.surface import DiscImage
+from oaknut.dfs.surface import DiscImage
 
 
 # Valid DFS directory characters
@@ -248,7 +248,7 @@ class DFSPath:
         """Read a BBC BASIC program and return its detokenised source.
 
         Composes :meth:`read_bytes` with
-        :func:`oaknut_dfs.basic.detokenise`. Never compose a BASIC
+        :func:`oaknut.dfs.basic.detokenise`. Never compose a BASIC
         program with :meth:`read_text` — tokenised BASIC is bytecode,
         not text, and decoding it through a character codec will
         produce garbage.
@@ -270,10 +270,10 @@ class DFSPath:
     ) -> None:
         """Write a BBC BASIC program, tokenising the source first.
 
-        Composes :func:`oaknut_dfs.basic.tokenise` with
+        Composes :func:`oaknut.dfs.basic.tokenise` with
         :meth:`write_bytes`. Defaults the load address to the BBC
         Micro's canonical ``0x1900``; pass
-        :data:`oaknut_dfs.basic.ELECTRON_BASIC_LOAD_ADDRESS` for
+        :data:`oaknut.dfs.basic.ELECTRON_BASIC_LOAD_ADDRESS` for
         Electron programs.
 
         Args:
@@ -575,7 +575,7 @@ class DFS:
             # 80-track sequential DSD
             dfs = DFS.from_buffer(buffer, ACORN_DFS_80T_DOUBLE_SIDED_SEQUENTIAL, side=1)
         """
-        from oaknut_dfs.catalogue import Catalogue
+        from oaknut.dfs.catalogue import Catalogue
 
         # Validate side parameter
         num_surfaces = len(disk_format.surface_specs)
@@ -617,7 +617,7 @@ class DFS:
         Returns:
             DFS instance backed by an in-memory buffer.
         """
-        from oaknut_dfs.catalogue import Catalogue
+        from oaknut.dfs.catalogue import Catalogue
 
         # Calculate buffer size from the format's surface specs
         specs = disk_format.surface_specs
@@ -667,7 +667,7 @@ class DFS:
         Yields:
             DFS instance backed by the file.
         """
-        from oaknut_dfs.catalogue import Catalogue
+        from oaknut.dfs.catalogue import Catalogue
 
         # Calculate file size
         specs = disk_format.surface_specs
@@ -845,7 +845,7 @@ class DFS:
             target_dirpath: Directory to export into. Created if missing.
             meta_format: Metadata encoding. Defaults to traditional INF.
                 ``None`` suppresses metadata (data files only). See
-                :func:`oaknut_dfs.host_bridge.export_with_metadata`.
+                :func:`oaknut.dfs.host_bridge.export_with_metadata`.
             owner: Econet owner ID, used only by PiEconetBridge formats.
 
         Raises:

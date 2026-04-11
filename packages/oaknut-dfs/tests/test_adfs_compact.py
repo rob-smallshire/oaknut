@@ -2,7 +2,7 @@
 
 import pytest
 
-from oaknut_dfs.adfs import ADFS, ADFS_S, ADFS_M
+from oaknut.dfs.adfs import ADFS, ADFS_S, ADFS_M
 
 
 class TestCompactBasic:

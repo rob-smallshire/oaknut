@@ -8,10 +8,10 @@ loading, metadata inspection, validation) without modifying the originals.
 import pytest
 from pathlib import Path
 
-import oaknut_dfs.acorn_dfs_catalogue  # noqa: F401
+import oaknut.dfs.acorn_dfs_catalogue  # noqa: F401
 
-from oaknut_dfs import DFS
-from oaknut_dfs.formats import ACORN_DFS_80T_SINGLE_SIDED
+from oaknut.dfs import DFS
+from oaknut.dfs.formats import ACORN_DFS_80T_SINGLE_SIDED
 
 
 GAMES_DIRPATH = Path(__file__).parent / "data" / "images" / "games"

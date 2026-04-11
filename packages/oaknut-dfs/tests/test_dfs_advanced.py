@@ -2,8 +2,8 @@
 
 import pytest
 
-from oaknut_dfs.dfs import DFS
-from oaknut_dfs.formats import (
+from oaknut.dfs.dfs import DFS
+from oaknut.dfs.formats import (
     ACORN_DFS_40T_SINGLE_SIDED,
 )
 

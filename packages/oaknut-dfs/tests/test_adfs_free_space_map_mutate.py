@@ -7,9 +7,9 @@ including checksum recalculation and entry merging.
 import pytest
 
 from helpers.adfs_image import make_old_free_space_map as _make_old_free_space_map
-from oaknut_dfs.adfs_free_space_map import OldFreeSpaceMap
-from oaknut_dfs.exceptions import ADFSDiscFullError
-from oaknut_dfs.sectors_view import SectorsView
+from oaknut.dfs.adfs_free_space_map import OldFreeSpaceMap
+from oaknut.dfs.exceptions import ADFSDiscFullError
+from oaknut.dfs.sectors_view import SectorsView
 
 
 def _make_fsm(free_entries, disc_size_sectors=640, **kwargs):

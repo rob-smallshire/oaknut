@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 
-from oaknut_dfs.surface import SurfaceSpec
+from oaknut.dfs.surface import SurfaceSpec
 
 # Base constants (shared across formats)
 BYTES_PER_SECTOR = 256

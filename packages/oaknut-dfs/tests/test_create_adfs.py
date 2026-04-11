@@ -8,7 +8,7 @@ expectations, and that files can be written and read back.
 
 import pytest
 
-from oaknut_dfs.adfs import ADFS, ADFS_S, ADFS_M, ADFS_L
+from oaknut.dfs.adfs import ADFS, ADFS_S, ADFS_M, ADFS_L
 
 
 # Expected properties for each ADFS format:

@@ -2,7 +2,7 @@
 
 import pytest
 
-from oaknut_dfs.adfs import ADFS, ADFS_S
+from oaknut.dfs.adfs import ADFS, ADFS_S
 
 
 class TestTitleSetter:

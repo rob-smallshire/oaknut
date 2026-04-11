@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Optional
 
-from oaknut_dfs.surface import Surface
+from oaknut.dfs.surface import Surface
 
 
 @dataclass(frozen=True)

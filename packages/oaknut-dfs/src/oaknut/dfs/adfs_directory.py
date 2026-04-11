@@ -9,10 +9,10 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
-from oaknut_file import Access  # re-exported for backward compatibility
+from oaknut.file import Access  # re-exported for backward compatibility
 
-from oaknut_dfs.exceptions import ADFSDirectoryError
-from oaknut_dfs.sectors_view import SectorsView
+from oaknut.dfs.exceptions import ADFSDirectoryError
+from oaknut.dfs.sectors_view import SectorsView
 
 
 __all__ = ["Access"]

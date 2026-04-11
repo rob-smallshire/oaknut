@@ -2,8 +2,8 @@
 
 import pytest
 
-from oaknut_dfs.adfs import ADFS, ADFS_S, ADFS_M
-from oaknut_dfs.exceptions import (
+from oaknut.dfs.adfs import ADFS, ADFS_S, ADFS_M
+from oaknut.dfs.exceptions import (
     ADFSDirectoryFullError,
     ADFSDiscFullError,
     ADFSPathError,

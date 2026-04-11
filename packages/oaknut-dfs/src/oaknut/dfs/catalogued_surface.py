@@ -2,8 +2,8 @@
 
 from typing import Type
 
-from oaknut_dfs.catalogue import Catalogue, FileEntry
-from oaknut_dfs.surface import Surface
+from oaknut.dfs.catalogue import Catalogue, FileEntry
+from oaknut.dfs.surface import Surface
 
 
 class CataloguedSurface:

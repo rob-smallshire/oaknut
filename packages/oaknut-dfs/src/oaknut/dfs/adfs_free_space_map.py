@@ -5,8 +5,8 @@ Parses the old-format free space map (ADFS S/M/L/D) from sectors 0–1.
 
 from __future__ import annotations
 
-from oaknut_dfs.exceptions import ADFSDiscFullError, ADFSMapError
-from oaknut_dfs.sectors_view import SectorsView
+from oaknut.dfs.exceptions import ADFSDiscFullError, ADFSMapError
+from oaknut.dfs.sectors_view import SectorsView
 
 
 # Old map layout constants

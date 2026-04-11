@@ -10,7 +10,7 @@ Tests cover:
 
 import pytest
 
-from oaknut_dfs.adfs import (
+from oaknut.dfs.adfs import (
     ADFS,
     _parse_dsc,
     geometry_for_capacity,

@@ -2,9 +2,9 @@
 
 import pytest
 
-from oaknut_dfs.acorn_dfs_catalogue import AcornDFSCatalogue
-from oaknut_dfs.catalogued_surface import CataloguedSurface
-from oaknut_dfs.surface import DiscImage, SurfaceSpec
+from oaknut.dfs.acorn_dfs_catalogue import AcornDFSCatalogue
+from oaknut.dfs.catalogued_surface import CataloguedSurface
+from oaknut.dfs.surface import DiscImage, SurfaceSpec
 
 
 class TestCataloguedSurfaceReadFile:

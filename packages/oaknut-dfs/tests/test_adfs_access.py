@@ -2,9 +2,9 @@
 
 import pytest
 
-from oaknut_dfs.adfs import ADFS, ADFS_S
-from oaknut_dfs.adfs_directory import Access
-from oaknut_dfs.exceptions import ADFSPathError
+from oaknut.dfs.adfs import ADFS, ADFS_S
+from oaknut.dfs.adfs_directory import Access
+from oaknut.dfs.exceptions import ADFSPathError
 
 
 class TestAccessEnum:

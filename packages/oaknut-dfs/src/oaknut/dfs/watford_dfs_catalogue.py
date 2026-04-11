@@ -2,8 +2,8 @@
 
 from typing import Optional
 
-from oaknut_dfs.catalogue import Catalogue, DiskInfo, FileEntry, ParsedFilename
-from oaknut_dfs.surface import Surface
+from oaknut.dfs.catalogue import Catalogue, DiskInfo, FileEntry, ParsedFilename
+from oaknut.dfs.surface import Surface
 
 
 class WatfordDFSCatalogue(Catalogue):

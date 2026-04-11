@@ -1,7 +1,7 @@
 """Tests for the host_bridge module — round-trip every MetaFormat.
 
 These tests exercise the export/import cascade directly, independently
-of DFS or ADFS. They verify that oaknut_file's INF, xattr, and
+of DFS or ADFS. They verify that oaknut.file's INF, xattr, and
 filename-encoded metadata schemes are all plumbed through.
 """
 
@@ -11,9 +11,9 @@ import os
 from pathlib import Path
 
 import pytest
-from oaknut_file import Access, AcornMeta, MetaFormat
+from oaknut.file import Access, AcornMeta, MetaFormat
 
-from oaknut_dfs.host_bridge import (
+from oaknut.dfs.host_bridge import (
     DEFAULT_EXPORT_META_FORMAT,
     DEFAULT_IMPORT_META_FORMATS,
     export_with_metadata,

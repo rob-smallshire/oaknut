@@ -6,7 +6,7 @@ from itertools import pairwise
 
 from typename import typename
 
-from oaknut_dfs.sectors_view import SectorsView as Sectors
+from oaknut.dfs.sectors_view import SectorsView as Sectors
 
 
 class Surface:
