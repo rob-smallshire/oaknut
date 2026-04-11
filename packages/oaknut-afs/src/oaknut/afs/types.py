@@ -89,27 +89,46 @@ class Geometry:
 # ---------------------------------------------------------------------------
 
 _BASE_YEAR = 1981  # Uade01.asm:207 — BASEYR = 81
-_MAX_ENCODABLE_YEAR = _BASE_YEAR + 0xFF  # ((year-81) AND &FF) fits in byte-ish
+# Year delta is 7 bits (4 bits at encoded[15:12], 3 bits at encoded[7:5]).
+_MAX_YEAR_DELTA = 0x7F
+_MAX_ENCODABLE_YEAR = _BASE_YEAR + _MAX_YEAR_DELTA
 
 
 @dataclass(frozen=True, slots=True)
 class AfsDate:
     """Packed 16-bit AFS creation date.
 
-    The on-disc format is the same as the Acorn file server date used
-    by NFS clients:
+    The on-disc format is the Acorn file-server "RISC OS / old-format"
+    date, stored little-endian as two bytes. The bit layout is:
 
-    .. code::
+    ======  =========================================================
+    Bits    Field
+    ======  =========================================================
+     0-4    Day (1..31)
+     5-7    High 3 bits of year delta
+     8-11   Month (1..12)
+    12-15   Low 4 bits of year delta
+    ======  =========================================================
 
-        encoded = ((year - 1981) * 4096)
+    where ``year_delta = year - 1981`` (so year 1981 has delta 0) and
+    is a 7-bit value covering 1981..2108.
+
+    This packing is equivalent to WFSINIT's formula (``WFSINIT.bas``
+    line 4890 ff.)::
+
+        encoded = ((year-81) * 4096)
                 + (month * 256)
                 + day
-                + ((year - 1981) & 0xF0) * 2
+                + ((year-81) AND &F0) * 2
+        stored = encoded AND &FFFF
 
-    The multiplication by 2 on the high nibble of the year offset is
-    how the Acorn encoding squeezes an 8-bit year delta into the
-    overlapping bit ranges of month and year. Years ≥ 2081 (offset
-    ≥ 100) are not representable.
+    The high-nibble-shifted-left-1 term is how the low 4 bits of the
+    year delta end up in bits 12-15 while the high 3 bits land in
+    bits 5-7. WFSINIT lets the value overflow 16 bits; only the low
+    16 bits are actually written. We mask explicitly for clarity.
+
+    Verified against the Beebmaster PDF test disc: ``8/8/2010``
+    round-trips to ``0xD828``.
 
     This class holds a Python ``datetime.date`` and (de)serialises on
     demand — we do *not* store the packed form, so every operation
@@ -129,12 +148,12 @@ class AfsDate:
         """Encode as the 2-byte little-endian packed form."""
         year_delta = self.date.year - _BASE_YEAR
         encoded = (
-            (year_delta * 0x1000)
-            + (self.date.month * 0x100)
-            + self.date.day
-            + ((year_delta & 0xF0) * 2)
+            self.date.day
+            | ((year_delta >> 4) & 0x07) << 5
+            | (self.date.month & 0x0F) << 8
+            | (year_delta & 0x0F) << 12
         )
-        return encoded.to_bytes(2, "little")
+        return (encoded & 0xFFFF).to_bytes(2, "little")
 
     @classmethod
     def from_bytes(cls, data: bytes) -> AfsDate:
@@ -144,11 +163,6 @@ class AfsDate:
         encoded = int.from_bytes(data, "little")
         day = encoded & 0x1F
         month = (encoded >> 8) & 0x0F
-        # Recover year_delta from the two overlapping sources: the
-        # low nibble of the high byte, plus the top bit of the low
-        # byte (where the *2 shift lands).
-        year_delta_low = (encoded >> 12) & 0x0F
-        year_delta_high = (encoded >> 9) & 0x70  # recover the high nibble
-        year_delta = year_delta_low | year_delta_high
+        year_delta = ((encoded >> 12) & 0x0F) | (((encoded >> 5) & 0x07) << 4)
         year = _BASE_YEAR + year_delta
         return cls(datetime.date(year, month, day))
