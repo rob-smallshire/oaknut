@@ -1,0 +1,82 @@
+name: Release
+
+# Publishes a package to PyPI when a namespaced tag is pushed.
+#
+#   oaknut-v<x.y.z>      → publish the oaknut meta-distribution
+#   oaknut-file-v<x.y.z> → publish oaknut-file
+#   oaknut-dfs-v<x.y.z>  → publish oaknut-dfs
+#   oaknut-zip-v<x.y.z>  → publish oaknut-zip
+#
+# Each tag fires the workflow once; a determine-package step parses
+# the tag and picks the right build command. Authentication uses the
+# account-scoped PYPI_TOKEN secret, which has upload permissions for
+# every current and future oaknut-* project.
+
+on:
+  push:
+    tags:
+      - 'oaknut-v*'
+      - 'oaknut-file-v*'
+      - 'oaknut-dfs-v*'
+      - 'oaknut-zip-v*'
+
+jobs:
+  publish:
+    name: Publish ${{ github.ref_name }} to PyPI
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.13"
+
+      - name: Determine package from tag
+        id: pkg
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          case "$tag" in
+            oaknut-v*)
+              # Meta-distribution. `uv build` at the workspace root
+              # builds the top-level oaknut package, not the workspace
+              # members — the members are built via --package.
+              echo "package=oaknut" >> "$GITHUB_OUTPUT"
+              echo "build_cmd=uv build" >> "$GITHUB_OUTPUT"
+              ;;
+            oaknut-file-v*)
+              echo "package=oaknut-file" >> "$GITHUB_OUTPUT"
+              echo "build_cmd=uv build --package oaknut-file" >> "$GITHUB_OUTPUT"
+              ;;
+            oaknut-dfs-v*)
+              echo "package=oaknut-dfs" >> "$GITHUB_OUTPUT"
+              echo "build_cmd=uv build --package oaknut-dfs" >> "$GITHUB_OUTPUT"
+              ;;
+            oaknut-zip-v*)
+              echo "package=oaknut-zip" >> "$GITHUB_OUTPUT"
+              echo "build_cmd=uv build --package oaknut-zip" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "ERROR: unrecognised tag format: $tag" >&2
+              exit 1
+              ;;
+          esac
+          echo "Determined package: $tag → $(grep '^package=' "$GITHUB_OUTPUT" | cut -d= -f2)"
+
+      - name: Install workspace
+        run: uv sync
+
+      - name: Build ${{ steps.pkg.outputs.package }}
+        run: |
+          # Wipe any stale dist/ artefacts from the sync step to keep
+          # the publish step from picking up wheels from other packages.
+          rm -rf dist/
+          ${{ steps.pkg.outputs.build_cmd }}
+          ls -la dist/
+
+      - name: Publish to PyPI
+        env:
+          UV_PUBLISH_TOKEN: ${{ secrets.PYPI_TOKEN }}
+        run: uv publish dist/*
