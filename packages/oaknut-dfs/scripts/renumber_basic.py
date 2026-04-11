@@ -32,20 +32,20 @@ def renumber_basic(input_filepath: Path, output_filepath: Path = None):
         output_filepath = input_filepath
 
     # Read all lines
-    with open(input_filepath, 'r') as f:
+    with open(input_filepath, "r") as f:
         lines = f.readlines()
 
     # Strip any existing line numbers and store the content
     content_lines = []
     for line in lines:
         # Remove line number if present (number followed by space or colon)
-        stripped = re.sub(r'^\d+[ \t:]?', '', line)
+        stripped = re.sub(r"^\d+[ \t:]?", "", line)
         content_lines.append(stripped)
 
     # Find error handler line for later
     error_handler_line_index = None
     for i, line in enumerate(content_lines):
-        if 'REM Error handler' in line or 'REM error handler' in line:
+        if "REM Error handler" in line or "REM error handler" in line:
             error_handler_line_index = i
             break
 
@@ -55,11 +55,11 @@ def renumber_basic(input_filepath: Path, output_filepath: Path = None):
 
     for i, content in enumerate(content_lines):
         # Check if line is blank
-        if content.strip() == '':
+        if content.strip() == "":
             # Blank line becomes numbered colon
             renumbered_lines.append(f"{new_line_num} :\n")
             new_line_num += 10
-        elif re.match(r'^[ \t]*:\s*$', content):
+        elif re.match(r"^[ \t]*:\s*$", content):
             # Line is just a colon - renumber it
             renumbered_lines.append(f"{new_line_num} :\n")
             new_line_num += 10
@@ -72,16 +72,12 @@ def renumber_basic(input_filepath: Path, output_filepath: Path = None):
     if error_handler_line_index is not None:
         error_handler_new_line = (error_handler_line_index + 1) * 10
         for i, line in enumerate(renumbered_lines):
-            if 'ON ERROR' in line and 'GOTO' in line:
+            if "ON ERROR" in line and "GOTO" in line:
                 # Replace any GOTO target in ON ERROR line with error handler line
-                renumbered_lines[i] = re.sub(
-                    r'GOTO \d+',
-                    f'GOTO {error_handler_new_line}',
-                    line
-                )
+                renumbered_lines[i] = re.sub(r"GOTO \d+", f"GOTO {error_handler_new_line}", line)
 
     # Write output
-    with open(output_filepath, 'w') as f:
+    with open(output_filepath, "w") as f:
         f.writelines(renumbered_lines)
 
     print(f"Renumbered {len([line for line in renumbered_lines if line.strip()])} lines")
@@ -106,5 +102,5 @@ def main():
     print(f"Successfully renumbered {input_filepath}")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

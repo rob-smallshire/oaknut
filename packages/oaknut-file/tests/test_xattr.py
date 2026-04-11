@@ -31,7 +31,6 @@ def host_file(tmp_path):
 
 
 class TestWriteAcornXattrs:
-
     def test_write_basic(self, host_file):
         write_acorn_xattrs(host_file, load_addr=0x1900, exec_addr=0x8023)
         meta = read_acorn_xattrs(host_file)
@@ -41,7 +40,10 @@ class TestWriteAcornXattrs:
 
     def test_write_with_attr(self, host_file):
         write_acorn_xattrs(
-            host_file, load_addr=0x1900, exec_addr=0x8023, attr=0x0B,
+            host_file,
+            load_addr=0x1900,
+            exec_addr=0x8023,
+            attr=0x0B,
         )
         meta = read_acorn_xattrs(host_file)
         assert meta.attr == 0x0B
@@ -53,7 +55,9 @@ class TestWriteAcornXattrs:
 
     def test_write_filetype_stamped(self, host_file):
         write_acorn_xattrs(
-            host_file, load_addr=0xFFFFFB00, exec_addr=0,
+            host_file,
+            load_addr=0xFFFFFB00,
+            exec_addr=0,
         )
         meta = read_acorn_xattrs(host_file)
         assert meta.is_filetype_stamped is True
@@ -67,7 +71,6 @@ class TestWriteAcornXattrs:
 
 
 class TestReadAcornXattrs:
-
     def test_read_no_xattrs_returns_none(self, host_file):
         assert read_acorn_xattrs(host_file) is None
 
@@ -94,7 +97,6 @@ class TestReadAcornXattrs:
 
 
 class TestWriteEconetXattrs:
-
     def test_write_basic(self, host_file):
         write_econet_xattrs(host_file, load_addr=0xFFFFDD00, exec_addr=0xFFFFDD00)
         meta = read_econet_xattrs(host_file)
@@ -103,7 +105,10 @@ class TestWriteEconetXattrs:
 
     def test_write_with_perm(self, host_file):
         write_econet_xattrs(
-            host_file, load_addr=0x1900, exec_addr=0x8023, attr=0x17,
+            host_file,
+            load_addr=0x1900,
+            exec_addr=0x8023,
+            attr=0x17,
         )
         meta = read_econet_xattrs(host_file)
         assert meta.attr == 0x17
@@ -116,7 +121,6 @@ class TestWriteEconetXattrs:
 
 
 class TestReadEconetXattrs:
-
     def test_read_no_xattrs_returns_none(self, host_file):
         assert read_econet_xattrs(host_file) is None
 
@@ -127,7 +131,6 @@ class TestReadEconetXattrs:
 
 
 class TestRoundTrip:
-
     def test_acorn_round_trip(self, host_file):
         write_acorn_xattrs(host_file, load_addr=0x1900, exec_addr=0x8023, attr=0x0B)
         meta = read_acorn_xattrs(host_file)

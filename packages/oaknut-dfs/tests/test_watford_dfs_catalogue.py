@@ -12,21 +12,21 @@ def watford_dfs_surface():
     buffer = bytearray(204800)  # 80-track single-sided (800 sectors × 256 bytes)
 
     # Initialize sector 0 (section 1 title in bytes 0-9)
-    buffer[0:10] = b'WATFORD   '  # 10-char title (7 letters + 3 spaces)
-    buffer[10:12] = b'\x00\x00'  # Bytes 10-11 reserved for catalog chaining
+    buffer[0:10] = b"WATFORD   "  # 10-char title (7 letters + 3 spaces)
+    buffer[10:12] = b"\x00\x00"  # Bytes 10-11 reserved for catalog chaining
 
     # Initialize sector 1 (section 1 metadata - no title continuation)
-    buffer[256:260] = b'\x00\x00\x00\x00'  # First 4 bytes (no title in Watford DFS)
+    buffer[256:260] = b"\x00\x00\x00\x00"  # First 4 bytes (no title in Watford DFS)
     buffer[256 + 4] = 0  # Cycle number
     buffer[256 + 5] = 0  # 0 files (bits 0,1,2 must be clear)
     buffer[256 + 6] = 0x03  # Boot option 0, 800 sectors high bits (0x03)
     buffer[256 + 7] = 0x20  # 800 sectors low byte (0x320 = 800)
 
     # Initialize sector 2 (0xAA marker - Watford DFS signature)
-    buffer[512:524] = b'\xAA' * 12
+    buffer[512:524] = b"\xaa" * 12
 
     # Initialize sector 3 (section 2 metadata)
-    buffer[768:772] = b'\x00\x00\x00\x00'  # First 4 bytes null
+    buffer[768:772] = b"\x00\x00\x00\x00"  # First 4 bytes null
     buffer[768 + 4] = 0  # Cycle number (matches section 1)
     buffer[768 + 5] = 0  # 0 files in section 2
     buffer[768 + 6] = 0x03  # Boot option 0, sector count high (matches section 1)
@@ -59,7 +59,7 @@ class TestWatfordDFSCatalogueRegistry:
     def test_identify_returns_none_for_acorn_dfs_image(self):
         """Test that Watford DFS doesn't match Acorn DFS images."""
         buffer = bytearray(102400)  # 40-track single-sided
-        buffer[0:12] = b'ACORNDFS    '  # No 0xAA marker
+        buffer[0:12] = b"ACORNDFS    "  # No 0xAA marker
         buffer[256 + 5] = 0
         buffer[256 + 6] = 0x01
         buffer[256 + 7] = 0x90  # 400 sectors
@@ -89,7 +89,7 @@ class TestWatfordDFSCatalogueMatches:
         """Test matches() rejects image without 0xAA marker."""
         # Clear the 0xAA marker
         buffer = watford_dfs_surface._disc_image.buffer
-        buffer[512:524] = b'\x00' * 12
+        buffer[512:524] = b"\x00" * 12
 
         assert not WatfordDFSCatalogue.matches(watford_dfs_surface)
 
@@ -161,12 +161,12 @@ class TestWatfordDFSCatalogueListFiles:
         buffer = watford_dfs_surface._disc_image.buffer
 
         # Add one file to section 1
-        buffer[8:15] = b'HELLO  '  # Filename
-        buffer[15] = ord('$')  # Directory
+        buffer[8:15] = b"HELLO  "  # Filename
+        buffer[15] = ord("$")  # Directory
 
-        buffer[256 + 8:256 + 10] = b'\x00\x00'  # Load address low
-        buffer[256 + 10:256 + 12] = b'\x00\x00'  # Exec address low
-        buffer[256 + 12:256 + 14] = b'\x0A\x00'  # Length = 10 bytes
+        buffer[256 + 8 : 256 + 10] = b"\x00\x00"  # Load address low
+        buffer[256 + 10 : 256 + 12] = b"\x00\x00"  # Exec address low
+        buffer[256 + 12 : 256 + 14] = b"\x0a\x00"  # Length = 10 bytes
         buffer[256 + 14] = 0x00  # Extra byte
         buffer[256 + 15] = 0x04  # Start sector = 4
 
@@ -206,7 +206,7 @@ class TestWatfordDFSCatalogueValidation:
     def test_validate_detects_missing_aa_marker(self, watford_dfs_surface):
         """Test validate() detects missing 0xAA marker."""
         buffer = watford_dfs_surface._disc_image.buffer
-        buffer[512:524] = b'\x00' * 12  # Clear marker
+        buffer[512:524] = b"\x00" * 12  # Clear marker
 
         catalogue = WatfordDFSCatalogue(watford_dfs_surface)
         errors = catalogue.validate()
@@ -248,7 +248,7 @@ class TestWatfordDFSCatalogueFileOperations:
             exec_address=0x1900,
             length=100,
             start_sector=4,
-            locked=False
+            locked=False,
         )
 
         # Verify file was added
@@ -274,7 +274,7 @@ class TestWatfordDFSCatalogueFileOperations:
             exec_address=0x1900,
             length=100,
             start_sector=4,
-            locked=False
+            locked=False,
         )
 
         # Remove the file
@@ -310,7 +310,7 @@ class TestWatfordDFSCatalogueFileOperations:
             exec_address=0x1900,
             length=256,
             start_sector=4,
-            locked=False
+            locked=False,
         )
         catalogue.add_file_entry(
             filename="FILE2",
@@ -319,7 +319,7 @@ class TestWatfordDFSCatalogueFileOperations:
             exec_address=0x1900,
             length=256,
             start_sector=10,  # Gap from sector 5-9
-            locked=False
+            locked=False,
         )
 
         # Compact should work without errors

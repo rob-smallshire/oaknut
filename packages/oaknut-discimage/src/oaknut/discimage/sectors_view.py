@@ -189,7 +189,7 @@ class SectorsView:
                 local_stop = min(view_len, stop - offset)
                 local_len = local_stop - local_start
 
-                view[local_start:local_stop] = value[value_offset:value_offset + local_len]
+                view[local_start:local_stop] = value[value_offset : value_offset + local_len]
                 value_offset += local_len
 
                 offset = view_end
@@ -209,7 +209,7 @@ class SectorsView:
         offset = 0
         for view in self._views:
             view_len = len(view)
-            result[offset:offset + view_len] = view
+            result[offset : offset + view_len] = view
             offset += view_len
         return bytes(result)
 

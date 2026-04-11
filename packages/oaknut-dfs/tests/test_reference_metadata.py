@@ -5,7 +5,6 @@ matches the BBC BASIC generator specifications.
 """
 
 
-
 class TestDiskMetadata:
     """Verify disk titles, boot options, and catalog structure."""
 
@@ -13,7 +12,7 @@ class TestDiskMetadata:
         """Verify basic validation disk has title 'BASIC' (with null padding)."""
         disk = reference_image("01-basic-validation.ssd")
         # BBC BASIC *TITLE stores only first word before space
-        assert disk.title.rstrip('\x00') == "BASIC"
+        assert disk.title.rstrip("\x00") == "BASIC"
 
     def test_catalog_sector_layout(self, reference_image):
         """Verify catalog occupies sectors 0-1, files start at sector 2+."""

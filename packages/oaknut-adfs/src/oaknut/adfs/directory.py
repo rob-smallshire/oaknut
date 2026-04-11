@@ -136,21 +136,21 @@ _OLD_DIR_SIZE = 1280  # 5 sectors × 256 bytes
 _OLD_DIR_SECTORS = 5
 _OLD_DIR_MAX_ENTRIES = 47
 _OLD_DIR_ENTRY_SIZE = 26
-_OLD_DIR_HEADER_SIZE = 5   # StartMasSeq (1) + StartName (4)
+_OLD_DIR_HEADER_SIZE = 5  # StartMasSeq (1) + StartName (4)
 _OLD_DIR_ENTRIES_OFFSET = _OLD_DIR_HEADER_SIZE  # 0x005
 
 # Tail starts after header + max entries
 _OLD_DIR_TAIL_OFFSET = _OLD_DIR_ENTRIES_OFFSET + _OLD_DIR_MAX_ENTRIES * _OLD_DIR_ENTRY_SIZE  # 0x4CB
 
 # Tail field offsets (relative to tail start)
-_OLD_TAIL_LAST_MARK = 0       # 1 byte
-_OLD_TAIL_DIR_NAME = 1        # 10 bytes
-_OLD_TAIL_PARENT = 11         # 3 bytes
-_OLD_TAIL_TITLE = 14          # 19 bytes
-_OLD_TAIL_RESERVED = 33       # 14 bytes
-_OLD_TAIL_END_MAS_SEQ = 47    # 1 byte
-_OLD_TAIL_END_NAME = 48       # 4 bytes
-_OLD_TAIL_CHECK_BYTE = 52     # 1 byte
+_OLD_TAIL_LAST_MARK = 0  # 1 byte
+_OLD_TAIL_DIR_NAME = 1  # 10 bytes
+_OLD_TAIL_PARENT = 11  # 3 bytes
+_OLD_TAIL_TITLE = 14  # 19 bytes
+_OLD_TAIL_RESERVED = 33  # 14 bytes
+_OLD_TAIL_END_MAS_SEQ = 47  # 1 byte
+_OLD_TAIL_END_NAME = 48  # 4 bytes
+_OLD_TAIL_CHECK_BYTE = 52  # 1 byte
 
 # Directory signatures
 _HUGO = b"Hugo"
@@ -173,6 +173,7 @@ def _extract_old_attributes(name_bytes: bytes) -> _ADFSRawAttributes:
       Char 8: P (private)
       Char 9: not used
     """
+
     def bit7(b: int) -> bool:
         return bool(b & 0x80)
 
@@ -228,18 +229,18 @@ def _parse_old_entry(data: SectorsView, entry_offset: int) -> _ADFSDirectoryEntr
         return None
 
     # Read 10-byte DirObName
-    name_bytes = data[entry_offset:entry_offset + 10]
+    name_bytes = data[entry_offset : entry_offset + 10]
     attributes = _extract_old_attributes(name_bytes)
     name = _strip_name(name_bytes)
 
     # Read remaining fields (all little-endian)
-    load_bytes = data[entry_offset + 0x0A:entry_offset + 0x0E]
+    load_bytes = data[entry_offset + 0x0A : entry_offset + 0x0E]
     load_address = int.from_bytes(load_bytes, "little")
 
-    exec_bytes = data[entry_offset + 0x0E:entry_offset + 0x12]
+    exec_bytes = data[entry_offset + 0x0E : entry_offset + 0x12]
     exec_address = int.from_bytes(exec_bytes, "little")
 
-    len_bytes = data[entry_offset + 0x12:entry_offset + 0x16]
+    len_bytes = data[entry_offset + 0x12 : entry_offset + 0x16]
     length = int.from_bytes(len_bytes, "little")
 
     indirect_disc_address = _read_24bit_le(data, entry_offset + 0x16)
@@ -330,14 +331,13 @@ class OldDirectoryFormat(ADFSDirectoryFormat):
         start_name = data[0x01:0x05]
         if start_name not in (_HUGO, _NICK):
             raise ADFSDirectoryError(
-                f"Invalid directory signature: {start_name!r} "
-                f"(expected {_HUGO!r} or {_NICK!r})"
+                f"Invalid directory signature: {start_name!r} (expected {_HUGO!r} or {_NICK!r})"
             )
 
         # Validate tail
         tail = _OLD_DIR_TAIL_OFFSET
         end_mas_seq = data[tail + _OLD_TAIL_END_MAS_SEQ]
-        end_name = data[tail + _OLD_TAIL_END_NAME:tail + _OLD_TAIL_END_NAME + 4]
+        end_name = data[tail + _OLD_TAIL_END_NAME : tail + _OLD_TAIL_END_NAME + 4]
 
         if end_name != start_name:
             raise ADFSDirectoryError(
@@ -347,8 +347,7 @@ class OldDirectoryFormat(ADFSDirectoryFormat):
 
         if start_mas_seq != end_mas_seq:
             raise ADFSDirectoryError(
-                f"Broken directory: StartMasSeq ({start_mas_seq}) != "
-                f"EndMasSeq ({end_mas_seq})"
+                f"Broken directory: StartMasSeq ({start_mas_seq}) != EndMasSeq ({end_mas_seq})"
             )
 
         # The DirCheckByte field is reserved (must be zero) on old-format
@@ -370,12 +369,12 @@ class OldDirectoryFormat(ADFSDirectoryFormat):
             entries.append(entry)
 
         # Parse tail fields
-        dir_name_bytes = data[tail + _OLD_TAIL_DIR_NAME:tail + _OLD_TAIL_DIR_NAME + 10]
+        dir_name_bytes = data[tail + _OLD_TAIL_DIR_NAME : tail + _OLD_TAIL_DIR_NAME + 10]
         dir_name = _strip_name(dir_name_bytes)
 
         parent_address = _read_24bit_le(data, tail + _OLD_TAIL_PARENT)
 
-        title_bytes = data[tail + _OLD_TAIL_TITLE:tail + _OLD_TAIL_TITLE + 19]
+        title_bytes = data[tail + _OLD_TAIL_TITLE : tail + _OLD_TAIL_TITLE + 19]
         title = _strip_name(title_bytes)
 
         return _ADFSDirectory(
@@ -399,8 +398,7 @@ class OldDirectoryFormat(ADFSDirectoryFormat):
             )
         if len(directory.entries) > _OLD_DIR_MAX_ENTRIES:
             raise ADFSDirectoryError(
-                f"Too many entries: {len(directory.entries)}, "
-                f"maximum is {_OLD_DIR_MAX_ENTRIES}"
+                f"Too many entries: {len(directory.entries)}, maximum is {_OLD_DIR_MAX_ENTRIES}"
             )
 
         # Clear the buffer
@@ -440,6 +438,6 @@ class OldDirectoryFormat(ADFSDirectoryFormat):
         # EndMasSeq
         data[tail + _OLD_TAIL_END_MAS_SEQ] = directory.sequence_number & 0xFF
         # EndName
-        data[tail + _OLD_TAIL_END_NAME:tail + _OLD_TAIL_END_NAME + 4] = _HUGO
+        data[tail + _OLD_TAIL_END_NAME : tail + _OLD_TAIL_END_NAME + 4] = _HUGO
         # DirCheckByte: reserved, must be zero
         data[tail + _OLD_TAIL_CHECK_BYTE] = 0x00

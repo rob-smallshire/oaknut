@@ -54,6 +54,7 @@ class TestReferenceImageSetup:
             for f in ssd_files:
                 # Check if write-protected
                 import stat
+
                 mode = f.stat().st_mode
                 protected = not (mode & stat.S_IWUSR)
                 protection = " [write-protected]" if protected else " [WRITABLE]"
@@ -66,6 +67,7 @@ class TestReferenceImageSetup:
             for f in dsd_files:
                 # Check if write-protected
                 import stat
+
                 mode = f.stat().st_mode
                 protected = not (mode & stat.S_IWUSR)
                 protection = " [write-protected]" if protected else " [WRITABLE]"
@@ -92,6 +94,7 @@ class TestReferenceImageSetup:
             pytest.skip("No reference images generated yet")
 
         import stat
+
         writable_images = []
 
         for img in images:

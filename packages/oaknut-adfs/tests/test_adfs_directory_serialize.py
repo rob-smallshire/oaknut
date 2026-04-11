@@ -42,9 +42,13 @@ class TestOldDirectorySerializeRoundTrip:
 
     def test_single_file(self):
         entries = [
-            _make_old_dir_entry("Hello", load_address=0x1900,
-                                exec_address=0x8023, length=256,
-                                indirect_disc_address=7),
+            _make_old_dir_entry(
+                "Hello",
+                load_address=0x1900,
+                exec_address=0x8023,
+                length=256,
+                indirect_disc_address=7,
+            ),
         ]
         original = _make_old_directory(entries, title="MyDisc")
         result = self._round_trip(original)
@@ -52,12 +56,11 @@ class TestOldDirectorySerializeRoundTrip:
 
     def test_multiple_files(self):
         entries = [
-            _make_old_dir_entry("Alpha", load_address=0x1900, length=100,
-                                indirect_disc_address=7),
-            _make_old_dir_entry("Beta", load_address=0x2000, length=512,
-                                indirect_disc_address=8),
-            _make_old_dir_entry("Gamma", load_address=0x3000, length=1024,
-                                indirect_disc_address=10),
+            _make_old_dir_entry("Alpha", load_address=0x1900, length=100, indirect_disc_address=7),
+            _make_old_dir_entry("Beta", load_address=0x2000, length=512, indirect_disc_address=8),
+            _make_old_dir_entry(
+                "Gamma", load_address=0x3000, length=1024, indirect_disc_address=10
+            ),
         ]
         original = _make_old_directory(entries, title="ThreeFiles")
         result = self._round_trip(original)
@@ -65,9 +68,7 @@ class TestOldDirectorySerializeRoundTrip:
 
     def test_directory_entry(self):
         entries = [
-            _make_old_dir_entry("Games", length=1280,
-                                indirect_disc_address=32,
-                                is_directory=True),
+            _make_old_dir_entry("Games", length=1280, indirect_disc_address=32, is_directory=True),
         ]
         original = _make_old_directory(entries)
         result = self._round_trip(original)
@@ -75,9 +76,14 @@ class TestOldDirectorySerializeRoundTrip:
 
     def test_locked_file(self):
         entries = [
-            _make_old_dir_entry("Secret", locked=True,
-                                owner_read=True, owner_write=False,
-                                length=64, indirect_disc_address=7),
+            _make_old_dir_entry(
+                "Secret",
+                locked=True,
+                owner_read=True,
+                owner_write=False,
+                length=64,
+                indirect_disc_address=7,
+            ),
         ]
         original = _make_old_directory(entries)
         result = self._round_trip(original)
@@ -103,15 +109,17 @@ class TestOldDirectorySerializeRoundTrip:
 
     def test_subdirectory_name(self):
         original = _make_old_directory(
-            [], dir_name="Games", title="Game Dir", parent_address=2,
+            [],
+            dir_name="Games",
+            title="Game Dir",
+            parent_address=2,
         )
         result = self._round_trip(original)
         assert result == original
 
     def test_max_entries(self):
         entries = [
-            _make_old_dir_entry(f"F{i:02d}", length=10,
-                                indirect_disc_address=7 + i)
+            _make_old_dir_entry(f"F{i:02d}", length=10, indirect_disc_address=7 + i)
             for i in range(47)
         ]
         original = _make_old_directory(entries)
@@ -120,11 +128,13 @@ class TestOldDirectorySerializeRoundTrip:
 
     def test_large_addresses(self):
         entries = [
-            _make_old_dir_entry("Big",
-                                load_address=0xFFFF1900,
-                                exec_address=0xFFFF8023,
-                                length=0x10000,
-                                indirect_disc_address=0xABCDEF),
+            _make_old_dir_entry(
+                "Big",
+                load_address=0xFFFF1900,
+                exec_address=0xFFFF8023,
+                length=0x10000,
+                indirect_disc_address=0xABCDEF,
+            ),
         ]
         original = _make_old_directory(entries)
         result = self._round_trip(original)
@@ -138,8 +148,7 @@ class TestOldDirectorySerializeToSectorsView:
         """Serialize should write into the given SectorsView, not return bytes."""
         fmt = OldDirectoryFormat()
         entries = [
-            _make_old_dir_entry("Test", load_address=0x1000, length=100,
-                                indirect_disc_address=7),
+            _make_old_dir_entry("Test", load_address=0x1000, length=100, indirect_disc_address=7),
         ]
         original = _make_old_directory(entries, title="ViewTest")
         view = SectorsView([memoryview(original)])

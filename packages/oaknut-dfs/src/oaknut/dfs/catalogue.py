@@ -63,7 +63,7 @@ class Catalogue(ABC):
     CATALOGUE_NAME: str | None = None  # Must be overridden (e.g., "acorn-dfs", "watford-dfs")
 
     # Registry of catalogue subclasses for format identification
-    _registry: dict[str, type['Catalogue']] = {}
+    _registry: dict[str, type["Catalogue"]] = {}
 
     def __init_subclass__(cls, **kwargs):
         """Register catalogue subclass for format identification."""
@@ -79,7 +79,7 @@ class Catalogue(ABC):
         self._surface = surface
 
     @classmethod
-    def identify(cls, surface: Surface) -> Optional[type['Catalogue']]:
+    def identify(cls, surface: Surface) -> Optional[type["Catalogue"]]:
         """
         Identify which catalogue type this surface uses.
 

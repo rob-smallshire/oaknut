@@ -62,7 +62,7 @@ class TestDFSNamedConstructors:
         # Initialize catalog for side 1 (tracks 1, 3, 5, ...)
         # Side 1 starts at offset 2560 (one track)
         buffer[2560:2568] = b"DSD1    "
-        buffer[2560 + 256:2560 + 260] = b"    "
+        buffer[2560 + 256 : 2560 + 260] = b"    "
         buffer[2560 + 260] = 0
         buffer[2560 + 261] = 0
         buffer[2560 + 262] = 0x00
@@ -144,7 +144,7 @@ class TestDFSFileOperations:
 
         buffer[8:15] = b"TODEL  "  # Max 7 chars
         buffer[15] = ord("$")
-        buffer[256 + 8:256 + 16] = bytes([0, 0, 0, 0, 100, 0, 0, 2])
+        buffer[256 + 8 : 256 + 16] = bytes([0, 0, 0, 0, 100, 0, 0, 2])
 
         dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
@@ -167,7 +167,7 @@ class TestDFSFileOperations:
 
         buffer[8:15] = b"EXISTS "
         buffer[15] = ord("$")
-        buffer[256 + 8:256 + 16] = bytes([0, 0, 0, 0, 100, 0, 0, 2])
+        buffer[256 + 8 : 256 + 16] = bytes([0, 0, 0, 0, 100, 0, 0, 2])
 
         dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
@@ -191,7 +191,7 @@ class TestDFSRenameAndLock:
 
         buffer[8:15] = b"OLDNAME"
         buffer[15] = ord("$")
-        buffer[256 + 8:256 + 16] = bytes([0, 0, 0, 0, 100, 0, 0, 2])
+        buffer[256 + 8 : 256 + 16] = bytes([0, 0, 0, 0, 100, 0, 0, 2])
 
         dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
@@ -213,7 +213,7 @@ class TestDFSRenameAndLock:
 
         buffer[8:15] = b"TEST   "
         buffer[15] = ord("$")
-        buffer[256 + 8:256 + 16] = bytes([0, 0, 0, 0, 100, 0, 0, 2])
+        buffer[256 + 8 : 256 + 16] = bytes([0, 0, 0, 0, 100, 0, 0, 2])
 
         dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
@@ -315,7 +315,9 @@ class TestDFSCopyFile:
 
         # Save file with specific metadata
         original_data = b"Test file contents"
-        (dfs.root / "$" / "ORIG").write_bytes(original_data, load_address=0x1900, exec_address=0x8023)
+        (dfs.root / "$" / "ORIG").write_bytes(
+            original_data, load_address=0x1900, exec_address=0x8023
+        )
 
         # Copy it
         orig_path = dfs.root / "$" / "ORIG"
@@ -940,7 +942,7 @@ class TestDFSFromFile:
         buf[262] = 0x00
         buf[263] = 200
         buf[2560:2568] = b"SIDE1   "
-        buf[2560 + 256:2560 + 260] = b"    "
+        buf[2560 + 256 : 2560 + 260] = b"    "
         buf[2560 + 262] = 0x00
         buf[2560 + 263] = 200
 

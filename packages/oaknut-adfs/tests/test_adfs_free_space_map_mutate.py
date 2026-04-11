@@ -21,7 +21,6 @@ def _make_fsm(free_entries, disc_size_sectors=640, **kwargs):
 
 
 class TestAllocate:
-
     def test_allocate_from_single_entry(self):
         """Allocate from a disc with one free region."""
         fsm = _make_fsm([(7, 633)])
@@ -112,7 +111,6 @@ class TestAllocate:
 
 
 class TestFree:
-
     def test_free_adds_entry(self):
         """Freeing sectors adds a new free space entry."""
         fsm = _make_fsm([(20, 100)])
@@ -187,7 +185,6 @@ class TestFree:
 
 
 class TestAllocateAndFreeRoundTrip:
-
     def test_allocate_then_free_restores_state(self):
         """Allocate then free should restore the original free space."""
         fsm = _make_fsm([(7, 633)])

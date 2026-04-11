@@ -60,7 +60,7 @@ SAMPLE_META = AcornMeta(
 
 
 FILETYPE_META = AcornMeta(
-    load_addr=0xFFFFFD00,   # RISC OS filetype-stamped (filetype 0xFFD)
+    load_addr=0xFFFFFD00,  # RISC OS filetype-stamped (filetype 0xFFD)
     exec_addr=0x00000000,
     attr=int(Access.R | Access.W),
 )
@@ -114,7 +114,8 @@ def test_inf_pieb_on_import_accepts_trad_sidecar(tmp_path: Path):
     export_with_metadata(b"data", target, SAMPLE_META, meta_format=MetaFormat.INF_TRAD)
 
     _, source, meta = import_with_metadata(
-        target, meta_formats=(MetaFormat.INF_PIEB,),
+        target,
+        meta_formats=(MetaFormat.INF_PIEB,),
     )
     assert source == "inf-trad"
     assert meta.load_addr == SAMPLE_META.load_addr
@@ -152,7 +153,10 @@ def test_xattr_round_trip(xattr_tmp_path: Path, fmt: MetaFormat):
 def test_filename_round_trip(tmp_path: Path, fmt: MetaFormat):
     target = tmp_path / "PROG"
     written = export_with_metadata(
-        b"xyz", target, SAMPLE_META, meta_format=fmt,
+        b"xyz",
+        target,
+        SAMPLE_META,
+        meta_format=fmt,
     )
 
     # The write path was rewritten with a suffix
@@ -172,7 +176,10 @@ def test_filename_riscos_filetype_stamped(tmp_path: Path):
     """Filetype-stamped files use the ,xxx suffix form."""
     target = tmp_path / "DOC"
     written = export_with_metadata(
-        b"text", target, FILETYPE_META, meta_format=MetaFormat.FILENAME_RISCOS,
+        b"text",
+        target,
+        FILETYPE_META,
+        meta_format=MetaFormat.FILENAME_RISCOS,
     )
     assert written.name == "DOC,ffd"
 
@@ -204,13 +211,15 @@ def test_import_cascade_respects_user_order(tmp_path: Path):
 
     # Cascade prefers INF
     _, source_inf, _ = import_with_metadata(
-        suffixed, meta_formats=(MetaFormat.INF_TRAD, MetaFormat.FILENAME_RISCOS),
+        suffixed,
+        meta_formats=(MetaFormat.INF_TRAD, MetaFormat.FILENAME_RISCOS),
     )
     assert source_inf == "inf-trad"
 
     # Cascade prefers filename
     _, source_fn, _ = import_with_metadata(
-        suffixed, meta_formats=(MetaFormat.FILENAME_RISCOS, MetaFormat.INF_TRAD),
+        suffixed,
+        meta_formats=(MetaFormat.FILENAME_RISCOS, MetaFormat.INF_TRAD),
     )
     assert source_fn == "filename"
 

@@ -148,7 +148,7 @@ class TestLockUnlockFile:
         # File: $.TEST (unlocked)
         buffer[8:15] = b"TEST   "
         buffer[15] = ord("$")  # Not locked (bit 7 clear)
-        buffer[256 + 8:256 + 16] = bytes([0, 0, 0, 0, 100, 0, 0, 2])
+        buffer[256 + 8 : 256 + 16] = bytes([0, 0, 0, 0, 100, 0, 0, 2])
 
         spec = SurfaceSpec(
             num_tracks=40,
@@ -188,7 +188,7 @@ class TestLockUnlockFile:
         # File: $.TEST (locked)
         buffer[8:15] = b"TEST   "
         buffer[15] = ord("$") | 0x80  # Locked (bit 7 set)
-        buffer[256 + 8:256 + 16] = bytes([0, 0, 0, 0, 100, 0, 0, 2])
+        buffer[256 + 8 : 256 + 16] = bytes([0, 0, 0, 0, 100, 0, 0, 2])
 
         spec = SurfaceSpec(
             num_tracks=40,
@@ -257,7 +257,7 @@ class TestRenameFile:
         # File: $.OLDNAME
         buffer[8:15] = b"OLDNAME"
         buffer[15] = ord("$")
-        buffer[256 + 8:256 + 16] = bytes([0, 0x10, 0, 0x20, 100, 0, 0, 2])
+        buffer[256 + 8 : 256 + 16] = bytes([0, 0x10, 0, 0x20, 100, 0, 0, 2])
 
         spec = SurfaceSpec(
             num_tracks=40,
@@ -299,7 +299,7 @@ class TestRenameFile:
         # File: $.TEST
         buffer[8:15] = b"TEST   "
         buffer[15] = ord("$")
-        buffer[256 + 8:256 + 16] = bytes([0, 0, 0, 0, 100, 0, 0, 2])
+        buffer[256 + 8 : 256 + 16] = bytes([0, 0, 0, 0, 100, 0, 0, 2])
 
         spec = SurfaceSpec(
             num_tracks=40,
@@ -333,7 +333,7 @@ class TestRenameFile:
         # File: $.TEST (locked)
         buffer[8:15] = b"TEST   "
         buffer[15] = ord("$") | 0x80  # Locked
-        buffer[256 + 8:256 + 16] = bytes([0, 0, 0, 0, 100, 0, 0, 2])
+        buffer[256 + 8 : 256 + 16] = bytes([0, 0, 0, 0, 100, 0, 0, 2])
 
         spec = SurfaceSpec(
             num_tracks=40,
@@ -391,7 +391,7 @@ class TestRenameFile:
 
         buffer[8:15] = b"TEST   "
         buffer[15] = ord("$")
-        buffer[256 + 8:256 + 16] = bytes([0, 0, 0, 0, 100, 0, 0, 2])
+        buffer[256 + 8 : 256 + 16] = bytes([0, 0, 0, 0, 100, 0, 0, 2])
 
         spec = SurfaceSpec(
             num_tracks=40,

@@ -85,9 +85,7 @@ class TestGameDiscFileEntries:
     def test_all_lengths_non_negative(self, game_disc):
         """Every file has a non-negative length."""
         for entry in game_disc.files:
-            assert entry.length >= 0, (
-                f"File {entry.path} has negative length {entry.length}"
-            )
+            assert entry.length >= 0, f"File {entry.path} has negative length {entry.length}"
 
     def test_all_paths_well_formed(self, game_disc):
         """Every file path is in the form D.FILENAME."""
@@ -124,8 +122,7 @@ class TestGameDiscFileLoading:
         for entry in game_disc.files:
             data = game_disc.path(entry.path).read_bytes()
             assert len(data) == entry.length, (
-                f"File {entry.path}: loaded {len(data)} bytes, "
-                f"expected {entry.length}"
+                f"File {entry.path}: loaded {len(data)} bytes, expected {entry.length}"
             )
 
     def test_load_preserves_data(self, game_disc):

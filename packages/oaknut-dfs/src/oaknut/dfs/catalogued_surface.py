@@ -51,9 +51,7 @@ class CataloguedSurface:
             raise FileNotFoundError(f"File not found: {filename}")
 
         # Read file sectors using Surface
-        file_sectors = self._surface.sector_range(
-            entry.start_sector, entry.sectors_required
-        )
+        file_sectors = self._surface.sector_range(entry.start_sector, entry.sectors_required)
 
         # Return exact file length (trim sector padding)
         return file_sectors.tobytes()[: entry.length]
@@ -116,17 +114,13 @@ class CataloguedSurface:
         used_sectors = set()
 
         # Catalog sectors
-        catalog_end = (
-            self._catalogue.CATALOG_START_SECTOR + self._catalogue.CATALOG_NUM_SECTORS
-        )
+        catalog_end = self._catalogue.CATALOG_START_SECTOR + self._catalogue.CATALOG_NUM_SECTORS
         for sector in range(self._catalogue.CATALOG_START_SECTOR, catalog_end):
             used_sectors.add(sector)
 
         # File sectors
         for entry in self._catalogue.list_files():
-            for sector in range(
-                entry.start_sector, entry.start_sector + entry.sectors_required
-            ):
+            for sector in range(entry.start_sector, entry.start_sector + entry.sectors_required):
                 used_sectors.add(sector)
 
         # Find contiguous free regions
@@ -176,17 +170,13 @@ class CataloguedSurface:
         used_sectors = set()
 
         # Catalog sectors are always used
-        catalog_end = (
-            self._catalogue.CATALOG_START_SECTOR + self._catalogue.CATALOG_NUM_SECTORS
-        )
+        catalog_end = self._catalogue.CATALOG_START_SECTOR + self._catalogue.CATALOG_NUM_SECTORS
         for sector in range(self._catalogue.CATALOG_START_SECTOR, catalog_end):
             used_sectors.add(sector)
 
         # Mark file sectors as used
         for entry in self._catalogue.list_files():
-            for sector in range(
-                entry.start_sector, entry.start_sector + entry.sectors_required
-            ):
+            for sector in range(entry.start_sector, entry.start_sector + entry.sectors_required):
                 used_sectors.add(sector)
 
         # Find first contiguous gap
@@ -204,6 +194,4 @@ class CataloguedSurface:
                 if consecutive_free >= sectors_needed:
                     return current_sector
 
-        raise IOError(
-            f"Not enough contiguous free space ({sectors_needed} sectors needed)"
-        )
+        raise IOError(f"Not enough contiguous free space ({sectors_needed} sectors needed)")

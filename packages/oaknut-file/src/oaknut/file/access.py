@@ -25,10 +25,10 @@ class Access(IntFlag):
         int(Access.R | Access.W)  # 0x03
     """
 
-    R  = 0x01  # Owner read
-    W  = 0x02  # Owner write
-    E  = 0x04  # Execute only
-    L  = 0x08  # Locked (prevents delete, overwrite, rename)
+    R = 0x01  # Owner read
+    W = 0x02  # Owner write
+    E = 0x04  # Execute only
+    L = 0x08  # Locked (prevents delete, overwrite, rename)
     PR = 0x10  # Public read
     PW = 0x20  # Public write
 

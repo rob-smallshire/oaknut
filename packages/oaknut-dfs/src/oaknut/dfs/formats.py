@@ -22,9 +22,7 @@ TRACKS_80 = 80
 
 
 ACORN_DFS_40T_SINGLE_SIDED = DiskFormat(
-    surface_specs=[
-        single_sided_spec(TRACKS_40, ACORN_DFS_SECTORS_PER_TRACK, BYTES_PER_SECTOR)
-    ],
+    surface_specs=[single_sided_spec(TRACKS_40, ACORN_DFS_SECTORS_PER_TRACK, BYTES_PER_SECTOR)],
     catalogue_name=ACORN_DFS_CATALOGUE_NAME,
 )
 
@@ -43,9 +41,7 @@ ACORN_DFS_40T_DOUBLE_SIDED_SEQUENTIAL = DiskFormat(
 )
 
 ACORN_DFS_80T_SINGLE_SIDED = DiskFormat(
-    surface_specs=[
-        single_sided_spec(TRACKS_80, ACORN_DFS_SECTORS_PER_TRACK, BYTES_PER_SECTOR)
-    ],
+    surface_specs=[single_sided_spec(TRACKS_80, ACORN_DFS_SECTORS_PER_TRACK, BYTES_PER_SECTOR)],
     catalogue_name=ACORN_DFS_CATALOGUE_NAME,
 )
 
@@ -64,9 +60,7 @@ ACORN_DFS_80T_DOUBLE_SIDED_SEQUENTIAL = DiskFormat(
 )
 
 WATFORD_DFS_40T_SINGLE_SIDED = DiskFormat(
-    surface_specs=[
-        single_sided_spec(TRACKS_40, ACORN_DFS_SECTORS_PER_TRACK, BYTES_PER_SECTOR)
-    ],
+    surface_specs=[single_sided_spec(TRACKS_40, ACORN_DFS_SECTORS_PER_TRACK, BYTES_PER_SECTOR)],
     catalogue_name=WATFORD_DFS_CATALOGUE_NAME,
 )
 
@@ -85,9 +79,7 @@ WATFORD_DFS_40T_DOUBLE_SIDED_SEQUENTIAL = DiskFormat(
 )
 
 WATFORD_DFS_80T_SINGLE_SIDED = DiskFormat(
-    surface_specs=[
-        single_sided_spec(TRACKS_80, ACORN_DFS_SECTORS_PER_TRACK, BYTES_PER_SECTOR)
-    ],
+    surface_specs=[single_sided_spec(TRACKS_80, ACORN_DFS_SECTORS_PER_TRACK, BYTES_PER_SECTOR)],
     catalogue_name=WATFORD_DFS_CATALOGUE_NAME,
 )
 

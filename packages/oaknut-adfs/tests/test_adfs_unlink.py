@@ -6,7 +6,6 @@ from oaknut.adfs.exceptions import ADFSFileLockedError, ADFSPathError
 
 
 class TestUnlink:
-
     def test_unlink_file(self):
         adfs = ADFS.create(ADFS_S)
         (adfs.root / "Hello").write_bytes(b"data")
@@ -59,8 +58,8 @@ class TestUnlink:
         adfs = ADFS.create(ADFS_S)
         (adfs.root / "Old").write_bytes(b"\x00" * 512)
         (adfs.root / "Old").unlink()
-        (adfs.root / "New").write_bytes(b"\xFF" * 512)
-        assert (adfs.root / "New").read_bytes() == b"\xFF" * 512
+        (adfs.root / "New").write_bytes(b"\xff" * 512)
+        assert (adfs.root / "New").read_bytes() == b"\xff" * 512
 
     def test_validate_after_unlink(self):
         adfs = ADFS.create(ADFS_S)

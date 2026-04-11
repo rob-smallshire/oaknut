@@ -75,9 +75,7 @@ def collect_examples() -> dict[str, str]:
 
     clean2, fn_meta2 = parse_encoded_filename("PROG,1900-801f")
     mos_parsed = (
-        f"({clean2!r}, "
-        f"load_addr=0x{fn_meta2.load_addr:X}, "
-        f"exec_addr=0x{fn_meta2.exec_addr:X})"
+        f"({clean2!r}, load_addr=0x{fn_meta2.load_addr:X}, exec_addr=0x{fn_meta2.exec_addr:X})"
     )
 
     # Filetype detection from a load address

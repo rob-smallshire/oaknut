@@ -6,7 +6,6 @@ from oaknut.adfs.exceptions import ADFSFileLockedError, ADFSPathError
 
 
 class TestRmdir:
-
     def test_rmdir_empty_directory(self):
         adfs = ADFS.create(ADFS_S)
         (adfs.root / "Empty").mkdir()

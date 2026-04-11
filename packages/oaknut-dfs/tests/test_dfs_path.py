@@ -10,8 +10,8 @@ def _make_empty_dfs():
     buffer = bytearray(102400)  # 40T single-sided
     buffer[0:8] = b"TESTDISC"
     buffer[256:260] = b"    "
-    buffer[260] = 0   # cycle
-    buffer[261] = 0   # num_files * 8
+    buffer[260] = 0  # cycle
+    buffer[261] = 0  # num_files * 8
     buffer[262] = 0x00
     buffer[263] = 200  # total sectors low byte (400 = 0x190)
     return DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
@@ -20,14 +20,17 @@ def _make_empty_dfs():
 def _make_dfs_with_files():
     """Create a DFS instance with files in $ and A directories."""
     dfs = _make_empty_dfs()
-    (dfs.root / "$" / "HELLO").write_bytes(b"Hello, World!", load_address=0x1900, exec_address=0x8000)
+    (dfs.root / "$" / "HELLO").write_bytes(
+        b"Hello, World!", load_address=0x1900, exec_address=0x8000
+    )
     (dfs.root / "$" / "README").write_bytes(b"Read me please", load_address=0x2000)
-    (dfs.root / "A" / "GAME").write_bytes(b"Game data here!", load_address=0x3000, exec_address=0x3000)
+    (dfs.root / "A" / "GAME").write_bytes(
+        b"Game data here!", load_address=0x3000, exec_address=0x3000
+    )
     return dfs
 
 
 class TestDFSPathNavigation:
-
     def test_root(self):
         dfs = _make_empty_dfs()
         assert dfs.root.path == ""
@@ -69,7 +72,6 @@ class TestDFSPathNavigation:
 
 
 class TestDFSPathQuerying:
-
     def test_root_exists(self):
         dfs = _make_empty_dfs()
         assert dfs.root.exists()
@@ -128,7 +130,6 @@ class TestDFSPathQuerying:
 
 
 class TestDFSPathIterdir:
-
     def test_iterdir_root_empty(self):
         dfs = _make_empty_dfs()
         entries = list(dfs.root)
@@ -173,7 +174,6 @@ class TestDFSPathIterdir:
 
 
 class TestDFSPathWalk:
-
     def test_walk_root(self):
         dfs = _make_dfs_with_files()
         results = list(dfs.root.walk())
@@ -219,7 +219,6 @@ class TestDFSPathWalk:
 
 
 class TestDFSPathFileOperations:
-
     def test_read_bytes(self):
         dfs = _make_dfs_with_files()
         data = (dfs.root / "$" / "HELLO").read_bytes()
@@ -247,9 +246,7 @@ class TestDFSPathFileOperations:
 
     def test_write_bytes(self):
         dfs = _make_empty_dfs()
-        (dfs.root / "$" / "NEWFILE").write_bytes(
-            b"new data", load_address=0x1234
-        )
+        (dfs.root / "$" / "NEWFILE").write_bytes(b"new data", load_address=0x1234)
         data = (dfs.root / "$" / "NEWFILE").read_bytes()
         assert data == b"new data"
         assert (dfs.root / "$" / "NEWFILE").stat().load_address == 0x1234
@@ -261,7 +258,6 @@ class TestDFSPathFileOperations:
 
 
 class TestDFSPathModification:
-
     def test_unlink(self):
         dfs = _make_dfs_with_files()
         assert (dfs.root / "$" / "HELLO").exists()
@@ -293,7 +289,6 @@ class TestDFSPathModification:
 
 
 class TestDFSPathContains:
-
     def test_root_contains_directory(self):
         dfs = _make_dfs_with_files()
         assert "$" in dfs.root
@@ -308,7 +303,6 @@ class TestDFSPathContains:
 
 
 class TestDFSPathEquality:
-
     def test_equal_paths(self):
         dfs = _make_empty_dfs()
         p1 = dfs.root / "$" / "HELLO"

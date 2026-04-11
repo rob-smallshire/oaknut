@@ -134,7 +134,9 @@ class TestFileInfo:
         dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
         # Save a file
-        (dfs.root / "$" / "HELLO").write_bytes(b"Test content", load_address=0x1900, exec_address=0x8023)
+        (dfs.root / "$" / "HELLO").write_bytes(
+            b"Test content", load_address=0x1900, exec_address=0x8023
+        )
 
         # Get file info
         st = (dfs.root / "$" / "HELLO").stat()
@@ -200,12 +202,12 @@ class TestValidation:
         # File 1: $.TEST at sector 2
         buffer[8:15] = b"TEST   "
         buffer[15] = ord("$")
-        buffer[256 + 8:256 + 16] = bytes([0, 0, 0, 0, 100, 0, 0, 2])
+        buffer[256 + 8 : 256 + 16] = bytes([0, 0, 0, 0, 100, 0, 0, 2])
 
         # File 2: $.TEST at sector 4 (duplicate!)
         buffer[16:23] = b"TEST   "
         buffer[23] = ord("$")
-        buffer[256 + 16:256 + 24] = bytes([0, 0, 0, 0, 100, 0, 0, 4])
+        buffer[256 + 16 : 256 + 24] = bytes([0, 0, 0, 0, 100, 0, 0, 4])
 
         dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 

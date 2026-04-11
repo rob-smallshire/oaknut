@@ -33,9 +33,12 @@ def make_old_dir_entry(
 
     # Set attribute bits in top bit of each name character
     attrs = [
-        owner_read, owner_write, locked, is_directory,
+        owner_read,
+        owner_write,
+        locked,
+        is_directory,
         False,  # execute
-        True,   # public read
+        True,  # public read
         False,  # public write
         False,  # public execute
         False,  # private
@@ -74,7 +77,7 @@ def make_old_directory(
     # Entries (26 bytes each, starting at offset 0x05)
     for i, entry_bytes in enumerate(entries):
         offset = 0x05 + i * 26
-        buf[offset:offset + 26] = entry_bytes
+        buf[offset : offset + 26] = entry_bytes
 
     # End-of-entries marker (first byte of next entry slot = 0)
     if len(entries) < 47:
@@ -87,21 +90,21 @@ def make_old_directory(
 
     # Directory name (10 bytes, padded with CR)
     dir_name_bytes = dir_name.encode("ascii").ljust(10, b"\r")
-    buf[tail + 1:tail + 11] = dir_name_bytes
+    buf[tail + 1 : tail + 11] = dir_name_bytes
 
     # Parent address (3 bytes LE)
     write_24bit_le(buf, tail + 11, parent_address)
 
     # Title (19 bytes, padded with CR)
     title_bytes = title.encode("ascii").ljust(19, b"\r")
-    buf[tail + 14:tail + 33] = title_bytes
+    buf[tail + 14 : tail + 33] = title_bytes
 
     # Reserved (14 bytes, must be zero) — already zero
 
     # EndMasSeq
     buf[tail + 47] = sequence_number
     # EndName
-    buf[tail + 48:tail + 52] = signature
+    buf[tail + 48 : tail + 52] = signature
 
     # Check byte is reserved (must be zero) on old-format directories
     buf[tail + 52] = 0x00
@@ -173,9 +176,7 @@ def make_adfs_s_image(
         # Root dir occupies sectors 2-6; rest is free
         free_entries = [(7, disc_size_sectors - 7)]
 
-    fsm = make_old_free_space_map(
-        free_entries, disc_size_sectors=disc_size_sectors
-    )
+    fsm = make_old_free_space_map(free_entries, disc_size_sectors=disc_size_sectors)
     buf[0:512] = fsm
 
     # Build root directory (sectors 2-6, offset 0x200)
@@ -185,12 +186,12 @@ def make_adfs_s_image(
     root_dir = make_old_directory(
         root_entries, dir_name="$", title=root_title, parent_address=0x200
     )
-    buf[0x200:0x200 + 1280] = root_dir
+    buf[0x200 : 0x200 + 1280] = root_dir
 
     # Write file data
     if file_data:
         for sector, data in file_data.items():
             offset = sector * 256
-            buf[offset:offset + len(data)] = data
+            buf[offset : offset + len(data)] = data
 
     return buf

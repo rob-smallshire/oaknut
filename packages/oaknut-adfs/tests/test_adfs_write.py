@@ -16,7 +16,6 @@ from oaknut.adfs.exceptions import (
 
 
 class TestWriteBytes:
-
     def test_write_and_read_back(self):
         adfs = ADFS.create(ADFS_S)
         data = b"Hello, ADFS!"
@@ -49,13 +48,13 @@ class TestWriteBytes:
 
     def test_write_exact_sector_boundary(self):
         adfs = ADFS.create(ADFS_S)
-        data = b"\xAA" * 256
+        data = b"\xaa" * 256
         (adfs.root / "OneSec").write_bytes(data)
         assert (adfs.root / "OneSec").read_bytes() == data
 
     def test_write_spanning_sectors(self):
         adfs = ADFS.create(ADFS_S)
-        data = b"\xBB" * 300  # Spans 2 sectors
+        data = b"\xbb" * 300  # Spans 2 sectors
         (adfs.root / "TwoSec").write_bytes(data)
         assert (adfs.root / "TwoSec").read_bytes() == data
 
@@ -120,7 +119,7 @@ class TestWriteBytes:
         adfs = ADFS.create(ADFS_S)
         (adfs.root / "File").write_bytes(b"\x00" * 2560)  # 10 sectors
         free_after_first = adfs.free_space
-        (adfs.root / "File").write_bytes(b"\x00" * 256)   # 1 sector
+        (adfs.root / "File").write_bytes(b"\x00" * 256)  # 1 sector
         # Should have freed 9 sectors
         assert adfs.free_space == free_after_first + 9 * 256
 
@@ -131,7 +130,6 @@ class TestWriteBytes:
 
 
 class TestWriteText:
-
     def test_write_text_default_acorn_encoding(self):
         adfs = ADFS.create(ADFS_S)
         (adfs.root / "Text").write_text("Hello")
@@ -157,7 +155,6 @@ class TestWriteText:
 
 
 class TestReadText:
-
     def test_read_text_default_acorn_encoding(self):
         adfs = ADFS.create(ADFS_S)
         (adfs.root / "Text").write_text("Hello")
@@ -181,15 +178,16 @@ class TestReadText:
 
 
 class TestWriteBasic:
-
     def test_write_basic_propagates_not_implemented(self):
         import oaknut.basic as basic  # noqa: F401 (module reference for docs)
+
         adfs = ADFS.create(ADFS_S)
         with pytest.raises(NotImplementedError):
             (adfs.root / "Prog").write_basic("10 PRINT")
 
     def test_write_basic_composes_tokenise_then_write_bytes(self, monkeypatch):
         import oaknut.basic as basic
+
         monkeypatch.setattr(basic, "tokenise", lambda src: b"\x0d\xff\x0d")
         adfs = ADFS.create(ADFS_S)
         (adfs.root / "Prog").write_basic("10 PRINT")
@@ -197,6 +195,7 @@ class TestWriteBasic:
 
     def test_write_basic_default_load_address_is_bbc(self, monkeypatch):
         import oaknut.basic as basic
+
         monkeypatch.setattr(basic, "tokenise", lambda src: b"\x00")
         adfs = ADFS.create(ADFS_S)
         (adfs.root / "Prog").write_basic("10 PRINT")
@@ -204,19 +203,24 @@ class TestWriteBasic:
 
     def test_write_basic_explicit_electron_load_address(self, monkeypatch):
         import oaknut.basic as basic
+
         monkeypatch.setattr(basic, "tokenise", lambda src: b"\x00")
         adfs = ADFS.create(ADFS_S)
         (adfs.root / "Prog").write_basic(
-            "10 PRINT", load_address=basic.ELECTRON_BASIC_LOAD_ADDRESS,
+            "10 PRINT",
+            load_address=basic.ELECTRON_BASIC_LOAD_ADDRESS,
         )
         assert (adfs.root / "Prog").stat().load_address == 0x0E00
 
     def test_write_basic_forwards_exec_and_locked(self, monkeypatch):
         import oaknut.basic as basic
+
         monkeypatch.setattr(basic, "tokenise", lambda src: b"\x00")
         adfs = ADFS.create(ADFS_S)
         (adfs.root / "Prog").write_basic(
-            "10 PRINT", exec_address=0xFFFF8023, locked=True,
+            "10 PRINT",
+            exec_address=0xFFFF8023,
+            locked=True,
         )
         stat = (adfs.root / "Prog").stat()
         assert stat.exec_address == 0xFFFF8023
@@ -224,7 +228,6 @@ class TestWriteBasic:
 
 
 class TestReadBasic:
-
     def test_read_basic_propagates_not_implemented(self):
         adfs = ADFS.create(ADFS_S)
         (adfs.root / "Prog").write_bytes(b"\x0d\xff")
@@ -233,6 +236,7 @@ class TestReadBasic:
 
     def test_read_basic_composes_read_bytes_then_detokenise(self, monkeypatch):
         import oaknut.basic as basic
+
         monkeypatch.setattr(basic, "detokenise", lambda data: "10 PRINT")
         adfs = ADFS.create(ADFS_S)
         (adfs.root / "Prog").write_bytes(b"\x0d\xff")
@@ -240,6 +244,7 @@ class TestReadBasic:
 
     def test_read_basic_forwards_bytes_to_detokenise(self, monkeypatch):
         import oaknut.basic as basic
+
         captured = []
 
         def stub(data):
@@ -254,7 +259,6 @@ class TestReadBasic:
 
 
 class TestDirectoryFull:
-
     def test_directory_full_raises(self):
         adfs = ADFS.create(ADFS_M)
         # Old-format directories hold 47 entries max
@@ -273,13 +277,10 @@ class TestDirectoryFull:
 
 
 class TestWriteRoundTripWithBuffer:
-
     def test_write_then_reopen(self):
         """Write a file, reopen the buffer, and read it back."""
         adfs = ADFS.create(ADFS_S, title="WriteTest")
-        (adfs.root / "Greet").write_bytes(
-            b"Hello!", load_address=0x1900, exec_address=0x8023
-        )
+        (adfs.root / "Greet").write_bytes(b"Hello!", load_address=0x1900, exec_address=0x8023)
 
         # Reopen from the same buffer
         buffer = adfs._disc._disc_image.buffer

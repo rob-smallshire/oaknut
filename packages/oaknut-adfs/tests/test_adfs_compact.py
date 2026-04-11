@@ -5,7 +5,6 @@ from oaknut.adfs import ADFS, ADFS_M, ADFS_S
 
 
 class TestCompactBasic:
-
     def test_compact_empty_disc(self):
         adfs = ADFS.create(ADFS_S)
         adfs.compact()
@@ -29,7 +28,10 @@ class TestCompactBasic:
     def test_compact_preserves_metadata(self):
         adfs = ADFS.create(ADFS_S)
         (adfs.root / "Prog").write_bytes(
-            b"code", load_address=0x1900, exec_address=0x8023, locked=True,
+            b"code",
+            load_address=0x1900,
+            exec_address=0x8023,
+            locked=True,
         )
         adfs.compact()
         stat = (adfs.root / "Prog").stat()
@@ -57,7 +59,6 @@ class TestCompactBasic:
 
 
 class TestCompactDefragmentation:
-
     def test_compact_consolidates_free_space(self):
         adfs = ADFS.create(ADFS_S)
         # Create files, delete middle one to create fragmentation
@@ -113,7 +114,6 @@ class TestCompactDefragmentation:
 
 
 class TestCompactWithDirectories:
-
     def test_compact_preserves_subdirectories(self):
         adfs = ADFS.create(ADFS_M)
         (adfs.root / "Games").mkdir()
@@ -151,7 +151,6 @@ class TestCompactWithDirectories:
 
 
 class TestCompactRoundTrip:
-
     def test_compact_then_reopen(self):
         adfs = ADFS.create(ADFS_S)
         (adfs.root / "File").write_bytes(b"hello", load_address=0x1900)

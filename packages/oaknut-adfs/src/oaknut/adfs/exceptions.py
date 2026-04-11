@@ -22,6 +22,7 @@ from oaknut.file.exceptions import FSError
 
 class ADFSError(FSError):
     """Base exception for all ADFS errors."""
+
     pass
 
 
@@ -31,6 +32,7 @@ class ADFSDirectoryError(ADFSError):
     Raised when a directory block has an invalid checksum,
     unrecognised magic bytes, or other structural problems.
     """
+
     pass
 
 
@@ -40,6 +42,7 @@ class ADFSDirectoryFullError(ADFSDirectoryError):
     Raised when attempting to add an entry to a directory that has
     reached its maximum capacity (47 entries for old-format directories).
     """
+
     pass
 
 
@@ -49,6 +52,7 @@ class ADFSMapError(ADFSError):
     Raised when the free space map has an invalid checksum
     or inconsistent data.
     """
+
     pass
 
 
@@ -58,6 +62,7 @@ class ADFSDiscFullError(ADFSMapError):
     Raised when attempting to allocate sectors but no free space
     region is large enough.
     """
+
     pass
 
 
@@ -67,6 +72,7 @@ class ADFSPathError(ADFSError):
     Raised for invalid paths, paths that do not exist,
     or path components with forbidden characters.
     """
+
     pass
 
 
@@ -76,4 +82,5 @@ class ADFSFileLockedError(ADFSError):
     Raised when attempting to delete, rename, or modify a file
     that has the locked attribute set.
     """
+
     pass

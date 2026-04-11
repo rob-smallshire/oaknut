@@ -83,6 +83,7 @@ class Surface:
 @dataclass(frozen=True)
 class SurfaceSpec:
     """Specification of how a surface maps to a disc image."""
+
     num_tracks: int
     sectors_per_track: int
     bytes_per_sector: int
@@ -112,10 +113,11 @@ class SurfaceSpec:
 @dataclass(frozen=True, order=True)
 class TrackFootprint:
     """The byte range a track occupies in a disc image."""
-    start: int          # Byte offset where track starts (compared first)
-    end: int            # Byte offset where track ends (exclusive)
+
+    start: int  # Byte offset where track starts (compared first)
+    end: int  # Byte offset where track ends (exclusive)
     surface_index: int  # Which surface this track belongs to
-    track_number: int   # Track number within that surface
+    track_number: int  # Track number within that surface
 
     def overlaps(self, other: "TrackFootprint") -> bool:
         """Check if this footprint overlaps with another footprint."""
@@ -124,6 +126,7 @@ class TrackFootprint:
 
 class SurfaceSpecIncompatibilityError(Exception):
     """Raised when two surface specifications are incompatible (i.e. overlap in the disc image)."""
+
     pass
 
 

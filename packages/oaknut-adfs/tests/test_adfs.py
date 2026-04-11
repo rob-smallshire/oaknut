@@ -27,7 +27,6 @@ from oaknut.discimage.sectors_view import SectorsView
 
 
 class TestOldFreeSpaceMapChecksum:
-
     def test_checksum_of_zeros(self):
         """Checksum of 256 zero bytes should be 0."""
         buf = bytearray(512)
@@ -43,7 +42,6 @@ class TestOldFreeSpaceMapChecksum:
 
 
 class TestOldFreeSpaceMap:
-
     def setup_method(self):
         self.fsm_bytes = _make_old_free_space_map(
             [(7, 633)],
@@ -104,7 +102,6 @@ class TestOldFreeSpaceMap:
 
 
 class TestOldDirectoryFormat:
-
     def test_parse_empty_directory(self):
         fmt = OldDirectoryFormat()
         dir_bytes = _make_old_directory([], dir_name="$", title="TestDisc")
@@ -119,10 +116,8 @@ class TestOldDirectoryFormat:
     def test_parse_directory_with_files(self):
         fmt = OldDirectoryFormat()
         entries = [
-            _make_old_dir_entry("Hello", load_address=0x1900, length=256,
-                                indirect_disc_address=7),
-            _make_old_dir_entry("World", load_address=0x2000, length=512,
-                                indirect_disc_address=9),
+            _make_old_dir_entry("Hello", load_address=0x1900, length=256, indirect_disc_address=7),
+            _make_old_dir_entry("World", load_address=0x2000, length=512, indirect_disc_address=9),
         ]
         dir_bytes = _make_old_directory(entries, title="MyDisc")
         view = SectorsView([memoryview(dir_bytes)])
@@ -138,9 +133,7 @@ class TestOldDirectoryFormat:
     def test_parse_directory_with_subdirectory(self):
         fmt = OldDirectoryFormat()
         entries = [
-            _make_old_dir_entry("Games", length=1280,
-                                indirect_disc_address=32,
-                                is_directory=True),
+            _make_old_dir_entry("Games", length=1280, indirect_disc_address=32, is_directory=True),
         ]
         dir_bytes = _make_old_directory(entries)
         view = SectorsView([memoryview(dir_bytes)])
@@ -151,8 +144,7 @@ class TestOldDirectoryFormat:
     def test_attributes_parsed(self):
         fmt = OldDirectoryFormat()
         entries = [
-            _make_old_dir_entry("Locked", locked=True, owner_read=True,
-                                owner_write=False),
+            _make_old_dir_entry("Locked", locked=True, owner_read=True, owner_write=False),
         ]
         dir_bytes = _make_old_directory(entries)
         view = SectorsView([memoryview(dir_bytes)])
@@ -230,7 +222,6 @@ class TestOldDirectoryFormat:
 
 
 class TestADFSFromBuffer:
-
     def test_open_empty_adfs_s(self):
         buf = _make_adfs_s_image()
         adfs = ADFS.from_buffer(memoryview(buf))
@@ -264,19 +255,26 @@ class TestADFSFromBuffer:
 
 
 class TestADFSWithFiles:
-
     def setup_method(self):
         # Create a disc with two files
         file1_data = b"Hello, ADFS World!" + b"\x00" * (256 - 18)
         file2_data = b"Second file" + b"\x00" * (512 - 11)
 
         entries = [
-            _make_old_dir_entry("FileOne", load_address=0x1900,
-                                exec_address=0x1900, length=18,
-                                indirect_disc_address=7),
-            _make_old_dir_entry("FileTwo", load_address=0x2000,
-                                exec_address=0x2000, length=11,
-                                indirect_disc_address=8),
+            _make_old_dir_entry(
+                "FileOne",
+                load_address=0x1900,
+                exec_address=0x1900,
+                length=18,
+                indirect_disc_address=7,
+            ),
+            _make_old_dir_entry(
+                "FileTwo",
+                load_address=0x2000,
+                exec_address=0x2000,
+                length=11,
+                indirect_disc_address=8,
+            ),
         ]
         buf = _make_adfs_s_image(
             root_entries=entries,
@@ -343,21 +341,23 @@ class TestADFSWithFiles:
 
 
 class TestADFSWithSubdirectory:
-
     def setup_method(self):
         # Create a disc with a subdirectory containing a file
         file_data = b"Inside subdir" + b"\x00" * (256 - 13)
 
         # Subdirectory at sector 7 (5 sectors = 7-11)
         subdir_entry = _make_old_dir_entry(
-            "Games", length=1280,
+            "Games",
+            length=1280,
             indirect_disc_address=7,
             is_directory=True,
         )
 
         # File inside subdir at sector 12
         file_entry = _make_old_dir_entry(
-            "Elite", load_address=0x3000, length=13,
+            "Elite",
+            load_address=0x3000,
+            length=13,
             indirect_disc_address=12,
         )
 
@@ -376,9 +376,9 @@ class TestADFSWithSubdirectory:
         )
 
         # Write subdirectory
-        buf[7 * 256:7 * 256 + 1280] = subdir_bytes
+        buf[7 * 256 : 7 * 256 + 1280] = subdir_bytes
         # Write file data
-        buf[12 * 256:12 * 256 + 256] = file_data
+        buf[12 * 256 : 12 * 256 + 256] = file_data
 
         self.adfs = ADFS.from_buffer(memoryview(buf))
 
@@ -433,7 +433,6 @@ class TestADFSWithSubdirectory:
 
 
 class TestADFSPathEquality:
-
     def test_equal_paths(self):
         buf = _make_adfs_s_image()
         adfs = ADFS.from_buffer(memoryview(buf))
@@ -463,7 +462,6 @@ class TestADFSPathEquality:
 
 
 class TestADFSFormatDetection:
-
     def test_wrong_size_raises(self):
         buf = bytearray(1000)
         with pytest.raises(Exception):
@@ -479,10 +477,9 @@ class TestADFSFormatDetection:
 
 
 class TestADFSDiscMetadata:
-
     def test_boot_option(self):
         fsm_bytes = _make_old_free_space_map([(7, 633)], boot_option=3)
-        entries = [_make_old_dir_entry("File", length=10, indirect_disc_address=7*256)]
+        entries = [_make_old_dir_entry("File", length=10, indirect_disc_address=7 * 256)]
         buf = _make_adfs_s_image(root_entries=entries)
         # Overwrite FSM with our custom one
         buf[0:512] = fsm_bytes

@@ -11,7 +11,6 @@ from oaknut.file.formats import (
 
 
 class TestMetaFormat:
-
     def test_values(self):
         assert MetaFormat.INF_TRAD == "inf-trad"
         assert MetaFormat.INF_PIEB == "inf-pieb"
@@ -29,13 +28,16 @@ class TestMetaFormat:
 
 
 class TestSourceLabels:
-
     def test_labels_are_strings(self):
-        for label in (SOURCE_SPARKFS, SOURCE_INF_TRAD, SOURCE_INF_PIEB,
-                      SOURCE_FILENAME, SOURCE_DIR):
+        for label in (
+            SOURCE_SPARKFS,
+            SOURCE_INF_TRAD,
+            SOURCE_INF_PIEB,
+            SOURCE_FILENAME,
+            SOURCE_DIR,
+        ):
             assert isinstance(label, str)
 
     def test_labels_are_distinct(self):
-        labels = {SOURCE_SPARKFS, SOURCE_INF_TRAD, SOURCE_INF_PIEB,
-                  SOURCE_FILENAME, SOURCE_DIR}
+        labels = {SOURCE_SPARKFS, SOURCE_INF_TRAD, SOURCE_INF_PIEB, SOURCE_FILENAME, SOURCE_DIR}
         assert len(labels) == 5

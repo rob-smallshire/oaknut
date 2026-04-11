@@ -29,13 +29,10 @@ class UnifiedDisc:
 
         # Validate all surfaces have the same bytes_per_sector
         bps_values = {
-            disc_image.surface(i).bytes_per_sector
-            for i in range(disc_image.num_surfaces)
+            disc_image.surface(i).bytes_per_sector for i in range(disc_image.num_surfaces)
         }
         if len(bps_values) != 1:
-            raise ValueError(
-                f"All surfaces must have the same bytes_per_sector, got {bps_values}"
-            )
+            raise ValueError(f"All surfaces must have the same bytes_per_sector, got {bps_values}")
         self._bytes_per_sector = bps_values.pop()
 
     @property
@@ -59,15 +56,11 @@ class UnifiedDisc:
             ValueError: If sector number is out of range.
         """
         if unified_sector < 0 or unified_sector >= self.num_sectors:
-            raise ValueError(
-                f"Sector {unified_sector} out of range (0-{self.num_sectors - 1})"
-            )
+            raise ValueError(f"Sector {unified_sector} out of range (0-{self.num_sectors - 1})")
         for i in range(len(self._boundaries) - 1):
             if unified_sector < self._boundaries[i + 1]:
                 return i, unified_sector - self._boundaries[i]
-        raise ValueError(
-            f"Sector {unified_sector} out of range (0-{self.num_sectors - 1})"
-        )
+        raise ValueError(f"Sector {unified_sector} out of range (0-{self.num_sectors - 1})")
 
     def sector_range(self, start_sector: int, num_sectors: int) -> SectorsView:
         """Read/write sectors from the unified address space.

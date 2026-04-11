@@ -109,11 +109,7 @@ def render_example(example_name: str) -> str:
 
     output = result.stdout.rstrip() + "\n"
 
-    return (
-        f"```python\n{source_for_readme}```\n\n"
-        f"Output:\n\n"
-        f"```text\n{output}```"
-    )
+    return f"```python\n{source_for_readme}```\n\nOutput:\n\n```text\n{output}```"
 
 
 def _strip_module_docstring(source: str) -> str:

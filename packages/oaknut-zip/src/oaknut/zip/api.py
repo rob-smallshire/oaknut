@@ -155,9 +155,7 @@ def extract_member(
         else:
             suffix = build_filename_suffix(meta)
         if not output_filepath.name.endswith(suffix):
-            encoded_filepath = output_filepath.with_name(
-                output_filepath.name + suffix
-            )
+            encoded_filepath = output_filepath.with_name(output_filepath.name + suffix)
             output_filepath.rename(encoded_filepath)
             if verbose:
                 rel = encoded_filepath.relative_to(output_dirpath)
@@ -181,9 +179,7 @@ def extract_member(
                 owner=owner,
             )
 
-        inf_filepath = output_filepath.with_suffix(
-            output_filepath.suffix + ".inf"
-        )
+        inf_filepath = output_filepath.with_suffix(output_filepath.suffix + ".inf")
         inf_filepath.write_text(inf_line + "\n", encoding="ascii")
 
         if verbose:
@@ -299,9 +295,7 @@ def list_archive(
                 entries.append(entry)
                 continue
 
-            metadata_source, clean_name, meta = resolve_metadata(
-                info, inf_index=inf_index
-            )
+            metadata_source, clean_name, meta = resolve_metadata(info, inf_index=inf_index)
 
             entry = {
                 FILENAME_KEY: clean_name,
@@ -364,9 +358,7 @@ def archive_info(
                 continue
 
             total += 1
-            metadata_source, _, meta = resolve_metadata(
-                entry, inf_index=inf_index
-            )
+            metadata_source, _, meta = resolve_metadata(entry, inf_index=inf_index)
 
             if metadata_source == SOURCE_SPARKFS:
                 sparkfs_count += 1

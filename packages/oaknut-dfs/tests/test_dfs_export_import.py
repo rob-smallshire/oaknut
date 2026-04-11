@@ -334,9 +334,7 @@ class TestMetaFormatRoundTrip:
     def test_dfs_round_trip_per_format(self, tmp_path, fmt):
         """DFSPath export/import round-trip for each non-xattr MetaFormat."""
         dfs1 = _make_dfs(_blank_buffer())
-        (dfs1.root / "$" / "PROG").write_bytes(
-            b"code", load_address=0x1900, exec_address=0x8023
-        )
+        (dfs1.root / "$" / "PROG").write_bytes(b"code", load_address=0x1900, exec_address=0x8023)
 
         target = tmp_path / "PROG"
         written = (dfs1.root / "$" / "PROG").export_file(target, meta_format=fmt)

@@ -64,7 +64,6 @@ def _dsd_format(size: int) -> DiskFormat:
 
 
 class TestWelcomeSSD:
-
     @pytest.fixture
     def dfs(self):
         filepath = IMAGES_DIR / "Welcome.ssd"
@@ -88,7 +87,6 @@ class TestWelcomeSSD:
 
 
 class TestEconetLevel1SSD:
-
     @pytest.fixture
     def dfs(self):
         filepath = IMAGES_DIR / "econet_level_1_utils.ssd"
@@ -111,7 +109,6 @@ class TestEconetLevel1SSD:
 
 
 class TestEconetLevel2SSD:
-
     @pytest.fixture
     def dfs(self):
         filepath = IMAGES_DIR / "econet_level_2_utils.ssd"
@@ -129,7 +126,6 @@ class TestEconetLevel2SSD:
 
 
 class TestMusic500SSD:
-
     @pytest.fixture
     def dfs(self):
         filepath = IMAGES_DIR / "Music500.ssd"
@@ -152,7 +148,6 @@ class TestMusic500SSD:
 
 
 class TestGamesSSD:
-
     @pytest.fixture
     def dfs(self):
         filepath = IMAGES_DIR / "Games.ssd"
@@ -172,7 +167,6 @@ class TestGamesSSD:
 
 
 class TestM5000SSD:
-
     @pytest.fixture
     def dfs(self):
         filepath = IMAGES_DIR / "M5000-4.ssd"
@@ -187,7 +181,6 @@ class TestM5000SSD:
 
 
 class TestTestSSD:
-
     @pytest.fixture
     def dfs(self):
         filepath = IMAGES_DIR / "Test.ssd"
@@ -206,7 +199,6 @@ class TestTestSSD:
 
 
 class TestCPMUtilitiesDSD:
-
     @pytest.fixture
     def dfs(self):
         filepath = IMAGES_DIR / "CPM_Utilities_Disc.dsd"
@@ -224,7 +216,6 @@ class TestCPMUtilitiesDSD:
 
 
 class TestL3UtilsDSD:
-
     @pytest.fixture
     def dfs(self):
         filepath = IMAGES_DIR / "L3-Utils.dsd"
@@ -264,7 +255,6 @@ class TestTorchHardDiscUtilsDSD:
 
 
 class TestTorchStandardUtilities2DSD:
-
     @pytest.fixture
     def dfs(self):
         filepath = IMAGES_DIR / "Torch_standard_utilities_2.dsd"
@@ -282,7 +272,6 @@ class TestTorchStandardUtilities2DSD:
 
 
 class TestMasterWelcomeADL:
-
     @pytest.fixture
     def adfs(self):
         filepath = IMAGES_DIR / "MasterWelcome.adl"
@@ -326,7 +315,6 @@ class TestMasterWelcomeADL:
 
 
 class TestL3ServerADL:
-
     @pytest.fixture
     def adfs(self):
         filepath = IMAGES_DIR / "l3server.adl"
@@ -351,7 +339,6 @@ class TestL3ServerADL:
 
 
 class TestBBCMaster512ADL:
-
     @pytest.fixture
     def adfs(self):
         filepath = IMAGES_DIR / "BBCMaster512-Disc1-DosPlusBoot.adl"
@@ -369,7 +356,6 @@ class TestBBCMaster512ADL:
 
 
 class TestL3FSISW_ADL:
-
     @pytest.fixture
     def adfs(self):
         filepath = IMAGES_DIR / "L3FS-ISW.adl"

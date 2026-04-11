@@ -78,9 +78,7 @@ class TestUnifiedDiscTwoSurfaces:
                     unified_sector = surface * 16 + track * 4 + sector_in_track
                     # Physical offset: interleaved layout
                     physical_offset = (
-                        track * 2 * track_size
-                        + surface * track_size
-                        + sector_in_track * 256
+                        track * 2 * track_size + surface * track_size + sector_in_track * 256
                     )
                     self.buffer[physical_offset] = unified_sector
 
@@ -120,9 +118,9 @@ class TestUnifiedDiscTwoSurfaces:
         """Reading sectors that span the surface boundary."""
         view = self.unified.sector_range(14, 4)
         assert len(view) == 4 * 256
-        assert view[0] == 14       # Last 2 sectors of surface 0
+        assert view[0] == 14  # Last 2 sectors of surface 0
         assert view[256] == 15
-        assert view[512] == 16     # First 2 sectors of surface 1
+        assert view[512] == 16  # First 2 sectors of surface 1
         assert view[768] == 17
 
     def test_write_through(self):
@@ -141,12 +139,18 @@ class TestUnifiedDiscMismatchedSectorSize:
         # Use non-overlapping surfaces with different sector sizes
         buffer = bytearray(16384)
         spec0 = SurfaceSpec(
-            num_tracks=2, sectors_per_track=4, bytes_per_sector=256,
-            track_zero_offset_bytes=0, track_stride_bytes=1024,
+            num_tracks=2,
+            sectors_per_track=4,
+            bytes_per_sector=256,
+            track_zero_offset_bytes=0,
+            track_stride_bytes=1024,
         )
         spec1 = SurfaceSpec(
-            num_tracks=2, sectors_per_track=2, bytes_per_sector=512,
-            track_zero_offset_bytes=8192, track_stride_bytes=1024,
+            num_tracks=2,
+            sectors_per_track=2,
+            bytes_per_sector=512,
+            track_zero_offset_bytes=8192,
+            track_stride_bytes=1024,
         )
         disc_image = DiscImage(memoryview(buffer), [spec0, spec1])
         with pytest.raises(ValueError, match="bytes_per_sector"):

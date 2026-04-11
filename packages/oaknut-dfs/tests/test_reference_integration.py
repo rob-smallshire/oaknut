@@ -27,7 +27,7 @@ class TestBasicValidationImage:
     def test_disk_title(self, disk):
         """Verify disk title starts with 'BASIC' (stored as 'BASIC' with null padding)."""
         # BBC BASIC *TITLE command stores only first part before space
-        assert disk.title.rstrip('\x00') == "BASIC"
+        assert disk.title.rstrip("\x00") == "BASIC"
 
     def test_directory_distribution(self, disk):
         """Verify files distributed across $, A, B directories."""

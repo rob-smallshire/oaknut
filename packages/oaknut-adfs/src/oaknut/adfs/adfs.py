@@ -158,18 +158,14 @@ def _parse_dsc(filepath: Union[str, PathLike]) -> _DSCGeometry:
     """
     data = Path(filepath).read_bytes()
     if len(data) != _DSC_SIZE:
-        raise ADFSError(
-            f"DSC file should be {_DSC_SIZE} bytes, got {len(data)}"
-        )
+        raise ADFSError(f"DSC file should be {_DSC_SIZE} bytes, got {len(data)}")
     return _DSCGeometry(
         cylinders=(data[13] << 8) | data[14],
         heads=data[15],
     )
 
 
-def _hard_disc_format(
-    geometry: _DSCGeometry, dat_size_bytes: int
-) -> ADFSFormat:
+def _hard_disc_format(geometry: _DSCGeometry, dat_size_bytes: int) -> ADFSFormat:
     """Create an ADFSFormat for a hard disc image from geometry and file size.
 
     ADFS addresses hard discs using linear SCSI LBA — sector N is at
@@ -249,14 +245,14 @@ def geometry_for_capacity(
 def _write_dsc(filepath: Union[str, PathLike], geometry: _DSCGeometry) -> None:
     """Write a 22-byte .dsc sidecar file with SCSI disc geometry."""
     data = bytearray(_DSC_SIZE)
-    data[3] = 0x08       # Speed class
-    data[10] = 0x01      # Removable flag
-    data[12] = 0x01      # Stepping rate
+    data[3] = 0x08  # Speed class
+    data[10] = 0x01  # Removable flag
+    data[12] = 0x01  # Stepping rate
     data[13] = (geometry.cylinders >> 8) & 0xFF  # Cylinders high
-    data[14] = geometry.cylinders & 0xFF         # Cylinders low
-    data[15] = geometry.heads                    # Heads
-    data[17] = 0x80      # RWCC low
-    data[19] = 0x80      # Landing zone
+    data[14] = geometry.cylinders & 0xFF  # Cylinders low
+    data[15] = geometry.heads  # Heads
+    data[17] = 0x80  # RWCC low
+    data[19] = 0x80  # Landing zone
     data[21] = 0x01
     Path(filepath).write_bytes(data)
 
@@ -567,7 +563,11 @@ class ADFSPath:
             raise ADFSPathError(f"Invalid path: {self._path!r}")
 
         self._adfs._write_file(
-            parts, data, load_address, exec_address, locked,
+            parts,
+            data,
+            load_address,
+            exec_address,
+            locked,
         )
 
     def write_text(
@@ -863,17 +863,15 @@ class ADFSPath:
         for i, component in enumerate(parts[1:], 1):
             entry = current_dir.find(component)
             if entry is None:
-                partial = ".".join(parts[:i + 1])
+                partial = ".".join(parts[: i + 1])
                 raise ADFSPathError(f"'{component}' not found in '{partial}'")
 
             if i < len(parts) - 1:
                 # Need to descend into this directory
                 if not entry.is_directory:
-                    partial = ".".join(parts[:i + 1])
+                    partial = ".".join(parts[: i + 1])
                     raise ADFSPathError(f"'{partial}' is not a directory")
-                current_dir = self._adfs._read_directory_at(
-                    entry.indirect_disc_address
-                )
+                current_dir = self._adfs._read_directory_at(entry.indirect_disc_address)
 
         return current_dir, entry
 
@@ -903,12 +901,8 @@ def _detect_format(buffer_size: int) -> ADFSFormat:
     """
     fmt = _ADFS_FORMATS_BY_SIZE.get(buffer_size)
     if fmt is None:
-        sizes = ", ".join(
-            f"{f.total_bytes} ({f.label})" for f in _ADFS_FORMATS_BY_SIZE.values()
-        )
-        raise ADFSError(
-            f"Unrecognised ADFS image size: {buffer_size} bytes. Expected {sizes}."
-        )
+        sizes = ", ".join(f"{f.total_bytes} ({f.label})" for f in _ADFS_FORMATS_BY_SIZE.values())
+        raise ADFSError(f"Unrecognised ADFS image size: {buffer_size} bytes. Expected {sizes}.")
     return fmt
 
 
@@ -989,7 +983,7 @@ def _initialise_old_root_directory(
     # EndMasSeq
     data[tail + 47] = 0  # Must match StartMasSeq
     # EndName
-    data[tail + 48:tail + 52] = b"Hugo"
+    data[tail + 48 : tail + 52] = b"Hugo"
     # DirCheckByte: reserved, must be zero
     data[tail + 52] = 0x00
 
@@ -1035,10 +1029,7 @@ def _create_floppy_file(
 ) -> Iterator[ADFS]:
     """Create a floppy disc image file."""
     if adfs_format is None:
-        raise ValueError(
-            "Floppy disc images require an adfs_format "
-            "(ADFS_S, ADFS_M, or ADFS_L)"
-        )
+        raise ValueError("Floppy disc images require an adfs_format (ADFS_S, ADFS_M, or ADFS_L)")
     with _create_image_file(filepath, adfs_format, title, boot_option) as adfs:
         yield adfs
 
@@ -1062,9 +1053,7 @@ def _create_hard_disc_file(
             "use capacity_bytes or cylinders/heads instead"
         )
     if capacity_bytes is not None and cylinders is not None:
-        raise ValueError(
-            "Specify either capacity_bytes or cylinders, not both"
-        )
+        raise ValueError("Specify either capacity_bytes or cylinders, not both")
 
     if capacity_bytes is not None:
         geometry = geometry_for_capacity(
@@ -1080,15 +1069,11 @@ def _create_hard_disc_file(
         )
     else:
         raise ValueError(
-            "Hard disc images require either capacity_bytes "
-            "or cylinders to be specified"
+            "Hard disc images require either capacity_bytes or cylinders to be specified"
         )
 
     total_bytes = (
-        geometry.cylinders
-        * geometry.heads
-        * geometry.sectors_per_track
-        * _ADFS_BYTES_PER_SECTOR
+        geometry.cylinders * geometry.heads * geometry.sectors_per_track * _ADFS_BYTES_PER_SECTOR
     )
     fmt = _hard_disc_format(geometry, total_bytes)
 
@@ -1168,13 +1153,9 @@ class ADFS:
             dsc_filepath = p.with_suffix(".dsc")
 
             if not dat_filepath.exists():
-                raise FileNotFoundError(
-                    f"Hard disc data file not found: {dat_filepath}"
-                )
+                raise FileNotFoundError(f"Hard disc data file not found: {dat_filepath}")
             if not dsc_filepath.exists():
-                raise FileNotFoundError(
-                    f"Hard disc geometry file not found: {dsc_filepath}"
-                )
+                raise FileNotFoundError(f"Hard disc geometry file not found: {dsc_filepath}")
 
             geometry = _parse_dsc(dsc_filepath)
             dat_size = dat_filepath.stat().st_size
@@ -1235,13 +1216,15 @@ class ADFS:
                     f"(minimum {_OLD_FSM_SECTORS + _OLD_DIR_SECTORS} sectors)"
                 )
             fmt = ADFSFormat(
-                surface_specs=[SurfaceSpec(
-                    num_tracks=1,
-                    sectors_per_track=total_sectors,
-                    bytes_per_sector=_ADFS_BYTES_PER_SECTOR,
-                    track_zero_offset_bytes=0,
-                    track_stride_bytes=buf_size,
-                )],
+                surface_specs=[
+                    SurfaceSpec(
+                        num_tracks=1,
+                        sectors_per_track=total_sectors,
+                        bytes_per_sector=_ADFS_BYTES_PER_SECTOR,
+                        track_zero_offset_bytes=0,
+                        track_stride_bytes=buf_size,
+                    )
+                ],
                 total_sectors=total_sectors,
                 total_bytes=buf_size,
                 label="HardDisc",
@@ -1285,9 +1268,7 @@ class ADFS:
         disc_image = DiscImage(buffer, adfs_format.surface_specs)
         unified = UnifiedDisc(disc_image)
 
-        _initialise_old_free_space_map(
-            unified, adfs_format.total_sectors, boot_option
-        )
+        _initialise_old_free_space_map(unified, adfs_format.total_sectors, boot_option)
         _initialise_old_root_directory(unified, title)
 
         map_data = unified.sector_range(0, 2)
@@ -1460,7 +1441,9 @@ class ADFS:
 
         # 3. Rewrite all objects
         count = self._restore_directory(
-            tree, _OLD_MAP_ROOT_SECTOR, title,
+            tree,
+            _OLD_MAP_ROOT_SECTOR,
+            title,
         )
         return count
 
@@ -1535,7 +1518,9 @@ class ADFS:
                 # Recurse into children
                 count += 1
                 count += self._restore_directory(
-                    item["children"], start_sector, item["title"],
+                    item["children"],
+                    start_sector,
+                    item["title"],
                 )
             else:
                 # Allocate sectors for file data
@@ -1564,7 +1549,9 @@ class ADFS:
         return count
 
     def _add_entry_to_directory(
-        self, disc_address: int, entry: _ADFSDirectoryEntry,
+        self,
+        disc_address: int,
+        entry: _ADFSDirectoryEntry,
     ) -> None:
         """Add an entry to a directory and write it back."""
         directory = self._read_directory_at(disc_address)
@@ -1638,7 +1625,7 @@ class ADFS:
         if num_sectors == 0:
             return b""
         data = self._disc.sector_range(start_sector, num_sectors)
-        return data[:entry.length]
+        return data[: entry.length]
 
     def _write_directory_at(self, directory: _ADFSDirectory, disc_address: int) -> None:
         """Serialize a directory back to its sectors on disc."""
@@ -1667,13 +1654,8 @@ class ADFS:
         existing = parent_dir.find(filename)
         if existing is not None:
             if existing.is_directory:
-                raise ADFSPathError(
-                    f"Cannot overwrite directory '{filename}' with a file"
-                )
-            old_sectors = (
-                (existing.length + _ADFS_BYTES_PER_SECTOR - 1)
-                // _ADFS_BYTES_PER_SECTOR
-            )
+                raise ADFSPathError(f"Cannot overwrite directory '{filename}' with a file")
+            old_sectors = (existing.length + _ADFS_BYTES_PER_SECTOR - 1) // _ADFS_BYTES_PER_SECTOR
             if old_sectors > 0:
                 self._fsm.free(existing.start_sector, old_sectors)
 
@@ -1715,8 +1697,7 @@ class ADFS:
         if existing is not None:
             # Replace the existing entry
             new_entries = tuple(
-                new_entry if e.name.upper() == filename.upper() else e
-                for e in parent_dir.entries
+                new_entry if e.name.upper() == filename.upper() else e for e in parent_dir.entries
             )
         else:
             # Add a new entry
@@ -1744,7 +1725,8 @@ class ADFS:
         self._write_directory_at(updated_dir, parent_disc_address)
 
     def _resolve_parent(
-        self, path_parts: list[str],
+        self,
+        path_parts: list[str],
     ) -> tuple[_ADFSDirectory, int]:
         """Navigate to the parent directory of a path.
 
@@ -1779,25 +1761,17 @@ class ADFS:
         if existing is None:
             raise ADFSPathError(f"'{filename}' not found")
         if existing.is_directory:
-            raise ADFSPathError(
-                f"'{filename}' is a directory, use rmdir"
-            )
+            raise ADFSPathError(f"'{filename}' is a directory, use rmdir")
         if existing.attributes.locked:
             raise ADFSFileLockedError(f"'{filename}' is locked")
 
         # Free sectors
-        num_sectors = (
-            (existing.length + _ADFS_BYTES_PER_SECTOR - 1)
-            // _ADFS_BYTES_PER_SECTOR
-        )
+        num_sectors = (existing.length + _ADFS_BYTES_PER_SECTOR - 1) // _ADFS_BYTES_PER_SECTOR
         if num_sectors > 0:
             self._fsm.free(existing.start_sector, num_sectors)
 
         # Remove entry from directory
-        new_entries = tuple(
-            e for e in parent_dir.entries
-            if e.name.upper() != filename.upper()
-        )
+        new_entries = tuple(e for e in parent_dir.entries if e.name.upper() != filename.upper())
         new_seq = (parent_dir.sequence_number + 1) & 0xFF
 
         updated_dir = _ADFSDirectory(
@@ -1899,10 +1873,7 @@ class ADFS:
         self._fsm.free(existing.indirect_disc_address, dir_sectors)
 
         # Remove entry from parent
-        new_entries = tuple(
-            e for e in parent_dir.entries
-            if e.name.upper() != dirname.upper()
-        )
+        new_entries = tuple(e for e in parent_dir.entries if e.name.upper() != dirname.upper())
         new_seq = (parent_dir.sequence_number + 1) & 0xFF
 
         updated_dir = _ADFSDirectory(
@@ -1949,8 +1920,7 @@ class ADFS:
         if src_disc_address == dst_disc_address:
             # Same directory — replace in place
             new_entries = tuple(
-                renamed if e.name.upper() == old_name.upper() else e
-                for e in src_dir.entries
+                renamed if e.name.upper() == old_name.upper() else e for e in src_dir.entries
             )
             new_seq = (src_dir.sequence_number + 1) & 0xFF
             updated = _ADFSDirectory(
@@ -1970,10 +1940,7 @@ class ADFS:
                 )
 
             # Remove from source
-            src_entries = tuple(
-                e for e in src_dir.entries
-                if e.name.upper() != old_name.upper()
-            )
+            src_entries = tuple(e for e in src_dir.entries if e.name.upper() != old_name.upper())
             src_seq = (src_dir.sequence_number + 1) & 0xFF
             updated_src = _ADFSDirectory(
                 name=src_dir.name,
@@ -2032,8 +1999,7 @@ class ADFS:
         )
 
         new_entries = tuple(
-            updated_entry if e.name.upper() == filename.upper() else e
-            for e in parent_dir.entries
+            updated_entry if e.name.upper() == filename.upper() else e for e in parent_dir.entries
         )
         new_seq = (parent_dir.sequence_number + 1) & 0xFF
 
@@ -2081,8 +2047,7 @@ class ADFS:
         )
 
         new_entries = tuple(
-            updated_entry if e.name.upper() == filename.upper() else e
-            for e in parent_dir.entries
+            updated_entry if e.name.upper() == filename.upper() else e for e in parent_dir.entries
         )
         new_seq = (parent_dir.sequence_number + 1) & 0xFF
 

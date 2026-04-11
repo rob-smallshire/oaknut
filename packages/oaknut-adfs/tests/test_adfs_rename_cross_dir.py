@@ -6,7 +6,6 @@ from oaknut.adfs.exceptions import ADFSPathError
 
 
 class TestRenameCrossDirectory:
-
     def test_move_file_to_subdirectory(self):
         adfs = ADFS.create(ADFS_M)
         (adfs.root / "Games").mkdir()
@@ -27,7 +26,10 @@ class TestRenameCrossDirectory:
         adfs = ADFS.create(ADFS_M)
         (adfs.root / "Dir").mkdir()
         (adfs.root / "Prog").write_bytes(
-            b"code", load_address=0x1900, exec_address=0x8023, locked=True,
+            b"code",
+            load_address=0x1900,
+            exec_address=0x8023,
+            locked=True,
         )
         (adfs.root / "Prog").rename(adfs.root / "Dir" / "Prog")
         stat = (adfs.root / "Dir" / "Prog").stat()

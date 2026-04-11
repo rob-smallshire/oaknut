@@ -381,12 +381,12 @@ class TestAcornDFSCatalogueRemoveFileEntry:
         # File 1: $.HELLO
         buffer[8:15] = b"HELLO  "
         buffer[15] = ord("$")
-        buffer[256 + 8:256 + 16] = bytes([0, 0, 0, 0, 100, 0, 0, 2])
+        buffer[256 + 8 : 256 + 16] = bytes([0, 0, 0, 0, 100, 0, 0, 2])
 
         # File 2: $.WORLD
         buffer[16:23] = b"WORLD  "
         buffer[23] = ord("$")
-        buffer[256 + 16:256 + 24] = bytes([0, 0, 0, 0, 200, 0, 0, 4])
+        buffer[256 + 16 : 256 + 24] = bytes([0, 0, 0, 0, 200, 0, 0, 4])
 
         spec = SurfaceSpec(
             num_tracks=40,
@@ -423,7 +423,7 @@ class TestAcornDFSCatalogueRemoveFileEntry:
         # Locked file (bit 7 set in directory byte)
         buffer[8:15] = b"LOCKED "
         buffer[15] = ord("$") | 0x80  # Set lock bit
-        buffer[256 + 8:256 + 16] = bytes([0, 0, 0, 0, 100, 0, 0, 2])
+        buffer[256 + 8 : 256 + 16] = bytes([0, 0, 0, 0, 100, 0, 0, 2])
 
         spec = SurfaceSpec(
             num_tracks=40,
@@ -1112,7 +1112,7 @@ class TestAcornDFSCatalogueMatches:
         buffer[263] = 200
 
         # Add Watford marker to sector 2
-        buffer[512:520] = b"\xAA" * 8  # 8 bytes of 0xAA
+        buffer[512:520] = b"\xaa" * 8  # 8 bytes of 0xAA
 
         spec = SurfaceSpec(
             num_tracks=40,
@@ -1138,7 +1138,7 @@ class TestAcornDFSCatalogueMatches:
         buffer[263] = 200
 
         # Add full Watford markers
-        buffer[512:520] = b"\xAA" * 8  # Sector 2: 8 bytes of 0xAA
+        buffer[512:520] = b"\xaa" * 8  # Sector 2: 8 bytes of 0xAA
         buffer[768:772] = b"\x00" * 4  # Sector 3: 4 bytes of 0x00
         buffer[773] = 0  # bits 0,1,2 clear
         buffer[774] = 0x00  # Match sector1[6]

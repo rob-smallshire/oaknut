@@ -56,6 +56,7 @@ def list_xattrs(filepath: Path) -> list[str]:
 
         return xattr.xattr(str(filepath)).list()
 
+
 FIXTURES_DIRPATH = Path(__file__).resolve().parent / "fixtures"
 NETUTILS_ZIP_FILEPATH = FIXTURES_DIRPATH / "NetUtils.zip"
 NETUTILB_ZIP_FILEPATH = FIXTURES_DIRPATH / "NetUtilB.zip"
@@ -543,7 +544,9 @@ class TestResolveMetadataWithInf:
 
     def test_inf_used_when_no_sparkfs(self):
         info = self._make_info("FILE")
-        inf_index = {"FILE": ("inf-pieb", AcornMeta(load_addr=0xFFFFDD00, exec_addr=0xFFFFDD00, attr=3))}
+        inf_index = {
+            "FILE": ("inf-pieb", AcornMeta(load_addr=0xFFFFDD00, exec_addr=0xFFFFDD00, attr=3))
+        }
         source, clean, meta = resolve_metadata(info, inf_index=inf_index)
         assert source == "inf-pieb"
         assert meta.load_addr == 0xFFFFDD00
@@ -551,14 +554,18 @@ class TestResolveMetadataWithInf:
     def test_sparkfs_beats_inf(self):
         extra = build_sparkfs_extra(0xFFFF0E10, 0xFFFF0E10, 0x03)
         info = self._make_info("FILE", extra=extra)
-        inf_index = {"FILE": ("inf-pieb", AcornMeta(load_addr=0xFFFFDD00, exec_addr=0xFFFFDD00, attr=3))}
+        inf_index = {
+            "FILE": ("inf-pieb", AcornMeta(load_addr=0xFFFFDD00, exec_addr=0xFFFFDD00, attr=3))
+        }
         source, clean, meta = resolve_metadata(info, inf_index=inf_index)
         assert source == "sparkfs"
         assert meta.load_addr == 0xFFFF0E10
 
     def test_inf_beats_filename_encoding(self):
         info = self._make_info("FILE,ffb")
-        inf_index = {"FILE,ffb": ("inf-trad", AcornMeta(load_addr=0xFFFF0E10, exec_addr=0xFFFF0E10, attr=3))}
+        inf_index = {
+            "FILE,ffb": ("inf-trad", AcornMeta(load_addr=0xFFFF0E10, exec_addr=0xFFFF0E10, attr=3))
+        }
         source, clean, meta = resolve_metadata(info, inf_index=inf_index)
         assert source == "inf-trad"
         assert meta.load_addr == 0xFFFF0E10
@@ -1061,9 +1068,7 @@ class TestMasterZip:
     def test_extract(self, tmp_path):
         runner = CliRunner()
         out = tmp_path / "out"
-        result = runner.invoke(
-            cli, ["extract", str(MASTER_ZIP_FILEPATH), "-d", str(out)]
-        )
+        result = runner.invoke(cli, ["extract", str(MASTER_ZIP_FILEPATH), "-d", str(out)])
         assert result.exit_code == 0
         # Spot-check some files exist
         extracted_files = list(out.rglob("*"))
@@ -1125,9 +1130,7 @@ class TestTestdirUnixZip:
     def test_extract_strips_suffixes(self, tmp_path):
         runner = CliRunner()
         out = tmp_path / "out"
-        result = runner.invoke(
-            cli, ["extract", str(TESTDIR_UNIX_ZIP_FILEPATH), "-d", str(out)]
-        )
+        result = runner.invoke(cli, ["extract", str(TESTDIR_UNIX_ZIP_FILEPATH), "-d", str(out)])
         assert result.exit_code == 0
         testdir = out / "testdir"
         # Filenames should have ,xxx suffixes stripped
@@ -1145,8 +1148,11 @@ class TestTestdirUnixZip:
         result = runner.invoke(
             cli,
             [
-                "extract", "--no-decode-filenames",
-                str(TESTDIR_UNIX_ZIP_FILEPATH), "-d", str(out),
+                "extract",
+                "--no-decode-filenames",
+                str(TESTDIR_UNIX_ZIP_FILEPATH),
+                "-d",
+                str(out),
             ],
         )
         assert result.exit_code == 0
@@ -1216,9 +1222,7 @@ class TestExtractMember:
         zip_filepath = make_zip_file(tmp_path, [("PROG", data, extra)])
         with zipfile.ZipFile(zip_filepath) as zf:
             info = zf.infolist()[0]
-            extract_member(
-                zf, info, tmp_path / "out", meta_format=MetaFormat.INF_TRAD
-            )
+            extract_member(zf, info, tmp_path / "out", meta_format=MetaFormat.INF_TRAD)
         inf = (tmp_path / "out" / "PROG.inf").read_text().strip()
         parts = inf.split()
         assert parts[0] == "PROG"
@@ -1301,9 +1305,7 @@ class TestExtractMember:
         zip_filepath = make_zip_file(tmp_path, [("FILE,ffb", data, None)])
         with zipfile.ZipFile(zip_filepath) as zf:
             info = zf.infolist()[0]
-            extract_member(
-                zf, info, tmp_path / "out", decode_filenames=False, meta_format=None
-            )
+            extract_member(zf, info, tmp_path / "out", decode_filenames=False, meta_format=None)
         assert (tmp_path / "out" / "FILE,ffb").is_file()
         assert not (tmp_path / "out" / "FILE").exists()
 
@@ -1319,9 +1321,7 @@ class TestExtractMember:
     def test_nested_directory_created(self, tmp_path):
         extra = build_sparkfs_extra(0xFFFF0E10, 0xFFFF0E10, 0x03)
         data = b"\x00" * 8
-        zip_filepath = make_zip_file(
-            tmp_path, [("Library/Subdir/FILE", data, extra)]
-        )
+        zip_filepath = make_zip_file(tmp_path, [("Library/Subdir/FILE", data, extra)])
         with zipfile.ZipFile(zip_filepath) as zf:
             info = zf.infolist()[0]
             extract_member(zf, info, tmp_path / "out")
@@ -1329,9 +1329,7 @@ class TestExtractMember:
 
     def test_encoded_load_exec_inf(self, tmp_path):
         data = b"\x00" * 16
-        zip_filepath = make_zip_file(
-            tmp_path, [("PROG,ffff0e10,0000801f", data, None)]
-        )
+        zip_filepath = make_zip_file(tmp_path, [("PROG,ffff0e10,0000801f", data, None)])
         with zipfile.ZipFile(zip_filepath) as zf:
             info = zf.infolist()[0]
             extract_member(zf, info, tmp_path / "out")
@@ -1348,9 +1346,7 @@ class TestExtractMember:
 
 class TestCliExtract:
     def test_default_output_dir(self, tmp_path):
-        zip_filepath = make_zip_file(
-            tmp_path, [("FILE", b"data", None)], name="myarchive.zip"
-        )
+        zip_filepath = make_zip_file(tmp_path, [("FILE", b"data", None)], name="myarchive.zip")
         runner = CliRunner()
         with runner.isolated_filesystem(temp_dir=tmp_path):
             result = runner.invoke(cli, ["extract", str(zip_filepath)])
@@ -1398,7 +1394,14 @@ class TestCliExtract:
             mock_sys.platform = "win32"
             result = runner.invoke(
                 cli,
-                ["extract", "--meta-format", meta_format, str(zip_filepath), "-d", str(tmp_path / "out")],
+                [
+                    "extract",
+                    "--meta-format",
+                    meta_format,
+                    str(zip_filepath),
+                    "-d",
+                    str(tmp_path / "out"),
+                ],
             )
         assert result.exit_code != 0
         assert "not supported on Windows" in result.output
@@ -1419,9 +1422,7 @@ class TestCliList:
         assert "README" in result.output
 
     def test_list_filename_source(self, tmp_path):
-        zip_filepath = make_zip_file(
-            tmp_path, [("FILE,ffb", b"\x00" * 8, None)]
-        )
+        zip_filepath = make_zip_file(tmp_path, [("FILE,ffb", b"\x00" * 8, None)])
         runner = CliRunner()
         result = runner.invoke(cli, ["list", str(zip_filepath)])
         assert result.exit_code == 0
@@ -1640,9 +1641,7 @@ class TestSwehBundledInf:
         assert result.exit_code == 0
         assert "inf-pieb:" in result.output
         # Should have PiEB-inf entries, not all plain
-        pieb_line = next(
-            line for line in result.output.splitlines() if "inf-pieb:" in line
-        )
+        pieb_line = next(line for line in result.output.splitlines() if "inf-pieb:" in line)
         count = int(pieb_line.split(":")[1].strip().split()[0])
         assert count > 0
 
@@ -1747,17 +1746,19 @@ class TestCliFilenameFormat:
     def test_no_double_encoding(self, tmp_path):
         """A file already named FILE,ffb should not become FILE,ffb,ffb."""
         extra = build_sparkfs_extra(0xFFFFFB00, 0xFFFFFB00, 0x03)
-        zip_filepath = make_zip_file(
-            tmp_path, [("FILE,ffb", b"\x00" * 8, extra)]
-        )
+        zip_filepath = make_zip_file(tmp_path, [("FILE,ffb", b"\x00" * 8, extra)])
         out = tmp_path / "out"
         runner = CliRunner()
         result = runner.invoke(
             cli,
             [
-                "extract", "--meta-format", "filename-riscos",
+                "extract",
+                "--meta-format",
+                "filename-riscos",
                 "--no-decode-filenames",
-                str(zip_filepath), "-d", str(out),
+                str(zip_filepath),
+                "-d",
+                str(out),
             ],
         )
         assert result.exit_code == 0
@@ -1847,17 +1848,19 @@ class TestCliMosFilenameFormat:
     def test_no_double_encoding_mos(self, tmp_path):
         """A file already carrying the correct MOS suffix is not renamed."""
         extra = build_sparkfs_extra(0x1900, 0x801F, 0x03)
-        zip_filepath = make_zip_file(
-            tmp_path, [("PROG,1900-801f", b"\x00" * 8, extra)]
-        )
+        zip_filepath = make_zip_file(tmp_path, [("PROG,1900-801f", b"\x00" * 8, extra)])
         out = tmp_path / "out"
         runner = CliRunner()
         result = runner.invoke(
             cli,
             [
-                "extract", "--meta-format", "filename-mos",
+                "extract",
+                "--meta-format",
+                "filename-mos",
                 "--no-decode-filenames",
-                str(zip_filepath), "-d", str(out),
+                str(zip_filepath),
+                "-d",
+                str(out),
             ],
         )
         assert result.exit_code == 0
@@ -1889,9 +1892,7 @@ class TestEdgeCases:
         zip_filepath = tmp_path / "empty.zip"
         zip_filepath.write_bytes(buf.getvalue())
         runner = CliRunner()
-        result = runner.invoke(
-            cli, ["extract", str(zip_filepath), "-d", str(tmp_path / "out")]
-        )
+        result = runner.invoke(cli, ["extract", str(zip_filepath), "-d", str(tmp_path / "out")])
         assert result.exit_code == 0
 
     def test_empty_file_with_sparkfs(self, tmp_path):

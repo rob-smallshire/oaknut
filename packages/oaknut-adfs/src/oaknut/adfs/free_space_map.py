@@ -13,19 +13,19 @@ _MAX_FREE_ENTRIES = 82
 _BYTES_PER_ENTRY = 3
 
 # Sector 0 offsets
-_FREE_START_OFFSET = 0x000      # 82 × 3-byte start addresses
-_RESERVED_OFFSET = 0x0F6        # 1 byte, must be zero
-_OLD_NAME_0_OFFSET = 0x0F7      # 5 bytes (chars 1, 3, 5, 7, 9 of disc name)
-_OLD_SIZE_OFFSET = 0x0FC        # 3 bytes, disc size in sectors
-_CHECK_0_OFFSET = 0x0FF         # 1 byte, checksum
+_FREE_START_OFFSET = 0x000  # 82 × 3-byte start addresses
+_RESERVED_OFFSET = 0x0F6  # 1 byte, must be zero
+_OLD_NAME_0_OFFSET = 0x0F7  # 5 bytes (chars 1, 3, 5, 7, 9 of disc name)
+_OLD_SIZE_OFFSET = 0x0FC  # 3 bytes, disc size in sectors
+_CHECK_0_OFFSET = 0x0FF  # 1 byte, checksum
 
 # Sector 1 offsets
-_FREE_LEN_OFFSET = 0x100        # 82 × 3-byte lengths
-_OLD_NAME_1_OFFSET = 0x1F6      # 5 bytes (chars 0, 2, 4, 6, 8 of disc name)
-_OLD_ID_OFFSET = 0x1FB          # 2 bytes, disc identifier
-_OLD_BOOT_OFFSET = 0x1FD        # 1 byte, boot option
-_FREE_END_OFFSET = 0x1FE        # 1 byte, pointer to end of free space list
-_CHECK_1_OFFSET = 0x1FF         # 1 byte, checksum
+_FREE_LEN_OFFSET = 0x100  # 82 × 3-byte lengths
+_OLD_NAME_1_OFFSET = 0x1F6  # 5 bytes (chars 0, 2, 4, 6, 8 of disc name)
+_OLD_ID_OFFSET = 0x1FB  # 2 bytes, disc identifier
+_OLD_BOOT_OFFSET = 0x1FD  # 1 byte, boot option
+_FREE_END_OFFSET = 0x1FE  # 1 byte, pointer to end of free space list
+_CHECK_1_OFFSET = 0x1FF  # 1 byte, checksum
 
 
 def _read_24bit_le(data: SectorsView, offset: int) -> int:
@@ -83,9 +83,7 @@ class OldFreeSpaceMap:
             ADFSMapError: If checksums are invalid or data is malformed.
         """
         if len(data) < 512:
-            raise ADFSMapError(
-                f"Free space map data too short: {len(data)} bytes, need 512"
-            )
+            raise ADFSMapError(f"Free space map data too short: {len(data)} bytes, need 512")
 
         self._data = data
 
@@ -123,9 +121,7 @@ class OldFreeSpaceMap:
         # Check FreeEnd is a multiple of 3
         free_end = self._data[_FREE_END_OFFSET]
         if free_end % 3 != 0:
-            errors.append(
-                f"FreeEnd pointer ({free_end}) is not a multiple of 3"
-            )
+            errors.append(f"FreeEnd pointer ({free_end}) is not a multiple of 3")
 
         # Check FreeEnd doesn't exceed maximum
         if free_end > _MAX_FREE_ENTRIES * _BYTES_PER_ENTRY:
@@ -240,9 +236,7 @@ class OldFreeSpaceMap:
                 self._recalculate_checksums()
                 return start
 
-        raise ADFSDiscFullError(
-            f"No free space region large enough for {num_sectors} sectors"
-        )
+        raise ADFSDiscFullError(f"No free space region large enough for {num_sectors} sectors")
 
     def free(self, start_sector: int, num_sectors: int) -> None:
         """Release sectors back to the free space map.
@@ -264,7 +258,7 @@ class OldFreeSpaceMap:
 
         # Find entries that are adjacent to the freed region
         merge_before = None  # Index of entry ending at start_sector
-        merge_after = None   # Index of entry starting at end_sector
+        merge_after = None  # Index of entry starting at end_sector
 
         for i in range(n):
             offset = i * _BYTES_PER_ENTRY
@@ -299,9 +293,7 @@ class OldFreeSpaceMap:
             after_offset = merge_after * _BYTES_PER_ENTRY
             after_length = _read_24bit_le(self._data, _FREE_LEN_OFFSET + after_offset)
             _write_24bit_le(self._data, _FREE_START_OFFSET + after_offset, start_sector)
-            _write_24bit_le(
-                self._data, _FREE_LEN_OFFSET + after_offset, after_length + num_sectors
-            )
+            _write_24bit_le(self._data, _FREE_LEN_OFFSET + after_offset, after_length + num_sectors)
         else:
             # Insert a new entry in sorted order
             insert_at = 0

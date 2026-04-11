@@ -16,7 +16,6 @@ from tests.fixtures import BEEBEM_IMAGES_DIRPATH as IMAGES_DIR
 
 
 class TestParseDSC:
-
     def test_parse_real_dsc(self):
         dsc_filepath = IMAGES_DIR / "scsi0.dsc"
         if not dsc_filepath.exists():
@@ -47,7 +46,6 @@ class TestParseDSC:
 
 
 class TestHardDiscFormat:
-
     def test_format_from_geometry(self):
         from oaknut.adfs.adfs import _DSCGeometry
 
@@ -93,7 +91,6 @@ class TestHardDiscFormat:
 
 
 class TestADFSHardDiscFromFile:
-
     def test_open_via_dat(self):
         dat_filepath = IMAGES_DIR / "scsi0.dat"
         dsc_filepath = IMAGES_DIR / "scsi0.dsc"
@@ -194,7 +191,6 @@ class TestADFSHardDiscSmallImages:
 
 
 class TestADFSHardDiscMissingCompanion:
-
     def test_dat_without_dsc_raises(self, tmp_path):
         dat_filepath = tmp_path / "test.dat"
         dat_filepath.write_bytes(b"\x00" * 1024)
@@ -214,7 +210,6 @@ class TestADFSHardDiscMissingCompanion:
 
 
 class TestADFSHardDiscFromBuffer:
-
     def test_non_floppy_size_accepted(self):
         """A buffer larger than any floppy format should be accepted if valid ADFS."""
         from helpers.adfs_image import make_old_directory, make_old_free_space_map
@@ -226,7 +221,7 @@ class TestADFSHardDiscFromBuffer:
         buf[0:512] = fsm
 
         root_dir = make_old_directory([], dir_name="$", title="HardDisc")
-        buf[0x200:0x200 + 1280] = root_dir
+        buf[0x200 : 0x200 + 1280] = root_dir
 
         adfs = ADFS.from_buffer(memoryview(buf))
         assert adfs.title == "HardDisc"

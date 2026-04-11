@@ -24,8 +24,8 @@ from typing import Tuple
 # BBC Micro (MODEs 0-6) character mappings
 # Maps Acorn byte values to Unicode characters where they differ from ASCII
 BBC_MICRO_TO_UNICODE = {
-    0x60: '£',  # Backtick replaced with pound sign
-    0x7C: '¦',  # Vertical bar replaced with broken bar
+    0x60: "£",  # Backtick replaced with pound sign
+    0x7C: "¦",  # Vertical bar replaced with broken bar
 }
 
 # Reverse mapping for encoding Unicode to BBC Micro
@@ -35,7 +35,7 @@ UNICODE_TO_BBC_MICRO = {v: k for k, v in BBC_MICRO_TO_UNICODE.items()}
 class AcornCodec(codecs.Codec):
     """Codec for Acorn/BBC Micro character encoding."""
 
-    def encode(self, input: str, errors: str = 'strict') -> Tuple[bytes, int]:
+    def encode(self, input: str, errors: str = "strict") -> Tuple[bytes, int]:
         """
         Encode Unicode string to Acorn bytes.
 
@@ -53,19 +53,19 @@ class AcornCodec(codecs.Codec):
             else:
                 code_point = ord(char)
                 if code_point > 255:
-                    if errors == 'strict':
+                    if errors == "strict":
                         raise UnicodeEncodeError(
-                            'acorn',
+                            "acorn",
                             input,
                             i,
                             i + 1,
                             f"Character '{char}' (U+{code_point:04X}) cannot be "
                             f"encoded in Acorn character set",
                         )
-                    elif errors == 'ignore':
+                    elif errors == "ignore":
                         continue
-                    elif errors == 'replace':
-                        output.append(ord('?'))
+                    elif errors == "replace":
+                        output.append(ord("?"))
                     else:
                         raise ValueError(f"Unknown error handling: {errors}")
                 else:
@@ -73,7 +73,7 @@ class AcornCodec(codecs.Codec):
 
         return bytes(output), len(input)
 
-    def decode(self, input: bytes, errors: str = 'strict') -> Tuple[str, int]:
+    def decode(self, input: bytes, errors: str = "strict") -> Tuple[str, int]:
         """
         Decode Acorn bytes to Unicode string.
 
@@ -92,7 +92,7 @@ class AcornCodec(codecs.Codec):
                 # Standard ASCII or high-bit characters
                 output.append(chr(byte))
 
-        return ''.join(output), len(input)
+        return "".join(output), len(input)
 
 
 # The Acorn codec is byte-for-byte stateless, so a single shared
@@ -133,7 +133,7 @@ class AcornStreamReader(AcornCodec, codecs.StreamReader):
 def getregentry(name: str = None) -> codecs.CodecInfo:
     """Get codec registry entry."""
     return codecs.CodecInfo(
-        name='acorn',
+        name="acorn",
         encode=_SHARED_ACORN_CODEC.encode,
         decode=_SHARED_ACORN_CODEC.decode,
         incrementalencoder=AcornIncrementalEncoder,
@@ -145,7 +145,7 @@ def getregentry(name: str = None) -> codecs.CodecInfo:
 
 def search_function(encoding: str) -> codecs.CodecInfo | None:
     """Search function for codec registry."""
-    if encoding.lower() == 'acorn':
+    if encoding.lower() == "acorn":
         return getregentry(encoding)
     return None
 
@@ -165,7 +165,7 @@ def acorn_to_unicode(data: bytes) -> str:
     Returns:
         Decoded Unicode string
     """
-    return data.decode('acorn')
+    return data.decode("acorn")
 
 
 def unicode_to_acorn(text: str) -> bytes:
@@ -181,7 +181,7 @@ def unicode_to_acorn(text: str) -> bytes:
     Raises:
         UnicodeEncodeError: If text contains characters that cannot be encoded
     """
-    return text.encode('acorn')
+    return text.encode("acorn")
 
 
 def is_valid_acorn_filename_char(char: str) -> bool:
@@ -204,15 +204,15 @@ def is_valid_acorn_filename_char(char: str) -> bool:
         (like '!' only at position 0) must be checked separately.
     """
     # Standard alphanumeric
-    if 'A' <= char <= 'Z' or '0' <= char <= '9':
+    if "A" <= char <= "Z" or "0" <= char <= "9":
         return True
 
     # Allowed punctuation (excluding forbidden: # * : . !)
-    if char in '$%&()+@^_-':
+    if char in "$%&()+@^_-":
         return True
 
     # UK-specific characters
-    if char == '£':
+    if char == "£":
         return True
 
     return False
@@ -236,6 +236,6 @@ def sanitize_for_acorn(text: str) -> str:
     text = text.upper()
 
     # Keep only valid characters
-    sanitized = ''.join(c for c in text if is_valid_acorn_filename_char(c))
+    sanitized = "".join(c for c in text if is_valid_acorn_filename_char(c))
 
     return sanitized

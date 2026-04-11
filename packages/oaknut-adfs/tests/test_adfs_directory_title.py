@@ -6,7 +6,6 @@ from oaknut.adfs.exceptions import ADFSPathError
 
 
 class TestDirectoryTitleGetter:
-
     def test_root_title(self):
         adfs = ADFS.create(ADFS_S, title="MyDisc")
         assert adfs.root.title == "MyDisc"
@@ -39,7 +38,6 @@ class TestDirectoryTitleGetter:
 
 
 class TestDirectoryTitleSetter:
-
     def test_set_root_title(self):
         adfs = ADFS.create(ADFS_S)
         adfs.root.title = "NewTitle"

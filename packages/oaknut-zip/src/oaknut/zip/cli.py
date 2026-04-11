@@ -48,13 +48,20 @@ def cli() -> None:
 @click.option(
     "--meta-format",
     type=click.Choice(
-        ["inf-trad", "inf-pieb", "xattr-acorn", "xattr-pieb",
-         "filename-riscos", "filename-mos", "none"],
+        [
+            "inf-trad",
+            "inf-pieb",
+            "xattr-acorn",
+            "xattr-pieb",
+            "filename-riscos",
+            "filename-mos",
+            "none",
+        ],
         case_sensitive=False,
     ),
     default="inf-trad",
     help="Metadata format: inf-trad, inf-pieb, xattr-acorn, xattr-pieb, "
-         "filename-riscos, filename-mos, or none.",
+    "filename-riscos, filename-mos, or none.",
 )
 @click.option(
     "--no-decode-filenames",
@@ -126,7 +133,7 @@ def _tree_display_names(entries: list[dict]) -> list[str]:
                 pj = paths[j]
                 if not pj.startswith(parent_prefix):
                     break
-                pj_component = pj[len(parent_prefix):].split("/")[0]
+                pj_component = pj[len(parent_prefix) :].split("/")[0]
                 if pj_component != our_node:
                     is_last = False
                     break
@@ -166,9 +173,7 @@ def list_cmd(zipfile_path: Path) -> None:
                 ft = entry[FILETYPE_KEY]
                 ft_str = f"{ft:03X}" if ft is not None else ""
                 attr_str = (
-                    format_access_text(entry[ATTR_KEY])
-                    if entry[ATTR_KEY] is not None
-                    else ""
+                    format_access_text(entry[ATTR_KEY]) if entry[ATTR_KEY] is not None else ""
                 )
                 table.add_row(
                     display_name,

@@ -10,7 +10,6 @@ from oaknut.adfs.exceptions import (
 
 
 class TestMkdir:
-
     def test_mkdir_creates_directory(self):
         adfs = ADFS.create(ADFS_S)
         (adfs.root / "Games").mkdir()
@@ -39,7 +38,8 @@ class TestMkdir:
         adfs = ADFS.create(ADFS_S)
         (adfs.root / "Games").mkdir()
         (adfs.root / "Games" / "Elite").write_bytes(
-            b"game data", load_address=0x1900,
+            b"game data",
+            load_address=0x1900,
         )
         assert (adfs.root / "Games" / "Elite").read_bytes() == b"game data"
 

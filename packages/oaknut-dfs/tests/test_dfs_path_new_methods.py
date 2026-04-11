@@ -16,7 +16,6 @@ def _make_empty_dfs():
 
 
 class TestWriteText:
-
     def test_write_text_default_encoding(self):
         dfs = _make_empty_dfs()
         (dfs.root / "$" / "TEXT").write_text("Hello")
@@ -30,7 +29,9 @@ class TestWriteText:
     def test_write_text_with_metadata(self):
         dfs = _make_empty_dfs()
         (dfs.root / "$" / "DOC").write_text(
-            "Notes", load_address=0x1900, exec_address=0x8023,
+            "Notes",
+            load_address=0x1900,
+            exec_address=0x8023,
         )
         stat = (dfs.root / "$" / "DOC").stat()
         assert stat.load_address == 0x1900
@@ -38,7 +39,6 @@ class TestWriteText:
 
 
 class TestReadText:
-
     def test_read_text_default_acorn_encoding(self):
         dfs = _make_empty_dfs()
         (dfs.root / "$" / "TEXT").write_text("Hello")
@@ -57,7 +57,6 @@ class TestReadText:
 
 
 class TestWriteBasic:
-
     def test_write_basic_propagates_not_implemented(self):
         dfs = _make_empty_dfs()
         with pytest.raises(NotImplementedError):
@@ -91,7 +90,8 @@ class TestWriteBasic:
         monkeypatch.setattr(basic, "tokenise", lambda src: b"\x00")
         dfs = _make_empty_dfs()
         (dfs.root / "$" / "PROG").write_basic(
-            "10 PRINT", load_address=basic.ELECTRON_BASIC_LOAD_ADDRESS,
+            "10 PRINT",
+            load_address=basic.ELECTRON_BASIC_LOAD_ADDRESS,
         )
         assert (dfs.root / "$" / "PROG").stat().load_address == 0x0E00
 
@@ -99,7 +99,9 @@ class TestWriteBasic:
         monkeypatch.setattr(basic, "tokenise", lambda src: b"\x00")
         dfs = _make_empty_dfs()
         (dfs.root / "$" / "PROG").write_basic(
-            "10 PRINT", exec_address=0x8023, locked=True,
+            "10 PRINT",
+            exec_address=0x8023,
+            locked=True,
         )
         stat = (dfs.root / "$" / "PROG").stat()
         assert stat.exec_address == 0x8023
@@ -107,7 +109,6 @@ class TestWriteBasic:
 
 
 class TestReadBasic:
-
     def test_read_basic_propagates_not_implemented(self):
         dfs = _make_empty_dfs()
         (dfs.root / "$" / "PROG").write_bytes(b"\x0d\xff")
@@ -135,7 +136,6 @@ class TestReadBasic:
 
 
 class TestExportFile:
-
     def test_export_file_writes_data(self, tmp_path):
         dfs = _make_empty_dfs()
         (dfs.root / "$" / "HELLO").write_bytes(b"Hello!")
@@ -146,7 +146,10 @@ class TestExportFile:
     def test_export_file_writes_inf(self, tmp_path):
         dfs = _make_empty_dfs()
         (dfs.root / "$" / "CODE").write_bytes(
-            b"\x00" * 100, load_address=0x1900, exec_address=0x8023, locked=True,
+            b"\x00" * 100,
+            load_address=0x1900,
+            exec_address=0x8023,
+            locked=True,
         )
         target = tmp_path / "CODE"
         (dfs.root / "$" / "CODE").export_file(target)
@@ -167,7 +170,6 @@ class TestExportFile:
 
 
 class TestImportFile:
-
     def test_import_file_reads_data(self, tmp_path):
         source = tmp_path / "hello.bin"
         source.write_bytes(b"Hello from host!")
@@ -208,9 +210,7 @@ class TestImportFile:
         source = tmp_path / "data.bin"
         source.write_bytes(b"test")
 
-        (tmp_path / "data.bin.inf").write_text(
-            "$.IGNORED 0000FF00 0000FF00 00000004\n"
-        )
+        (tmp_path / "data.bin.inf").write_text("$.IGNORED 0000FF00 0000FF00 00000004\n")
 
         dfs = _make_empty_dfs()
         (dfs.root / "$" / "FILE").import_file(source)
@@ -219,12 +219,13 @@ class TestImportFile:
 
 
 class TestExportImportRoundTrip:
-
     def test_export_then_import(self, tmp_path):
         dfs1 = _make_empty_dfs()
         original = bytes(range(200))
         (dfs1.root / "$" / "FILE").write_bytes(
-            original, load_address=0x1900, exec_address=0x8023,
+            original,
+            load_address=0x1900,
+            exec_address=0x8023,
         )
 
         export_path = tmp_path / "FILE"

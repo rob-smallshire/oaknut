@@ -60,7 +60,11 @@ def run_oaknut_zip(*args: str) -> str:
 def run_shell(cmd: str) -> str:
     """Run a shell command and return stripped stdout."""
     result = subprocess.run(
-        cmd, shell=True, capture_output=True, text=True, check=True,
+        cmd,
+        shell=True,
+        capture_output=True,
+        text=True,
+        check=True,
     )
     return result.stdout.rstrip()
 
@@ -121,24 +125,36 @@ def generate() -> str:
         # PiEconetBridge INF extraction
         pieb_dirpath = tmp / "pieb"
         run_oaknut_zip(
-            "extract", "--meta-format", "inf-pieb", fixture,
-            "-d", str(pieb_dirpath),
+            "extract",
+            "--meta-format",
+            "inf-pieb",
+            fixture,
+            "-d",
+            str(pieb_dirpath),
         )
         pieb_inf_examples = collect_pieb_inf_examples(pieb_dirpath)
 
         # xattr extraction (PiEconetBridge namespace)
         xattr_pieb_dirpath = tmp / "xattr-pieb"
         run_oaknut_zip(
-            "extract", "--meta-format", "xattr-pieb", fixture,
-            "-d", str(xattr_pieb_dirpath),
+            "extract",
+            "--meta-format",
+            "xattr-pieb",
+            fixture,
+            "-d",
+            str(xattr_pieb_dirpath),
         )
         xattr_pieb_examples = collect_xattr_examples(xattr_pieb_dirpath)
 
         # xattr extraction (Acorn namespace)
         xattr_acorn_dirpath = tmp / "xattr-acorn"
         run_oaknut_zip(
-            "extract", "--meta-format", "xattr-acorn", fixture,
-            "-d", str(xattr_acorn_dirpath),
+            "extract",
+            "--meta-format",
+            "xattr-acorn",
+            fixture,
+            "-d",
+            str(xattr_acorn_dirpath),
         )
         xattr_acorn_examples = collect_xattr_examples(xattr_acorn_dirpath)
 

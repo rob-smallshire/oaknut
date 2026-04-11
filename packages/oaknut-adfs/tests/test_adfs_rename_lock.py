@@ -6,7 +6,6 @@ from oaknut.adfs.exceptions import ADFSFileLockedError, ADFSPathError
 
 
 class TestRename:
-
     def test_rename_file(self):
         adfs = ADFS.create(ADFS_S)
         (adfs.root / "Old").write_bytes(b"data")
@@ -30,7 +29,10 @@ class TestRename:
     def test_rename_preserves_metadata(self):
         adfs = ADFS.create(ADFS_S)
         (adfs.root / "Old").write_bytes(
-            b"data", load_address=0x1900, exec_address=0x8023, locked=True,
+            b"data",
+            load_address=0x1900,
+            exec_address=0x8023,
+            locked=True,
         )
         (adfs.root / "Old").rename(adfs.root / "New")
         stat = (adfs.root / "New").stat()
@@ -93,7 +95,6 @@ class TestRename:
 
 
 class TestLock:
-
     def test_lock_file(self):
         adfs = ADFS.create(ADFS_S)
         (adfs.root / "File").write_bytes(b"data")
@@ -137,7 +138,6 @@ class TestLock:
 
 
 class TestUnlock:
-
     def test_unlock_file(self):
         adfs = ADFS.create(ADFS_S)
         (adfs.root / "File").write_bytes(b"data", locked=True)

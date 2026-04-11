@@ -47,7 +47,9 @@ def parse_encoded_filename(filename: str) -> tuple[str, AcornMeta | None]:
         # Synthesise a RISC OS load address from the filetype
         load_addr = 0xFFF00000 | (filetype << 8)
         return m.group(1), AcornMeta(
-            load_addr=load_addr, exec_addr=0, filetype=filetype,
+            load_addr=load_addr,
+            exec_addr=0,
+            filetype=filetype,
         )
 
     return filename, None

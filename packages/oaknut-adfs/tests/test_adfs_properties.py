@@ -5,7 +5,6 @@ from oaknut.adfs import ADFS, ADFS_S
 
 
 class TestTitleSetter:
-
     def test_set_title(self):
         adfs = ADFS.create(ADFS_S)
         adfs.title = "NewTitle"
@@ -42,7 +41,6 @@ class TestTitleSetter:
 
 
 class TestBootOptionSetter:
-
     def test_set_boot_option(self):
         adfs = ADFS.create(ADFS_S)
         adfs.boot_option = 3

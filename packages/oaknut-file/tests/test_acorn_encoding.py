@@ -25,7 +25,7 @@ class TestAcornToUnicode:
 
     def test_broken_bar_bbc_micro(self):
         """Broken bar at 0x7C on BBC Micro."""
-        data = b"A\x7CB"  # "A¦B"
+        data = b"A\x7cB"  # "A¦B"
         result = acorn_to_unicode(data)
         assert result == "A¦B"
 
@@ -74,7 +74,7 @@ class TestUnicodeToAcorn:
         """Broken bar encodes to 0x7C on BBC Micro."""
         text = "A¦B"
         result = unicode_to_acorn(text)
-        assert result == b"A\x7CB"
+        assert result == b"A\x7cB"
 
     def test_mixed_characters(self):
         """Mixed standard and UK characters."""
@@ -107,7 +107,7 @@ class TestUnicodeToAcorn:
 
     def test_invalid_character_raises(self):
         """Characters outside 0-255 range raise ValueError."""
-        text = "HELLO\U0001F4BE"  # Contains floppy disk emoji
+        text = "HELLO\U0001f4be"  # Contains floppy disk emoji
         with pytest.raises(ValueError, match="cannot be encoded"):
             unicode_to_acorn(text)
 
@@ -133,7 +133,7 @@ class TestIsValidAcornFilenameChar:
 
     def test_pound_sign(self):
         """Pound sign is valid."""
-        assert is_valid_acorn_filename_char('£')
+        assert is_valid_acorn_filename_char("£")
 
     def test_common_punctuation(self):
         """Common allowed punctuation is valid (excluding forbidden: # * : . !)."""
@@ -142,19 +142,19 @@ class TestIsValidAcornFilenameChar:
 
     def test_lowercase_invalid(self):
         """Lowercase letters are invalid (should be uppercase)."""
-        assert not is_valid_acorn_filename_char('a')
-        assert not is_valid_acorn_filename_char('z')
+        assert not is_valid_acorn_filename_char("a")
+        assert not is_valid_acorn_filename_char("z")
 
     def test_space_invalid(self):
         """Spaces are typically invalid in filenames."""
-        assert not is_valid_acorn_filename_char(' ')
+        assert not is_valid_acorn_filename_char(" ")
 
     def test_special_chars_invalid(self):
         """Special characters not in allowed set are invalid."""
-        assert not is_valid_acorn_filename_char('*')
-        assert not is_valid_acorn_filename_char('/')
-        assert not is_valid_acorn_filename_char('\\')
-        assert not is_valid_acorn_filename_char(':')
+        assert not is_valid_acorn_filename_char("*")
+        assert not is_valid_acorn_filename_char("/")
+        assert not is_valid_acorn_filename_char("\\")
+        assert not is_valid_acorn_filename_char(":")
 
 
 class TestSanitizeForAcorn:
@@ -222,7 +222,7 @@ class TestEncodingIntegration:
         """Filename containing pound sign."""
         filename = "£MONEY"
         encoded = unicode_to_acorn(filename)
-        assert b'\x60' in encoded  # Contains pound at 0x60
+        assert b"\x60" in encoded  # Contains pound at 0x60
         assert acorn_to_unicode(encoded) == filename
 
     def test_max_length_filename(self):
@@ -244,7 +244,7 @@ class TestEncodingIntegration:
         encoded = unicode_to_acorn(title)
         decoded = acorn_to_unicode(encoded)
         assert decoded == title
-        assert b'\x60' in encoded
+        assert b"\x60" in encoded
 
 
 class TestCodecInterface:
@@ -253,69 +253,69 @@ class TestCodecInterface:
     def test_encode_with_codec(self):
         """Encode using Python's standard .encode() method."""
         text = "HELLO"
-        encoded = text.encode('acorn')
+        encoded = text.encode("acorn")
         assert encoded == b"HELLO"
 
     def test_decode_with_codec(self):
         """Decode using Python's standard .decode() method."""
         data = b"HELLO"
-        decoded = data.decode('acorn')
+        decoded = data.decode("acorn")
         assert decoded == "HELLO"
 
     def test_encode_pound_sign(self):
         """Encode pound sign using codec."""
         text = "£100"
-        encoded = text.encode('acorn')
+        encoded = text.encode("acorn")
         assert encoded == b"\x60100"
 
     def test_decode_pound_sign(self):
         """Decode pound sign using codec."""
         data = b"\x60100"
-        decoded = data.decode('acorn')
+        decoded = data.decode("acorn")
         assert decoded == "£100"
 
     def test_encode_broken_bar(self):
         """Encode broken bar using codec."""
         text = "A¦B"
-        encoded = text.encode('acorn')
-        assert encoded == b"A\x7CB"
+        encoded = text.encode("acorn")
+        assert encoded == b"A\x7cB"
 
     def test_decode_broken_bar(self):
         """Decode broken bar using codec."""
-        data = b"A\x7CB"
-        decoded = data.decode('acorn')
+        data = b"A\x7cB"
+        decoded = data.decode("acorn")
         assert decoded == "A¦B"
 
     def test_codec_round_trip(self):
         """Round trip through codec."""
         original = "TEST£FILE"
-        encoded = original.encode('acorn')
-        decoded = encoded.decode('acorn')
+        encoded = original.encode("acorn")
+        decoded = encoded.decode("acorn")
         assert decoded == original
 
     def test_codec_name(self):
         """Test codec is registered as 'acorn'."""
         text = "£"
-        assert text.encode('acorn') == b"\x60"
+        assert text.encode("acorn") == b"\x60"
         # Codec is registered as 'acorn'
-        assert text.encode('ACORN') == b"\x60"  # Case insensitive
+        assert text.encode("ACORN") == b"\x60"  # Case insensitive
 
     def test_encode_errors_strict(self):
         """Encoding with strict error handling raises on invalid chars."""
         text = "TEST™"  # Contains trademark symbol
         with pytest.raises(UnicodeEncodeError):
-            text.encode('acorn', errors='strict')
+            text.encode("acorn", errors="strict")
 
     def test_encode_errors_ignore(self):
         """Encoding with ignore error handling skips invalid chars."""
         text = "TEST™OK"
-        encoded = text.encode('acorn', errors='ignore')
+        encoded = text.encode("acorn", errors="ignore")
         assert encoded == b"TESTOK"
 
     def test_encode_errors_replace(self):
         """Encoding with replace error handling uses ? for invalid chars."""
         text = "TEST™"
-        encoded = text.encode('acorn', errors='replace')
+        encoded = text.encode("acorn", errors="replace")
         assert encoded == b"TEST?"
 
     def test_codec_with_file_like(self):
@@ -324,13 +324,13 @@ class TestCodecInterface:
 
         # Write with codec
         buffer = io.BytesIO()
-        writer = io.TextIOWrapper(buffer, encoding='acorn')
+        writer = io.TextIOWrapper(buffer, encoding="acorn")
         writer.write("£100")
         writer.flush()
 
         # Read with codec
         buffer.seek(0)
-        reader = io.TextIOWrapper(buffer, encoding='acorn')
+        reader = io.TextIOWrapper(buffer, encoding="acorn")
         result = reader.read()
         assert result == "£100"
 
@@ -340,12 +340,14 @@ class TestCodecRegistry:
 
     def test_codecs_lookup_returns_info(self):
         import codecs
+
         info = codecs.lookup("acorn")
         assert info.name == "acorn"
 
     def test_incremental_encoder_streams_chunks(self):
         """The incremental encoder handles chunked input correctly."""
         import codecs
+
         encoder = codecs.getincrementalencoder("acorn")()
         out = b""
         out += encoder.encode("COST")
@@ -355,6 +357,7 @@ class TestCodecRegistry:
 
     def test_incremental_decoder_streams_chunks(self):
         import codecs
+
         decoder = codecs.getincrementaldecoder("acorn")()
         out = ""
         out += decoder.decode(b"COST")
@@ -364,12 +367,14 @@ class TestCodecRegistry:
 
     def test_incremental_encoder_respects_errors(self):
         import codecs
+
         encoder = codecs.getincrementalencoder("acorn")(errors="replace")
         assert encoder.encode("A\u0100B") == b"A?B"
 
     def test_iterencode_and_iterdecode(self):
         """codecs.iterencode / iterdecode walk the incremental path."""
         import codecs
+
         chunks = iter(["COST", "£", "100"])
         out = b"".join(codecs.iterencode(chunks, "acorn"))
         assert out == b"COST\x60100"

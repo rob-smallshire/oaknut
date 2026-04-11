@@ -5,7 +5,6 @@ catalogue is empty, the total sectors and free space match expectations,
 and that files can be written and read back.
 """
 
-
 import pytest
 from oaknut.dfs.dfs import DFS
 from oaknut.dfs.formats import (
@@ -107,7 +106,9 @@ class TestDFSCreateRoundTrip:
         assert (dfs.root / "$" / "HELLO").read_bytes() == b"Hello, World!"
 
     @pytest.mark.parametrize("disk_format,expected_total_sectors,catalogue_sectors", ALL_FORMATS)
-    def test_catalogue_high_bits_round_trip(self, disk_format, expected_total_sectors, catalogue_sectors):
+    def test_catalogue_high_bits_round_trip(
+        self, disk_format, expected_total_sectors, catalogue_sectors
+    ):
         """Verify that the high bits (16-17) of load, exec, and length
         are packed and unpacked correctly in the catalogue extra byte.
 
@@ -133,7 +134,9 @@ class TestDFSCreateRoundTrip:
         assert data == b"test data"
 
     @pytest.mark.parametrize("disk_format,expected_total_sectors,catalogue_sectors", ALL_FORMATS)
-    def test_free_sectors_decrease_after_save(self, disk_format, expected_total_sectors, catalogue_sectors):
+    def test_free_sectors_decrease_after_save(
+        self, disk_format, expected_total_sectors, catalogue_sectors
+    ):
         dfs = DFS.create(disk_format)
         initial_free = dfs.free_sectors
         (dfs.root / "$" / "FILE").write_bytes(b"x" * 512)  # 2 sectors
@@ -155,7 +158,9 @@ class TestDFSCreateFile:
     """Test DFS.create_file() for file-backed disc images."""
 
     @pytest.mark.parametrize("disk_format,expected_total_sectors,catalogue_sectors", ALL_FORMATS)
-    def test_create_file_empty_and_reopen(self, disk_format, expected_total_sectors, catalogue_sectors, tmp_path):
+    def test_create_file_empty_and_reopen(
+        self, disk_format, expected_total_sectors, catalogue_sectors, tmp_path
+    ):
         filepath = tmp_path / "test.ssd"
         with DFS.create_file(filepath, disk_format, title="Persist") as dfs:
             pass
@@ -166,7 +171,9 @@ class TestDFSCreateFile:
             assert len(dfs.files) == 0
 
     @pytest.mark.parametrize("disk_format,expected_total_sectors,catalogue_sectors", ALL_FORMATS)
-    def test_create_file_with_data(self, disk_format, expected_total_sectors, catalogue_sectors, tmp_path):
+    def test_create_file_with_data(
+        self, disk_format, expected_total_sectors, catalogue_sectors, tmp_path
+    ):
         filepath = tmp_path / "test.ssd"
         with DFS.create_file(filepath, disk_format) as dfs:
             (dfs.root / "$" / "HELLO").write_bytes(b"Hello!")
@@ -176,7 +183,9 @@ class TestDFSCreateFile:
             assert (dfs.root / "$" / "HELLO").read_bytes() == b"Hello!"
 
     @pytest.mark.parametrize("disk_format,expected_total_sectors,catalogue_sectors", ALL_FORMATS)
-    def test_created_file_size(self, disk_format, expected_total_sectors, catalogue_sectors, tmp_path):
+    def test_created_file_size(
+        self, disk_format, expected_total_sectors, catalogue_sectors, tmp_path
+    ):
         filepath = tmp_path / "test.ssd"
         with DFS.create_file(filepath, disk_format):
             pass  # Just create
@@ -193,7 +202,6 @@ class TestDFSCreateFile:
 
 
 class TestDFSCreateEdgeCases:
-
     def test_create_double_sided_each_side_independent(self):
         """Each side of a DSD is independent — creating gives side 0."""
         dfs = DFS.create(ACORN_DFS_80T_DOUBLE_SIDED_INTERLEAVED)

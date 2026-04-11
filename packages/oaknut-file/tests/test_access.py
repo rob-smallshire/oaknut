@@ -5,7 +5,6 @@ from oaknut.file.access import Access, format_access_hex, format_access_text
 
 
 class TestAccessFlags:
-
     def test_owner_read_is_bit_0(self):
         assert Access.R == 0x01
 
@@ -63,7 +62,6 @@ class TestAccessFlags:
 
 
 class TestFormatAccessHex:
-
     def test_format_wr(self):
         assert format_access_hex(0x03) == "03"
 
@@ -81,7 +79,6 @@ class TestFormatAccessHex:
 
 
 class TestFormatAccessText:
-
     def test_wr(self):
         result = format_access_text(0x03)
         assert "W" in result

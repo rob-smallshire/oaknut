@@ -11,7 +11,6 @@ import pytest
 
 
 class TestConstants:
-
     def test_bbc_basic_load_address(self):
         assert basic.BBC_BASIC_LOAD_ADDRESS == 0x1900
 
@@ -20,10 +19,9 @@ class TestConstants:
 
 
 class TestTokeniseStub:
-
     def test_tokenise_raises_not_implemented(self):
         with pytest.raises(NotImplementedError):
-            basic.tokenise("10 PRINT \"Hello\"")
+            basic.tokenise('10 PRINT "Hello"')
 
     def test_tokenise_raises_on_empty_input(self):
         with pytest.raises(NotImplementedError):
@@ -31,7 +29,6 @@ class TestTokeniseStub:
 
 
 class TestDetokeniseStub:
-
     def test_detokenise_raises_not_implemented(self):
         with pytest.raises(NotImplementedError):
             basic.detokenise(b"\x0d\xff")
@@ -55,12 +52,11 @@ class TestModuleIsolation:
 
         for node in ast.walk(tree):
             if isinstance(node, ast.ImportFrom):
-                assert node.module is None or not node.module.startswith(
-                    "oaknut.dfs"
-                ), f"basic.py must not import from oaknut.dfs: {ast.dump(node)}"
+                assert node.module is None or not node.module.startswith("oaknut.dfs"), (
+                    f"basic.py must not import from oaknut.dfs: {ast.dump(node)}"
+                )
             elif isinstance(node, ast.Import):
                 for alias in node.names:
                     assert not alias.name.startswith("oaknut.dfs"), (
-                        f"basic.py must not import from oaknut.dfs: "
-                        f"{alias.name}"
+                        f"basic.py must not import from oaknut.dfs: {alias.name}"
                     )

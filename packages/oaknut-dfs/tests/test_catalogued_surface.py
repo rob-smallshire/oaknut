@@ -203,12 +203,12 @@ class TestCataloguedSurfaceDeleteFile:
         # File 1: $.FIRST
         buffer[8:15] = b"FIRST  "
         buffer[15] = ord("$")
-        buffer[256 + 8:256 + 16] = bytes([0, 0, 0, 0, 100, 0, 0, 2])
+        buffer[256 + 8 : 256 + 16] = bytes([0, 0, 0, 0, 100, 0, 0, 2])
 
         # File 2: $.SECOND
         buffer[16:23] = b"SECOND "
         buffer[23] = ord("$")
-        buffer[256 + 16:256 + 24] = bytes([0, 0, 0, 0, 200, 0, 0, 4])
+        buffer[256 + 16 : 256 + 24] = bytes([0, 0, 0, 0, 200, 0, 0, 4])
 
         spec = SurfaceSpec(
             num_tracks=40,
@@ -308,7 +308,7 @@ class TestCataloguedSurfaceIntegration:
 
         buffer[8:15] = b"TEST   "
         buffer[15] = ord("$")
-        buffer[256 + 8:256 + 16] = bytes([0, 0, 0, 0, 100, 0, 0, 2])
+        buffer[256 + 8 : 256 + 16] = bytes([0, 0, 0, 0, 100, 0, 0, 2])
 
         spec = SurfaceSpec(
             num_tracks=40,

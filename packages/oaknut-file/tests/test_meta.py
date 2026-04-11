@@ -5,7 +5,6 @@ from oaknut.file.meta import AcornMeta
 
 
 class TestAcornMeta:
-
     def test_default_construction(self):
         meta = AcornMeta()
         assert meta.load_addr is None
@@ -29,7 +28,6 @@ class TestAcornMeta:
 
 
 class TestFiletypeStamping:
-
     def test_filetype_stamped(self):
         meta = AcornMeta(load_addr=0xFFFF0E10)
         assert meta.is_filetype_stamped is True

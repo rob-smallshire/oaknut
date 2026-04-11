@@ -104,10 +104,7 @@ class DFSPath:
         if not self._path:
             return True  # Root always exists
         if self._is_directory_path():
-            return any(
-                f.directory == self._path.upper()
-                for f in self._dfs.files
-            )
+            return any(f.directory == self._path.upper() for f in self._dfs.files)
         return self._dfs._catalogued_surface.find_file(self._path) is not None
 
     def is_dir(self) -> bool:
@@ -184,17 +181,11 @@ class DFSPath:
             yield self, populated_dirs, []
             for dir_letter in populated_dirs:
                 dir_path = DFSPath(self._dfs, dir_letter)
-                filenames = [
-                    f.filename for f in self._dfs.files
-                    if f.directory == dir_letter
-                ]
+                filenames = [f.filename for f in self._dfs.files if f.directory == dir_letter]
                 yield dir_path, [], filenames
         elif self._is_directory_path():
             dir_letter = self._path.upper()
-            filenames = [
-                f.filename for f in self._dfs.files
-                if f.directory == dir_letter
-            ]
+            filenames = [f.filename for f in self._dfs.files if f.directory == dir_letter]
             yield self, [], filenames
 
     # --- File operations ---
@@ -541,9 +532,7 @@ class DFS:
                     mm.flush()
 
     @classmethod
-    def from_buffer(
-        cls, buffer: memoryview, disk_format: DiskFormat, side: int = 0
-    ) -> "DFS":
+    def from_buffer(cls, buffer: memoryview, disk_format: DiskFormat, side: int = 0) -> "DFS":
         """
         Create DFS from buffer using specified disk format.
 
@@ -877,8 +866,7 @@ class DFS:
     def __repr__(self) -> str:
         """Debug representation."""
         return (
-            f"DFS(title={self.title!r}, files={len(self.files)}, "
-            f"free_sectors={self.free_sectors})"
+            f"DFS(title={self.title!r}, files={len(self.files)}, free_sectors={self.free_sectors})"
         )
 
     def __str__(self) -> str:

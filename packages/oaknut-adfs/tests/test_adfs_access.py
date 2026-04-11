@@ -7,7 +7,6 @@ from oaknut.adfs.exceptions import ADFSPathError
 
 
 class TestAccessEnum:
-
     def test_individual_flags(self):
         assert Access.R.value == 0x01
         assert Access.W.value == 0x02
@@ -89,7 +88,6 @@ class TestAccessOsfileCompatibility:
 
 
 class TestChmod:
-
     def test_chmod_lock(self):
         adfs = ADFS.create(ADFS_S)
         (adfs.root / "File").write_bytes(b"data")
@@ -148,7 +146,9 @@ class TestChmod:
     def test_chmod_preserves_other_metadata(self):
         adfs = ADFS.create(ADFS_S)
         (adfs.root / "File").write_bytes(
-            b"data", load_address=0x1900, exec_address=0x8023,
+            b"data",
+            load_address=0x1900,
+            exec_address=0x8023,
         )
         (adfs.root / "File").chmod(Access.R)
         stat = (adfs.root / "File").stat()
@@ -209,7 +209,6 @@ class TestChmod:
 
 
 class TestStatAccess:
-
     def test_default_file_access(self):
         adfs = ADFS.create(ADFS_S)
         (adfs.root / "File").write_bytes(b"data")
@@ -272,7 +271,6 @@ class TestStatAccess:
 
 
 class TestLockUnlockWithChmod:
-
     def test_lock_is_shorthand_for_adding_L(self):
         adfs = ADFS.create(ADFS_S)
         (adfs.root / "File").write_bytes(b"data")

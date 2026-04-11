@@ -1,4 +1,5 @@
 """Tests for the surface module."""
+
 import pytest
 from oaknut.discimage.surface import (
     DiscImage,
@@ -548,8 +549,8 @@ class TestSurfaceSectors:
             track_stride_bytes=5120,  # Skips other side
         )
         buffer = memoryview(bytearray(204800))
-        buffer[0:256] = b"0" * 256       # Sector 0 (track 0)
-        buffer[5120:5376] = b"1" * 256   # Sector 10 (track 1)
+        buffer[0:256] = b"0" * 256  # Sector 0 (track 0)
+        buffer[5120:5376] = b"1" * 256  # Sector 10 (track 1)
 
         disc = DiscImage(buffer, [spec])
         surface = disc.surface(0)
@@ -705,9 +706,9 @@ class TestDiscImageGetSectorViews:
             track_stride_bytes=5120,  # Interleaved - skips other side
         )
         buffer = memoryview(bytearray(204800))
-        buffer[0:256] = b"A" * 256       # Sector 0 (track 0)
-        buffer[256:512] = b"B" * 256     # Sector 1 (track 0)
-        buffer[5120:5376] = b"C" * 256   # Sector 10 (track 1)
+        buffer[0:256] = b"A" * 256  # Sector 0 (track 0)
+        buffer[256:512] = b"B" * 256  # Sector 1 (track 0)
+        buffer[5120:5376] = b"C" * 256  # Sector 10 (track 1)
 
         disc = DiscImage(buffer, [spec])
 

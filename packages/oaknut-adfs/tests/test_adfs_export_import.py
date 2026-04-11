@@ -8,7 +8,6 @@ from oaknut.file import Access, MetaFormat
 
 
 class TestExportFile:
-
     def test_export_file_writes_data(self, tmp_path):
         adfs = ADFS.create(ADFS_S)
         (adfs.root / "Hello").write_bytes(b"Hello, World!")
@@ -54,7 +53,6 @@ class TestExportFile:
 
 
 class TestImportFile:
-
     def test_import_file_reads_data(self, tmp_path):
         source = tmp_path / "hello.bin"
         source.write_bytes(b"Hello from host!")
@@ -96,9 +94,7 @@ class TestImportFile:
         source = tmp_path / "data.bin"
         source.write_bytes(b"test")
 
-        (tmp_path / "data.bin.inf").write_text(
-            "Ignored 0000FF00 0000FF00 00000004\n"
-        )
+        (tmp_path / "data.bin.inf").write_text("Ignored 0000FF00 0000FF00 00000004\n")
 
         adfs = ADFS.create(ADFS_S)
         (adfs.root / "File").import_file(source)
@@ -127,7 +123,6 @@ class TestImportFile:
 
 
 class TestExportImportRoundTrip:
-
     def test_export_then_import_preserves_data(self, tmp_path):
         """Export a file and import it back — data should match."""
         adfs1 = ADFS.create(ADFS_S)
@@ -176,7 +171,9 @@ class TestMetaFormatRoundTrip:
     def test_adfs_round_trip_per_format(self, tmp_path, fmt):
         adfs1 = ADFS.create(ADFS_S)
         (adfs1.root / "Code").write_bytes(
-            b"hello", load_address=0x1900, exec_address=0x8023,
+            b"hello",
+            load_address=0x1900,
+            exec_address=0x8023,
         )
 
         target = tmp_path / "Code"
@@ -207,7 +204,8 @@ class TestMetaFormatRoundTrip:
 
         adfs2 = ADFS.create(ADFS_S)
         (adfs2.root / "Shared").import_file(
-            target, meta_formats=(MetaFormat.INF_PIEB,),
+            target,
+            meta_formats=(MetaFormat.INF_PIEB,),
         )
 
         stat = (adfs2.root / "Shared").stat()

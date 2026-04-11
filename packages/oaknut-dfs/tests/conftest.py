@@ -52,9 +52,7 @@ def _detect_disk_format(filepath: Path) -> DiskFormat:
         elif size == 409600:  # 80 tracks × 2 sides × 10 sectors × 256 bytes (interleaved)
             return ACORN_DFS_80T_DOUBLE_SIDED_INTERLEAVED
 
-    raise ValueError(
-        f"Unknown disk format for {filepath.name}: size={size}, ext={ext}"
-    )
+    raise ValueError(f"Unknown disk format for {filepath.name}: size={size}, ext={ext}")
 
 
 @pytest.fixture

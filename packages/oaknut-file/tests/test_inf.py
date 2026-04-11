@@ -12,7 +12,6 @@ from oaknut.file.meta import AcornMeta
 
 
 class TestParseInfLineTraditional:
-
     def test_basic_line(self):
         source, meta = parse_inf_line("HELLO    00001900 00008023 00000100")
         assert source == "inf-trad"
@@ -47,7 +46,6 @@ class TestParseInfLineTraditional:
 
 
 class TestParseInfLinePiEconetBridge:
-
     def test_basic_pieb_line(self):
         source, meta = parse_inf_line("0 ffffdd00 ffffdd00 17")
         assert source == "inf-pieb"
@@ -61,7 +59,6 @@ class TestParseInfLinePiEconetBridge:
 
 
 class TestParseInfLineEdgeCases:
-
     def test_empty_line_returns_none(self):
         assert parse_inf_line("") is None
 
@@ -73,7 +70,6 @@ class TestParseInfLineEdgeCases:
 
 
 class TestFormatTradInfLine:
-
     def test_basic(self):
         line = format_trad_inf_line("HELLO", 0x1900, 0x8023, 0x100)
         assert "00001900" in line
@@ -93,7 +89,6 @@ class TestFormatTradInfLine:
 
 
 class TestFormatPiebInfLine:
-
     def test_basic(self):
         line = format_pieb_inf_line(0x1900, 0x8023)
         assert "1900" in line
@@ -110,7 +105,6 @@ class TestFormatPiebInfLine:
 
 
 class TestInfRoundTrip:
-
     def test_trad_round_trip(self):
         line = format_trad_inf_line("HELLO", 0x1900, 0x8023, 0x100, attr=0x03)
         source, meta = parse_inf_line(line)
@@ -120,7 +114,6 @@ class TestInfRoundTrip:
 
 
 class TestReadWriteInfFile:
-
     def test_write_and_read(self, tmp_path):
         filepath = tmp_path / "test.inf"
         line = format_trad_inf_line("HELLO", 0x1900, 0x8023, 0x100, attr=0x03)

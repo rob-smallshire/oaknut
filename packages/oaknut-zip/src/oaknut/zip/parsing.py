@@ -61,9 +61,7 @@ def parse_sparkfs_extra(extra: bytes) -> AcornMeta | None:
             chunk = extra[offset : offset + SPARKFS_DATA_LENGTH]
             sig = chunk[0:4]
             if sig == SPARKFS_SIGNATURE:
-                load_addr, exec_addr, attr, _reserved = struct.unpack_from(
-                    "<IIII", chunk, 4
-                )
+                load_addr, exec_addr, attr, _reserved = struct.unpack_from("<IIII", chunk, 4)
                 meta = AcornMeta(
                     load_addr=load_addr,
                     exec_addr=exec_addr,

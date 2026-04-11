@@ -63,7 +63,7 @@ class WatfordDFSCatalogue(Catalogue):
 
         # Synchronise metadata from section 1 to section 2
         sectors[0x304] = sectors[0x104]  # Cycle number
-        sectors[0x305] = 0               # Number of files × 8 (section 2)
+        sectors[0x305] = 0  # Number of files × 8 (section 2)
         sectors[0x306] = sectors[0x106]  # Boot option + sector count high
         sectors[0x307] = sectors[0x107]  # Sector count low
 
@@ -174,7 +174,7 @@ class WatfordDFSCatalogue(Catalogue):
         # Title from sector 0 (bytes 0-9 only - 10 chars max)
         # Bytes 10-11 of sector 0 are reserved for catalog chaining
         title_bytes = bytes(sector0[0:10])
-        title = title_bytes.decode('acorn').rstrip()
+        title = title_bytes.decode("acorn").rstrip()
 
         # Cycle number (byte 0x104 in sector 1)
         cycle_number = sector1[4]
@@ -196,7 +196,7 @@ class WatfordDFSCatalogue(Catalogue):
             cycle_number=cycle_number,
             num_files=num_files,
             total_sectors=total_sectors,
-            boot_option=boot_option
+            boot_option=boot_option,
         )
 
     def list_files(self) -> list[FileEntry]:
@@ -245,17 +245,17 @@ class WatfordDFSCatalogue(Catalogue):
             offset1 = 0x08 + (i * 8)
 
             # Parse from sector 0
-            filename_bytes = bytes(sector0[offset0:offset0+7])
-            filename = filename_bytes.decode('acorn').rstrip()
-            directory = chr(sector0[offset0+7] & 0x7F)  # Mask off locked bit
-            locked = bool(sector0[offset0+7] & 0x80)
+            filename_bytes = bytes(sector0[offset0 : offset0 + 7])
+            filename = filename_bytes.decode("acorn").rstrip()
+            directory = chr(sector0[offset0 + 7] & 0x7F)  # Mask off locked bit
+            locked = bool(sector0[offset0 + 7] & 0x80)
 
             # Parse from sector 1
-            load_low = sector1[offset1] | (sector1[offset1+1] << 8)
-            exec_low = sector1[offset1+2] | (sector1[offset1+3] << 8)
-            length_low = sector1[offset1+4] | (sector1[offset1+5] << 8)
-            extra_byte = sector1[offset1+6]
-            sector_low = sector1[offset1+7]
+            load_low = sector1[offset1] | (sector1[offset1 + 1] << 8)
+            exec_low = sector1[offset1 + 2] | (sector1[offset1 + 3] << 8)
+            length_low = sector1[offset1 + 4] | (sector1[offset1 + 5] << 8)
+            extra_byte = sector1[offset1 + 6]
+            sector_low = sector1[offset1 + 7]
 
             # Unpack high bits from extra_byte
             # Bits 2-3 of extra_byte = bits 16-17 of load_address
@@ -274,7 +274,7 @@ class WatfordDFSCatalogue(Catalogue):
                 load_address=load_address,
                 exec_address=exec_address,
                 length=length,
-                start_sector=start_sector
+                start_sector=start_sector,
             )
             entries.append(entry)
 
@@ -288,7 +288,7 @@ class WatfordDFSCatalogue(Catalogue):
         exec_address: int,
         length: int,
         start_sector: int,
-        locked: bool = False
+        locked: bool = False,
     ) -> None:
         """
         Add file entry to appropriate catalog section.
@@ -323,16 +323,32 @@ class WatfordDFSCatalogue(Catalogue):
         if disk_info.num_files < 31:
             # Add to section 1 (sectors 0-1)
             self._add_entry_to_section(
-                0, 1, disk_info.num_files, filename, directory,
-                load_address, exec_address, length, start_sector, locked
+                0,
+                1,
+                disk_info.num_files,
+                filename,
+                directory,
+                load_address,
+                exec_address,
+                length,
+                start_sector,
+                locked,
             )
         else:
             # Add to section 2 (sectors 2-3)
             # File index within section 2 is (num_files - 31)
             section2_index = disk_info.num_files - 31
             self._add_entry_to_section(
-                2, 3, section2_index, filename, directory,
-                load_address, exec_address, length, start_sector, locked
+                2,
+                3,
+                section2_index,
+                filename,
+                directory,
+                load_address,
+                exec_address,
+                length,
+                start_sector,
+                locked,
             )
 
         # Sync metadata between sections
@@ -349,7 +365,7 @@ class WatfordDFSCatalogue(Catalogue):
         exec_address: int,
         length: int,
         start_sector: int,
-        locked: bool
+        locked: bool,
     ) -> None:
         """Add entry to specific catalog section."""
         sector0 = self._surface.sector_range(sector0_num, 1)
@@ -360,7 +376,7 @@ class WatfordDFSCatalogue(Catalogue):
 
         # Write filename and directory to sector 0
         filename_padded = filename.ljust(7)
-        sector0[entry_offset:entry_offset + 7] = filename_padded.encode("acorn")
+        sector0[entry_offset : entry_offset + 7] = filename_padded.encode("acorn")
         dir_byte = ord(directory) & 0x7F
         if locked:
             dir_byte |= 0x80
@@ -448,11 +464,7 @@ class WatfordDFSCatalogue(Catalogue):
         self._sync_metadata()
 
     def _rebuild_section(
-        self,
-        sector0_num: int,
-        sector1_num: int,
-        files: list[FileEntry],
-        disk_info: DiskInfo
+        self, sector0_num: int, sector1_num: int, files: list[FileEntry], disk_info: DiskInfo
     ) -> None:
         """Rebuild one catalog section."""
         # Get writable sector views
@@ -460,19 +472,19 @@ class WatfordDFSCatalogue(Catalogue):
         sector1 = self._surface.sector_range(sector1_num, 1)
 
         # Clear sectors
-        sector0[:] = b'\x00' * 256
-        sector1[:] = b'\x00' * 256
+        sector0[:] = b"\x00" * 256
+        sector1[:] = b"\x00" * 256
 
         # Write title (or 0xAA marker for section 2)
         if sector0_num == 0:
             # Section 1: write actual title (bytes 0-9 of sector 0)
             title_padded = disk_info.title[:10].ljust(10)
             sector0[0:10] = title_padded.encode("acorn")
-            sector0[10:12] = b'\x00\x00'  # Reserved bytes 10-11 for catalog chaining
+            sector0[10:12] = b"\x00\x00"  # Reserved bytes 10-11 for catalog chaining
             # Sector 1 bytes 0-3 not used for title in Watford DFS
         else:
             # Section 2: write 0xAA marker
-            sector0[0:12] = b'\xAA' * 12
+            sector0[0:12] = b"\xaa" * 12
 
         # Write file entries
         for i, entry in enumerate(files):
@@ -480,7 +492,7 @@ class WatfordDFSCatalogue(Catalogue):
 
             # Write filename and directory to sector 0
             filename_padded = entry.filename.ljust(7)
-            sector0[entry_offset:entry_offset + 7] = filename_padded.encode("acorn")
+            sector0[entry_offset : entry_offset + 7] = filename_padded.encode("acorn")
             dir_byte = ord(entry.directory) & 0x7F
             if entry.locked:
                 dir_byte |= 0x80
@@ -527,8 +539,7 @@ class WatfordDFSCatalogue(Catalogue):
         all_files = self.list_files()
 
         for entry in all_files:
-            if (entry.filename == parsed.filename and
-                entry.directory == parsed.directory):
+            if entry.filename == parsed.filename and entry.directory == parsed.directory:
                 return entry
         return None
 
@@ -550,7 +561,7 @@ class WatfordDFSCatalogue(Catalogue):
         sector1 = self._surface.sector_range(1, 1)
 
         title_padded = title[:10].ljust(10)
-        sector0[0:10] = title_padded.encode('acorn')
+        sector0[0:10] = title_padded.encode("acorn")
 
         # Section 2 has 0xAA marker, not title - no update needed
 
@@ -696,7 +707,7 @@ class WatfordDFSCatalogue(Catalogue):
 
         # Update filename and directory in sector 0
         new_filename_padded = new_filename.ljust(7)
-        sector0[entry_offset:entry_offset + 7] = new_filename_padded.encode("acorn")
+        sector0[entry_offset : entry_offset + 7] = new_filename_padded.encode("acorn")
 
         # Preserve locked bit when setting directory
         dir_byte = ord(new_directory) & 0x7F
@@ -745,21 +756,18 @@ class WatfordDFSCatalogue(Catalogue):
 
         if len(filename) > self.MAX_FILENAME_LENGTH:
             raise ValueError(
-                f"Filename too long: '{filename}' "
-                f"(max {self.MAX_FILENAME_LENGTH} chars)"
+                f"Filename too long: '{filename}' (max {self.MAX_FILENAME_LENGTH} chars)"
             )
 
         # Check for forbidden characters
-        forbidden = set('#*:.')
+        forbidden = set("#*:.")
         for i, char in enumerate(filename):
             # Check for forbidden characters
             if char in forbidden:
-                raise ValueError(
-                    f"Forbidden character '{char}' in filename '{filename}'"
-                )
+                raise ValueError(f"Forbidden character '{char}' in filename '{filename}'")
 
             # '!' is only allowed as the first character
-            if char == '!' and i != 0:
+            if char == "!" and i != 0:
                 raise ValueError(
                     f"'!' is only allowed as the first character, "
                     f"not at position {i} in '{filename}'"
@@ -780,7 +788,7 @@ class WatfordDFSCatalogue(Catalogue):
 
         # Validate Acorn encoding compatibility
         try:
-            filename.encode('acorn')
+            filename.encode("acorn")
         except (UnicodeEncodeError, LookupError) as e:
             raise ValueError(f"Filename contains invalid characters: {e}")
 
@@ -796,8 +804,7 @@ class WatfordDFSCatalogue(Catalogue):
         """
         if directory.upper() not in self.VALID_DIRECTORY_CHARS:
             raise ValueError(
-                f"Invalid directory: {directory!r}. "
-                f"Must be one of: {self.VALID_DIRECTORY_CHARS}"
+                f"Invalid directory: {directory!r}. Must be one of: {self.VALID_DIRECTORY_CHARS}"
             )
 
     def validate_title(self, title: str) -> None:
@@ -812,8 +819,7 @@ class WatfordDFSCatalogue(Catalogue):
         """
         if len(title) > self.MAX_TITLE_LENGTH:
             raise ValueError(
-                f"Title too long: {len(title)} chars "
-                f"(max {self.MAX_TITLE_LENGTH} for Watford DFS)"
+                f"Title too long: {len(title)} chars (max {self.MAX_TITLE_LENGTH} for Watford DFS)"
             )
         # Check valid characters
         for char in title:
@@ -838,9 +844,7 @@ class WatfordDFSCatalogue(Catalogue):
         # Check catalog structure
         disk_info = self.get_disk_info()
         if disk_info.num_files > self.MAX_FILES:
-            errors.append(
-                f"Too many files: {disk_info.num_files} > {self.MAX_FILES}"
-            )
+            errors.append(f"Too many files: {disk_info.num_files} > {self.MAX_FILES}")
 
         # Check for 0xAA marker in sector 2
         sector2 = self._surface.sector_range(2, 1)
@@ -866,9 +870,7 @@ class WatfordDFSCatalogue(Catalogue):
         sector_map = {}
 
         for entry in files:
-            for sector in range(
-                entry.start_sector, entry.start_sector + entry.sectors_required
-            ):
+            for sector in range(entry.start_sector, entry.start_sector + entry.sectors_required):
                 if sector in sector_map:
                     errors.append(
                         f"Sector {sector} used by both {sector_map[sector]} and {entry.path}"
@@ -882,8 +884,7 @@ class WatfordDFSCatalogue(Catalogue):
             end_sector = entry.start_sector + entry.sectors_required
             if end_sector > total_sectors:
                 errors.append(
-                    f"File {entry.path} extends beyond disk: "
-                    f"sector {end_sector} > {total_sectors}"
+                    f"File {entry.path} extends beyond disk: sector {end_sector} > {total_sectors}"
                 )
 
         # Check for duplicate filenames
@@ -925,7 +926,7 @@ class WatfordDFSCatalogue(Catalogue):
             # Read the actual sectors containing file data
             sectors_view = self._surface.sector_range(entry.start_sector, entry.sectors_required)
             # Copy only the actual file data (trim padding)
-            data = bytes(sectors_view[:entry.length])
+            data = bytes(sectors_view[: entry.length])
             file_data.append(
                 {
                     "filename": entry.filename,

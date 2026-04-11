@@ -118,10 +118,12 @@ class AcornDFSCatalogue(Catalogue):
 
         # If sector 3 starts with 4 bytes of 0x00 AND has matching boot/sectors
         # then it's Watford
-        if (all(sector3[i] == 0x00 for i in range(4)) and
-            sector3[5] & 0x07 == 0 and  # bits 0,1,2 clear
-            sector3[6] == sector1[6] and  # matches boot/sectors high
-            sector3[7] == sector1[7]):    # matches sectors low
+        if (
+            all(sector3[i] == 0x00 for i in range(4))
+            and sector3[5] & 0x07 == 0  # bits 0,1,2 clear
+            and sector3[6] == sector1[6]  # matches boot/sectors high
+            and sector3[7] == sector1[7]
+        ):  # matches sectors low
             return False
 
         # All checks passed - this is standard Acorn DFS
@@ -257,21 +259,18 @@ class AcornDFSCatalogue(Catalogue):
 
         if len(filename) > self.MAX_FILENAME_LENGTH:
             raise ValueError(
-                f"Filename too long: '{filename}' "
-                f"(max {self.MAX_FILENAME_LENGTH} chars)"
+                f"Filename too long: '{filename}' (max {self.MAX_FILENAME_LENGTH} chars)"
             )
 
         # Check for forbidden characters
-        forbidden = set('#*:.')
+        forbidden = set("#*:.")
         for i, char in enumerate(filename):
             # Check for forbidden characters
             if char in forbidden:
-                raise ValueError(
-                    f"Forbidden character '{char}' in filename '{filename}'"
-                )
+                raise ValueError(f"Forbidden character '{char}' in filename '{filename}'")
 
             # '!' is only allowed as the first character
-            if char == '!' and i != 0:
+            if char == "!" and i != 0:
                 raise ValueError(
                     f"'!' is only allowed as the first character, "
                     f"not at position {i} in '{filename}'"
@@ -292,7 +291,7 @@ class AcornDFSCatalogue(Catalogue):
 
         # Validate Acorn encoding compatibility
         try:
-            filename.encode('acorn')
+            filename.encode("acorn")
         except (UnicodeEncodeError, LookupError) as e:
             raise ValueError(f"Filename contains invalid characters: {e}")
 
@@ -313,9 +312,7 @@ class AcornDFSCatalogue(Catalogue):
         - Not be control characters (< 32), except null (0) for padding
         """
         if len(title) > self.MAX_TITLE_LENGTH:
-            raise ValueError(
-                f"Title too long: '{title}' (max {self.MAX_TITLE_LENGTH} chars)"
-            )
+            raise ValueError(f"Title too long: '{title}' (max {self.MAX_TITLE_LENGTH} chars)")
 
         # Check each character
         for i, char in enumerate(title):
@@ -335,7 +332,7 @@ class AcornDFSCatalogue(Catalogue):
 
         # Validate Acorn encoding compatibility
         try:
-            title.encode('acorn')
+            title.encode("acorn")
         except (UnicodeEncodeError, LookupError) as e:
             raise ValueError(f"Title contains invalid characters: {e}")
 
@@ -588,7 +585,7 @@ class AcornDFSCatalogue(Catalogue):
 
         # Update filename and directory in sector 0
         new_filename_padded = new_filename.ljust(7)
-        sector0[entry_offset:entry_offset + 7] = new_filename_padded.encode("acorn")
+        sector0[entry_offset : entry_offset + 7] = new_filename_padded.encode("acorn")
 
         # Preserve locked bit when setting directory
         dir_byte = ord(new_directory) & 0x7F
@@ -612,18 +609,14 @@ class AcornDFSCatalogue(Catalogue):
         # Check catalog structure
         disk_info = self.get_disk_info()
         if disk_info.num_files > self.MAX_FILES:
-            errors.append(
-                f"Too many files: {disk_info.num_files} > {self.MAX_FILES}"
-            )
+            errors.append(f"Too many files: {disk_info.num_files} > {self.MAX_FILES}")
 
         # Check for overlapping files
         files = self.list_files()
         sector_map = {}
 
         for entry in files:
-            for sector in range(
-                entry.start_sector, entry.start_sector + entry.sectors_required
-            ):
+            for sector in range(entry.start_sector, entry.start_sector + entry.sectors_required):
                 if sector in sector_map:
                     errors.append(
                         f"Sector {sector} used by both {sector_map[sector]} and {entry.path}"
@@ -637,8 +630,7 @@ class AcornDFSCatalogue(Catalogue):
             end_sector = entry.start_sector + entry.sectors_required
             if end_sector > total_sectors:
                 errors.append(
-                    f"File {entry.path} extends beyond disk: "
-                    f"sector {end_sector} > {total_sectors}"
+                    f"File {entry.path} extends beyond disk: sector {end_sector} > {total_sectors}"
                 )
 
         # Check for duplicate filenames
@@ -679,7 +671,7 @@ class AcornDFSCatalogue(Catalogue):
             # Read the actual sectors containing file data
             sectors_view = self._surface.sector_range(entry.start_sector, entry.sectors_required)
             # Copy only the actual file data (trim padding)
-            data = bytes(sectors_view[:entry.length])
+            data = bytes(sectors_view[: entry.length])
             file_data.append(
                 {
                     "filename": entry.filename,

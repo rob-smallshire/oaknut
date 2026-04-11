@@ -100,21 +100,24 @@ def capture_adfs_floppy_open() -> str:
     ]
 
     from oaknut.dfs import ADFS
+
     if ADFS_FIXTURE_FILEPATH.exists():
         with ADFS.from_file(ADFS_FIXTURE_FILEPATH) as adfs:
-            lines.append(f'    print(adfs.title)   # {adfs.title!r}')
+            lines.append(f"    print(adfs.title)   # {adfs.title!r}")
     else:
         lines.append("    print(adfs.title)   # '80T Welcome & Utils'")
 
-    lines.extend([
-        "",
-        "    # Navigate with / operator",
-        '    for entry in adfs.root / "LIBRARY":',
-        "        print(entry.name, entry.stat().length)",
-        "",
-        "    # Read a file",
-        '    data = (adfs.root / "HELP" / "aform").read_bytes()',
-    ])
+    lines.extend(
+        [
+            "",
+            "    # Navigate with / operator",
+            '    for entry in adfs.root / "LIBRARY":',
+            "        print(entry.name, entry.stat().length)",
+            "",
+            "    # Read a file",
+            '    data = (adfs.root / "HELP" / "aform").read_bytes()',
+        ]
+    )
     return "\n".join(lines)
 
 
@@ -162,7 +165,7 @@ def capture_adfs_hdd_create() -> str:
         "from oaknut.dfs import ADFS",
         "",
         "# Create a 20MB hard disc image",
-        'with ADFS.create_file(',
+        "with ADFS.create_file(",
         '    "scsi0.dat", capacity_bytes=20 * 1024 * 1024, title="Data"',
         ") as adfs:",
         "    pass  # creates both scsi0.dat and scsi0.dsc",

@@ -10,7 +10,6 @@ from oaknut.file.meta import AcornMeta
 
 
 class TestParseEncodedFilename:
-
     def test_filetype_suffix(self):
         clean, meta = parse_encoded_filename("HELLO,ffb")
         assert clean == "HELLO"
@@ -52,7 +51,6 @@ class TestParseEncodedFilename:
 
 
 class TestBuildFilenameSuffix:
-
     def test_filetype_stamped(self):
         meta = AcornMeta(load_addr=0xFFFFFB00, exec_addr=0)
         suffix = build_filename_suffix(meta)
@@ -65,7 +63,6 @@ class TestBuildFilenameSuffix:
 
 
 class TestBuildMosFilenameSuffix:
-
     def test_basic(self):
         meta = AcornMeta(load_addr=0x1900, exec_addr=0x8023)
         suffix = build_mos_filename_suffix(meta)
@@ -78,7 +75,6 @@ class TestBuildMosFilenameSuffix:
 
 
 class TestFilenameEncodingRoundTrip:
-
     def test_filetype_round_trip(self):
         meta = AcornMeta(load_addr=0xFFFFFB00, exec_addr=0)
         suffix = build_filename_suffix(meta)
