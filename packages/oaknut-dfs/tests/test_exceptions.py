@@ -1,7 +1,7 @@
 """Tests for custom exception hierarchy."""
 
 import pytest
-from oaknut.dfs.exceptions import (
+from oaknut.adfs.exceptions import (
     ADFSDirectoryError,
     ADFSDirectoryFullError,
     ADFSDiscFullError,
@@ -9,6 +9,8 @@ from oaknut.dfs.exceptions import (
     ADFSFileLockedError,
     ADFSMapError,
     ADFSPathError,
+)
+from oaknut.dfs.exceptions import (
     CatalogError,
     CatalogFullError,
     CatalogReadError,
@@ -16,9 +18,9 @@ from oaknut.dfs.exceptions import (
     DiskFullError,
     FileExistsError,
     FileLocked,
-    FSError,
     InvalidFormatError,
 )
+from oaknut.file.exceptions import FSError
 
 
 class TestExceptionHierarchy:

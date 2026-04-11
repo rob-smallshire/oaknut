@@ -2,7 +2,7 @@
 
 import pytest
 from oaknut.adfs import ADFS, ADFS_M, ADFS_S
-from oaknut.dfs.exceptions import ADFSPathError
+from oaknut.adfs.exceptions import ADFSPathError
 
 
 class TestRenameCrossDirectory:

@@ -30,14 +30,14 @@ from oaknut.adfs.directory import (
     _ADFSDirectoryEntry,
     _ADFSRawAttributes,
 )
-from oaknut.adfs.free_space_map import OldFreeSpaceMap
-from oaknut.dfs import basic
-from oaknut.dfs.exceptions import (
+from oaknut.adfs.exceptions import (
     ADFSDirectoryFullError,
     ADFSError,
     ADFSFileLockedError,
     ADFSPathError,
 )
+from oaknut.adfs.free_space_map import OldFreeSpaceMap
+from oaknut.dfs import basic
 from oaknut.file import AcornMeta, MetaFormat
 from oaknut.file.host_bridge import (
     DEFAULT_EXPORT_META_FORMAT,

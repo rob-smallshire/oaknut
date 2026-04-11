@@ -8,7 +8,7 @@ and write_text().
 import oaknut.file.acorn_encoding  # noqa: F401
 import pytest
 from oaknut.adfs import ADFS, ADFS_L, ADFS_M, ADFS_S
-from oaknut.dfs.exceptions import (
+from oaknut.adfs.exceptions import (
     ADFSDirectoryFullError,
     ADFSDiscFullError,
     ADFSPathError,

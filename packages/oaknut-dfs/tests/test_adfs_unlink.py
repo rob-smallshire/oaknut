@@ -2,7 +2,7 @@
 
 import pytest
 from oaknut.adfs import ADFS, ADFS_S
-from oaknut.dfs.exceptions import ADFSFileLockedError, ADFSPathError
+from oaknut.adfs.exceptions import ADFSFileLockedError, ADFSPathError
 
 
 class TestUnlink:

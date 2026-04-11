@@ -3,7 +3,7 @@
 import pytest
 from oaknut.adfs import ADFS, ADFS_S
 from oaknut.adfs.directory import Access
-from oaknut.dfs.exceptions import ADFSPathError
+from oaknut.adfs.exceptions import ADFSPathError
 
 
 class TestAccessEnum:

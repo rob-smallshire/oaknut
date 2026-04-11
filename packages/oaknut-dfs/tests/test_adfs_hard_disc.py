@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 from oaknut.adfs import ADFS
 from oaknut.adfs.adfs import _hard_disc_format, _parse_dsc
-from oaknut.dfs.exceptions import ADFSError
+from oaknut.adfs.exceptions import ADFSError
 
 IMAGES_DIR = Path(__file__).parent / "images"
 
