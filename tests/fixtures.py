@@ -11,3 +11,4 @@ from pathlib import Path
 _WORKSPACE_ROOT = Path(__file__).resolve().parent.parent
 
 REFERENCE_IMAGES_DIRPATH: Path = _WORKSPACE_ROOT / "tests" / "data" / "images"
+BEEBEM_IMAGES_DIRPATH: Path = _WORKSPACE_ROOT / "tests" / "beebem"

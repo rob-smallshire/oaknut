@@ -6,20 +6,8 @@ import oaknut.dfs.watford_dfs_catalogue  # noqa: F401
 
 # Import acorn_encoding to register the codec
 import oaknut.file.acorn_encoding  # noqa: F401
-from oaknut.adfs import (
-    ADFS,
-    ADFS_L,
-    ADFS_M,
-    ADFS_S,
-    ADFSFormat,
-    ADFSPath,
-    ADFSStat,
-    geometry_for_capacity,
-)
-from oaknut.adfs.directory import Access
 from oaknut.dfs.catalogue import DiskInfo
 from oaknut.dfs.dfs import DFS, DFSPath, DFSStat
-from oaknut.dfs.exceptions import FSError
 from oaknut.dfs.formats import (
     ACORN_DFS_40T_DOUBLE_SIDED_INTERLEAVED,
     ACORN_DFS_40T_DOUBLE_SIDED_SEQUENTIAL,
@@ -39,6 +27,7 @@ from oaknut.file import (
     MetaFormat,
 )
 from oaknut.file.boot_option import BootOption
+from oaknut.file.exceptions import FSError
 from oaknut.file.host_bridge import (
     DEFAULT_EXPORT_META_FORMAT,
     DEFAULT_IMPORT_META_FORMATS,
@@ -54,16 +43,7 @@ __version__ = "4.0.0"
 __version_info__ = Version(*(__version__.split(".")))
 
 __all__ = [
-    "Access",
     "AcornMeta",
-    "ADFS",
-    "ADFS_S",
-    "ADFS_M",
-    "ADFS_L",
-    "ADFSFormat",
-    "ADFSPath",
-    "ADFSStat",
-    "geometry_for_capacity",
     "DFS",
     "DFSPath",
     "DFSStat",

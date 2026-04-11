@@ -4,15 +4,13 @@ These tests validate parsing against genuine disc images from BeebEm,
 covering both DFS (SSD/DSD) and ADFS (ADL) formats.
 """
 
-from pathlib import Path
-
 import pytest
 from oaknut.adfs import ADFS
 from oaknut.dfs.dfs import DFS
 from oaknut.dfs.formats import DiskFormat
 from oaknut.image.surface import SurfaceSpec
 
-IMAGES_DIR = Path(__file__).parent / "images"
+from tests.fixtures import BEEBEM_IMAGES_DIRPATH as IMAGES_DIR
 
 
 def _ssd_format(size: int) -> DiskFormat:

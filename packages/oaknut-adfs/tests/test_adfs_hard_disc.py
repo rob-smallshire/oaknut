@@ -5,15 +5,12 @@ ADFS hard disc images consist of a .dat file (raw sector data) and a
 structure is identical to floppy ADFS (old map, old directory).
 """
 
-from pathlib import Path
-
 import pytest
 from oaknut.adfs import ADFS
 from oaknut.adfs.adfs import _hard_disc_format, _parse_dsc
 from oaknut.adfs.exceptions import ADFSError
 
-IMAGES_DIR = Path(__file__).parent / "images"
-
+from tests.fixtures import BEEBEM_IMAGES_DIRPATH as IMAGES_DIR
 
 # --- DSC parsing tests ---
 
