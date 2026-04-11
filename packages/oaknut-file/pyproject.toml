@@ -25,9 +25,9 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/rob-smallshire/oaknut-file"
-Repository = "https://github.com/rob-smallshire/oaknut-file"
-Issues = "https://github.com/rob-smallshire/oaknut-file/issues"
+Homepage = "https://github.com/rob-smallshire/oaknut"
+Repository = "https://github.com/rob-smallshire/oaknut"
+Issues = "https://github.com/rob-smallshire/oaknut/issues"
 
 [dependency-groups]
 test = [
@@ -41,7 +41,7 @@ dev = [
 ]
 
 [tool.setuptools.dynamic]
-version = { attr = "oaknut_file.__version__" }
+version = { attr = "oaknut.file.__version__" }
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -53,15 +53,8 @@ serialize = ["{major}.{minor}.{patch}"]
 tag = true
 commit = true
 message = "Bump version: {current_version} → {new_version}"
-tag_name = "v{new_version}"
+tag_name = "oaknut-file-v{new_version}"
 tag_message = "Bump version: {current_version} → {new_version}"
 files = [
-    { filename = "src/oaknut_file/__init__.py" },
+    { filename = "src/oaknut/file/__init__.py" },
 ]
-
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-
-[tool.uv]
-index-url = "https://pypi.org/simple/"
-publish-url = "https://upload.pypi.org/legacy/"

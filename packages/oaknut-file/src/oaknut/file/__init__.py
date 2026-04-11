@@ -7,9 +7,9 @@ and access flag management.
 
 __version__ = "0.1.3"
 
-from oaknut_file.access import Access, format_access_hex, format_access_text
-from oaknut_file.meta import AcornMeta
-from oaknut_file.formats import (
+from oaknut.file.access import Access, format_access_hex, format_access_text
+from oaknut.file.meta import AcornMeta
+from oaknut.file.formats import (
     MetaFormat,
     SOURCE_DIR,
     SOURCE_FILENAME,
@@ -17,19 +17,19 @@ from oaknut_file.formats import (
     SOURCE_INF_TRAD,
     SOURCE_SPARKFS,
 )
-from oaknut_file.inf import (
+from oaknut.file.inf import (
     format_pieb_inf_line,
     format_trad_inf_line,
     parse_inf_line,
     read_inf_file,
     write_inf_file,
 )
-from oaknut_file.filename_encoding import (
+from oaknut.file.filename_encoding import (
     build_filename_suffix,
     build_mos_filename_suffix,
     parse_encoded_filename,
 )
-from oaknut_file.xattr import (
+from oaknut.file.xattr import (
     read_acorn_xattrs,
     read_econet_xattrs,
     write_acorn_xattrs,

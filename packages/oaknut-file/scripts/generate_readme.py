@@ -24,7 +24,7 @@ OUTPUT_FILEPATH = REPO_DIRPATH / "README.md"
 
 def collect_examples() -> dict[str, str]:
     """Run real API examples and capture their output."""
-    from oaknut_file import (
+    from oaknut.file import (
         Access,
         AcornMeta,
         format_pieb_inf_line,

@@ -2,7 +2,7 @@
 
 import pytest
 
-from oaknut_file.meta import AcornMeta
+from oaknut.file.meta import AcornMeta
 
 
 class TestAcornMeta:

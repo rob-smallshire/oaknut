@@ -2,12 +2,12 @@
 
 import pytest
 
-from oaknut_file.filename_encoding import (
+from oaknut.file.filename_encoding import (
     parse_encoded_filename,
     build_filename_suffix,
     build_mos_filename_suffix,
 )
-from oaknut_file.meta import AcornMeta
+from oaknut.file.meta import AcornMeta
 
 
 class TestParseEncodedFilename:

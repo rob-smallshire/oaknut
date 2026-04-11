@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import re
 
-from oaknut_file.meta import AcornMeta
+from oaknut.file.meta import AcornMeta
 
 
 # Regex patterns for each encoding scheme

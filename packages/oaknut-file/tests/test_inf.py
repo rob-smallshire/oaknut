@@ -2,14 +2,14 @@
 
 import pytest
 
-from oaknut_file.inf import (
+from oaknut.file.inf import (
     parse_inf_line,
     format_trad_inf_line,
     format_pieb_inf_line,
     read_inf_file,
     write_inf_file,
 )
-from oaknut_file.meta import AcornMeta
+from oaknut.file.meta import AcornMeta
 
 
 class TestParseInfLineTraditional:

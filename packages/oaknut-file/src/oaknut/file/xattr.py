@@ -22,7 +22,7 @@ import os
 from pathlib import Path
 from typing import Union
 
-from oaknut_file.meta import AcornMeta
+from oaknut.file.meta import AcornMeta
 
 
 # --- Acorn namespace constants ---

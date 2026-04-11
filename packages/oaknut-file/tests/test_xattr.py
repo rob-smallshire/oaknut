@@ -8,9 +8,9 @@ import sys
 
 import pytest
 
-from oaknut_file.access import Access
-from oaknut_file.meta import AcornMeta
-from oaknut_file.xattr import (
+from oaknut.file.access import Access
+from oaknut.file.meta import AcornMeta
+from oaknut.file.xattr import (
     read_acorn_xattrs,
     write_acorn_xattrs,
     read_econet_xattrs,

@@ -13,9 +13,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from oaknut_file.access import Access
-from oaknut_file.formats import SOURCE_INF_PIEB, SOURCE_INF_TRAD
-from oaknut_file.meta import AcornMeta
+from oaknut.file.access import Access
+from oaknut.file.formats import SOURCE_INF_PIEB, SOURCE_INF_TRAD
+from oaknut.file.meta import AcornMeta
 
 
 def _is_hex(s: str) -> bool:

@@ -2,7 +2,7 @@
 
 import pytest
 
-from oaknut_file.access import Access, format_access_hex, format_access_text
+from oaknut.file.access import Access, format_access_hex, format_access_text
 
 
 class TestAccessFlags:
