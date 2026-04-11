@@ -17,6 +17,7 @@ __version__ = "0.1.0"
 
 from oaknut.afs.access import AFSAccess
 from oaknut.afs.afs import AFS, AFSNotPresentError
+from oaknut.afs.allocator import Allocator
 from oaknut.afs.exceptions import (
     AFSAccessDeniedError,
     AFSAlreadyPartitionedError,
@@ -51,6 +52,7 @@ __all__ = [
     "AFSAccess",
     "AFSNotPresentError",
     "AFSPath",
+    "Allocator",
     "PasswordsFile",
     "UserRecord",
     "AFSAccessDeniedError",
