@@ -41,6 +41,7 @@ classifiers = [
 ]
 dependencies = [
     "oaknut-file>=1.0",
+    "oaknut-image>=1.0",
     "oaknut-dfs>=4.0",
     "oaknut-zip>=2.0",
 ]
@@ -58,9 +59,10 @@ packages = []
 members = ["packages/oaknut-*"]
 
 [tool.uv.sources]
-oaknut-file = { workspace = true }
-oaknut-dfs  = { workspace = true }
-oaknut-zip  = { workspace = true }
+oaknut-file  = { workspace = true }
+oaknut-image = { workspace = true }
+oaknut-dfs   = { workspace = true }
+oaknut-zip   = { workspace = true }
 
 [tool.uv]
 default-groups = ["test", "lint", "dev"]
@@ -86,6 +88,7 @@ minversion = "8.0"
 addopts = ["--import-mode=importlib"]
 testpaths = [
     "packages/oaknut-file/tests",
+    "packages/oaknut-image/tests",
     "packages/oaknut-dfs/tests",
     "packages/oaknut-zip/tests",
 ]
