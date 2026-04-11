@@ -1,0 +1,76 @@
+{#-
+  README.md template. Rendered by scripts/render_readme.py.
+  Do not edit README.md directly — edit this file (or the example
+  Python scripts in docs/readme_examples/) and re-run the script.
+  A pre-commit hook checks that README.md is up to date.
+-#}
+# oaknut
+
+Python tools for Acorn computer filesystems, files, and formats — the BBC Micro, Electron, Archimedes, and their descendants.
+
+This repository is a [`uv`](https://github.com/astral-sh/uv) workspace monorepo containing the `oaknut-*` family of packages. Each package is independently published to PyPI, but they all contribute to a shared `oaknut.` Python namespace so that imports read naturally:
+
+```python
+from oaknut.file import AcornMeta, MetaFormat
+from oaknut.dfs import DFS
+from oaknut.adfs import ADFS
+from oaknut.basic import tokenise
+from oaknut.zip import extract_archive
+```
+
+## Packages
+
+| PyPI distribution | Import path | Scope |
+|---|---|---|
+{%- for pkg in packages %}
+| [`{{ pkg.name }}`](packages/{{ pkg.name }}/) | `{{ pkg.import_path }}` | {{ pkg.description }} |
+{%- endfor %}
+
+The dependency arrows run strictly bottom-up: `file → {discimage, basic} → {dfs, adfs, zip}`. `oaknut-dfs` and `oaknut-adfs` are independent siblings — neither depends on the other.
+
+## Quickstart: opening a disc
+
+{{ example("dfs_quickstart") }}
+
+## Quickstart: Acorn file metadata
+
+{{ example("file_metadata") }}
+
+## Development
+
+```sh
+git clone https://github.com/rob-smallshire/oaknut.git
+cd oaknut
+uv sync
+uv run pytest
+```
+
+The workspace uses `[tool.uv.sources]` in the root `pyproject.toml` to wire sibling packages as local path dependencies during development, so any change in one package is immediately visible to the others without a publish round-trip. End users installing from PyPI get the published versions resolved normally.
+
+Guidance for working on the codebase lives in [`CLAUDE.md`](CLAUDE.md) at the workspace root, with package-specific addenda in `packages/<name>/CLAUDE.md`.
+
+## Installing from PyPI
+
+Each library package is independently installable:
+
+```sh
+{%- for pkg in packages if pkg.name != "oaknut-discimage" %}
+pip install {{ pkg.name }}
+{%- endfor %}
+```
+
+Or install the whole family via the meta-distribution:
+
+```sh
+pip install oaknut
+```
+
+## Documentation
+
+- [`CLAUDE.md`](CLAUDE.md) — workspace conventions, development commands, test infrastructure
+- [`docs/monorepo.md`](docs/monorepo.md) — monorepo design and architectural target
+- [`docs/cli-design.md`](docs/cli-design.md) — design of the forthcoming `disc` CLI
+
+## Licence
+
+MIT. See each package's `LICENSE` file.
