@@ -59,6 +59,46 @@ class SyntheticFile:
 
 
 @dataclass
+class ChainSpec:
+    """A file to be laid out across a chain of map blocks.
+
+    ``block_sizes`` lists the number of **data sectors** each map
+    block's extents should cover, in chain order. Each block's
+    extents are one sector long (maximally fragmented). A chain of
+    e.g. ``[48, 5]`` gives 48 extents in the head block plus 5 in a
+    single tail block, for 53 logical sectors total. The first
+    block must have exactly 48 extents for the chain pointer to be
+    reachable (per the ROM's MPGSGB semantics).
+
+    Each sector is populated with distinct bytes: sector N contains
+    the bytes ``((N & 0xFF),) * 256`` so callers can reconstruct
+    the expected content. ``last_sector_bytes`` is set on the final
+    block only.
+    """
+
+    name: str
+    block_sizes: list[int]
+    last_sector_bytes: int = 0
+    load_address: int = 0x00008000
+    exec_address: int = 0x00008023
+    access: str = "LR/R"
+
+    @property
+    def total_sectors(self) -> int:
+        return sum(self.block_sizes)
+
+    def sector_content(self, logical_index: int) -> bytes:
+        return bytes(((logical_index & 0xFF),) * 256)
+
+    def expected_bytes(self) -> bytes:
+        total = self.total_sectors
+        raw = b"".join(self.sector_content(i) for i in range(total))
+        if self.last_sector_bytes == 0:
+            return raw
+        return raw[: (total - 1) * 256 + self.last_sector_bytes]
+
+
+@dataclass
 class SyntheticUser:
     name: str
     password: str = ""
@@ -96,6 +136,8 @@ def build_synthetic_adfs_with_afs(
     start_cylinder: int = DEFAULT_START_CYLINDER,
     disc_name: str = "SynthTestDisc",
     root_files: list[SyntheticFile] | None = None,
+    chain_files: list[ChainSpec] | None = None,
+    root_directory_sectors: int = 2,
     users: list[SyntheticUser] | None = None,
     date: datetime.date = datetime.date(2026, 4, 11),
 ) -> ADFS:
@@ -107,6 +149,8 @@ def build_synthetic_adfs_with_afs(
     """
     if root_files is None:
         root_files = [SyntheticFile(name="Hello", contents=b"Hello, AFS!\n")]
+    if chain_files is None:
+        chain_files = []
     if users is None:
         users = [SyntheticUser("Syst", system=True), SyntheticUser("guest")]
 
@@ -139,7 +183,7 @@ def build_synthetic_adfs_with_afs(
             cursor += 1
         return start
 
-    root_dir_size_sectors = 2  # 512 bytes, 19-slot default
+    root_dir_size_sectors = root_directory_sectors
     passwords_body_sectors = 1
 
     root_map_sin = alloc(1)
@@ -151,6 +195,21 @@ def build_synthetic_adfs_with_afs(
         map_sin = alloc(1)
         data_sec = alloc(n_sectors)
         file_slots.append((f, map_sin, data_sec, n_sectors))
+
+    # Allocate SINs and data sectors for chained files. Each chain
+    # block's data extents are maximally fragmented: one extent per
+    # sector, so a block of size N gets N distinct single-sector
+    # extents.
+    chain_slots: list[
+        tuple[ChainSpec, list[int], list[list[int]]]
+    ] = []  # (spec, block_sins, per_block_sector_lists)
+    for chain in chain_files:
+        block_sins: list[int] = []
+        per_block_sectors: list[list[int]] = []
+        for block_size in chain.block_sizes:
+            block_sins.append(alloc(1))
+            per_block_sectors.append([alloc(1) for _ in range(block_size)])
+        chain_slots.append((chain, block_sins, per_block_sectors))
 
     passwords_map_sin = alloc(1)
     passwords_data_sec = alloc(passwords_body_sectors)
@@ -170,6 +229,18 @@ def build_synthetic_adfs_with_afs(
             )
         )
         file_sin_lookup[f.name] = map_sin
+    for chain, block_sins, _ in chain_slots:
+        entries.append(
+            DirectoryEntry(
+                name=chain.name,
+                load_address=chain.load_address,
+                exec_address=chain.exec_address,
+                access=AFSAccess.from_string(chain.access),
+                date=AfsDate(date),
+                sin=SystemInternalName(block_sins[0]),
+            )
+        )
+        file_sin_lookup[chain.name] = block_sins[0]
     entries.append(
         DirectoryEntry(
             name="Passwords",
@@ -245,6 +316,31 @@ def build_synthetic_adfs_with_afs(
         )
         write_sector(map_sin, file_map.to_bytes())
         write_sectors(data_sec, _pad_to_sector(f.contents).ljust(n_sectors * _SECTOR_SIZE, b"\x00"))
+
+    # Chained map files: walk each chain forward, writing each map
+    # block's extents + data sectors. The chain pointer in each
+    # non-final block's slot 48 points at the next block's SIN.
+    for chain, block_sins, per_block_sectors in chain_slots:
+        total_sectors_so_far = 0
+        for block_index, (block_sin, sector_list) in enumerate(
+            zip(block_sins, per_block_sectors)
+        ):
+            is_last = block_index == len(block_sins) - 1
+            extents = tuple(Extent(start=s, length=1) for s in sector_list)
+            # Only the final block carries the meaningful BILB.
+            bilb = chain.last_sector_bytes if is_last else 0
+            next_sin = None if is_last else SystemInternalName(block_sins[block_index + 1])
+            map_block = MapSector(
+                sin=SystemInternalName(block_sin),
+                extents=extents,
+                last_sector_bytes=bilb,
+                next_sin=next_sin,
+            )
+            write_sector(block_sin, map_block.to_bytes())
+            for local_idx, sector_addr in enumerate(sector_list):
+                logical_index = total_sectors_so_far + local_idx
+                write_sector(sector_addr, chain.sector_content(logical_index))
+            total_sectors_so_far += len(sector_list)
 
     # Passwords file: map sector + data sectors.
     passwords_body = b"".join(_encode_user(u) for u in users)

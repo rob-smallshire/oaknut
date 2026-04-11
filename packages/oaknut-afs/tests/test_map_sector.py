@@ -199,18 +199,23 @@ class TestParseErrors:
 
 
 class TestMaxExtents:
-    def test_49_extents_accepted(self) -> None:
-        extents = tuple(Extent(Sector(0x100 + i * 10), 1) for i in range(49))
+    """Per Uade02:329-332, a map block has 49 extent slots total but
+    slot 48 (LSTENT) is reserved for the chain pointer, leaving 48
+    data-extent slots. See Uade13:488-492 (MPGSNX) for the reader's
+    treatment of slot 48."""
+
+    def test_48_extents_accepted(self) -> None:
+        extents = tuple(Extent(Sector(0x100 + i * 10), 1) for i in range(48))
         map_sec = MapSector(
             sin=SystemInternalName(0x50),
             extents=extents,
         )
-        assert len(map_sec.extents) == 49
-        assert map_sec.total_sectors() == 49
+        assert len(map_sec.extents) == 48
+        assert map_sec.total_sectors() == 48
 
-    def test_50_extents_rejected(self) -> None:
-        extents = tuple(Extent(Sector(0x100 + i * 10), 1) for i in range(50))
-        with pytest.raises(ValueError, match="too many extents"):
+    def test_49_data_extents_rejected(self) -> None:
+        extents = tuple(Extent(Sector(0x100 + i * 10), 1) for i in range(49))
+        with pytest.raises(ValueError, match="too many data extents"):
             MapSector(sin=SystemInternalName(0x50), extents=extents)
 
 

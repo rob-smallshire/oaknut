@@ -218,10 +218,8 @@ upper bound on users per disc: **80**. The "40" comment is stale.
 
 ## Map sector (JesMap)
 
-`Uade02` does not hold the JesMap structure constants (those are in
-MAPMAN headers, to be examined in phase 7). What `Uade02` does tell us
-via `MAPTB` (the **in-memory** map table, not the on-disc form) is the
-shape of the data the server tracks per disc:
+`Uade02` holds the MAPTB (in-memory per-disc map table, `Uade02:228-247`)
+describing what the server tracks per-disc at run time:
 
 - `MPDCNO` (2 bytes): disc number
 - `MPNOCY` (2 bytes): number of cylinders
@@ -236,21 +234,84 @@ shape of the data the server tracks per disc:
 - `MPSCYL` (2 bytes): start cylinder
 - `MPSZCY` (1 byte): size in bytes of cylinder bit map
 
-And the map block pointer block (`BLKSN` / `BLKNO` / `MBSQNO` /
-`MGFLG` / `BILB` / `MBENTS`) at `Uade02:208-218`:
+### Map block layout (on disc and in memory)
 
-- `ENSZ = 5` — bytes in map block entry (the (start, length) extent
-  tuple we know from the PDF)
-- `MXENTS = 49` — max entries in one map block. This is an **upper
-  bound on extents per map sector** from the server's perspective.
-- `LSTENT = MBENTS + (MXENTS - 1) * ENSZ` — offset of the last extent
-- `LSTSQ = 255` — max sequence number
-- `BTINBK = 256` — bytes in a normal disc block
+The *map block pointer block* header at `Uade02:313-334` is both the
+**in-memory descriptor** of a loaded map block *and* the on-disc byte
+layout once the 6-byte ASCII magic has been replaced by the block's
+own SIN/BLKNO. The fields are:
 
-The full JesMap on-disc format is documented in Beebmaster's PDF and
-will be cross-checked against MAPMAN (`Uade10`–`Uade13`) in phase 7.
-For now the key fact is **49 extents per map sector** and **5 bytes per
-extent**.
+| Offset | Size | Label   | Meaning |
+|-------:|-----:|---------|---------|
+|  0 | 3 | `BLKSN`  | On disc: first 3 bytes of `'JesMap'` magic. In memory after read: the SIN this map block was loaded from. |
+|  3 | 3 | `BLKNO`  | On disc: last 3 bytes of `'JesMap'` magic. In memory: the block's ordinal number / drive number (not used on the wire). |
+|  6 | 1 | `MBSQNO` | Leading master sequence number. |
+|  7 | 1 | `MGFLG`  | Reserved flags byte (always zero in L3V126). |
+|  8 | 2 | `BILB`   | **Bytes in last (data) block — 16-bit LE**. Only the final map block in a chain carries a meaningful value; intermediate blocks leave it stale. Zero means "last data sector is fully used" (i.e. add a full 256 bytes). `Uade13:573-595` (`MPGSFN`). |
+| 10 | 245 | `MBENTS` | Body: up to 49 five-byte extent slots, `ENSZ = 5` (3-byte start sector LE + 2-byte length LE). |
+| 255 | 1 | trailing `MBSQNO` | Must equal the leading copy; mismatch raises `DRERRB` / "broken directory". `Uade11` on write, `Uade02:332` (`LSTSQ`). |
+
+Constants from `Uade02:329-334`:
+- `ENSZ = 5`
+- `MXENTS = 49`
+- `LSTENT = MBENTS + (MXENTS - 1) * ENSZ = 10 + 48*5 = 250`
+- `LSTSQ = 255`
+- `BTINBK = 256`
+
+The magic is written by `Uade10.asm:229-236` (`MPCRSP`), which copies
+the six-byte literal ``MPBLTX EQUB "paMseJ"`` onto disc with an index
+that runs from 5 down to 0, producing the bytes `J`, `e`, `s`, `M`,
+`a`, `p` in normal order on the wire.
+
+### Chained map blocks
+
+**The 49th extent slot (index 48, at `LSTENT = 250`) is reserved as
+the chain pointer, not a data extent**. When a file acquires a 49th
+extent, MAPMAN allocates a new map block and overwrites slot 48 of
+the *old* map block with the new block's SIN (3 bytes) plus length 1
+(2 bytes). The data extent that would have gone there is placed into
+slot 0 of the new map block, and the chain continues from there.
+
+Source: `Uade12.asm:187-227` (`MKRLN` / `ALBLK` path) stores `(newblock_SIN, 1)` at
+`MPMBPT + LSTENT` and writes the old block back. The reader side in
+`Uade13.asm:470-533` (`MPGTSZ`/`MPGSMB`) walks extent slots starting
+at `MBENTS`, detects zero starts as end-of-data, and compares the
+current slot offset against `LSTENT`: if a non-zero entry is found at
+or beyond `LSTENT`, the entry's 3-byte start field is treated as the
+SIN of the next map block and the walker jumps via `MPGSNX` into
+`RDMPBK` on that SIN.
+
+This has several important consequences for any parser:
+
+1. **Only 48 data extents fit in one map block.** The 49th slot can
+   never hold a data extent — writing one there would be
+   indistinguishable from a chain pointer on read.
+2. **Chains are singly-linked forward lists.** There is no back
+   pointer; each block only knows its successor. `BLKSN` / `BLKNO`
+   are populated from whatever sector the server happened to read,
+   not from the bytes on disc.
+3. **Chain termination is by zero start sector.** Either a zero
+   entry anywhere in slots 0..47, or a zero entry at slot 48,
+   terminates the chain. There is no explicit "last block" flag.
+4. **`MBSQNO` is a corruption check, not a chain ordinal.** Leading
+   (byte 6) and trailing (byte 255) copies must agree. There is no
+   relationship between the sequence numbers on adjacent blocks in
+   a chain; each is its own independent counter.
+5. **`BILB` is only meaningful on the final block in a chain.**
+   Intermediate blocks carry stale values from whenever they were
+   last written, and `MPGSFN` at `Uade13:573-595` only reads it
+   after `MPGTSZ` has reached end-of-chain via `MPGSGB`.
+
+The Python read path in `oaknut.afs.map_sector` therefore needs:
+
+- A parser that returns extents from slots 0..47 only, plus an
+  optional `next_sin` from slot 48.
+- A chain walker (owned by the `AFS` handle, since it needs to
+  dereference SINs back to sector reads) that calls the parser
+  repeatedly to produce a flat list of data extents plus the final
+  block's `BILB`.
+- `ExtentStream` stays byte-addressable over the flattened extents
+  unchanged.
 
 ## Bit map
 
@@ -325,10 +386,12 @@ These structures/algorithms are not yet documented here because they
 live in ROM modules beyond `Uade01/02`. Each will be added during its
 phase.
 
-- **JesMap on-disc format** (header bytes, magic, sequence number) —
-  MAPMAN, phase 7.
-- **Map-sector chaining** for large files — MAPMAN, phase 7.
-- **Directory growth strategy** — DIRMAN (`Uade0C`–`Uade0E`), phase 7.
+- **Directory growth strategy** — handled at the MAPMAN layer via
+  `MAPMAN.CHANGESIZE` (`Uade0E.asm:1222` `CHZSZD`): DIRMAN asks MAPMAN
+  to grow the underlying object, then reformats the newly-allocated
+  tail as free slots threaded onto the free list. Phase 7 for the
+  read path (large directories read automatically once chained maps
+  work); phase 10 for the write path.
 - **Allocation policy** — MBBMCM, phase 8.
 - **Extend / truncate semantics** — RNDMAN (`Rman01`–`Rman05`) + MAPMAN,
   phase 12.

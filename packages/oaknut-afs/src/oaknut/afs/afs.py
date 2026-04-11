@@ -42,7 +42,7 @@ from oaknut.afs.exceptions import (
     AFSPathError,
 )
 from oaknut.afs.info_sector import INFO_SECTOR_SIZE, InfoSector, InfoSectorPair
-from oaknut.afs.map_sector import MAP_SECTOR_SIZE, ExtentStream, MapSector
+from oaknut.afs.map_sector import MAP_SECTOR_SIZE, ExtentStream, MapChain, MapSector
 from oaknut.afs.passwords import PASSWORDS_FILENAME, PasswordsFile
 from oaknut.afs.path import AFSPath
 from oaknut.afs.types import Geometry, SystemInternalName
@@ -198,15 +198,27 @@ class AFS:
         data = self._read_sector(int(sin))
         return MapSector.from_bytes(data, sin)
 
+    def _read_map_chain(self, head_sin: SystemInternalName) -> MapChain:
+        """Walk a map chain starting at ``head_sin``, returning the
+        flattened :class:`MapChain` descriptor for the object.
+
+        The walker reads every block in the chain eagerly via
+        :meth:`_read_map_sector`. For typical objects (≤ 48 extents)
+        this is a single disc read.
+        """
+        return MapChain.walk(head_sin, self._read_map_sector)
+
     def _read_object_bytes(self, sin: SystemInternalName) -> bytes:
         """Read the full byte contents of the object identified by ``sin``.
 
-        Resolves the object's map sector and streams its extents
-        through :class:`ExtentStream`. Handles single-map-sector
-        objects only; chained maps arrive in phase 7.
+        Walks the object's map chain (which may be one or more blocks
+        linked through their LSTENT slots), flattens the extents, and
+        streams the result through :class:`ExtentStream`. See
+        ``Uade13.asm:462-533`` (``MPGTSZ``) for the server's
+        equivalent walk.
         """
-        map_sector = self._read_map_sector(sin)
-        stream = ExtentStream(map_sector, self._read_sector)
+        chain = self._read_map_chain(sin)
+        stream = ExtentStream(chain, self._read_sector)
         return stream.read_all()
 
     def _read_directory(self, sin: SystemInternalName) -> AfsDirectory:
