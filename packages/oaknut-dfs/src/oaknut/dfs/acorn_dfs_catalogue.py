@@ -273,7 +273,8 @@ class AcornDFSCatalogue(Catalogue):
             # '!' is only allowed as the first character
             if char == '!' and i != 0:
                 raise ValueError(
-                    f"'!' is only allowed as the first character, not at position {i} in '{filename}'"
+                    f"'!' is only allowed as the first character, "
+                    f"not at position {i} in '{filename}'"
                 )
 
             # Check for top-bit set characters

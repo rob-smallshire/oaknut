@@ -1500,7 +1500,6 @@ class ADFS:
 
         Returns the number of objects written (files + directories).
         """
-        parent_dir = self._read_directory_at(parent_disc_address)
         count = 0
 
         for item in items:

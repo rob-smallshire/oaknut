@@ -9,19 +9,21 @@ from pathlib import Path
 # `importlib` mode (required for PEP 420 namespace packages) which
 # does not inject test directories into sys.path. Inserting the
 # tests directory here restores the `from helpers.adfs_image import ...`
-# import pattern used throughout.
+# import pattern used throughout. The deliberate sys.path manipulation
+# before the subsequent imports trips ruff's E402 check, so those
+# imports carry explicit per-line noqa comments.
 _TESTS_DIR = Path(__file__).parent
 if str(_TESTS_DIR) not in sys.path:
     sys.path.insert(0, str(_TESTS_DIR))
 
-import shutil
-import stat
+import shutil  # noqa: E402
+import stat  # noqa: E402
 
 # Import to ensure catalogue classes are registered
-import oaknut.dfs.acorn_dfs_catalogue  # noqa: F401
-import pytest
-from oaknut.dfs import DFS
-from oaknut.dfs.formats import (
+import oaknut.dfs.acorn_dfs_catalogue  # noqa: F401, E402
+import pytest  # noqa: E402
+from oaknut.dfs import DFS  # noqa: E402
+from oaknut.dfs.formats import (  # noqa: E402
     ACORN_DFS_40T_DOUBLE_SIDED_INTERLEAVED,
     ACORN_DFS_40T_SINGLE_SIDED,
     ACORN_DFS_80T_DOUBLE_SIDED_INTERLEAVED,

@@ -162,7 +162,9 @@ def capture_adfs_hdd_create() -> str:
         "from oaknut.dfs import ADFS",
         "",
         "# Create a 20MB hard disc image",
-        'with ADFS.create_file("scsi0.dat", capacity_bytes=20 * 1024 * 1024, title="Data") as adfs:',
+        'with ADFS.create_file(',
+        '    "scsi0.dat", capacity_bytes=20 * 1024 * 1024, title="Data"',
+        ") as adfs:",
         "    pass  # creates both scsi0.dat and scsi0.dsc",
     ]
     return "\n".join(lines)

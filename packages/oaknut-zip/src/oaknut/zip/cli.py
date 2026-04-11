@@ -165,7 +165,11 @@ def list_cmd(zipfile_path: Path) -> None:
             if entry[LOAD_ADDR_KEY] is not None:
                 ft = entry[FILETYPE_KEY]
                 ft_str = f"{ft:03X}" if ft is not None else ""
-                attr_str = format_access_text(entry[ATTR_KEY]) if entry[ATTR_KEY] is not None else ""
+                attr_str = (
+                    format_access_text(entry[ATTR_KEY])
+                    if entry[ATTR_KEY] is not None
+                    else ""
+                )
                 table.add_row(
                     display_name,
                     f"{entry[LOAD_ADDR_KEY]:08X}",

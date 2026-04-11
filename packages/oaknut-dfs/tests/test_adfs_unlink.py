@@ -70,7 +70,7 @@ class TestUnlink:
 
     def test_unlink_directory_raises(self):
         """unlink() should not delete directories — use rmdir for that."""
-        adfs = ADFS.create(ADFS_S)
+        ADFS.create(ADFS_S)
         # We need mkdir for this test, so skip if not available
         pytest.importorskip("oaknut.dfs.adfs")
         # Write a file, then try to unlink root (a directory)

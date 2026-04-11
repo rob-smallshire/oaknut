@@ -86,8 +86,10 @@ class SurfaceSpec:
     num_tracks: int
     sectors_per_track: int
     bytes_per_sector: int
-    track_zero_offset_bytes: int  # Offset in bytes within the disc image where this surface starts
-    track_stride_bytes: int  # Number of bytes from the start of one track to the start of the next track
+    # Offset in bytes within the disc image where this surface starts
+    track_zero_offset_bytes: int
+    # Number of bytes from the start of one track to the start of the next track
+    track_stride_bytes: int
 
     def __post_init__(self):
         if self.num_tracks <= 0:
@@ -102,7 +104,8 @@ class SurfaceSpec:
         minimum_stride = self.sectors_per_track * self.bytes_per_sector
         if self.track_stride_bytes < minimum_stride:
             raise ValueError(
-                f"track_stride_bytes {self.track_stride_bytes} is less than minimum required {minimum_stride}"
+                f"track_stride_bytes {self.track_stride_bytes} is less than "
+                f"minimum required {minimum_stride}"
             )
 
 
@@ -159,7 +162,8 @@ class DiscImage:
             )
             if max_offset > buffer_size:
                 raise ValueError(
-                    f"Surface {i} requires {max_offset} bytes but buffer is only {buffer_size} bytes"
+                    f"Surface {i} requires {max_offset} bytes "
+                    f"but buffer is only {buffer_size} bytes"
                 )
 
     @staticmethod

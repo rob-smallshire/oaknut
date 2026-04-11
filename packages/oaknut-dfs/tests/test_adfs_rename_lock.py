@@ -10,7 +10,7 @@ class TestRename:
     def test_rename_file(self):
         adfs = ADFS.create(ADFS_S)
         (adfs.root / "Old").write_bytes(b"data")
-        result = (adfs.root / "Old").rename(adfs.root / "New")
+        (adfs.root / "Old").rename(adfs.root / "New")
         assert not (adfs.root / "Old").exists()
         assert (adfs.root / "New").exists()
         assert (adfs.root / "New").read_bytes() == b"data"
@@ -24,7 +24,7 @@ class TestRename:
     def test_rename_accepts_string(self):
         adfs = ADFS.create(ADFS_S)
         (adfs.root / "Old").write_bytes(b"data")
-        result = (adfs.root / "Old").rename("$.New")
+        (adfs.root / "Old").rename("$.New")
         assert (adfs.root / "New").read_bytes() == b"data"
 
     def test_rename_preserves_metadata(self):

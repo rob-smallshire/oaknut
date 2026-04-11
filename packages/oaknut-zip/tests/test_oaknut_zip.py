@@ -11,6 +11,26 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
+from click.testing import CliRunner
+from oaknut.file import (
+    AcornMeta,
+    MetaFormat,
+    build_filename_suffix,
+    build_mos_filename_suffix,
+    format_access_hex,
+    format_pieb_inf_line,
+    format_trad_inf_line,
+    parse_encoded_filename,
+    parse_inf_line,
+)
+from oaknut.zip import (
+    build_inf_index,
+    extract_member,
+    parse_sparkfs_extra,
+    resolve_metadata,
+    sanitise_extract_path,
+)
+from oaknut.zip.cli import cli
 
 requires_xattr = pytest.mark.skipif(
     sys.platform == "win32", reason="Extended attributes not supported on Windows"
@@ -35,28 +55,6 @@ def list_xattrs(filepath: Path) -> list[str]:
         import xattr
 
         return xattr.xattr(str(filepath)).list()
-
-
-from click.testing import CliRunner
-from oaknut.file import (
-    AcornMeta,
-    MetaFormat,
-    build_filename_suffix,
-    build_mos_filename_suffix,
-    format_access_hex,
-    format_pieb_inf_line,
-    format_trad_inf_line,
-    parse_encoded_filename,
-    parse_inf_line,
-)
-from oaknut.zip import (
-    build_inf_index,
-    extract_member,
-    parse_sparkfs_extra,
-    resolve_metadata,
-    sanitise_extract_path,
-)
-from oaknut.zip.cli import cli
 
 FIXTURES_DIRPATH = Path(__file__).resolve().parent / "fixtures"
 NETUTILS_ZIP_FILEPATH = FIXTURES_DIRPATH / "NetUtils.zip"
@@ -1642,7 +1640,9 @@ class TestSwehBundledInf:
         assert result.exit_code == 0
         assert "inf-pieb:" in result.output
         # Should have PiEB-inf entries, not all plain
-        pieb_line = [l for l in result.output.splitlines() if "inf-pieb:" in l][0]
+        pieb_line = next(
+            line for line in result.output.splitlines() if "inf-pieb:" in line
+        )
         count = int(pieb_line.split(":")[1].strip().split()[0])
         assert count > 0
 

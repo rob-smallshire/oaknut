@@ -281,7 +281,6 @@ class OldFreeSpaceMap:
             # Merge all three: extend the before-entry to cover the after-entry too
             before_offset = merge_before * _BYTES_PER_ENTRY
             after_offset = merge_after * _BYTES_PER_ENTRY
-            before_start = _read_24bit_le(self._data, _FREE_START_OFFSET + before_offset)
             before_length = _read_24bit_le(self._data, _FREE_LEN_OFFSET + before_offset)
             after_length = _read_24bit_le(self._data, _FREE_LEN_OFFSET + after_offset)
             new_length = before_length + num_sectors + after_length
@@ -292,13 +291,17 @@ class OldFreeSpaceMap:
             # Extend the before-entry
             before_offset = merge_before * _BYTES_PER_ENTRY
             before_length = _read_24bit_le(self._data, _FREE_LEN_OFFSET + before_offset)
-            _write_24bit_le(self._data, _FREE_LEN_OFFSET + before_offset, before_length + num_sectors)
+            _write_24bit_le(
+                self._data, _FREE_LEN_OFFSET + before_offset, before_length + num_sectors
+            )
         elif merge_after is not None:
             # Extend the after-entry backward
             after_offset = merge_after * _BYTES_PER_ENTRY
             after_length = _read_24bit_le(self._data, _FREE_LEN_OFFSET + after_offset)
             _write_24bit_le(self._data, _FREE_START_OFFSET + after_offset, start_sector)
-            _write_24bit_le(self._data, _FREE_LEN_OFFSET + after_offset, after_length + num_sectors)
+            _write_24bit_le(
+                self._data, _FREE_LEN_OFFSET + after_offset, after_length + num_sectors
+            )
         else:
             # Insert a new entry in sorted order
             insert_at = 0
