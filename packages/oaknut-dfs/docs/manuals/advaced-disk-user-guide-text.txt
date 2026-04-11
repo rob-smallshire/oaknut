@@ -1,0 +1,856 @@
+The Advanced Disk User
+Guide
+for the BBC Microcomputer
+Colin Pharo B.Sc., MBCS
+published by The Cambridge Microcomputer Centre
+ Published in the United Kingdom by: The Cambridge Microcomputer Centre, 153-154 East Road,
+Cambridge, England
+Telephone (0223) 355404 TIx 817445
+ISBN 0 946827 70 2
+Copyright © 1985 The Cambridge Microcomputer Centre
+Cambridge Microcomputer Centre is a wholly owned subsidiary of Namal Associates Ltd.
+The author would like to thank his wife, Jenny, for the long sessions at proot-reading and the endless cups of coffee which made this book possible. Thanks also to Dan
+Nanayakkara and his wife, Jaya, and Peter Wederell for their assistance in the production of this book.
+The combined 40/80 track technique was first described by D.M. Barnett in 'Acorn User, February 1984.
+Al rights reserved. This book is copyright. No part of this book may be copied or
+be addressed to the publishers. While every precaution has been taken in the preparation of this book, the publisher assumes no responsibility for errors or omissions. Neither is any liability assumed for damages resulting from the use of information contained herein.
+Please note that within this text, the terms Tube and Econet are registered tradenames of Acorn Computers Limited. Al references in this book to the BBC Microcomputer refer to the computer produced for the British Broadcasting Corporation by Acorn Computers Limited. Al references to the 8271 refer to the floppy disk controller chip manufactured by Intel Corporation.
+This book was computer typeset by Computerset (MIK) Lid, Ely, Cambridgeshire and printed by The Burlington I'ress (Cambridge) Ltd, Foxton, Cambridge.
+
+ 5 6 7 8 9 101112
+Contents
+Introduction 5
+Part 1- Acorn DFS Theory
+1 2 3 4 5
+The Diskette The Disk Drive
+The 8271 FDC
+Acorn DFS Introduction
+Aocm DES InterCalsmands Acorn DFS OSFILE
+Acorn DFS OSARGS
+Acorn DFS OSBGET/BPUT/GBPB Acorn DFS OSFIND
+Acorn DFS OSFSC Acorn DFS OSWORD
+NMI Interrupts
+Acorn DFS and BASIC
+Acorn DFS Error Messages
+7
+13 14 15
+Part 2- Disk Utilities
+16 Disk Overlay
+17 Combined 40/80 Track
+18 Disk Recovery
+19 Disk Editor
+311
+327 345 359
+3
+
+ Part 3- Files
+20 Access Methods
+373 12 Database 393 2 Sorting
+405
+Part 4 - Problems
+23 Acorn DFS Weaknesses 417
+24 Alternative DFS 427
+Appendices
+433 2 Dski Cabrade
+Disk Cable
+435 3 Disk Connectors 436 4
+DFS Call Summary 438 5 DFS Error Messages
+440 6 DE'S 0.90/1.20 Differences 441
+4
+
+ Introduction
+Of all the peripheral devices that you can attach to a BBC Microcomputer, probably none enhances its use and scope more than the disk drive. With fast access to both programs and data alike, you can at last put the microcomputer to work - or at least that is how it should be.
+In reality, there is a dearth of really detailed information avallable for BBC disk systems and this tends to limit the use to which they are put. This book is just one in a series published by the Cambridge Microcomputer Centre which attempts to supply missing information for the BBC Microcomputer. The series currently comprises:
+'The Advanced User Guide'
+'The Advanced BASIC Rom User Guide'
+'The Advanced Disk User Guide'
+It is intended that the book be read from start to finish as concepts introduced in one chapter are expanded upon in subsequent chapters. It is a good idea to skim through the book to get the general drift, followed by a more serious read afterwards. Once the fundamental principles have been grasped the user should be in a strong position to develop programs and to solve problems, aided by the several profished published whtini this ob starhet rogramne fo the programs use GOSUB, GOTO or RESTORE the line numbers in the programs have no significance and comments
+need not be entered at the keyboard.
+Most of this book is written in the style of an instructional textbook. In places, however, the information is presented more in the style of a manual and it is hoped that, by this means, the book will serve a dual purpose. In places (such as the Chapter on OSWORD), this has led to some repetition. It is hoped that by repeating information, the user is spared the burden of looking up information at several different places in the book.
+5
+
+ PART1 ACORN DFS-
+THEORY
+
+ 1 The Diskette
+Various names are commonly used in place of the term, 'diskette'. You may hear them simply called 'disks', 'flexible disks, 'floppy disks' or even just 'floppies'.
+They come in various sizes (3 inch, 3.25 inch, 3.5 inch, 5.25 inch and 8 inch) and ni a bewildering array of formats. Many of these permutations can be used with the BBC Microcomputer. However, this chapter discusses only the standard BBC disk system. Other systems, which will be covered later in the book, may differ in detail but are based on
+the same principles.
+Figure 1 shows a diagram of a standard 5.25 inch diskette. It
+coated in a material sensitive to magnetic fields and in this respect it more closely resembles the cassette tape. This magnetic coating is fragile. It can easily be destroyed by dirt and dust, finger-prints, smoke particles and by wear and tear. For this reason the diskette is protected inside a square, cardboard envelope. At one place, the read/write window, the surface of the diskette is exposed giving access to recorded data. In the diagram, the disk itself is drawn as a dotted circle.
+The recording surface of a diskette is divided into a number of tracks just like a gramophone record. There is an important difference, however. The track on a gramophone record is really one, long, continuous, spiral groove from the outside to the centre. The tracks on a diskette are equally-spaced, concentric circles and are not physically cut into the diskette. These tracks do not cover the whole surface of the disk. A track near the centre of the disk would be very short and not capable of storing much data, whilst the outside edge of a diskette is prone to warp and is unreliable for the storage of data. The actual recording surface is confined to a band starting about 1.5 inches from the centre and finishing about 2.5 inches from the centre. This band coincides with, but is a little less wide than, the read/write window. When the diskette is mounted in a disk drive, it is gripped at the hub and spun within its cardboard envelope. In this way, each part of the band falls beneath the read/write window once per
+7
+
+ revolution of the disk. Thus each part of the band is accessible. The better makes of diskette incorporate an oxide lubricant in the recording surface to reduce friction between the disk and the envelope. Some diskettes are also equipped with plastic, re-inforcing rings at the hub to help withstand the forces applied by the spindle and to prolong diskette life. Plastic hub re-inforcers can be bought separately.
+At the edge of the square diskette envelope, there is a write-
+protect notch. On some disk drives, the absence of a notch
+trips a switch which then sets the drive to write-protected
+mode. Other drives employ a light source/detector system.
+Within the disk drive a small LED (light emitting diode)
+shines through this notch and the light strikes a photo-
+detector on the other side. So long as this notch is present, the photo-detector receives light and signals the disk controller that the diskette is unprotected. To protect the diskette from being accidentally over-written, we simply cover this notch (with opaque, sticky paper, for example). Now when the diskette is mounted in the drive, light from the LED cannot reach the photo-detector. The signal to the disk controller drops and the controller traps all attempts at writing to the diskette. This is a useful way ofprotecting valuable programs/ data once they have been recorded on the diskette. Some
+commercial software diskettes are packaged in an envelope which has no notch. This of course gives automatic write- protection and prevents accidental erasure.
+envelope
+read/write window
+index pulse-o hole
+spindle hole.
+write protect notch
+recording band
+8
+Figure 1. The Diskette.
+
+ A similar light-source/detector system is employed at the index pulse hole. This hole identifies the start of each track.
+The hole occurs on both sides of the envelope with a matching hole in the disk, itself. Every complete revolution of the disk, the three holes align pertectly, allowing light to strike the photo-detector which then signals the disk controller. The signal is known as the 'index pulse'. At the precise instant of this pulse, every track will be positioned at its start under the read/write window.
+1.1 The Physical Track
+We have already mentioned 'tracks' and described them as
+equally-spaced, concentric rings within a one inch recording band. Disk drives that can be used with the BBC Microcomputer normally operate in one of two formats. In one of these formats there are 80 such tracks on the diskette.
+The other has 40 tracks. Clearly80 track diskettes have their tracks closer together than do 40 track diskettes. In both formats, the tracks are physically numbered from zero at the outermost track. Numbers then step sequentially towards the innermost track which is physical track 79 (80 track format) or physical track 39 (40 track format). Note especially that in most modern disk drives, the width of a track is identical in both formats. It is only the separation distance between tracks that varies (the 80 track separation is half that of the 40 track).
+1his has important consequences as will be seen later. For the moment I just ask you to study Figure 2 and observe the following:
+Track 0 is common to both formats and is always accessible.
+Every track of a 40 track diskette is available to an 80 track drive. It is just that alternate tracks expected by an 80 track drive are missing.
+Every other track of an 80 track diskette is accessible to a 40 track drive, but odd-numbered tracks are not.
+Track 0 is longer than the innermost track. It is about 16 inches long, whilst the innermost track is about 9 inches long.
+9
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ A= &7F
+· = 1 5 5 of a d r e s s f o p r a m b ol c k
+param block &0 = drive number (0 to 3) param block &1 to &4 = does not matter param block &7 = &02
+param block &6 = &7A
+param block &7 = &1A
+param block &8 = value to put in register action:
+This command allows you to alter the contents of the 8271 Special Register, the Track Register - Drive 1/3. The 8271 uses this register to identify its current track position for the diskette in drive 1/3. It is most useful to be able to change this register as it gives you a way of handling logical sectoring. Suppose you tell the 8271 to seek track 5 of the diskette in drive 1 and then to read all the sector ids on that track.
+Suppose as a result of this you discover that the sector ids al have a logical track number of 8. Al you have to do is reset the track register to 8 and you can now read the track. Remember to set it back to 5 afterwards.
+on exit:
+A= unchanged
+X = unchanged
+Y= unchanged
+P= destroyed
+param block &9 = Result Register (see Chapter 3)
+bit 7,6 =0
+bit 5 = deleted data flag bit 4,3 = completion type bit 2,1 = completion code
+bit 0 = 0
+NO DEMONSTRATION PROGRAM
+(Overwriting track registers is an important technique that helps us to handle logical sectoring. See the chapter on Utility Programs for more information.)
+253
+
+ 12.5 OSWORD &7F Read Special Register
+The 8271 allows you to read its own internal registers which it uses in its normal operation. In some instances this can be really helpful as a diagnostic aid. The parameter block for these commands is as follows:
+param block &0 = drive number (0 to 3) param block &1 to &4 = does not matter param block &7 = &01
+param block &6 = &7D
+param block &7 = register number (see Figure 18)
+In all cases the 8271 transfers the contents of its Special Register to the Result Register, which OSWORD then passes to you in param block &8. The following demonstration program reads al the Special Registers. The commands are then presented one-by-one.
+10 REM
+20 REM DEMONSTRATION
+30 REM -
+40 REM OSWORD read the special registers 50 REM - -
+60 DMI mc% &100
+70 osword = &FFF1
+80 FOR pass% = 0 TO 2 STEP 2
+90 %P = m%c
+10 COPT pass%
+10 \
+parameter block 120
+-param EQUB 1
+130
+EQUD &F
+140
+EQUB 1
+150
+EQUB 87D
+160
+EQUB O
+170 -res
+EQUB O
+180 -parad EQUW param 190
+20 .start LDA 870
+210 STA param+7 20 LDA #87F
+\ drive 1
+\ no buffer
+I no. of parms I command
+\ register
+\ result
+l addr of param
+\ get reg I save it I function
+254
+
+ 230
+LDX parad
+l point X& Y
+240 LDY parad+1
+l at param
+250 USR osword
+I OSWORD
+260.end RTS
+270 J
+280 NEXT
+pas%
+290 REM
+Read Special Registers. Print contents. 300
+310 DMI
+R$(9), reg%(9)
+320 FOR
+%I = 0 OT 9
+330
+READ R$ (I%)
+340
+READ reg1⁄6(1%)
+350 NEXT
+360
+FOR
+370 380 390
+%I = 0 TO 9
+2870= reg%(1%)
+CAL start
+PRNIT R$(I%);" =8";?res
+400 NEXT
+410 END
+420 DATA "Scan Sector Register",806
+430 DATA "Bad Track 1 Reg - Drive 0/2",&10 40 DATA "Bad Track 2Reg - Drive 0/2",&1 450 DATA Track Register Drive 0/2",812
+460 DATA
+"Mode Register", &17
+470 DATA
+"Bad Track Reg 1 - Drive 1/3",&18 480 DATA
+"Bad Track Reg 2 - Drive 1/3",&19 490 DATA "Track
+Register Drive 1/3",&1A 500 DATA "Drive
+Control Input", 822
+510 DATA "Drive
+Control Output", 823
+> RUN
+Scan Sector Register = 8A8
+Bad Track Reg 1 - Drive 0/2 = &F Bad Track Reg 2 - Drive 0/2 = &FF Track Register - Drive 0/2 = 80 Mode Register = 8C1
+Bad Track Reg 1 - Drive 1/3 = &FF
+B a d T r a c k R e g 2 - D r i v e 1 / 3 = &F F Track Register - Drive 1/3 = 83 Drive Control Input = 801
+Drive Control Output = 8A8
+255
+
+ OSWORD Read Scan Sector Register
+on entry:
+A = &7F
+X= LSB of address of param block Y= MSB of address of param block
+param block &0 = drive number (0 to 3) param block a l to &4 = does not matter param block &7 = &01
+param block &6 = &/D
+param block 87 = &06
+action:
+This command allows you to read the contents of the 8271 Special Register, the Scan Sector Register. The contents of this register are normally unpredictable. However, when amulti- sector command fails due to a CRC error, the Scan Sector Register contains the offending sector number.
+on exit:
+A= unchanged
+X= unchanged
+Y= unchanged
+P = destroyed
+param block &8 = Scan Sector Register
+OSWORD Read Bad Track Register 1 - Drive 0/2 on entry:
+A = &7F
+x = LSB of address of param block 7 = MSB of address of param block
+param block &0 = drive number (0 to 3) param block &1 to &4 = does not matter param block &7 = &01
+param block &6 = &7D
+param block &7 = &10
+256
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ byte 1350 = 1460
+(2 byte pointer to next in chain) byte 1352 = 7
+(length of surname)
+byte 1353 = "ARNOLD"
+(surname)
+byte 1360 = 2
+(length of initials)
+byte 1360 = "G."
+(initials)
+byte 1362 = 1
+(length of address)
+byte 1363 ="9, ASH ROAD"
+(address)
+byte 1374 = 1
+(length of telephone number)
+byte 1375 = "01-998-8888" (telephone number)
+byte 1460 = 0000
+(2 byte end of chain pointer) byte 1462 = 9
+(length of surname)
+byte 1463 = "A' RPINGTON"
+(surname)
+byte 1472 = 2
+(length of initials)
+byte 1473 = "H."
+(initials)
+byte 1475 = 1
+(length of address)
+byte 1476 = "7,
+ASH ROAD"
+(address)
+byte 1487 = 1
+(length of telephone number) byte 1488 = "01-998-7777" (telephone number)
+The physical order of the records in the data file is of no importance. So long as the embedded pointers form a chain which is in key order, the technique works. I n this technique, the index file is only 26 records long and will not need to be updated frequently. You would probably choose to hold it in memory and write it back to disk if it changed. Note that it
+can only change if you:
+move the first record in a chain
+delete the first record in a chain insert a new first record in a chain
+The technique is a combination of random access and pseudo- sequential access. To locate a record you examine the appropriate index record and then start reading records in the chain in sequence, using the embedded pointers, until you find the one that you want.
+Note also that to delete a record you simply make the embedded pointer of the record before the deleted record point to the record in the chain which follows the deleted record. For example, to delete the second record in the 'A'
+383
+
+ chain above, you simply write 1460 at byte 56. However, as earlier, this leaves you with wasted space in the middle of the data file and a tidy up routine is a desirable feature. To insert a new record, you can place a record anywhere in free space and break the pointer chain at the appropriate place, to include the new record. But fi this technique scores well on ease of coding, how well does it perform? The answer obviously depends on the number of records in the chain. If you want to access a record for 'ZORRO, you will probably find the technique lightning fast, because surnames beginning with 'Z' are rare. In other instances, when chains become very large, access is woefully slow. Commercial programs that are based on this theme often try to offset the problem by reading more than one record at a time into a large memory buffer.
+For example, you could decide to read a whole track at a time. In this way, you hope to find the whole chain in memory, which you can then process quickly. fI needs be, another track nay have to be read. Clearly it you are intending to use this technique, the tidy up routine is crucial. If, over time, your
+file becomes completely higgledy-piggledy, then the chances of finding the rest of the chain in your buffer are remote.
+You do need to keep a record of free space with this technique. This is often accomplished by having a 27th index record which simply points to the next tree byte on the disk.
+20.7 Variations on Partial Index Files
+In the case of a telephone directory, the previous technique is unlikely to be very good from a pertormance point of view, because some of the chains will be very long. You can extend the idea by creating index records for two letters (for example 'AA', 'AB', 'AC' 'ZX', 'ZY','ZZ'). You now have 26*26 index records (676 records) which you may well be able to hold in memory. Now, however, the chains should be much shorter, allowing much better performance. It is true that the 'SM' chain (with all its Smuths) is likely to be a good deal longer than the 'ZZ' chain. This highlights one problem with the technique - many of the index records will be wasted as there will be no corresponding chains. Each wasted index is not only a drain on valuable disk space, but also on memory.
+384
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ Power Socket on BBC Micro. TOP
+Ov 5v
+Ov 12v -5v
+The +5v connection is 1.25 amps. The + 12v connection is 1.25 amps. The - 5 connection is 75 milliamps.
+437
+
+ Appendix 4.
+DFS Cal Summary. OSFILE
+A = 0
+Save memory block
+A = 1
+Update catalogue
+A = 2
+Update load address
+A= 3
+Update execute address A = 4
+Update lock status
+A = 5
+Read catalogue entry
+A = 6
+Delete fi l e
+A = &FF Load fi l e
+OSARGS
+A=0 Y=0
+Read Filing System
+A= 1. Y = 0 Read address of *RUN parameters
+A = 8FF Y= 0
+Update all files A = 0 Y= handle Read PTR#
+A=1 Y=handleWritePTR#
+A= 2 Y=handle Read EXT#
+A= 8F Y= handle Update a file
+OSBGET
+Y= handle Read byte into A
+OSBPUT
+y = handle Write byte from A
+OSGBPB
+A= 1 Write block at user pointer A= 2 Write block at PTR#
+A = 3 Read block at user pointer A=4Read block at PTR# A=5Read title +boot-up option A= 6 Read *DIR drive + directory A= 7 Read *LIB drive + directory A= 8 Read filenames
+438
+
+ OSFIND
+A= 840 Y= handle OPENIN
+A=880 Y=handle OPENOUT
+A=&CO Y=handle OPENUP
+A= 0 Y= handle CLOSE# a file A=0 Y=0 CLOSE#all files
+OSFSC
+A= 0 *OPT handler A=1EOF# handler
+A = 2 *1 h a n d l e r
+A= 3 * handler
+A= 4 *RUN handler A=5*CAT handler
+A= 6 Shutdown files
+A= 7 Read handle ranges A = 8 *ENABLE handler
+OSWORD
+A = 870 read disk cycles
+A = 87E read number of sectors
+A= 87F
+command = 84A write data 128 bytes
+command = 84B write data multi-sector
+command = 84E write deleted data 128 bytes command = 84F write deleted data multi-sector
+command = 852
+read data 128 bytes
+command = 853
+read data multi-sector
+command = 856
+read data + deleted data 128 bytes
+command
+= 857
+read data + deleted data multi-sector command
+= &5B
+read sector ids
+command
+= 85E
+verify 128 bytes
+command
+= 85F
+verify multi-sector
+command
+= 863
+format
+command
+= 869
+seek
+command
+= 86C
+read drive status
+command
+=875
+initialise 8271/load bad tracks command
+= 87A
+write special register
+command
+= 87D
+read special register
+439
+
+ Appendix 5.
+Disk Error Messages.
+Disk Fault/Drive Fault
+808 Clock Error
+80C Sector Id CRC Error 80E Data CRC Error
+&10 D r i v e Not R e a d y
+&12 Write Protect
+814 Track 0 Not Found 816 Write Fault
+818 Sector Not Found
+BASIC
+189 (&BD) Not enabled
+190 (&BE) Catalogue full 191 (&BF) Can't extend
+192 (&CO) Too many open files
+193 (8C1)
+File read only 194 (&C2)
+File open
+195 (803)
+File locked 196 (804)
+File exists
+197 (805) Drive fault
+198 (&C6) Disk full
+19 (807) Disk fault
+200 (&8) Disk changed 201 (809) Disk read only 203 (&CB) Bad option
+204 (&CC) Bad fi lename 205 (&CD) Bad drive
+206 (&CE) Bad directory 207 (&CF) Bad attribute 214 (806) File not found 220 (8DB) Syntax
+222 (&DD) Channel
+223 (&DE) Eof
+252 (&FC) Bad address 254 (&FE) Bad command
+440
+
+ Appendix 6.
+DFS 0.90/1.20 Differences.
+1) DFS 1.20 does not allow characters with the most significant bit set to be entered as filenames or disk titles. Thisprevents youfrom effecting coloured catalogue displays in Mode 7.
+2) DFS 1.20 does not distinguish between upper case and lower case directory codes.
+3) *DIR works differently. Consider the sequence: *DIR A
+*DIR :1
+defery foyou d 2ithe default genena purpose not overwrite the default general purpose directory which stays as 'A'.
+5) *ENABLE is superfluous in DFS 1.20. If not used, the command prompts for confirmation.
+6) In DFS 1.20, *BUILD and *LIST have line numbers with leading zeroes.
+Deich ear a reveral diferent pror mesages mostfo
+8) DFS 1.20 uses 'n:' instead of 'drive n' in messages such as produced by *COMPACT.
+9) DFS 1.20 manages the sectors per disk value differently, such that *BACKUP between 40 and 80 track drives
+produces slightly different results.
+10) DFS 1.20 has fixes for lots of the bugs found in DFS 0.90.

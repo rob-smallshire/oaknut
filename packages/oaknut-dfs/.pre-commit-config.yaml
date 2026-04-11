@@ -1,0 +1,9 @@
+repos:
+  - repo: local
+    hooks:
+      - id: readme-check
+        name: Check README is up-to-date
+        entry: uv run --group dev scripts/generate_readme.py --check
+        language: system
+        files: ^(scripts/README\.md\.j2|scripts/generate_readme\.py|src/oaknut_dfs/)
+        pass_filenames: false

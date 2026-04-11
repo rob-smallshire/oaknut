@@ -1,0 +1,87 @@
+[project]
+name = "oaknut-dfs"
+dynamic = ["version"]
+authors = [{ name = "Robert Smallshire", email = "robert@smallshire.org.uk" }]
+description = "Python library for handling Acorn DFS disc images (SSD/DSD format)"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.11"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+]
+dependencies = [
+    "click>=8.1.7",
+    "oaknut-file>=0.1.3",
+    "typename>=1.0.4",
+]
+
+[project.urls]
+Homepage = "https://github.com/rob-smallshire/oaknut-dfs"
+Repository = "https://github.com/rob-smallshire/oaknut-dfs"
+Issues = "https://github.com/rob-smallshire/oaknut-dfs/issues"
+
+# [project.scripts]
+# oaknut-dfs = "oaknut_dfs.cli:cli"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.dynamic]
+version = { attr = "oaknut_dfs.__version__" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = [
+    "tests",
+]
+norecursedirs = [
+    "tests/helpers",
+    "tests/data",
+]
+
+[dependency-groups]
+test = [
+    "pytest>=8.3.4",
+]
+
+dev = [
+    "bump-my-version>=0.28.0",
+    "jinja2>=3.0",
+    "pre-commit>=3.0",
+    "ruff>=0.9.1",
+    {include-group = "test"},
+]
+
+[tool.bumpversion]
+current_version = "3.0.0"
+parse = "(?P<major>\\d+)\\.(?P<minor>\\d+)\\.(?P<patch>\\d+)"
+serialize = ["{major}.{minor}.{patch}"]
+tag = true
+commit = true
+message = "Bump version: {current_version} → {new_version}"
+tag_name = "v{new_version}"
+tag_message = "Bump version: {current_version} → {new_version}"
+files = [
+    { filename = "src/oaknut_dfs/__init__.py" },
+]
+
+[tool.uv]
+index-url = "https://pypi.org/simple/"
+publish-url = "https://upload.pypi.org/legacy/"
+
+
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
