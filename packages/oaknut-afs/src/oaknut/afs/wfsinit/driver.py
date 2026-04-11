@@ -86,7 +86,6 @@ def initialise(adfs: "ADFS", *, spec: InitSpec) -> None:
 
     spc = physical_spc
     total_cyls = physical_total_cyls
-    total_afs_sectors = afs_cylinders * spc
 
     disc = adfs._disc
 
