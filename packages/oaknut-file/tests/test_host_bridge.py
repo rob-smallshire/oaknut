@@ -11,13 +11,13 @@ import os
 from pathlib import Path
 
 import pytest
-from oaknut.dfs.host_bridge import (
+from oaknut.file import Access, AcornMeta, MetaFormat
+from oaknut.file.host_bridge import (
     DEFAULT_EXPORT_META_FORMAT,
     DEFAULT_IMPORT_META_FORMATS,
     export_with_metadata,
     import_with_metadata,
 )
-from oaknut.file import Access, AcornMeta, MetaFormat
 
 # --- Capability probe for xattr support ------------------------------------
 

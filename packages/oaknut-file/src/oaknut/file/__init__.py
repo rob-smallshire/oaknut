@@ -25,6 +25,14 @@ from oaknut.file.formats import (
     SOURCE_SPARKFS,
     MetaFormat,
 )
+from oaknut.file.host_bridge import (
+    DEFAULT_EXPORT_META_FORMAT,
+    DEFAULT_IMPORT_META_FORMATS,
+    SOURCE_XATTR_ACORN,
+    SOURCE_XATTR_PIEB,
+    export_with_metadata,
+    import_with_metadata,
+)
 from oaknut.file.inf import (
     format_pieb_inf_line,
     format_trad_inf_line,
@@ -44,6 +52,8 @@ __all__ = [
     "Access",
     "AcornMeta",
     "BootOption",
+    "DEFAULT_EXPORT_META_FORMAT",
+    "DEFAULT_IMPORT_META_FORMATS",
     "FSError",
     "MetaFormat",
     "SOURCE_DIR",
@@ -51,6 +61,10 @@ __all__ = [
     "SOURCE_INF_PIEB",
     "SOURCE_INF_TRAD",
     "SOURCE_SPARKFS",
+    "SOURCE_XATTR_ACORN",
+    "SOURCE_XATTR_PIEB",
+    "export_with_metadata",
+    "import_with_metadata",
     "build_filename_suffix",
     "build_mos_filename_suffix",
     "format_access_hex",

@@ -26,21 +26,24 @@ from __future__ import annotations
 from collections.abc import Sequence
 from pathlib import Path
 
-from oaknut.file import (
-    SOURCE_FILENAME,
-    AcornMeta,
-    MetaFormat,
+from oaknut.file.filename_encoding import (
     build_filename_suffix,
     build_mos_filename_suffix,
+    parse_encoded_filename,
+)
+from oaknut.file.formats import SOURCE_FILENAME, MetaFormat
+from oaknut.file.inf import (
     format_pieb_inf_line,
     format_trad_inf_line,
-    parse_encoded_filename,
+    read_inf_file,
+    write_inf_file,
+)
+from oaknut.file.meta import AcornMeta
+from oaknut.file.xattr import (
     read_acorn_xattrs,
     read_econet_xattrs,
-    read_inf_file,
     write_acorn_xattrs,
     write_econet_xattrs,
-    write_inf_file,
 )
 
 # Xattr source labels — oaknut.file doesn't (yet) define these, so we

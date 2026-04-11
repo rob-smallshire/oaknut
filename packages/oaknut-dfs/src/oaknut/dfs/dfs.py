@@ -14,14 +14,14 @@ from oaknut.dfs import basic
 from oaknut.dfs.catalogue import FileEntry
 from oaknut.dfs.catalogued_surface import CataloguedSurface
 from oaknut.dfs.formats import DiskFormat
-from oaknut.dfs.host_bridge import (
+from oaknut.dfs.surface import DiscImage
+from oaknut.file import Access, AcornMeta, MetaFormat
+from oaknut.file.host_bridge import (
     DEFAULT_EXPORT_META_FORMAT,
     DEFAULT_IMPORT_META_FORMATS,
     export_with_metadata,
     import_with_metadata,
 )
-from oaknut.dfs.surface import DiscImage
-from oaknut.file import Access, AcornMeta, MetaFormat
 
 # Valid DFS directory characters
 _DFS_DIRECTORY_CHARS = frozenset("$ABCDEFGHIJKLMNOPQRSTUVWXYZ")
@@ -843,7 +843,7 @@ class DFS:
             target_dirpath: Directory to export into. Created if missing.
             meta_format: Metadata encoding. Defaults to traditional INF.
                 ``None`` suppresses metadata (data files only). See
-                :func:`oaknut.dfs.host_bridge.export_with_metadata`.
+                :func:`oaknut.file.host_bridge.export_with_metadata`.
             owner: Econet owner ID, used only by PiEconetBridge formats.
 
         Raises:

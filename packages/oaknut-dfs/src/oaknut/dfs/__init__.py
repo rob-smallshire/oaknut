@@ -29,14 +29,6 @@ from oaknut.dfs.formats import (
     ACORN_DFS_80T_SINGLE_SIDED,
     DiskFormat,
 )
-from oaknut.dfs.host_bridge import (
-    DEFAULT_EXPORT_META_FORMAT,
-    DEFAULT_IMPORT_META_FORMATS,
-    SOURCE_XATTR_ACORN,
-    SOURCE_XATTR_PIEB,
-    export_with_metadata,
-    import_with_metadata,
-)
 from oaknut.file import (
     SOURCE_DIR,
     SOURCE_FILENAME,
@@ -47,6 +39,14 @@ from oaknut.file import (
     MetaFormat,
 )
 from oaknut.file.boot_option import BootOption
+from oaknut.file.host_bridge import (
+    DEFAULT_EXPORT_META_FORMAT,
+    DEFAULT_IMPORT_META_FORMATS,
+    SOURCE_XATTR_ACORN,
+    SOURCE_XATTR_PIEB,
+    export_with_metadata,
+    import_with_metadata,
+)
 
 Version = namedtuple("Version", ["major", "minor", "patch"])
 
