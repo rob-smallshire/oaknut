@@ -1,11 +1,10 @@
 """Tests for INF sidecar file parsing and formatting."""
 
 import pytest
-
 from oaknut.file.inf import (
-    parse_inf_line,
-    format_trad_inf_line,
     format_pieb_inf_line,
+    format_trad_inf_line,
+    parse_inf_line,
     read_inf_file,
     write_inf_file,
 )

@@ -38,7 +38,6 @@ def list_xattrs(filepath: Path) -> list[str]:
 
 
 from click.testing import CliRunner
-
 from oaknut.file import (
     AcornMeta,
     MetaFormat,

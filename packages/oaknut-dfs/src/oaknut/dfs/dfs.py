@@ -10,8 +10,6 @@ from os import PathLike
 from pathlib import Path
 from typing import Iterator, Union
 
-from oaknut.file import Access, AcornMeta, MetaFormat
-
 from oaknut.dfs import basic
 from oaknut.dfs.catalogue import FileEntry
 from oaknut.dfs.catalogued_surface import CataloguedSurface
@@ -23,7 +21,7 @@ from oaknut.dfs.host_bridge import (
     import_with_metadata,
 )
 from oaknut.dfs.surface import DiscImage
-
+from oaknut.file import Access, AcornMeta, MetaFormat
 
 # Valid DFS directory characters
 _DFS_DIRECTORY_CHARS = frozenset("$ABCDEFGHIJKLMNOPQRSTUVWXYZ")

@@ -1,7 +1,6 @@
 """Tests for Access IntFlag enum and access formatting."""
 
 import pytest
-
 from oaknut.file.access import Access, format_access_hex, format_access_text
 
 

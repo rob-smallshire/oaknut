@@ -4,17 +4,15 @@ Tests for writing files to ADFS disc images via ADFSPath.write_bytes()
 and write_text().
 """
 
-import pytest
-
-from oaknut.dfs.adfs import ADFS, ADFS_S, ADFS_M, ADFS_L
-from oaknut.dfs.exceptions import (
-    ADFSDiscFullError,
-    ADFSDirectoryFullError,
-    ADFSPathError,
-)
-
 # Ensure acorn codec is registered
 import oaknut.dfs.acorn_encoding  # noqa: F401
+import pytest
+from oaknut.dfs.adfs import ADFS, ADFS_L, ADFS_M, ADFS_S
+from oaknut.dfs.exceptions import (
+    ADFSDirectoryFullError,
+    ADFSDiscFullError,
+    ADFSPathError,
+)
 
 
 class TestWriteBytes:

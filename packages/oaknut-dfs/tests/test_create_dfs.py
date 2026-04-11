@@ -7,23 +7,21 @@ and that files can be written and read back.
 
 
 import pytest
-
 from oaknut.dfs.dfs import DFS
 from oaknut.dfs.formats import (
-    ACORN_DFS_40T_SINGLE_SIDED,
     ACORN_DFS_40T_DOUBLE_SIDED_INTERLEAVED,
     ACORN_DFS_40T_DOUBLE_SIDED_SEQUENTIAL,
-    ACORN_DFS_80T_SINGLE_SIDED,
+    ACORN_DFS_40T_SINGLE_SIDED,
     ACORN_DFS_80T_DOUBLE_SIDED_INTERLEAVED,
     ACORN_DFS_80T_DOUBLE_SIDED_SEQUENTIAL,
-    WATFORD_DFS_40T_SINGLE_SIDED,
+    ACORN_DFS_80T_SINGLE_SIDED,
     WATFORD_DFS_40T_DOUBLE_SIDED_INTERLEAVED,
     WATFORD_DFS_40T_DOUBLE_SIDED_SEQUENTIAL,
-    WATFORD_DFS_80T_SINGLE_SIDED,
+    WATFORD_DFS_40T_SINGLE_SIDED,
     WATFORD_DFS_80T_DOUBLE_SIDED_INTERLEAVED,
     WATFORD_DFS_80T_DOUBLE_SIDED_SEQUENTIAL,
+    WATFORD_DFS_80T_SINGLE_SIDED,
 )
-
 
 # Expected properties for each format:
 # (format, label, tracks, sectors_per_track, num_sides, catalogue_sectors, catalogue_name)

@@ -24,7 +24,6 @@ from typing import Union
 
 from oaknut.file.meta import AcornMeta
 
-
 # --- Acorn namespace constants ---
 _ACORN_LOAD = "user.acorn.load"
 _ACORN_EXEC = "user.acorn.exec"

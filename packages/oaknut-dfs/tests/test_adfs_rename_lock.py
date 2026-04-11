@@ -1,7 +1,6 @@
 """Tests for ADFSPath.rename(), lock(), and unlock()."""
 
 import pytest
-
 from oaknut.dfs.adfs import ADFS, ADFS_S
 from oaknut.dfs.exceptions import ADFSFileLockedError, ADFSPathError
 

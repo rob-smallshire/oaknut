@@ -1,12 +1,12 @@
 """Tests for MetaFormat enum and source labels."""
 
 from oaknut.file.formats import (
-    MetaFormat,
-    SOURCE_SPARKFS,
-    SOURCE_INF_TRAD,
-    SOURCE_INF_PIEB,
-    SOURCE_FILENAME,
     SOURCE_DIR,
+    SOURCE_FILENAME,
+    SOURCE_INF_PIEB,
+    SOURCE_INF_TRAD,
+    SOURCE_SPARKFS,
+    MetaFormat,
 )
 
 

@@ -22,8 +22,6 @@ from os import PathLike
 from pathlib import Path
 from typing import Iterator, Union
 
-from oaknut.file import AcornMeta, MetaFormat
-
 from oaknut.dfs import basic
 from oaknut.dfs.adfs_directory import (
     Access,
@@ -33,12 +31,6 @@ from oaknut.dfs.adfs_directory import (
     _ADFSDirectoryEntry,
     _ADFSRawAttributes,
 )
-from oaknut.dfs.host_bridge import (
-    DEFAULT_EXPORT_META_FORMAT,
-    DEFAULT_IMPORT_META_FORMATS,
-    export_with_metadata,
-    import_with_metadata,
-)
 from oaknut.dfs.adfs_free_space_map import OldFreeSpaceMap
 from oaknut.dfs.exceptions import (
     ADFSDirectoryFullError,
@@ -46,9 +38,15 @@ from oaknut.dfs.exceptions import (
     ADFSFileLockedError,
     ADFSPathError,
 )
+from oaknut.dfs.host_bridge import (
+    DEFAULT_EXPORT_META_FORMAT,
+    DEFAULT_IMPORT_META_FORMATS,
+    export_with_metadata,
+    import_with_metadata,
+)
 from oaknut.dfs.surface import DiscImage, SurfaceSpec
 from oaknut.dfs.unified_disc import UnifiedDisc
-
+from oaknut.file import AcornMeta, MetaFormat
 
 _ADFS_SECTORS_PER_TRACK = 16
 _ADFS_BYTES_PER_SECTOR = 256

@@ -5,14 +5,12 @@ game discs, validating read-only operations (catalogue parsing, file
 loading, metadata inspection, validation) without modifying the originals.
 """
 
-import pytest
 from pathlib import Path
 
 import oaknut.dfs.acorn_dfs_catalogue  # noqa: F401
-
+import pytest
 from oaknut.dfs import DFS
 from oaknut.dfs.formats import ACORN_DFS_80T_SINGLE_SIDED
-
 
 GAMES_DIRPATH = Path(__file__).parent / "data" / "images" / "games"
 

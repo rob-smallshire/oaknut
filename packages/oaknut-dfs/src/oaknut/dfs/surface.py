@@ -4,9 +4,8 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from itertools import pairwise
 
-from typename import typename
-
 from oaknut.dfs.sectors_view import SectorsView as Sectors
+from typename import typename
 
 
 class Surface:

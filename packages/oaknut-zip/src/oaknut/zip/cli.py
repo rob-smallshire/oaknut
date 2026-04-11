@@ -5,7 +5,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import click
-
 from oaknut.file import MetaFormat, format_access_text
 
 from . import __version__

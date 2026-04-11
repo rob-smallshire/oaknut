@@ -22,7 +22,6 @@ dedicated ``oaknut-basic`` package without refactoring.
 
 from __future__ import annotations
 
-
 # Canonical load addresses for BBC BASIC programs on each host.
 # Programs saved by *SAVE on a real machine use these by default.
 BBC_BASIC_LOAD_ADDRESS = 0x1900

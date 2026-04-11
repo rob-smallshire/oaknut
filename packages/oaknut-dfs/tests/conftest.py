@@ -14,13 +14,12 @@ _TESTS_DIR = Path(__file__).parent
 if str(_TESTS_DIR) not in sys.path:
     sys.path.insert(0, str(_TESTS_DIR))
 
-import pytest
 import shutil
 import stat
 
 # Import to ensure catalogue classes are registered
 import oaknut.dfs.acorn_dfs_catalogue  # noqa: F401
-
+import pytest
 from oaknut.dfs import DFS
 from oaknut.dfs.formats import (
     ACORN_DFS_40T_DOUBLE_SIDED_INTERLEAVED,
@@ -29,7 +28,6 @@ from oaknut.dfs.formats import (
     ACORN_DFS_80T_SINGLE_SIDED,
     DiskFormat,
 )
-
 
 # Path to reference images directory
 REFERENCE_IMAGES = Path(__file__).parent / "data" / "images"

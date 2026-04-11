@@ -5,11 +5,16 @@ then verify parsing through the public ADFSPath API.
 """
 
 import pytest
-
 from helpers.adfs_image import (
     make_adfs_s_image as _make_adfs_s_image,
+)
+from helpers.adfs_image import (
     make_old_dir_entry as _make_old_dir_entry,
+)
+from helpers.adfs_image import (
     make_old_directory as _make_old_directory,
+)
+from helpers.adfs_image import (
     make_old_free_space_map as _make_old_free_space_map,
 )
 from oaknut.dfs.adfs import ADFS, ADFSPath, ADFSStat
@@ -17,7 +22,6 @@ from oaknut.dfs.adfs_directory import OldDirectoryFormat
 from oaknut.dfs.adfs_free_space_map import OldFreeSpaceMap, _calculate_old_map_checksum
 from oaknut.dfs.exceptions import ADFSDirectoryError, ADFSMapError, ADFSPathError
 from oaknut.dfs.sectors_view import SectorsView
-
 
 # --- Free Space Map Tests ---
 

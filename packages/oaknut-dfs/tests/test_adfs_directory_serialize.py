@@ -6,9 +6,10 @@ or parses identically.
 """
 
 import pytest
-
 from helpers.adfs_image import (
     make_old_dir_entry as _make_old_dir_entry,
+)
+from helpers.adfs_image import (
     make_old_directory as _make_old_directory,
 )
 from oaknut.dfs.adfs_directory import (

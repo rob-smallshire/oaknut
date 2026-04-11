@@ -8,10 +8,8 @@ structure is identical to floppy ADFS (old map, old directory).
 from pathlib import Path
 
 import pytest
-
-from oaknut.dfs.adfs import ADFS, _parse_dsc, _hard_disc_format
+from oaknut.dfs.adfs import ADFS, _hard_disc_format, _parse_dsc
 from oaknut.dfs.exceptions import ADFSError
-
 
 IMAGES_DIR = Path(__file__).parent / "images"
 
@@ -221,7 +219,7 @@ class TestADFSHardDiscFromBuffer:
 
     def test_non_floppy_size_accepted(self):
         """A buffer larger than any floppy format should be accepted if valid ADFS."""
-        from helpers.adfs_image import make_old_free_space_map, make_old_directory
+        from helpers.adfs_image import make_old_directory, make_old_free_space_map
 
         total_sectors = 4096
         buf = bytearray(total_sectors * 256)

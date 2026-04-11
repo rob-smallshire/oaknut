@@ -1,11 +1,10 @@
 """Tests for filename metadata encoding/decoding."""
 
 import pytest
-
 from oaknut.file.filename_encoding import (
-    parse_encoded_filename,
     build_filename_suffix,
     build_mos_filename_suffix,
+    parse_encoded_filename,
 )
 from oaknut.file.meta import AcornMeta
 

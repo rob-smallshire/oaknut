@@ -1,7 +1,6 @@
 """Tests for Catalogue metadata operations (set_title, lock, rename, etc.)."""
 
 import pytest
-
 from oaknut.dfs.acorn_dfs_catalogue import AcornDFSCatalogue
 from oaknut.dfs.surface import DiscImage, SurfaceSpec
 

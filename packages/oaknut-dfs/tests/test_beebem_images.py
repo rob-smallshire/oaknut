@@ -7,12 +7,10 @@ covering both DFS (SSD/DSD) and ADFS (ADL) formats.
 from pathlib import Path
 
 import pytest
-
 from oaknut.dfs.adfs import ADFS
 from oaknut.dfs.dfs import DFS
 from oaknut.dfs.formats import DiskFormat
 from oaknut.dfs.surface import SurfaceSpec
-
 
 IMAGES_DIR = Path(__file__).parent / "images"
 

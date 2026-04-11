@@ -8,7 +8,6 @@ from __future__ import annotations
 from oaknut.dfs.exceptions import ADFSDiscFullError, ADFSMapError
 from oaknut.dfs.sectors_view import SectorsView
 
-
 # Old map layout constants
 _MAX_FREE_ENTRIES = 82
 _BYTES_PER_ENTRY = 3

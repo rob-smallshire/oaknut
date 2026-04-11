@@ -1,8 +1,7 @@
 """Tests for ADFS.compact() — free space defragmentation."""
 
 import pytest
-
-from oaknut.dfs.adfs import ADFS, ADFS_S, ADFS_M
+from oaknut.dfs.adfs import ADFS, ADFS_M, ADFS_S
 
 
 class TestCompactBasic:

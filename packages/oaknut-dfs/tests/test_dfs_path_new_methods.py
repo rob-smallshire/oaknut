@@ -1,7 +1,6 @@
 """Tests for new DFSPath methods: write_text(), export_file(), import_file()."""
 
 import pytest
-
 from oaknut.dfs import basic
 from oaknut.dfs.dfs import DFS
 from oaknut.dfs.formats import ACORN_DFS_40T_SINGLE_SIDED

@@ -5,7 +5,6 @@ including checksum recalculation and entry merging.
 """
 
 import pytest
-
 from helpers.adfs_image import make_old_free_space_map as _make_old_free_space_map
 from oaknut.dfs.adfs_free_space_map import OldFreeSpaceMap
 from oaknut.dfs.exceptions import ADFSDiscFullError

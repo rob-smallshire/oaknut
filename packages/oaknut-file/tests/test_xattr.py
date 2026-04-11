@@ -7,16 +7,14 @@ uses ``os.setxattr``. Other platforms skip these tests.
 import sys
 
 import pytest
-
 from oaknut.file.access import Access
 from oaknut.file.meta import AcornMeta
 from oaknut.file.xattr import (
     read_acorn_xattrs,
-    write_acorn_xattrs,
     read_econet_xattrs,
+    write_acorn_xattrs,
     write_econet_xattrs,
 )
-
 
 pytestmark = pytest.mark.skipif(
     sys.platform not in ("darwin", "linux"),

@@ -1,7 +1,6 @@
 """Tests for ADFSPath.unlink() — deleting files from ADFS disc images."""
 
 import pytest
-
 from oaknut.dfs.adfs import ADFS, ADFS_S
 from oaknut.dfs.exceptions import ADFSFileLockedError, ADFSPathError
 

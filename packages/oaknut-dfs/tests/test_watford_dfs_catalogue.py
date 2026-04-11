@@ -1,7 +1,6 @@
 """Tests for Watford DFS Catalogue implementation."""
 
 import pytest
-
 from oaknut.dfs.catalogue import Catalogue
 from oaknut.dfs.surface import DiscImage, SurfaceSpec
 from oaknut.dfs.watford_dfs_catalogue import WatfordDFSCatalogue

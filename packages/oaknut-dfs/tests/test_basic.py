@@ -7,7 +7,6 @@ without disturbing callers.
 """
 
 import pytest
-
 from oaknut.dfs import basic
 
 

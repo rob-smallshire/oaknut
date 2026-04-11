@@ -9,7 +9,6 @@ and the dict keys used by :func:`~oaknut.zip.api.list_archive` and
 
 from __future__ import annotations
 
-
 # --- SparkFS extra field constants ---
 
 SPARKFS_HEADER_ID = 0x4341  # "AC" in little-endian

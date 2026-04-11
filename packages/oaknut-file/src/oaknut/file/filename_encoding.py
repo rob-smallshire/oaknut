@@ -13,7 +13,6 @@ import re
 
 from oaknut.file.meta import AcornMeta
 
-
 # Regex patterns for each encoding scheme
 SUFFIX_FILETYPE_RE = re.compile(r"^(.*),([0-9a-fA-F]{3})$")
 SUFFIX_LOADEXEC_RE = re.compile(r"^(.*),([0-9a-fA-F]{8}),([0-9a-fA-F]{8})$")

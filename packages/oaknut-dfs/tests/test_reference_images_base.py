@@ -21,9 +21,9 @@ Example:
       assert disk.exists("$.TEXT")
 """
 
-import pytest
 from pathlib import Path
 
+import pytest
 
 REFERENCE_IMAGES = Path(__file__).parent / "data" / "images"
 

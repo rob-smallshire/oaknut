@@ -1,22 +1,11 @@
 from collections import namedtuple
 
-# Import acorn_encoding to register the codec
-import oaknut.dfs.acorn_encoding  # noqa: F401
-
 # Import catalogue implementations to register them
 import oaknut.dfs.acorn_dfs_catalogue  # noqa: F401
+
+# Import acorn_encoding to register the codec
+import oaknut.dfs.acorn_encoding  # noqa: F401
 import oaknut.dfs.watford_dfs_catalogue  # noqa: F401
-
-from oaknut.file import (
-    AcornMeta,
-    MetaFormat,
-    SOURCE_DIR,
-    SOURCE_FILENAME,
-    SOURCE_INF_PIEB,
-    SOURCE_INF_TRAD,
-    SOURCE_SPARKFS,
-)
-
 from oaknut.dfs.adfs import (
     ADFS,
     ADFS_L,
@@ -29,9 +18,9 @@ from oaknut.dfs.adfs import (
 )
 from oaknut.dfs.adfs_directory import Access
 from oaknut.dfs.boot_option import BootOption
-from oaknut.dfs.exceptions import FSError
 from oaknut.dfs.catalogue import DiskInfo
 from oaknut.dfs.dfs import DFS, DFSPath, DFSStat
+from oaknut.dfs.exceptions import FSError
 from oaknut.dfs.formats import (
     ACORN_DFS_40T_DOUBLE_SIDED_INTERLEAVED,
     ACORN_DFS_40T_DOUBLE_SIDED_SEQUENTIAL,
@@ -48,6 +37,15 @@ from oaknut.dfs.host_bridge import (
     SOURCE_XATTR_PIEB,
     export_with_metadata,
     import_with_metadata,
+)
+from oaknut.file import (
+    SOURCE_DIR,
+    SOURCE_FILENAME,
+    SOURCE_INF_PIEB,
+    SOURCE_INF_TRAD,
+    SOURCE_SPARKFS,
+    AcornMeta,
+    MetaFormat,
 )
 
 Version = namedtuple("Version", ["major", "minor", "patch"])

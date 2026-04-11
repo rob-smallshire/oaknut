@@ -3,9 +3,9 @@
 import pytest
 from oaknut.dfs.acorn_encoding import (
     acorn_to_unicode,
-    unicode_to_acorn,
     is_valid_acorn_filename_char,
     sanitize_for_acorn,
+    unicode_to_acorn,
 )
 
 

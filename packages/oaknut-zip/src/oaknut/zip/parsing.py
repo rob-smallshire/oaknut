@@ -16,11 +16,12 @@ import struct
 import zipfile
 
 from oaknut.file import (
+    SOURCE_FILENAME,
+    SOURCE_SPARKFS,
     AcornMeta,
     parse_encoded_filename,
     parse_inf_line,
 )
-from oaknut.file import SOURCE_FILENAME, SOURCE_SPARKFS
 
 from .models import (
     SPARKFS_DATA_LENGTH,

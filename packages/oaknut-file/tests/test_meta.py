@@ -1,7 +1,6 @@
 """Tests for AcornMeta dataclass."""
 
 import pytest
-
 from oaknut.file.meta import AcornMeta
 
 

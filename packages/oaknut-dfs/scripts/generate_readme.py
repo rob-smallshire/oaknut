@@ -13,12 +13,10 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from jinja2 import Environment, FileSystemLoader
-
 # Register catalogue classes before using DFS
 import oaknut.dfs.acorn_dfs_catalogue  # noqa: F401
-
-from oaknut.dfs import DFS, ACORN_DFS_80T_SINGLE_SIDED
+from jinja2 import Environment, FileSystemLoader
+from oaknut.dfs import ACORN_DFS_80T_SINGLE_SIDED, DFS
 
 REPO_DIRPATH = Path(__file__).resolve().parent.parent
 TEMPLATE_DIRPATH = REPO_DIRPATH / "scripts"

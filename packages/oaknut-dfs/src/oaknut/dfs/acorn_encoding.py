@@ -21,7 +21,6 @@ References:
 import codecs
 from typing import Tuple
 
-
 # BBC Micro (MODEs 0-6) character mappings
 # Maps Acorn byte values to Unicode characters where they differ from ASCII
 BBC_MICRO_TO_UNICODE = {

@@ -27,9 +27,9 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from oaknut.file import (
+    SOURCE_FILENAME,
     AcornMeta,
     MetaFormat,
-    SOURCE_FILENAME,
     build_filename_suffix,
     build_mos_filename_suffix,
     format_pieb_inf_line,
@@ -42,7 +42,6 @@ from oaknut.file import (
     write_econet_xattrs,
     write_inf_file,
 )
-
 
 # Xattr source labels — oaknut.file doesn't (yet) define these, so we
 # use the MetaFormat value strings directly. If oaknut.file later grows

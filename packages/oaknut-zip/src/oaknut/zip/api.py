@@ -7,15 +7,14 @@ import zipfile
 from pathlib import Path
 
 import click
-
 from oaknut.file import (
-    AcornMeta,
-    MetaFormat,
     SOURCE_DIR,
     SOURCE_FILENAME,
     SOURCE_INF_PIEB,
     SOURCE_INF_TRAD,
     SOURCE_SPARKFS,
+    AcornMeta,
+    MetaFormat,
     build_filename_suffix,
     build_mos_filename_suffix,
     format_pieb_inf_line,

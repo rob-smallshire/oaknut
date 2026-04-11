@@ -1,8 +1,7 @@
 """Tests for ADFSPath.rmdir() — removing empty directories."""
 
 import pytest
-
-from oaknut.dfs.adfs import ADFS, ADFS_S, ADFS_M
+from oaknut.dfs.adfs import ADFS, ADFS_M, ADFS_S
 from oaknut.dfs.exceptions import ADFSFileLockedError, ADFSPathError
 
 

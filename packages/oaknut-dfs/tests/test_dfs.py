@@ -4,11 +4,10 @@ import shutil
 from pathlib import Path
 
 import pytest
-
 from oaknut.dfs.dfs import DFS
 from oaknut.dfs.formats import (
-    ACORN_DFS_40T_SINGLE_SIDED,
     ACORN_DFS_40T_DOUBLE_SIDED_INTERLEAVED,
+    ACORN_DFS_40T_SINGLE_SIDED,
     ACORN_DFS_80T_SINGLE_SIDED,
 )
 

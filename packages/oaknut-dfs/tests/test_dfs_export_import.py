@@ -1,12 +1,11 @@
 """Tests for DFS export/import operations (.inf files)."""
 
 import pytest
-from oaknut.file import MetaFormat
-
 from oaknut.dfs.dfs import DFS
 from oaknut.dfs.formats import (
     ACORN_DFS_40T_SINGLE_SIDED,
 )
+from oaknut.file import MetaFormat
 
 
 def _make_dfs(buffer):

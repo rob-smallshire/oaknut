@@ -1,7 +1,6 @@
 """Tests for AcornDFSCatalogue."""
 
 import pytest
-
 from oaknut.dfs.acorn_dfs_catalogue import AcornDFSCatalogue
 from oaknut.dfs.catalogue import Catalogue
 from oaknut.dfs.surface import DiscImage, SurfaceSpec

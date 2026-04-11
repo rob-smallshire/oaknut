@@ -1,11 +1,10 @@
 """Tests for the surface module."""
 import pytest
-
 from oaknut.dfs.surface import (
-    SurfaceSpec,
-    TrackFootprint,
     DiscImage,
+    SurfaceSpec,
     SurfaceSpecIncompatibilityError,
+    TrackFootprint,
 )
 
 
