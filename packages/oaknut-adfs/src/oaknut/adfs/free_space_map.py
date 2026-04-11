@@ -196,6 +196,53 @@ class OldFreeSpaceMap:
         """Disc identifier (2 bytes, little-endian)."""
         return self._data[_OLD_ID_OFFSET] | (self._data[_OLD_ID_OFFSET + 1] << 8)
 
+    def shrink_to(self, new_total_sectors: int) -> None:
+        """Shrink the ADFS disc size to ``new_total_sectors``.
+
+        Rewrites the OldSize field and truncates any free-space
+        entries that fall outside the new range. The caller is
+        responsible for having compacted the disc first — if any
+        *used* sectors fall beyond ``new_total_sectors`` they are
+        silently orphaned, which is exactly what the phase-15
+        repartitioner wants once ``ADFS.compact()`` has moved all
+        live data to the front.
+        """
+        old_total = self.total_sectors
+        if new_total_sectors <= 0 or new_total_sectors > old_total:
+            raise ValueError(
+                f"new_total_sectors {new_total_sectors} must be in 1..{old_total}"
+            )
+
+        # Rewrite total size.
+        _write_24bit_le(self._data, _OLD_SIZE_OFFSET, new_total_sectors)
+
+        # Truncate free-space entries: drop any entry that starts
+        # at or beyond the new boundary; clip any that straddles.
+        entries = self.free_space_entries()
+        new_entries: list[tuple[int, int]] = []
+        for start_bytes, length_bytes in entries:
+            start_sectors = start_bytes // 256
+            length_sectors = length_bytes // 256
+            end_sectors = start_sectors + length_sectors
+            if start_sectors >= new_total_sectors:
+                continue
+            if end_sectors > new_total_sectors:
+                length_sectors = new_total_sectors - start_sectors
+            new_entries.append((start_sectors, length_sectors))
+
+        # Clear and rewrite the free list.
+        for i in range(_MAX_FREE_ENTRIES):
+            offset = i * _BYTES_PER_ENTRY
+            _write_24bit_le(self._data, _FREE_START_OFFSET + offset, 0)
+            _write_24bit_le(self._data, _FREE_LEN_OFFSET + offset, 0)
+        for i, (start, length) in enumerate(new_entries):
+            offset = i * _BYTES_PER_ENTRY
+            _write_24bit_le(self._data, _FREE_START_OFFSET + offset, start)
+            _write_24bit_le(self._data, _FREE_LEN_OFFSET + offset, length)
+        self._data[_FREE_END_OFFSET] = len(new_entries) * _BYTES_PER_ENTRY
+
+        self._recalculate_checksums()
+
     def install_afs_pointers(self, sec1: int, sec2: int) -> None:
         """Write the ``(sec1, sec2)`` AFS info-sector pointers into the map.
 
