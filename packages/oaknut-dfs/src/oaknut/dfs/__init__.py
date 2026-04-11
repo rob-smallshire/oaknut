@@ -52,7 +52,7 @@ from oaknut.dfs.host_bridge import (
 
 Version = namedtuple("Version", ["major", "minor", "patch"])
 
-__version__ = "3.0.0"
+__version__ = "4.0.0"
 __version_info__ = Version(*(__version__.split(".")))
 
 __all__ = [
