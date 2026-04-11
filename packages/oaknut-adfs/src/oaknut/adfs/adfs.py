@@ -38,6 +38,8 @@ from oaknut.adfs.exceptions import (
     ADFSPathError,
 )
 from oaknut.adfs.free_space_map import OldFreeSpaceMap
+from oaknut.discimage.surface import DiscImage, SurfaceSpec
+from oaknut.discimage.unified_disc import UnifiedDisc
 from oaknut.file import AcornMeta, MetaFormat
 from oaknut.file.host_bridge import (
     DEFAULT_EXPORT_META_FORMAT,
@@ -45,8 +47,6 @@ from oaknut.file.host_bridge import (
     export_with_metadata,
     import_with_metadata,
 )
-from oaknut.image.surface import DiscImage, SurfaceSpec
-from oaknut.image.unified_disc import UnifiedDisc
 
 _ADFS_SECTORS_PER_TRACK = 16
 _ADFS_BYTES_PER_SECTOR = 256

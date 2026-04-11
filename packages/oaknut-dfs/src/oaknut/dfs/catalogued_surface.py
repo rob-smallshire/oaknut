@@ -3,7 +3,7 @@
 from typing import Type
 
 from oaknut.dfs.catalogue import Catalogue, FileEntry
-from oaknut.image.surface import Surface
+from oaknut.discimage.surface import Surface
 
 
 class CataloguedSurface:

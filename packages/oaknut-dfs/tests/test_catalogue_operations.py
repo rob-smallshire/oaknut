@@ -2,7 +2,7 @@
 
 import pytest
 from oaknut.dfs.acorn_dfs_catalogue import AcornDFSCatalogue
-from oaknut.image.surface import DiscImage, SurfaceSpec
+from oaknut.discimage.surface import DiscImage, SurfaceSpec
 
 
 class TestSetTitle:

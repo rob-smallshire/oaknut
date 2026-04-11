@@ -3,7 +3,7 @@
 from typing import Optional
 
 from oaknut.dfs.catalogue import Catalogue, DiskInfo, FileEntry, ParsedFilename
-from oaknut.image.surface import Surface
+from oaknut.discimage.surface import Surface
 
 
 class WatfordDFSCatalogue(Catalogue):

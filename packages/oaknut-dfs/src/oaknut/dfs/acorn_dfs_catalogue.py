@@ -1,7 +1,7 @@
 """Acorn DFS catalog implementation."""
 
 from oaknut.dfs.catalogue import Catalogue, DiskInfo, FileEntry, ParsedFilename
-from oaknut.image.surface import Surface
+from oaknut.discimage.surface import Surface
 
 
 class AcornDFSCatalogue(Catalogue):

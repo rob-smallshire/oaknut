@@ -3,7 +3,7 @@
 import struct
 
 from oaknut.adfs.free_space_map import _calculate_old_map_checksum
-from oaknut.image.sectors_view import SectorsView
+from oaknut.discimage.sectors_view import SectorsView
 
 
 def write_24bit_le(buf: bytearray, offset: int, value: int) -> None:

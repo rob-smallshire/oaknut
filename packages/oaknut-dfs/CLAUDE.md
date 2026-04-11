@@ -16,7 +16,7 @@ floppies (.ssd / .dsd). It depends on:
 - `oaknut-file` — for `AcornMeta`, `MetaFormat`, `Access`, `FSError`,
   `BootOption`, the `'acorn'` text codec, and the `host_bridge`
   import/export cascade.
-- `oaknut-image` — for `Surface`, `SectorsView`, `UnifiedDisc`, the
+- `oaknut-discimage` — for `Surface`, `SectorsView`, `UnifiedDisc`, the
   generic `DiskFormat` dataclass, and `SurfaceSpec` helpers.
 - `oaknut-basic` — for BBC BASIC tokenisation used by
   `DFSPath.read_basic` / `write_basic`.
@@ -46,7 +46,7 @@ Every module below lives under `src/oaknut/dfs/`:
   giving the mid-level API that `dfs.py` builds on.
 - `formats.py` — DFS and Watford format constants. Imports the
   generic `DiskFormat` + surface-spec helpers from
-  `oaknut.image.formats`.
+  `oaknut.discimage.formats`.
 - `exceptions.py` — `DFSError` base + DFS-specific subclasses
   (`CatalogError`, `DiskFullError`, `FileLocked`,
   `InvalidFormatError`, `FileExistsError`, `CatalogFullError`,
@@ -62,9 +62,9 @@ CataloguedSurface (catalogued_surface.py)
   ↓
 Catalogue ABC (catalogue.py)  ←  AcornDFSCatalogue / WatfordDFSCatalogue
   ↓                                         ↓
-Surface (oaknut.image.surface)    ←  (reads catalogue sectors)
+Surface (oaknut.discimage.surface)    ←  (reads catalogue sectors)
   ↓
-SectorsView (oaknut.image.sectors_view)
+SectorsView (oaknut.discimage.sectors_view)
   ↓
 raw bytes / mmap
 ```

@@ -1,4 +1,4 @@
-# oaknut-image
+# oaknut-discimage
 
 Sector-level disc image abstractions shared by the oaknut filesystem
 packages. Provides `Surface`, `SectorsView`, `UnifiedDisc`, and the

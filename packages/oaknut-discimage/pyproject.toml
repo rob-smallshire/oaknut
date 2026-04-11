@@ -3,7 +3,7 @@ requires = ["setuptools>=68.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "oaknut-image"
+name = "oaknut-discimage"
 dynamic = ["version"]
 authors = [{ name = "Robert Smallshire", email = "robert@smallshire.org.uk" }]
 description = "Disc image sector abstractions shared by Acorn filesystem packages"
@@ -40,7 +40,7 @@ dev = [
 ]
 
 [tool.setuptools.dynamic]
-version = { attr = "oaknut.image.__version__" }
+version = { attr = "oaknut.discimage.__version__" }
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -52,7 +52,7 @@ serialize = ["{major}.{minor}.{patch}"]
 tag = true
 commit = true
 message = "Bump version: {current_version} → {new_version}"
-tag_name = "oaknut-image-v{new_version}"
+tag_name = "oaknut-discimage-v{new_version}"
 tag_message = "Bump version: {current_version} → {new_version}"
 files = [
     { filename = "src/oaknut/image/__init__.py" },

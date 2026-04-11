@@ -10,7 +10,7 @@ alongside the filesystem they describe.
 
 from dataclasses import dataclass
 
-from oaknut.image.surface import SurfaceSpec
+from oaknut.discimage.surface import SurfaceSpec
 
 BYTES_PER_SECTOR = 256
 

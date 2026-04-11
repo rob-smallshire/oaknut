@@ -45,7 +45,7 @@ The mapping from PyPI distribution to import path is one-to-one and predictable:
 |---|---|
 | `oaknut-file`  | `oaknut.file` |
 | `oaknut-fs`    | `oaknut.fs` |
-| `oaknut-image` | `oaknut.image` |
+| `oaknut-discimage` | `oaknut.discimage` |
 | `oaknut-dfs`   | `oaknut.dfs` |
 | `oaknut-adfs`  | `oaknut.adfs` |
 | `oaknut-basic` | `oaknut.basic` |
@@ -77,14 +77,14 @@ The end-state package set is layered, not flat. Beyond the packages that already
 |---|---|---|
 | `oaknut-file` | Acorn file metadata sidecar formats: INF (trad + PiEconetBridge), `user.acorn.*` / `user.econet_*` xattrs, RISC OS / MOS filename encoding, `Access` flags, `AcornMeta`, `MetaFormat`, **and the host bridge** (the `host_bridge.py` module currently inside `oaknut-dfs` moves here, since it's a natural extension of oaknut-file's I/O surface) | `oaknut-dfs`, `oaknut-adfs`, `oaknut-zip`, anything that touches host metadata |
 | `oaknut-fs` *(new)* | **Universal filesystem abstractions** — anything an Acorn filesystem needs that isn't filesystem-specific: the abstract `Catalogue` ABC, `FileEntry`, `DiskInfo`, `ParsedFilename`, the `acorn` text codec, `BootOption`, `FSError` base | `oaknut-dfs`, `oaknut-adfs`, future `oaknut-nfs`, future `oaknut-afs` |
-| `oaknut-image` *(new)* | **Disc-image abstractions** for filesystems backed by sectors on a disc image: `Surface`, `SectorImage`, `SectorsView`, `DiskFormat`, geometry helpers, `UnifiedDisc`, `CataloguedSurface` | `oaknut-dfs`, `oaknut-adfs` only — *not* `oaknut-nfs`/`oaknut-afs`, neither of which is disc-based |
+| `oaknut-discimage` *(new)* | **Disc-image abstractions** for filesystems backed by sectors on a disc image: `Surface`, `SectorImage`, `SectorsView`, `DiskFormat`, geometry helpers, `UnifiedDisc`, `CataloguedSurface` | `oaknut-dfs`, `oaknut-adfs` only — *not* `oaknut-nfs`/`oaknut-afs`, neither of which is disc-based |
 | `oaknut-dfs` | DFS / Watford DDFS / Opus DDOS only — the catalogue implementations and `DFSPath` / `DFS` types | downstream consumers |
 | `oaknut-adfs` | ADFS only — directory format, free space map, `ADFSPath` / `ADFS` types | downstream consumers |
 | `oaknut-basic` | BBC BASIC tokeniser/detokeniser, language constants. Self-contained, no internal deps | downstream consumers |
 | `oaknut-zip` | Acorn-aware ZIP archive support (SparkFS extras, INF resolution) | CLI |
 | `oaknut-disc` | The CLI binary (`disc` / `oaknut-disc`) — depends on whichever filesystem packages it wants to support | end users |
 
-**Why two shared lower layers (`oaknut-fs` and `oaknut-image`) rather than one?** The clean property of the split is that **`oaknut-nfs` and `oaknut-afs` could be implemented later without ever depending on `oaknut-image`**. Acorn NFS (Econet network filing) and AFS (file server) have no disc image — they have a network protocol or a server-side store. Lumping the disc abstractions into a single shared `oaknut-fs` package would force NFS/AFS to pull in code they fundamentally don't use, and would muddy the answer to "what does NFS need from us?". Two packages document the boundary between "any Acorn filesystem" and "specifically a disc-based one" at the package level rather than in prose comments.
+**Why two shared lower layers (`oaknut-fs` and `oaknut-discimage`) rather than one?** The clean property of the split is that **`oaknut-nfs` and `oaknut-afs` could be implemented later without ever depending on `oaknut-discimage`**. Acorn NFS (Econet network filing) and AFS (file server) have no disc image — they have a network protocol or a server-side store. Lumping the disc abstractions into a single shared `oaknut-fs` package would force NFS/AFS to pull in code they fundamentally don't use, and would muddy the answer to "what does NFS need from us?". Two packages document the boundary between "any Acorn filesystem" and "specifically a disc-based one" at the package level rather than in prose comments.
 
 **Where today's code goes.** Mapping the current `src/oaknut_dfs/` modules onto the target layout, with the new namespace-package import path each one ends up at:
 
@@ -95,14 +95,14 @@ The end-state package set is layered, not flat. Beyond the packages that already
 | `catalogue.py` (`Catalogue` ABC, `FileEntry`, `DiskInfo`, `ParsedFilename`) | `oaknut-fs` | `oaknut.fs.catalogue` |
 | `exceptions.py` (`FSError` base; format-specific subclasses follow their format) | `oaknut-fs` (base) + `oaknut-dfs`/`oaknut-adfs` (subclasses) | `oaknut.fs.exceptions` + `oaknut.dfs.exceptions` etc. |
 | `host_bridge.py` | `oaknut-file` | `oaknut.file.host_bridge` |
-| `sectors_view.py`, `surface.py`, `catalogued_surface.py` | `oaknut-image` | `oaknut.image.{sectors_view,surface,catalogued_surface}` |
-| `formats.py` (`DiskFormat` and the `ACORN_DFS_*` constants) | `oaknut-image` (base) + `oaknut-dfs` (DFS-specific constants) | `oaknut.image.formats` + `oaknut.dfs.formats` |
-| `unified_disc.py` | `oaknut-image` | `oaknut.image.unified_disc` |
+| `sectors_view.py`, `surface.py`, `catalogued_surface.py` | `oaknut-discimage` | `oaknut.discimage.{sectors_view,surface,catalogued_surface}` |
+| `formats.py` (`DiskFormat` and the `ACORN_DFS_*` constants) | `oaknut-discimage` (base) + `oaknut-dfs` (DFS-specific constants) | `oaknut.discimage.formats` + `oaknut.dfs.formats` |
+| `unified_disc.py` | `oaknut-discimage` | `oaknut.discimage.unified_disc` |
 | `acorn_dfs_catalogue.py`, `watford_dfs_catalogue.py`, `dfs.py` | `oaknut-dfs` | `oaknut.dfs.*` |
 | `adfs.py`, `adfs_directory.py`, `adfs_free_space_map.py` | `oaknut-adfs` | `oaknut.adfs.*` |
 | `basic.py` | `oaknut-basic` | `oaknut.basic` |
 
-This layering is the **architectural target**, not day-one work. The monorepo migration itself only needs to import the existing repos as they stand. The shared-layer extractions (`oaknut-fs`, `oaknut-image`, the move of `host_bridge` into `oaknut-file`) happen as a follow-up once the monorepo is in place — they're one of the things the monorepo makes much easier, because they're cross-package refactors that can land in single atomic commits.
+This layering is the **architectural target**, not day-one work. The monorepo migration itself only needs to import the existing repos as they stand. The shared-layer extractions (`oaknut-fs`, `oaknut-discimage`, the move of `host_bridge` into `oaknut-file`) happen as a follow-up once the monorepo is in place — they're one of the things the monorepo makes much easier, because they're cross-package refactors that can land in single atomic commits.
 
 ---
 
@@ -152,8 +152,8 @@ oaknut/                                  # monorepo root
 │   │   │   ├── __init__.py
 │   │   │   └── ...
 │   │   └── tests/
-│   ├── oaknut-image/                    # disc-image abstractions (NEW)
-│   │   ├── pyproject.toml               # name = "oaknut-image"
+│   ├── oaknut-discimage/                    # disc-image abstractions (NEW)
+│   │   ├── pyproject.toml               # name = "oaknut-discimage"
 │   │   ├── src/oaknut/image/
 │   │   │   ├── __init__.py
 │   │   │   └── ...
@@ -207,7 +207,7 @@ The dependency arrows are layered cleanly:
        ├─────────────────┤                  │
        ▼                 ▼                  │
 ┌──────────────┐  ┌──────────────┐          │
-│ oaknut-image │  │  oaknut-fs   │          │
+│ oaknut-discimage │  │  oaknut-fs   │          │
 └──────────────┘  └──────────────┘          │
        │                 │                  │
        └────────┬────────┴──────────────────┘
@@ -217,7 +217,7 @@ The dependency arrows are layered cleanly:
         └──────────────┘
 ```
 
-Future `oaknut-nfs` and `oaknut-afs` would slot in alongside `oaknut-dfs`/`oaknut-adfs` but depend only on `oaknut-fs` (and `oaknut-file`), bypassing `oaknut-image` entirely.
+Future `oaknut-nfs` and `oaknut-afs` would slot in alongside `oaknut-dfs`/`oaknut-adfs` but depend only on `oaknut-fs` (and `oaknut-file`), bypassing `oaknut-discimage` entirely.
 
 The workspace root `pyproject.toml` declares `[tool.uv.workspace]` listing the member packages, plus the shared dev/test dependency groups. Each package's own `pyproject.toml` keeps its real metadata, classifiers, and runtime dependencies — the workspace root only orchestrates.
 
@@ -239,7 +239,7 @@ requires-python = ">= 3.11"
 dependencies = [
     "oaknut-file",
     "oaknut-fs",
-    "oaknut-image",
+    "oaknut-discimage",
     "oaknut-dfs",
     "oaknut-adfs",
     "oaknut-basic",
@@ -253,7 +253,7 @@ members = ["packages/oaknut-*"]
 [tool.uv.sources]
 oaknut-file  = { workspace = true }
 oaknut-fs    = { workspace = true }
-oaknut-image = { workspace = true }
+oaknut-discimage = { workspace = true }
 oaknut-dfs   = { workspace = true }
 oaknut-adfs  = { workspace = true }
 oaknut-basic = { workspace = true }
@@ -283,7 +283,7 @@ addopts = ["--import-mode=importlib"]
 testpaths = [
     "packages/oaknut-file/tests",
     "packages/oaknut-fs/tests",
-    "packages/oaknut-image/tests",
+    "packages/oaknut-discimage/tests",
     "packages/oaknut-dfs/tests",
     "packages/oaknut-adfs/tests",
     "packages/oaknut-basic/tests",
@@ -321,7 +321,7 @@ license = "MIT"
 dependencies = [
     "oaknut-file>=1.0",
     "oaknut-fs>=1.0",
-    "oaknut-image>=1.0",
+    "oaknut-discimage>=1.0",
 ]
 
 [tool.setuptools.dynamic]
@@ -436,7 +436,7 @@ The migration itself is seven steps:
 6. **Run the full test suite** across all three packages from the monorepo root and confirm parity with the standalone repos (modulo the import-path rewrites).
 7. **Tag the cutover.** Publish a coordinated major-version bump (`oaknut-file` → 1.0, `oaknut-dfs` → 4.0, `oaknut-zip` → 1.0) from the monorepo to confirm the per-package release flow works end-to-end. Archive the standalone repos (read-only on GitHub, with a redirect notice in their READMEs pointing at the monorepo and the new `from oaknut.<name>` import idiom).
 
-After step 7 the CLI work from `cli-design.md` can start in `packages/oaknut-disc/` with imports already in their final namespace form (`from oaknut.dfs import DFS`, `from oaknut.file import MetaFormat`, etc.). The shared-layer extractions (`oaknut-fs`, `oaknut-image`) and the package splits (`oaknut-adfs`, `oaknut-basic`) are separate downstream refactors that happen *after* the CLI work without disturbing it — the CLI just keeps depending on `oaknut-dfs` and inherits the new packages transparently as `oaknut-dfs` slims down. Because everything is already namespace-packaged, those downstream extractions are pure intra-namespace `git mv` operations: moving `src/oaknut/dfs/basic.py` from `packages/oaknut-dfs/` to `packages/oaknut-basic/src/oaknut/basic/__init__.py` doesn't change a single import statement at any call site — `from oaknut.basic import tokenise` keeps working unchanged.
+After step 7 the CLI work from `cli-design.md` can start in `packages/oaknut-disc/` with imports already in their final namespace form (`from oaknut.dfs import DFS`, `from oaknut.file import MetaFormat`, etc.). The shared-layer extractions (`oaknut-fs`, `oaknut-discimage`) and the package splits (`oaknut-adfs`, `oaknut-basic`) are separate downstream refactors that happen *after* the CLI work without disturbing it — the CLI just keeps depending on `oaknut-dfs` and inherits the new packages transparently as `oaknut-dfs` slims down. Because everything is already namespace-packaged, those downstream extractions are pure intra-namespace `git mv` operations: moving `src/oaknut/dfs/basic.py` from `packages/oaknut-dfs/` to `packages/oaknut-basic/src/oaknut/basic/__init__.py` doesn't change a single import statement at any call site — `from oaknut.basic import tokenise` keeps working unchanged.
 
 That gives us this overall plan:
 
@@ -447,7 +447,7 @@ CLI work in packages/oaknut-disc/                (cli-design.md)
         ↓
 Library refactor — architectural target reached:
   • Extract oaknut-fs    (universal filesystem ABCs)
-  • Extract oaknut-image (disc-image abstractions)
+  • Extract oaknut-discimage (disc-image abstractions)
   • Move host_bridge → oaknut-file
   • Split oaknut-adfs out of oaknut-dfs
   • Split oaknut-basic out of oaknut-dfs

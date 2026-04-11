@@ -1,4 +1,4 @@
-"""Pytest bootstrap for oaknut-image.
+"""Pytest bootstrap for oaknut-discimage.
 
 Under pytest's importlib mode (required for PEP 420 namespace
 packages) neither the package's own ``tests`` directory nor the

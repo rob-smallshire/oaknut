@@ -8,7 +8,7 @@ import pytest
 from oaknut.adfs import ADFS
 from oaknut.dfs.dfs import DFS
 from oaknut.dfs.formats import DiskFormat
-from oaknut.image.surface import SurfaceSpec
+from oaknut.discimage.surface import SurfaceSpec
 
 from tests.fixtures import BEEBEM_IMAGES_DIRPATH as IMAGES_DIR
 

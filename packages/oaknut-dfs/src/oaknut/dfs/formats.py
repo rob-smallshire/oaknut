@@ -1,11 +1,11 @@
 """DFS and Watford DFS disc format constants.
 
 The generic ``DiskFormat`` dataclass and ``SurfaceSpec`` helpers
-live in ``oaknut.image.formats``; this module defines the concrete
+live in ``oaknut.discimage.formats``; this module defines the concrete
 Acorn-DFS and Watford-DFS format instances built on top of them.
 """
 
-from oaknut.image.formats import (
+from oaknut.discimage.formats import (
     BYTES_PER_SECTOR,
     DiskFormat,
     interleaved_double_sided_specs,

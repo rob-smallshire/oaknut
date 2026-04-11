@@ -21,7 +21,7 @@ from oaknut.adfs import ADFS, ADFSPath, ADFSStat
 from oaknut.adfs.directory import OldDirectoryFormat
 from oaknut.adfs.exceptions import ADFSDirectoryError, ADFSMapError, ADFSPathError
 from oaknut.adfs.free_space_map import OldFreeSpaceMap, _calculate_old_map_checksum
-from oaknut.image.sectors_view import SectorsView
+from oaknut.discimage.sectors_view import SectorsView
 
 # --- Free Space Map Tests ---
 

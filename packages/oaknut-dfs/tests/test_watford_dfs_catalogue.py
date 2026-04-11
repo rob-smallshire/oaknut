@@ -3,7 +3,7 @@
 import pytest
 from oaknut.dfs.catalogue import Catalogue
 from oaknut.dfs.watford_dfs_catalogue import WatfordDFSCatalogue
-from oaknut.image.surface import DiscImage, SurfaceSpec
+from oaknut.discimage.surface import DiscImage, SurfaceSpec
 
 
 @pytest.fixture
