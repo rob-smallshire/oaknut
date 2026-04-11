@@ -22,6 +22,10 @@ Hierarchy::
         ├── AFSFileLockedError            (fs_error_code = 0xC3)
         ├── AFSInsufficientSpaceError     (fs_error_code = 0xC6)
         ├── AFSQuotaExceededError         (fs_error_code = 0x5C)
+        ├── AFSDirectoryFullError         (no growth room — phase 10 will auto-grow)
+        ├── AFSDirectoryEntryExistsError
+        ├── AFSDirectoryEntryNotFoundError
+        ├── AFSDirectoryNotEmptyError
         ├── AFSRepartitionError
         │   ├── AFSNewMapNotSupportedError
         │   ├── AFSDiscNotCompactedError
@@ -111,6 +115,42 @@ class AFSQuotaExceededError(AFSError):
     """The acting user does not have enough quota for this operation."""
 
     fs_error_code = 0x5C  # MPERRN — insufficient user free space
+
+
+# ---------------------------------------------------------------------------
+# Directory mutation errors (phase 9+).
+# ---------------------------------------------------------------------------
+
+
+class AFSDirectoryFullError(AFSError):
+    """Cannot insert into a directory whose free list is empty.
+
+    The Level 3 File Server handles this by growing the directory
+    automatically via ``CHZSZE`` (Uade0E:1198). The oaknut-afs write
+    path currently raises this error when growth would be required
+    — phase 10 will add automatic growth, matching the ROM.
+    """
+
+
+class AFSDirectoryEntryExistsError(AFSError):
+    """An entry with the same name already exists in the directory."""
+
+
+class AFSDirectoryEntryNotFoundError(AFSError):
+    """No entry with the requested name exists in the directory.
+
+    Corresponds to the server's ``DRERRC`` error code returned by
+    ``FNDTEX`` at ``Uade0D:249`` when the walk reaches the end of
+    the in-use list without a match.
+    """
+
+
+class AFSDirectoryNotEmptyError(AFSError):
+    """Cannot remove a directory that still has entries.
+
+    Raised by ``rmdir`` / ``unlink`` on a non-empty sub-directory,
+    matching ``DELCHK`` at ``Uade0D:1218+`` (``DRERRJ``).
+    """
 
 
 # ---------------------------------------------------------------------------

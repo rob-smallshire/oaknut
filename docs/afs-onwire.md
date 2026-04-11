@@ -188,6 +188,67 @@ use `DRLINK` as the next-pointer. When inserting a new entry, the
 server pops a slot from the free list and splices it into the in-use
 list at the alphabetical position.
 
+### Directory mutation semantics
+
+From DIRMAN at `Uade0C-0E`:
+
+**Insert** (RETANP at `Uade0E.asm:789-944`):
+1. Walk the in-use list via `FNDTEX` (`Uade0D.asm:220-250`)
+   looking for the target name. On no-match, `FNDTEX` leaves
+   `PREVEN` pointing at the last entry strictly less than the
+   target name — the splice point for alphabetic insertion.
+2. Pop the free-list head (`DRFREE` → first free slot). If the
+   free list is empty, call `CHZSZE` to grow the directory
+   (`Uade0E.asm:1198`) and retry. There is no "directory full"
+   error surfaced to callers; growth is automatic.
+3. Rewrite the popped slot's payload (name, load, exec, access,
+   date, SIN) and splice it into the in-use list between
+   `PREVEN` and `PREVEN.DRLINK`.
+4. `DRENTS += 1`; call `ENSRIT` to bump leading + trailing
+   `DRSQNO` and flush.
+
+**Delete** (DRDELT at `Uade0C.asm:330-397`):
+1. `FNDTEX` to find the entry (exit with `CRNTEN` at it and
+   `PREVEN` pointing at its predecessor).
+2. `DELCHK` (`Uade0D.asm:1191-1263`) checks: locked entry
+   (`DRACCS` bit 4) → `DRERRG`; open file (via RNDMAN) →
+   `DRERRI`; non-empty sub-directory → `DRERRJ`.
+3. Rewrite the predecessor's `DRLINK` to skip the target (unlink
+   from in-use list).
+4. `FREECH` (`Uade0D.asm:1297`) **prepends** the freed slot to
+   the free list LIFO-style: the just-deleted slot becomes the
+   next slot an insert will use.
+5. `DRENTS -= 1`; `ENSRIT` to bump both seq copies.
+
+**Rename in-place** (RETANB at `Uade0E.asm:806-851`):
+1. `FNDTEX` to find the entry.
+2. Overwrite `DRTITL` with the new name.
+3. `ENSRIT` to bump seq.
+
+Crucially, in-place rename does **not** re-thread the in-use
+list. If the new name sorts to a different position, the list
+becomes un-ordered. `FNDTEX` on the resulting directory may fail
+to locate entries whose sort position is past the rename point
+because the walk stops once a name strictly greater than the
+target is encountered. Callers that need sorted-list semantics
+must delete + reinsert rather than rename.
+
+**Duplicate-insert overwrite** (RETANB at `Uade0E.asm:806-851`):
+when an insert targets a name that already exists, DIRMAN
+overwrites the existing slot's load/exec/date/SIN fields while
+preserving the existing access byte and leaving the in-use list
+unchanged. The `oaknut-afs` Python implementation instead raises
+`AFSDirectoryEntryExistsError` on duplicate insert and exposes
+this as a separate `update_entry_fields` operation so the two
+intents stay distinct in the API.
+
+**Sequence number** (ENSRIT at `Uade0D.asm:815`): every mutation
+bumps both copies by 1 (wrapping at 0xFF → 0x00). The number is
+purely a torn-write detector — a mismatch between leading and
+trailing copies raises `DRERRB` (FS error 42, "broken directory").
+It is not a monotonic generation counter, so a fresh read after
+restart cannot tell which of two conflicting discs is newer.
+
 ## Passwords file entry (31 bytes, repeated)
 
 From `Uade02.asm:133-141`:

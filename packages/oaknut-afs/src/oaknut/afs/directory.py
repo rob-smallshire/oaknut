@@ -63,7 +63,12 @@ from dataclasses import dataclass
 from typing import Iterator
 
 from oaknut.afs.access import AFSAccess
-from oaknut.afs.exceptions import AFSBrokenDirectoryError
+from oaknut.afs.exceptions import (
+    AFSBrokenDirectoryError,
+    AFSDirectoryEntryExistsError,
+    AFSDirectoryEntryNotFoundError,
+    AFSDirectoryFullError,
+)
 from oaknut.afs.types import AfsDate, SystemInternalName
 
 # ---------------------------------------------------------------------------
@@ -486,4 +491,398 @@ def build_directory_bytes(
     else:
         buf[_OFF_FREE_POINTER : _OFF_FREE_POINTER + 2] = (0).to_bytes(2, "little")
 
+    return bytes(buf)
+
+
+# ---------------------------------------------------------------------------
+# Byte-level mutation — phase 9: insert / delete / rename / update
+# ---------------------------------------------------------------------------
+#
+# These operate on the raw on-disc bytes of a directory object, not on
+# a parsed :class:`AfsDirectory`, because the physical slot layout
+# matters for ROM-compatible behaviour and round-tripping. The parsed
+# form erases slot positions and free-list ordering.
+#
+# Each function mirrors the corresponding DIRMAN routine:
+#
+# - :func:`insert_entry` — RETANP path at ``Uade0E.asm:789-944``.
+#   Pops the free-list head, rewrites the new slot's content, splices
+#   it into the in-use list at alphabetic position using the same
+#   insertion-point logic as ``FNDTEX`` (``Uade0D.asm:220-250``).
+# - :func:`delete_entry` — DRDELT at ``Uade0C.asm:330-397``. Walks the
+#   in-use list to the named entry, unlinks it from the in-use chain,
+#   prepends the freed slot to the free list (``FREECH`` at
+#   ``Uade0D.asm:1297``) LIFO-style.
+# - :func:`rename_entry` — RETANB path at ``Uade0E.asm:806-851``.
+#   Rewrites the ``DRTITL`` field in place without re-threading the
+#   in-use list. **This can leave the list un-sorted** if the rename
+#   crosses a neighbouring entry's name; the ROM accepts this and
+#   ``FNDTEX`` on the resulting directory may fail to locate entries
+#   whose sort position is past the rename point until the directory
+#   is next rebuilt.
+# - :func:`update_entry_fields` — the duplicate-insert replace path
+#   at ``Uade0E.asm:850``. Rewrites load/exec/date in place without
+#   touching the name, access byte, or list threading.
+#
+# All four functions bump the leading and trailing master-sequence
+# bytes (``ENSRIT`` semantics from ``Uade0D.asm:815``). Every
+# successful mutation produces bytes whose leading ``DRSQNO`` byte is
+# ``(old + 1) & 0xFF`` and whose final byte matches.
+
+# ---------------------------------------------------------------------------
+# Low-level byte-buffer helpers
+# ---------------------------------------------------------------------------
+
+
+def _header_first_pointer(buf: bytes | bytearray) -> int:
+    return int.from_bytes(buf[_OFF_FIRST_POINTER : _OFF_FIRST_POINTER + 2], "little")
+
+
+def _header_free_pointer(buf: bytes | bytearray) -> int:
+    return int.from_bytes(buf[_OFF_FREE_POINTER : _OFF_FREE_POINTER + 2], "little")
+
+
+def _header_num_entries(buf: bytes | bytearray) -> int:
+    return int.from_bytes(buf[_OFF_NUM_ENTRIES : _OFF_NUM_ENTRIES + 2], "little")
+
+
+def _set_first_pointer(buf: bytearray, value: int) -> None:
+    buf[_OFF_FIRST_POINTER : _OFF_FIRST_POINTER + 2] = value.to_bytes(2, "little")
+
+
+def _set_free_pointer(buf: bytearray, value: int) -> None:
+    buf[_OFF_FREE_POINTER : _OFF_FREE_POINTER + 2] = value.to_bytes(2, "little")
+
+
+def _set_num_entries(buf: bytearray, value: int) -> None:
+    buf[_OFF_NUM_ENTRIES : _OFF_NUM_ENTRIES + 2] = value.to_bytes(2, "little")
+
+
+def _slot_link(buf: bytes | bytearray, slot_offset: int) -> int:
+    return int.from_bytes(
+        buf[slot_offset + _ENT_OFF_LINK : slot_offset + _ENT_OFF_LINK + 2], "little"
+    )
+
+
+def _set_slot_link(buf: bytearray, slot_offset: int, value: int) -> None:
+    buf[slot_offset + _ENT_OFF_LINK : slot_offset + _ENT_OFF_LINK + 2] = value.to_bytes(
+        2, "little"
+    )
+
+
+def _slot_name(buf: bytes | bytearray, slot_offset: int) -> str:
+    raw = bytes(buf[slot_offset + _ENT_OFF_NAME : slot_offset + _ENT_OFF_NAME + MAX_NAME_LENGTH])
+    return raw.rstrip(b" \x00").decode("ascii")
+
+
+def _bump_sequence(buf: bytearray) -> int:
+    """Increment both the leading and trailing master-sequence bytes.
+
+    Matches ``ENSRIT`` at ``Uade0D.asm:815``: two pointer rewrites
+    (leading at offset ``DRSQNO = 2``, trailing at the directory's
+    last byte), wrapping through 0xFF→0x00. Returns the new value.
+    """
+    new_seq = (buf[_OFF_MASTER_SEQ] + 1) & 0xFF
+    buf[_OFF_MASTER_SEQ] = new_seq
+    buf[-1] = new_seq
+    return new_seq
+
+
+def _write_entry_payload(
+    buf: bytearray,
+    slot_offset: int,
+    entry: DirectoryEntry,
+) -> None:
+    """Overwrite the payload fields (name through SIN) of a slot.
+
+    Leaves the ``DRLINK`` field untouched — the caller is responsible
+    for threading the slot into whichever list it belongs to.
+    """
+    buf[slot_offset + _ENT_OFF_NAME : slot_offset + _ENT_OFF_NAME + MAX_NAME_LENGTH] = (
+        _encode_name(entry.name)
+    )
+    buf[slot_offset + _ENT_OFF_LOAD : slot_offset + _ENT_OFF_LOAD + 4] = (
+        entry.load_address.to_bytes(4, "little")
+    )
+    buf[slot_offset + _ENT_OFF_EXEC : slot_offset + _ENT_OFF_EXEC + 4] = (
+        entry.exec_address.to_bytes(4, "little")
+    )
+    buf[slot_offset + _ENT_OFF_ACCESS] = entry.access.to_byte()
+    buf[slot_offset + _ENT_OFF_DATE : slot_offset + _ENT_OFF_DATE + 2] = entry.date.to_bytes()
+    buf[slot_offset + _ENT_OFF_SIN : slot_offset + _ENT_OFF_SIN + 3] = int(entry.sin).to_bytes(
+        3, "little"
+    )
+
+
+def _find_in_use_insertion_point(
+    buf: bytes | bytearray,
+    new_name: str,
+) -> tuple[int, int | None]:
+    """Walk the in-use list looking for the alphabetic insertion point.
+
+    Returns ``(predecessor_link_offset, successor_slot_offset)`` where:
+
+    - ``predecessor_link_offset`` is the byte offset of the 16-bit
+      ``DRLINK`` (or ``DRFRST``) field that currently holds the
+      pointer which should be rewritten to point at the new slot.
+    - ``successor_slot_offset`` is the offset of the existing entry
+      that should become the new slot's successor (i.e. the value
+      currently stored at ``predecessor_link_offset``), or ``None``
+      if the new entry will be appended at the end of the list.
+
+    If a duplicate name is encountered the walk raises
+    :class:`AFSDirectoryEntryExistsError` — the ROM's RETANB path
+    replaces in place, but our public :func:`insert_entry` refuses
+    duplicates and surfaces a clear error instead. Use
+    :func:`update_entry_fields` if you want the ROM's overwrite
+    semantics.
+    """
+    new_name_upper = new_name.upper()
+    pred_link_offset = _OFF_FIRST_POINTER  # header's DRFRST is the "predecessor link"
+    current_slot = _header_first_pointer(buf)
+
+    while current_slot != 0:
+        current_name = _slot_name(buf, current_slot)
+        current_upper = current_name.upper()
+        if current_upper == new_name_upper:
+            raise AFSDirectoryEntryExistsError(
+                f"directory already contains an entry named {current_name!r}"
+            )
+        if new_name_upper < current_upper:
+            return pred_link_offset, current_slot
+        pred_link_offset = current_slot + _ENT_OFF_LINK
+        current_slot = _slot_link(buf, current_slot)
+
+    return pred_link_offset, None
+
+
+def _find_in_use_entry(
+    buf: bytes | bytearray,
+    name: str,
+) -> tuple[int, int]:
+    """Walk the in-use list looking for ``name``.
+
+    Returns ``(predecessor_link_offset, slot_offset)`` where
+    ``slot_offset`` is the offset of the matching entry and
+    ``predecessor_link_offset`` is the offset of the 16-bit field
+    whose current value is ``slot_offset`` (either the header's
+    ``DRFRST`` or the predecessor slot's ``DRLINK``). This is the
+    pointer the delete path rewrites to unlink the matched slot.
+
+    Raises :class:`AFSDirectoryEntryNotFoundError` if the walk hits
+    the end of the list without finding a match.
+    """
+    target_upper = name.upper()
+    pred_link_offset = _OFF_FIRST_POINTER
+    current_slot = _header_first_pointer(buf)
+
+    while current_slot != 0:
+        current_name = _slot_name(buf, current_slot)
+        if current_name.upper() == target_upper:
+            return pred_link_offset, current_slot
+        pred_link_offset = current_slot + _ENT_OFF_LINK
+        current_slot = _slot_link(buf, current_slot)
+
+    raise AFSDirectoryEntryNotFoundError(
+        f"no entry named {name!r} in the directory"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Public mutation API
+# ---------------------------------------------------------------------------
+
+
+def insert_entry(raw: bytes, entry: DirectoryEntry) -> bytes:
+    """Return new directory bytes with ``entry`` inserted.
+
+    Follows the DIRMAN insertion algorithm:
+
+    1. Pop the head of the free list (``DRFREE``). If the free list
+       is empty, raise :class:`AFSDirectoryFullError` — phase 10 will
+       add automatic growth to match the ROM.
+    2. Walk the in-use list to the first entry whose name is greater
+       than ``entry.name``; this is the insertion point. If a
+       duplicate name is encountered, raise
+       :class:`AFSDirectoryEntryExistsError`.
+    3. Write the new entry's payload into the popped slot and splice
+       it into the in-use list between the predecessor and successor.
+    4. Increment ``DRENTS`` and bump the master sequence number
+       (both leading and trailing copies).
+    """
+    buf = bytearray(raw)
+
+    free_head = _header_free_pointer(buf)
+    if free_head == 0:
+        raise AFSDirectoryFullError(
+            "directory has no free slots (capacity reached); "
+            "phase 10 will auto-grow"
+        )
+
+    # Step 2 is done first so we can reject duplicates without touching
+    # the free list at all.
+    pred_link_offset, successor = _find_in_use_insertion_point(buf, entry.name)
+
+    # Step 1: pop free-list head.
+    new_slot_offset = free_head
+    next_free = _slot_link(buf, new_slot_offset)
+    _set_free_pointer(buf, next_free)
+
+    # Step 3: write the payload + splice.
+    _write_entry_payload(buf, new_slot_offset, entry)
+    # The new slot's next-link points at the successor (which may be
+    # 0 if the insertion is at the end of the list).
+    _set_slot_link(buf, new_slot_offset, successor or 0)
+    # The predecessor's next-link now points at our new slot.
+    if pred_link_offset == _OFF_FIRST_POINTER:
+        _set_first_pointer(buf, new_slot_offset)
+    else:
+        buf[pred_link_offset : pred_link_offset + 2] = new_slot_offset.to_bytes(2, "little")
+
+    # Step 4: count and sequence.
+    _set_num_entries(buf, _header_num_entries(buf) + 1)
+    _bump_sequence(buf)
+    return bytes(buf)
+
+
+def delete_entry(raw: bytes, name: str) -> bytes:
+    """Return new directory bytes with ``name`` removed.
+
+    Raises :class:`AFSDirectoryEntryNotFoundError` if no entry with
+    that name exists. **Does not check for access-byte locked / open
+    file / non-empty-directory** — those checks belong at the higher
+    AFS layer (``DELCHK`` at ``Uade0D:1191`` in the ROM), where the
+    caller has enough context to consult the file's access byte and
+    walk the sub-directory if needed.
+
+    The deletion:
+
+    1. Walks the in-use list to find the entry, returning the
+       offset of the predecessor's link field.
+    2. Rewrites the predecessor's link to skip over the entry
+       (unlink from in-use list).
+    3. Prepends the freed slot to the free list (LIFO — see
+       ``FREECH`` at ``Uade0D:1297``).
+    4. Decrements ``DRENTS`` and bumps the sequence number.
+    """
+    buf = bytearray(raw)
+
+    pred_link_offset, slot_offset = _find_in_use_entry(buf, name)
+
+    # Step 2: splice the entry out of the in-use list.
+    successor = _slot_link(buf, slot_offset)
+    if pred_link_offset == _OFF_FIRST_POINTER:
+        _set_first_pointer(buf, successor)
+    else:
+        buf[pred_link_offset : pred_link_offset + 2] = successor.to_bytes(2, "little")
+
+    # Step 3: prepend to free list. New free-list head = the slot we
+    # just freed; its next-link is the previous head.
+    old_free_head = _header_free_pointer(buf)
+    _set_slot_link(buf, slot_offset, old_free_head)
+    _set_free_pointer(buf, slot_offset)
+
+    # Step 4: count and sequence.
+    _set_num_entries(buf, _header_num_entries(buf) - 1)
+    _bump_sequence(buf)
+    return bytes(buf)
+
+
+def rename_entry(raw: bytes, old_name: str, new_name: str) -> bytes:
+    """Return new directory bytes with ``old_name`` renamed to ``new_name``.
+
+    Matches the ROM's in-place rename semantics: the slot's
+    ``DRTITL`` field is overwritten but the in-use list is **not**
+    re-threaded. If ``new_name`` would sort to a different position,
+    the list becomes un-ordered. Subsequent ``FNDTEX`` walks may
+    then fail to locate entries whose sort position is past the
+    rename point, just as they would on a ROM-managed directory.
+
+    Implementations that need a sorted result can delete+reinsert
+    instead. The ``AFSPath.rename`` helper higher up will do that
+    automatically when it crosses a directory boundary, but
+    same-directory in-place rename is retained for byte-exact
+    compatibility with the ROM.
+
+    Raises :class:`AFSDirectoryEntryNotFoundError` if ``old_name``
+    is missing, and :class:`AFSDirectoryEntryExistsError` if
+    ``new_name`` already exists under a different slot.
+    """
+    if old_name == new_name:
+        # No-op, but still bumps the sequence number like the ROM
+        # would if ENSRIT is called — we treat this as a deliberate
+        # touch.
+        buf = bytearray(raw)
+        # Verify the name exists first.
+        _find_in_use_entry(buf, old_name)
+        _bump_sequence(buf)
+        return bytes(buf)
+
+    buf = bytearray(raw)
+    _, slot_offset = _find_in_use_entry(buf, old_name)
+
+    # Check the destination name doesn't already exist in a
+    # different slot.
+    try:
+        _, conflicting = _find_in_use_entry(buf, new_name)
+    except AFSDirectoryEntryNotFoundError:
+        pass
+    else:
+        if conflicting != slot_offset:
+            raise AFSDirectoryEntryExistsError(
+                f"directory already contains an entry named {new_name!r}"
+            )
+
+    buf[slot_offset + _ENT_OFF_NAME : slot_offset + _ENT_OFF_NAME + MAX_NAME_LENGTH] = (
+        _encode_name(new_name)
+    )
+    _bump_sequence(buf)
+    return bytes(buf)
+
+
+def update_entry_fields(
+    raw: bytes,
+    name: str,
+    *,
+    load_address: int | None = None,
+    exec_address: int | None = None,
+    date: AfsDate | None = None,
+    sin: SystemInternalName | None = None,
+) -> bytes:
+    """Return new directory bytes with the non-name fields of ``name`` updated.
+
+    Leaves the ``name`` and ``access`` fields untouched — matching
+    the ROM's RETANB replace path at ``Uade0E.asm:850``, which
+    preserves the access byte when an insert collides with an
+    existing entry. Any subset of ``load_address`` / ``exec_address``
+    / ``date`` / ``sin`` may be ``None`` to leave that field alone.
+
+    Raises :class:`AFSDirectoryEntryNotFoundError` if ``name``
+    does not exist.
+    """
+    buf = bytearray(raw)
+    _, slot_offset = _find_in_use_entry(buf, name)
+
+    if load_address is not None:
+        if not (0 <= load_address <= 0xFFFFFFFF):
+            raise ValueError(f"load_address {load_address} outside 0..0xFFFFFFFF")
+        buf[slot_offset + _ENT_OFF_LOAD : slot_offset + _ENT_OFF_LOAD + 4] = (
+            load_address.to_bytes(4, "little")
+        )
+    if exec_address is not None:
+        if not (0 <= exec_address <= 0xFFFFFFFF):
+            raise ValueError(f"exec_address {exec_address} outside 0..0xFFFFFFFF")
+        buf[slot_offset + _ENT_OFF_EXEC : slot_offset + _ENT_OFF_EXEC + 4] = (
+            exec_address.to_bytes(4, "little")
+        )
+    if date is not None:
+        buf[slot_offset + _ENT_OFF_DATE : slot_offset + _ENT_OFF_DATE + 2] = date.to_bytes()
+    if sin is not None:
+        if not (0 <= int(sin) <= 0xFFFFFF):
+            raise ValueError(f"sin {sin} outside 0..0xFFFFFF")
+        buf[slot_offset + _ENT_OFF_SIN : slot_offset + _ENT_OFF_SIN + 3] = int(sin).to_bytes(
+            3, "little"
+        )
+
+    _bump_sequence(buf)
     return bytes(buf)
