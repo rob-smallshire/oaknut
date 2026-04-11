@@ -40,9 +40,9 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
 ]
 dependencies = [
-    "oaknut-file",
-    "oaknut-dfs",
-    "oaknut-zip",
+    "oaknut-file>=1.0",
+    "oaknut-dfs>=4.0",
+    "oaknut-zip>=2.0",
 ]
 
 [project.urls]
