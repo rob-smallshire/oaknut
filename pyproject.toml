@@ -89,6 +89,11 @@ testpaths = [
     "packages/oaknut-dfs/tests",
     "packages/oaknut-zip/tests",
 ]
+# The workspace-root tests/ directory holds shared test data and a
+# tiny tests/fixtures.py module consumed by every package's conftest.
+# It is intentionally *not* in testpaths — pytest should discover no
+# test files there.
+norecursedirs = ["tests/data"]
 
 [tool.ruff]
 line-length = 100

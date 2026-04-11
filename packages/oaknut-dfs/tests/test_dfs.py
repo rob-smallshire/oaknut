@@ -11,10 +11,9 @@ from oaknut.dfs.formats import (
     ACORN_DFS_80T_SINGLE_SIDED,
 )
 
-GAME_IMAGE_FILEPATH = (
-    pytest.importorskip("pathlib").Path(__file__).parent
-    / "data" / "images" / "games" / "Disc003-Zalaga.ssd"
-)
+from tests.fixtures import REFERENCE_IMAGES_DIRPATH
+
+GAME_IMAGE_FILEPATH = REFERENCE_IMAGES_DIRPATH / "games" / "Disc003-Zalaga.ssd"
 
 
 class TestDFSNamedConstructors:

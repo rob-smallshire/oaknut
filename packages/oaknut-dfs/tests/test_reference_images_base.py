@@ -21,11 +21,9 @@ Example:
       assert disk.exists("$.TEXT")
 """
 
-from pathlib import Path
-
 import pytest
 
-REFERENCE_IMAGES = Path(__file__).parent / "data" / "images"
+from tests.fixtures import REFERENCE_IMAGES_DIRPATH as REFERENCE_IMAGES
 
 
 class TestReferenceImageSetup:
@@ -38,9 +36,9 @@ class TestReferenceImageSetup:
 
     def test_generators_directory_exists(self):
         """Generator programs directory exists."""
-        generators_dir = Path(__file__).parent / "data" / "generators"
-        assert generators_dir.exists()
-        assert generators_dir.is_dir()
+        generators_dirpath = REFERENCE_IMAGES.parent / "generators"
+        assert generators_dirpath.exists()
+        assert generators_dirpath.is_dir()
 
     def test_list_available_reference_images(self):
         """Show which reference images have been generated."""

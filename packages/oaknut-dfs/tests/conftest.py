@@ -12,9 +12,11 @@ from pathlib import Path
 # import pattern used throughout. The deliberate sys.path manipulation
 # before the subsequent imports trips ruff's E402 check, so those
 # imports carry explicit per-line noqa comments.
-_TESTS_DIR = Path(__file__).parent
-if str(_TESTS_DIR) not in sys.path:
-    sys.path.insert(0, str(_TESTS_DIR))
+_TESTS_DIRPATH = Path(__file__).parent
+_WORKSPACE_ROOT = _TESTS_DIRPATH.parent.parent.parent
+for _path in (_TESTS_DIRPATH, _WORKSPACE_ROOT):
+    if str(_path) not in sys.path:
+        sys.path.insert(0, str(_path))
 
 import shutil  # noqa: E402
 import stat  # noqa: E402
@@ -31,8 +33,7 @@ from oaknut.dfs.formats import (  # noqa: E402
     DiskFormat,
 )
 
-# Path to reference images directory
-REFERENCE_IMAGES = Path(__file__).parent / "data" / "images"
+from tests.fixtures import REFERENCE_IMAGES_DIRPATH  # noqa: E402
 
 
 def _detect_disk_format(filepath: Path) -> DiskFormat:
@@ -81,7 +82,7 @@ def reference_image(tmp_path):
     """
 
     def _open(reference_name: str, side: int = 0) -> DFS:
-        src_path = REFERENCE_IMAGES / reference_name
+        src_path = REFERENCE_IMAGES_DIRPATH / reference_name
         if not src_path.exists():
             pytest.skip(f"Reference image not found: {reference_name}")
 
@@ -126,7 +127,7 @@ def writable_copy(tmp_path):
     """
 
     def _copy(reference_name: str, side: int = 0) -> tuple[DFS, Path]:
-        src_path = REFERENCE_IMAGES / reference_name
+        src_path = REFERENCE_IMAGES_DIRPATH / reference_name
         if not src_path.exists():
             pytest.skip(f"Reference image not found: {reference_name}")
 
