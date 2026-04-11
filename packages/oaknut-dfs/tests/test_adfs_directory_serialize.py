@@ -18,7 +18,7 @@ from oaknut.dfs.adfs_directory import (
     _ADFSDirectoryEntry,
     _ADFSRawAttributes,
 )
-from oaknut.dfs.sectors_view import SectorsView
+from oaknut.image.sectors_view import SectorsView
 
 
 class TestOldDirectorySerializeRoundTrip:

@@ -10,8 +10,8 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
 from oaknut.dfs.exceptions import ADFSDirectoryError
-from oaknut.dfs.sectors_view import SectorsView
 from oaknut.file import Access  # re-exported for backward compatibility
+from oaknut.image.sectors_view import SectorsView
 
 __all__ = ["Access"]
 

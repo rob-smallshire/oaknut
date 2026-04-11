@@ -10,8 +10,8 @@ For single-sided discs, this is a trivial pass-through.
 
 from __future__ import annotations
 
-from oaknut.dfs.sectors_view import SectorsView
 from oaknut.dfs.surface import DiscImage
+from oaknut.image.sectors_view import SectorsView
 
 
 class UnifiedDisc:
