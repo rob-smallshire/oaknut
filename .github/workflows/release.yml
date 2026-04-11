@@ -25,12 +25,15 @@ jobs:
     name: Publish ${{ github.ref_name }} to PyPI
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@v8
         with:
           python-version: "3.13"
+          cache-dependency-glob: |
+            pyproject.toml
+            packages/*/pyproject.toml
 
       - name: Determine package from tag
         id: pkg
