@@ -229,3 +229,198 @@ class PasswordsFile(Sequence[UserRecord]):
             if record.full_id.upper() == target or record.name.upper() == target:
                 return record
         raise KeyError(f"no user named {name!r} in passwords file")
+
+    # ------------------------------------------------------------------
+    # Mutation — phase 14 (AUTMAN / USRMAN equivalents)
+    # ------------------------------------------------------------------
+
+    def to_bytes(self) -> bytes:
+        """Serialise every record back to on-disc bytes."""
+        return b"".join(_encode_user_record(r) for r in self._records)
+
+    def _replace_records(self, records: tuple[UserRecord, ...]) -> PasswordsFile:
+        return PasswordsFile(records)
+
+    def with_added(
+        self,
+        name: str,
+        *,
+        password: str = "",
+        quota: int = 0,
+        system: bool = False,
+        privileges_locked: bool = False,
+        boot_option: BootOption = BootOption.OFF,
+    ) -> PasswordsFile:
+        """Return a new passwords file with ``name`` added.
+
+        Raises :class:`KeyError` if the user already exists.
+        Reuses the first tombstoned slot if one is available,
+        otherwise appends a fresh record at the end. Matches the
+        USRMAN add-user flow semantically.
+        """
+        try:
+            self.find(name)
+        except KeyError:
+            pass
+        else:
+            raise KeyError(f"user {name!r} already exists")
+
+        if "." in name:
+            group, _, bare = name.partition(".")
+        else:
+            group = None
+            bare = name
+
+        new_record = UserRecord(
+            name=bare,
+            group=group,
+            password=password,
+            free_space=quota,
+            is_in_use=True,
+            is_system=system,
+            is_privileges_locked=privileges_locked,
+            boot_option=boot_option,
+        )
+
+        # Reuse a tombstoned slot if available.
+        records = list(self._records)
+        for index, record in enumerate(records):
+            if not record.is_in_use:
+                records[index] = new_record
+                return self._replace_records(tuple(records))
+
+        records.append(new_record)
+        return self._replace_records(tuple(records))
+
+    def with_removed(self, name: str) -> PasswordsFile:
+        """Return a new passwords file with ``name`` removed (tombstoned).
+
+        The slot is cleared in place; its position is not reclaimed
+        so subsequent adds can reuse it. Raises :class:`KeyError`
+        if the user does not exist.
+        """
+        target = self.find(name)
+        records = list(self._records)
+        for index, record in enumerate(records):
+            if record is target:
+                tombstone = UserRecord(
+                    name="",
+                    group=None,
+                    password="",
+                    free_space=0,
+                    is_in_use=False,
+                    is_system=False,
+                    is_privileges_locked=False,
+                    boot_option=BootOption.OFF,
+                )
+                records[index] = tombstone
+                return self._replace_records(tuple(records))
+        raise KeyError(f"user {name!r} not found")  # pragma: no cover
+
+    def with_replaced(self, name: str, new_record: UserRecord) -> PasswordsFile:
+        target = self.find(name)
+        records = list(self._records)
+        for index, record in enumerate(records):
+            if record is target:
+                records[index] = new_record
+                return self._replace_records(tuple(records))
+        raise KeyError(f"user {name!r} not found")  # pragma: no cover
+
+    def with_quota(self, name: str, quota: int) -> PasswordsFile:
+        if quota < 0 or quota > 0xFFFFFFFF:
+            raise ValueError(f"quota {quota} outside 0..0xFFFFFFFF")
+        target = self.find(name)
+        return self.with_replaced(
+            name,
+            UserRecord(
+                name=target.name,
+                group=target.group,
+                password=target.password,
+                free_space=quota,
+                is_in_use=target.is_in_use,
+                is_system=target.is_system,
+                is_privileges_locked=target.is_privileges_locked,
+                boot_option=target.boot_option,
+            ),
+        )
+
+    def with_password(self, name: str, password: str) -> PasswordsFile:
+        if len(password) > _LEN_PASSWORD:
+            raise ValueError(f"password exceeds {_LEN_PASSWORD} chars")
+        target = self.find(name)
+        return self.with_replaced(
+            name,
+            UserRecord(
+                name=target.name,
+                group=target.group,
+                password=password,
+                free_space=target.free_space,
+                is_in_use=target.is_in_use,
+                is_system=target.is_system,
+                is_privileges_locked=target.is_privileges_locked,
+                boot_option=target.boot_option,
+            ),
+        )
+
+    def with_boot_option(self, name: str, boot_option: BootOption) -> PasswordsFile:
+        target = self.find(name)
+        return self.with_replaced(
+            name,
+            UserRecord(
+                name=target.name,
+                group=target.group,
+                password=target.password,
+                free_space=target.free_space,
+                is_in_use=target.is_in_use,
+                is_system=target.is_system,
+                is_privileges_locked=target.is_privileges_locked,
+                boot_option=boot_option,
+            ),
+        )
+
+    def with_system(self, name: str, system: bool) -> PasswordsFile:
+        target = self.find(name)
+        return self.with_replaced(
+            name,
+            UserRecord(
+                name=target.name,
+                group=target.group,
+                password=target.password,
+                free_space=target.free_space,
+                is_in_use=target.is_in_use,
+                is_system=system,
+                is_privileges_locked=target.is_privileges_locked,
+                boot_option=target.boot_option,
+            ),
+        )
+
+
+def _encode_user_record(record: UserRecord) -> bytes:
+    """Serialise a :class:`UserRecord` back to 31 on-disc bytes."""
+    raw = bytearray(ENTRY_SIZE)
+    if record.is_in_use:
+        user_id = record.full_id.encode("ascii")
+        if len(user_id) > _LEN_USER_ID:
+            raise ValueError(f"user id {record.full_id!r} exceeds {_LEN_USER_ID} bytes")
+        raw[: len(user_id)] = user_id
+        if len(user_id) < _LEN_USER_ID:
+            raw[len(user_id)] = _CR
+        pwd = record.password.encode("ascii")
+        if len(pwd) > _LEN_PASSWORD:
+            raise ValueError(f"password exceeds {_LEN_PASSWORD} bytes")
+        raw[_OFF_PASSWORD : _OFF_PASSWORD + len(pwd)] = pwd
+        if len(pwd) < _LEN_PASSWORD:
+            raw[_OFF_PASSWORD + len(pwd)] = _CR
+    raw[_OFF_FREE_SPACE : _OFF_FREE_SPACE + _LEN_FREE_SPACE] = (
+        record.free_space & 0xFFFFFFFF
+    ).to_bytes(_LEN_FREE_SPACE, "little")
+    status = 0
+    if record.is_in_use:
+        status |= INUSE
+    if record.is_system:
+        status |= SYSTPV
+    if record.is_privileges_locked:
+        status |= LOCKPV
+    status |= int(record.boot_option) & BOOT_MASK
+    raw[_OFF_STATUS] = status
+    return bytes(raw)
