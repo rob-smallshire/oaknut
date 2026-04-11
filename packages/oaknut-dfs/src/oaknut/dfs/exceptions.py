@@ -1,12 +1,13 @@
 """Exception hierarchy for oaknut.dfs library.
 
-All exceptions derive from FSError, the common root for both DFS and ADFS
-filesystem errors. This allows callers to catch all library errors with a
-single handler, or to catch DFS-specific or ADFS-specific errors separately.
+All DFS-specific exceptions derive from DFSError, which in turn
+derives from the shared `FSError` base defined in oaknut.file. ADFS
+exception subclasses continue to live here temporarily and will
+move into oaknut.adfs.exceptions when that package is extracted.
 
 Hierarchy:
 
-    FSError
+    FSError (oaknut.file.exceptions)
     ├── DFSError
     │   ├── CatalogError
     │   │   ├── CatalogReadError
@@ -24,14 +25,7 @@ Hierarchy:
         └── ADFSFileLockedError
 """
 
-
-class FSError(Exception):
-    """Base exception for all oaknut.dfs filesystem errors.
-
-    Catches both DFS and ADFS errors with a single handler.
-    """
-    pass
-
+from oaknut.file.exceptions import FSError
 
 # --- DFS exceptions ---
 
