@@ -886,3 +886,75 @@ def update_entry_fields(
 
     _bump_sequence(buf)
     return bytes(buf)
+
+
+# ---------------------------------------------------------------------------
+# Directory growth — phase 10
+# ---------------------------------------------------------------------------
+#
+# Mirrors the DIRMAN ``CHZSZE`` → ``FORMAT`` flow (Uade0E:1206-). The
+# allocator half of growth (extending the underlying object's map
+# chain by one more sector) is the caller's responsibility; this
+# function takes the already-extended raw bytes and threads the new
+# slot grid onto the free list. The trailing sequence byte moves to
+# the new last byte. Both leading and trailing sequence bytes are
+# bumped.
+#
+# Unlike the ROM, the Python path does not shrink back to the
+# tightest whole-block size (FORMTM's second MAPMAN.CHANGESIZE call)
+# — the result may carry up to 25 bytes of padding at the tail.
+# Phase 20's byte-exact wfsinit_compat mode can revisit if needed.
+
+
+def grow_directory_bytes(raw: bytes, new_size_bytes: int) -> bytes:
+    """Return the directory bytes extended to ``new_size_bytes``.
+
+    ``raw`` must be the bytes of a valid directory smaller than
+    ``new_size_bytes``. The tail is zero-extended, new slots from
+    the extended region are prepended onto the free list LIFO-style,
+    and the trailing sequence byte is written at the new last byte.
+    The leading + trailing master sequence number is bumped.
+
+    Raises :class:`ValueError` if ``new_size_bytes`` is not strictly
+    larger than the current size, not a multiple of 256, or would
+    add zero usable slots.
+    """
+    old_size = len(raw)
+    if new_size_bytes <= old_size:
+        raise ValueError(
+            f"new_size_bytes ({new_size_bytes}) must exceed current size ({old_size})"
+        )
+    if new_size_bytes % 256 != 0:
+        raise ValueError(
+            f"new_size_bytes ({new_size_bytes}) must be a multiple of 256"
+        )
+
+    old_capacity = (old_size - HEADER_SIZE - TRAILING_SEQ_SIZE) // ENTRY_SIZE
+    if old_capacity > MAX_ENTRIES:
+        old_capacity = MAX_ENTRIES
+    new_capacity = (new_size_bytes - HEADER_SIZE - TRAILING_SEQ_SIZE) // ENTRY_SIZE
+    if new_capacity > MAX_ENTRIES:
+        new_capacity = MAX_ENTRIES
+    if new_capacity <= old_capacity:
+        raise ValueError(
+            f"grow from {old_size} to {new_size_bytes} bytes does not add any slots "
+            f"(old_capacity={old_capacity}, new_capacity={new_capacity})"
+        )
+
+    buf = bytearray(new_size_bytes)
+    buf[:old_size] = raw
+
+    for slot_index in range(old_capacity, new_capacity):
+        slot_offset = HEADER_SIZE + slot_index * ENTRY_SIZE
+        # Zero the slot so the parser's name/date checks can't trip
+        # on stale bytes from the just-allocated tail sector.
+        buf[slot_offset : slot_offset + ENTRY_SIZE] = b"\x00" * ENTRY_SIZE
+        old_free_head = _header_free_pointer(buf)
+        _set_slot_link(buf, slot_offset, old_free_head)
+        _set_free_pointer(buf, slot_offset)
+
+    # Trailing sequence byte moves to the new last byte.
+    buf[-1] = buf[_OFF_MASTER_SEQ]
+    _bump_sequence(buf)
+
+    return bytes(buf)

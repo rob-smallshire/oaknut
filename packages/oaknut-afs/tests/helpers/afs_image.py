@@ -214,6 +214,27 @@ def build_synthetic_adfs_with_afs(
     passwords_map_sin = alloc(1)
     passwords_data_sec = alloc(passwords_body_sectors)
 
+    # Track every absolute sector that this synthetic image marks
+    # as "used" so we can set the corresponding bitmap bits below.
+    # Without this, the bitmap would claim every non-bitmap sector
+    # is free and the allocator would hand out sectors that already
+    # hold live data.
+    allocated_sectors: list[int] = [sec1, sec2, root_map_sin]
+    allocated_sectors.extend(
+        root_data_start + i for i in range(root_dir_size_sectors)
+    )
+    for _f, map_sin, data_sec, n_sectors in file_slots:
+        allocated_sectors.append(map_sin)
+        allocated_sectors.extend(data_sec + i for i in range(n_sectors))
+    for _chain, block_sins, per_block_sectors in chain_slots:
+        allocated_sectors.extend(block_sins)
+        for sector_list in per_block_sectors:
+            allocated_sectors.extend(sector_list)
+    allocated_sectors.append(passwords_map_sin)
+    allocated_sectors.extend(
+        passwords_data_sec + i for i in range(passwords_body_sectors)
+    )
+
     # ----- Build the root directory -----
     entries: list[DirectoryEntry] = []
     file_sin_lookup: dict[str, int] = {}
@@ -285,16 +306,27 @@ def build_synthetic_adfs_with_afs(
     write_sector(sec1, info_bytes)
     write_sector(sec2, info_bytes)
 
-    # Per-cylinder bitmaps: mark sector 0 as allocated, rest free.
-    # The AFS read path only inspects them via ``free_sectors``, so a
-    # correct zero-cylinder-0 bitmap is sufficient.
+    # Per-cylinder bitmaps: start every AFS cylinder with its
+    # sector 0 allocated (the bitmap sector itself is never free).
+    # Then clear the bits for every sector that this helper has
+    # written live data into — otherwise the allocator would happily
+    # hand those out on a subsequent write and trash the image.
+    bitmap_pages: dict[int, bytearray] = {}
     for cyl_index in range(num_cylinders_afs):
-        physical = start_cylinder + cyl_index
         bitmap = bytearray(_SECTOR_SIZE)
-        # Sectors 1..spc-1 free → all-ones except bit 0.
-        bitmap[0] = 0xFF & ~0x01
+        bitmap[0] = 0xFF & ~0x01  # sectors 1..spc-1 free
         for byte_idx in range(1, _SPC // 8):
             bitmap[byte_idx] = 0xFF
+        bitmap_pages[cyl_index] = bitmap
+    for absolute_sector in allocated_sectors:
+        cyl_abs, sec_in_cyl = divmod(absolute_sector, _SPC)
+        cyl_index = cyl_abs - start_cylinder
+        if not (0 <= cyl_index < num_cylinders_afs):
+            continue
+        bitmap = bitmap_pages[cyl_index]
+        bitmap[sec_in_cyl >> 3] &= ~(1 << (sec_in_cyl & 7)) & 0xFF
+    for cyl_index, bitmap in bitmap_pages.items():
+        physical = start_cylinder + cyl_index
         write_sector(physical * _SPC, bytes(bitmap))
 
     # Root directory: map sector + data.

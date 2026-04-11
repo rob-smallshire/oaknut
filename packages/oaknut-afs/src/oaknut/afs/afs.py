@@ -35,17 +35,32 @@ from contextlib import contextmanager
 from os import PathLike
 from typing import TYPE_CHECKING, Iterator, Union
 
-from oaknut.afs.directory import AfsDirectory, DirectoryEntry
+from oaknut.afs.directory import (
+    AfsDirectory,
+    DirectoryEntry,
+    grow_directory_bytes,
+    insert_entry,
+)
 from oaknut.afs.exceptions import (
+    AFSDirectoryFullError,
     AFSError,
     AFSInfoSectorError,
     AFSPathError,
 )
 from oaknut.afs.info_sector import INFO_SECTOR_SIZE, InfoSector, InfoSectorPair
-from oaknut.afs.map_sector import MAP_SECTOR_SIZE, ExtentStream, MapChain, MapSector
+from oaknut.afs.map_sector import MAP_SECTOR_SIZE, Extent, ExtentStream, MapChain, MapSector
 from oaknut.afs.passwords import PASSWORDS_FILENAME, PasswordsFile
 from oaknut.afs.path import AFSPath
 from oaknut.afs.types import Geometry, SystemInternalName
+
+#: Directory grow step: one disc block, matching ``CHZSZE`` at
+#: ``Uade0E.asm:1167`` which adds exactly ``BLKSZE = 256`` bytes each
+#: time an insert fails with an empty free list.
+_DIRECTORY_GROW_STEP_BYTES = 256
+
+#: Maximum directory size, from ``MAXDIR`` at ``Uade02.asm:158``
+#: (= 26 disc blocks = 6656 bytes, enough for 255 slots).
+_MAX_DIRECTORY_BYTES = 26 * 256
 
 if TYPE_CHECKING:
     from oaknut.discimage.unified_disc import UnifiedDisc
@@ -81,6 +96,11 @@ class AFS:
         self._info: InfoSector = self._read_and_verify_info()
         # Lazy cache of the passwords file parse; None until first access.
         self._passwords_cache: PasswordsFile | None = None
+        # Lazy-initialised bitmap shadow + allocator, reused across
+        # every mutation in the session so the free-count cache is
+        # consistent across grows and allocations.
+        self._bitmap_shadow_cache = None  # oaknut.afs.bitmap.BitmapShadow
+        self._allocator_cache = None  # oaknut.afs.allocator.Allocator
 
     # ------------------------------------------------------------------
     # Named constructors
@@ -152,18 +172,9 @@ class AFS:
 
     @property
     def free_sectors(self) -> int:
-        """Total free data sectors across all cylinders in the region.
-
-        Summed by reading every cylinder's bitmap sector. Phase 8's
-        :class:`BitmapShadow` will cache this; phase 6 recomputes on
-        each access because the answer is only used for display.
-        """
-
-        shadow = self._build_bitmap_shadow()
-        total = 0
-        for cyl in range(shadow.num_cylinders):
-            total += shadow.bitmap_for(cyl).free_count()
-        return total
+        """Total free data sectors across all cylinders in the region."""
+        shadow = self._bitmap_shadow()
+        return shadow.total_free()
 
     # ------------------------------------------------------------------
     # Read primitives
@@ -286,17 +297,66 @@ class AFS:
         return PasswordsFile.from_bytes(raw)
 
     # ------------------------------------------------------------------
-    # Bitmap plumbing for free_sectors
+    # Write primitives — phase 10+
     # ------------------------------------------------------------------
 
-    def _build_bitmap_shadow(self):
-        """Construct a :class:`BitmapShadow` for this AFS region.
+    def _write_sector(self, sector: int, data: bytes) -> None:
+        """Write one 256-byte sector at absolute address ``sector``."""
+        if len(data) != MAP_SECTOR_SIZE:
+            raise ValueError(
+                f"sector write must be {MAP_SECTOR_SIZE} bytes, got {len(data)}"
+            )
+        if sector < 0 or sector >= self._disc.num_sectors:
+            raise AFSError(
+                f"sector {sector:#x} outside disc range 0..{self._disc.num_sectors - 1:#x}"
+            )
+        view = self._disc.sector_range(sector, 1)
+        view[:] = data
+
+    def _write_object_bytes(self, sin: SystemInternalName, data: bytes) -> None:
+        """Write ``data`` to the object identified by ``sin``.
+
+        The object's map chain must already cover at least
+        ``len(data)`` bytes (rounded up to a sector). Use
+        :meth:`_grow_object_by_sectors` first if you need to extend.
+        The object is written sector by sector; the final sector may
+        be partial in which case the tail is zero-padded.
+        """
+        chain = self._read_map_chain(sin)
+        capacity_bytes = chain.total_sectors() * MAP_SECTOR_SIZE
+        if len(data) > capacity_bytes:
+            raise AFSError(
+                f"object {int(sin):#x} has capacity {capacity_bytes} bytes; "
+                f"cannot write {len(data)} bytes"
+            )
+        # Walk extents writing data sectors; tail-pad the last sector
+        # with zeros if data isn't a whole-sector multiple.
+        cursor = 0
+        for extent in chain.flat_extents():
+            for offset in range(extent.length):
+                if cursor >= len(data):
+                    return
+                sector_addr = int(extent.start) + offset
+                chunk = data[cursor : cursor + MAP_SECTOR_SIZE]
+                if len(chunk) < MAP_SECTOR_SIZE:
+                    chunk = chunk + b"\x00" * (MAP_SECTOR_SIZE - len(chunk))
+                self._write_sector(sector_addr, chunk)
+                cursor += MAP_SECTOR_SIZE
+
+    # ------------------------------------------------------------------
+    # Bitmap shadow + allocator (lazy, cached per session)
+    # ------------------------------------------------------------------
+
+    def _bitmap_shadow(self):
+        """Return the session's :class:`BitmapShadow`, creating on first use.
 
         Cylinder indices are 0-based relative to the start of the
-        region (as the shadow expects). The reader translates those
-        to absolute-disc sectors via
-        ``(start_cylinder + index) * sectors_per_cylinder``.
+        region. The reader and writer translate to absolute-disc
+        sectors via ``(start_cylinder + index) * sectors_per_cylinder``.
         """
+        if self._bitmap_shadow_cache is not None:
+            return self._bitmap_shadow_cache
+
         from oaknut.afs.bitmap import BitmapShadow
 
         spc = self._info.sectors_per_cylinder
@@ -308,23 +368,155 @@ class AFS:
             return self._read_sector(physical * spc)
 
         def writer(cyl_index: int, data: bytes) -> None:
-            # Read path only for phase 6; the bitmap shadow will
-            # only invoke this from mutations, which we don't do.
-            raise AFSError("AFS is read-only in phase 6; cannot write bitmap")
+            physical = start_cyl + cyl_index
+            self._write_sector(physical * spc, data)
 
-        return BitmapShadow(
+        self._bitmap_shadow_cache = BitmapShadow(
             num_cylinders=num_cylinders,
             sectors_per_cylinder=spc,
             reader=reader,
             writer=writer,
         )
+        return self._bitmap_shadow_cache
+
+    def _allocator(self):
+        """Return the session's :class:`Allocator`, creating on first use."""
+        if self._allocator_cache is not None:
+            return self._allocator_cache
+
+        from oaknut.afs.allocator import Allocator
+
+        self._allocator_cache = Allocator(
+            self._bitmap_shadow(),
+            start_cylinder=self._info.start_cylinder,
+            sectors_per_cylinder=self._info.sectors_per_cylinder,
+        )
+        return self._allocator_cache
 
     # ------------------------------------------------------------------
-    # Context manager interface (read-only in phase 6)
+    # Object growth — phase 10
+    # ------------------------------------------------------------------
+
+    def _grow_object_by_sectors(
+        self,
+        sin: SystemInternalName,
+        additional_sectors: int,
+    ) -> int:
+        """Extend an object's map chain by ``additional_sectors`` sectors.
+
+        Allocates fresh data sectors via the session allocator and
+        appends them as extents to the **last** map block in the
+        chain, writing the updated map block back to disc. This is
+        the MAPMAN.CHANGESIZE grow path (``Uade10:355`` ``MPCHSZ``)
+        simplified for phase-10 scope: directories max out at 26
+        sectors, which easily fits in a single map block's 48 data
+        extents, so no chain expansion is required.
+
+        Coalesces a new extent into the existing last extent when
+        their physical sectors are contiguous, mirroring what the
+        ROM's ABLKS-in-a-loop path produces naturally.
+
+        Returns the new total size in sectors.
+        """
+        if additional_sectors <= 0:
+            raise ValueError(f"additional_sectors must be positive, got {additional_sectors}")
+
+        allocator = self._allocator()
+        new_extents = allocator.allocate(additional_sectors)
+
+        chain = self._read_map_chain(sin)
+        last_block = chain.last
+
+        # Merge into the existing extent list, coalescing where
+        # physically adjacent.
+        merged_extents: list[Extent] = list(last_block.extents)
+        for extent in new_extents:
+            if merged_extents and int(merged_extents[-1].end) == int(extent.start):
+                prev = merged_extents[-1]
+                merged_extents[-1] = Extent(
+                    start=prev.start,
+                    length=prev.length + extent.length,
+                )
+            else:
+                merged_extents.append(extent)
+
+        if len(merged_extents) > 48:
+            # Phase 10 does not implement chain-expansion growth;
+            # callers requesting this much at once should bump the
+            # grow step or wait for phase 12 (file extend).
+            raise AFSError(
+                f"object {int(sin):#x} grow would overflow the last map block's "
+                f"48 data extents (would need {len(merged_extents)}); "
+                f"chain-expansion growth not implemented in phase 10"
+            )
+
+        new_last_block = MapSector(
+            sin=last_block.sin,
+            extents=tuple(merged_extents),
+            last_sector_bytes=0,  # whole-sector growth, no partial last sector yet
+            sequence_number=(last_block.sequence_number + 1) & 0xFF,
+            next_sin=last_block.next_sin,
+        )
+        self._write_sector(int(last_block.sin), new_last_block.to_bytes())
+
+        # Flush bitmap shadow so the new allocations persist.
+        self._bitmap_shadow().flush()
+
+        # Return the new total sector count.
+        return chain.total_sectors() + additional_sectors
+
+    # ------------------------------------------------------------------
+    # Directory insert with auto-grow — phase 10
+    # ------------------------------------------------------------------
+
+    def insert_into_directory(
+        self,
+        dir_sin: SystemInternalName,
+        entry: DirectoryEntry,
+    ) -> None:
+        """Insert ``entry`` into the directory at ``dir_sin``.
+
+        Reads the directory bytes, calls
+        :func:`~oaknut.afs.directory.insert_entry`, and writes the
+        result back. If the directory's free list is empty the
+        underlying object is grown by one disc block (matching
+        ``CHZSZE`` at ``Uade0E:1167``) and the insert is retried.
+        The grow step is capped at ``MAXDIR = 26`` sectors.
+
+        Raises :class:`AFSDirectoryFullError` if the directory is
+        already at ``MAXDIR`` and a grow would exceed the cap.
+        """
+        raw = self._read_object_bytes(dir_sin)
+        try:
+            new_raw = insert_entry(raw, entry)
+        except AFSDirectoryFullError:
+            new_size = len(raw) + _DIRECTORY_GROW_STEP_BYTES
+            if new_size > _MAX_DIRECTORY_BYTES:
+                raise AFSDirectoryFullError(
+                    f"directory at sin {int(dir_sin):#x} already at MAXDIR "
+                    f"({_MAX_DIRECTORY_BYTES} bytes); cannot grow further"
+                ) from None
+            # Grow the underlying object first, then reformat the
+            # in-memory bytes, then re-run the insert.
+            self._grow_object_by_sectors(dir_sin, _DIRECTORY_GROW_STEP_BYTES // MAP_SECTOR_SIZE)
+            grown_raw = grow_directory_bytes(raw, new_size)
+            new_raw = insert_entry(grown_raw, entry)
+
+        self._write_object_bytes(dir_sin, new_raw)
+
+    # ------------------------------------------------------------------
+    # Context manager interface
     # ------------------------------------------------------------------
 
     def flush(self) -> None:
-        """Flush pending mutations. No-op in phase 6 (read-only)."""
+        """Flush pending mutations. Write-through in phase 10 — the
+        bitmap shadow writes dirty cylinders on every allocation, and
+        map/data sectors are written directly via the unified disc.
+        This call flushes any remaining dirty bitmap sectors as a
+        safety net.
+        """
+        if self._bitmap_shadow_cache is not None:
+            self._bitmap_shadow_cache.flush()
 
     def __enter__(self) -> AFS:
         return self
