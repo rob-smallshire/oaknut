@@ -14,7 +14,6 @@ from oaknut.dfs import basic
 from oaknut.dfs.catalogue import FileEntry
 from oaknut.dfs.catalogued_surface import CataloguedSurface
 from oaknut.dfs.formats import DiskFormat
-from oaknut.dfs.surface import DiscImage
 from oaknut.file import Access, AcornMeta, MetaFormat
 from oaknut.file.host_bridge import (
     DEFAULT_EXPORT_META_FORMAT,
@@ -22,6 +21,7 @@ from oaknut.file.host_bridge import (
     export_with_metadata,
     import_with_metadata,
 )
+from oaknut.image.surface import DiscImage
 
 # Valid DFS directory characters
 _DFS_DIRECTORY_CHARS = frozenset("$ABCDEFGHIJKLMNOPQRSTUVWXYZ")

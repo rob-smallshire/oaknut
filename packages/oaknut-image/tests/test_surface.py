@@ -1,6 +1,6 @@
 """Tests for the surface module."""
 import pytest
-from oaknut.dfs.surface import (
+from oaknut.image.surface import (
     DiscImage,
     SurfaceSpec,
     SurfaceSpecIncompatibilityError,

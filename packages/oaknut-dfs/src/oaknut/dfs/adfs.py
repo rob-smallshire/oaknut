@@ -38,7 +38,6 @@ from oaknut.dfs.exceptions import (
     ADFSFileLockedError,
     ADFSPathError,
 )
-from oaknut.dfs.surface import DiscImage, SurfaceSpec
 from oaknut.dfs.unified_disc import UnifiedDisc
 from oaknut.file import AcornMeta, MetaFormat
 from oaknut.file.host_bridge import (
@@ -47,6 +46,7 @@ from oaknut.file.host_bridge import (
     export_with_metadata,
     import_with_metadata,
 )
+from oaknut.image.surface import DiscImage, SurfaceSpec
 
 _ADFS_SECTORS_PER_TRACK = 16
 _ADFS_BYTES_PER_SECTOR = 256

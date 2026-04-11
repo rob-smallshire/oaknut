@@ -1,8 +1,8 @@
 """Tests for UnifiedDisc."""
 
 import pytest
-from oaknut.dfs.surface import DiscImage, SurfaceSpec
 from oaknut.dfs.unified_disc import UnifiedDisc
+from oaknut.image.surface import DiscImage, SurfaceSpec
 
 
 class TestUnifiedDiscSingleSurface:
