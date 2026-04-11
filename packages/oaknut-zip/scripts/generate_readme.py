@@ -38,7 +38,7 @@ EXAMPLE_XATTR_FILES = ["SetStation", "ReadMe"]
 
 
 def run_oaknut_zip(*args: str) -> str:
-    """Run oaknut_zip.py via uv and return stripped stdout."""
+    """Run the oaknut-zip CLI via uv and return stripped stdout."""
     uv = shutil.which("uv")
     if uv is None:
         print("ERROR: uv not found on PATH", file=sys.stderr)

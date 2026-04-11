@@ -1,10 +1,10 @@
 """ZIP-specific constants and dict keys for oaknut-zip.
 
 Metadata types, access enums, source labels, and filename-encoding
-helpers live in ``oaknut_file``. This module keeps only the pieces
+helpers live in ``oaknut.file``. This module keeps only the pieces
 that are specific to the ZIP layer: SparkFS extra-field constants
-and the dict keys used by :func:`~oaknut_zip.api.list_archive` and
-:func:`~oaknut_zip.api.archive_info`.
+and the dict keys used by :func:`~oaknut.zip.api.list_archive` and
+:func:`~oaknut.zip.api.archive_info`.
 """
 
 from __future__ import annotations

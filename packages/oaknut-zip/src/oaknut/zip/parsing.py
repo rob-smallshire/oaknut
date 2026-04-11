@@ -15,12 +15,12 @@ from __future__ import annotations
 import struct
 import zipfile
 
-from oaknut_file import (
+from oaknut.file import (
     AcornMeta,
     parse_encoded_filename,
     parse_inf_line,
 )
-from oaknut_file import SOURCE_FILENAME, SOURCE_SPARKFS
+from oaknut.file import SOURCE_FILENAME, SOURCE_SPARKFS
 
 from .models import (
     SPARKFS_DATA_LENGTH,

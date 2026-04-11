@@ -39,7 +39,7 @@ def list_xattrs(filepath: Path) -> list[str]:
 
 from click.testing import CliRunner
 
-from oaknut_file import (
+from oaknut.file import (
     AcornMeta,
     MetaFormat,
     build_filename_suffix,
@@ -50,14 +50,14 @@ from oaknut_file import (
     parse_encoded_filename,
     parse_inf_line,
 )
-from oaknut_zip import (
+from oaknut.zip import (
     build_inf_index,
     extract_member,
     parse_sparkfs_extra,
     resolve_metadata,
     sanitise_extract_path,
 )
-from oaknut_zip.cli import cli
+from oaknut.zip.cli import cli
 
 FIXTURES_DIRPATH = Path(__file__).resolve().parent / "fixtures"
 NETUTILS_ZIP_FILEPATH = FIXTURES_DIRPATH / "NetUtils.zip"
@@ -1397,7 +1397,7 @@ class TestCliExtract:
     def test_xattr_rejected_on_windows(self, tmp_path, meta_format):
         zip_filepath = make_zip_file(tmp_path, [("FILE", b"data", None)])
         runner = CliRunner()
-        with patch("oaknut_zip.api.sys") as mock_sys:
+        with patch("oaknut.zip.api.sys") as mock_sys:
             mock_sys.platform = "win32"
             result = runner.invoke(
                 cli,
@@ -1483,7 +1483,7 @@ class TestCliInfo:
 
 class TestCliVersion:
     def test_version(self):
-        from oaknut_zip import __version__
+        from oaknut.zip import __version__
 
         runner = CliRunner()
         result = runner.invoke(cli, ["--version"])

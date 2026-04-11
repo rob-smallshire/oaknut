@@ -1,7 +1,7 @@
 """Entry point for running oaknut-zip as a module.
 
 This allows oaknut-zip to be executed as:
-    python -m oaknut_zip
+    python -m oaknut.zip
 """
 
 from .cli import cli

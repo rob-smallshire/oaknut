@@ -6,7 +6,7 @@ from pathlib import Path
 
 import click
 
-from oaknut_file import MetaFormat, format_access_text
+from oaknut.file import MetaFormat, format_access_text
 
 from . import __version__
 from .api import archive_info, extract_archive, list_archive

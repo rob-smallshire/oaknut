@@ -8,7 +8,7 @@ from pathlib import Path
 
 import click
 
-from oaknut_file import (
+from oaknut.file import (
     AcornMeta,
     MetaFormat,
     SOURCE_DIR,
@@ -96,7 +96,7 @@ def extract_member(
         decode_filenames: Strip encoded metadata suffixes from filenames.
         owner: Econet owner ID for inf-pieb and xattr-pieb formats.
         inf_index: Pre-built index of bundled ``.inf`` metadata, as
-            returned by :func:`~oaknut_zip.parsing.build_inf_index`.
+            returned by :func:`~oaknut.zip.parsing.build_inf_index`.
     """
 
     if info.is_dir():
