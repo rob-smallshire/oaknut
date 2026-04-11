@@ -1,9 +1,22 @@
 """Shared pytest fixtures for reference image tests."""
 
+import sys
+from pathlib import Path
+
+# Make `tests/helpers/` importable as a top-level `helpers` package from
+# any test module in this directory. Under pytest's legacy `prepend`
+# import mode this happened automatically, but the monorepo runs in
+# `importlib` mode (required for PEP 420 namespace packages) which
+# does not inject test directories into sys.path. Inserting the
+# tests directory here restores the `from helpers.adfs_image import ...`
+# import pattern used throughout.
+_TESTS_DIR = Path(__file__).parent
+if str(_TESTS_DIR) not in sys.path:
+    sys.path.insert(0, str(_TESTS_DIR))
+
 import pytest
 import shutil
 import stat
-from pathlib import Path
 
 # Import to ensure catalogue classes are registered
 import oaknut_dfs.acorn_dfs_catalogue  # noqa: F401
