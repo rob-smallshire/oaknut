@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+*.egg-info/
+.venv/
+dist/
+build/
+
+# Library package — lockfile is for applications only
+uv.lock

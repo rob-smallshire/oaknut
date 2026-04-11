@@ -1,0 +1,62 @@
+"""Acorn file metadata handling.
+
+Shared metadata layer for the oaknut package family: INF sidecar
+parsing/formatting, filename encoding schemes, extended attributes,
+and access flag management.
+"""
+
+__version__ = "0.1.3"
+
+from oaknut_file.access import Access, format_access_hex, format_access_text
+from oaknut_file.meta import AcornMeta
+from oaknut_file.formats import (
+    MetaFormat,
+    SOURCE_DIR,
+    SOURCE_FILENAME,
+    SOURCE_INF_PIEB,
+    SOURCE_INF_TRAD,
+    SOURCE_SPARKFS,
+)
+from oaknut_file.inf import (
+    format_pieb_inf_line,
+    format_trad_inf_line,
+    parse_inf_line,
+    read_inf_file,
+    write_inf_file,
+)
+from oaknut_file.filename_encoding import (
+    build_filename_suffix,
+    build_mos_filename_suffix,
+    parse_encoded_filename,
+)
+from oaknut_file.xattr import (
+    read_acorn_xattrs,
+    read_econet_xattrs,
+    write_acorn_xattrs,
+    write_econet_xattrs,
+)
+
+__all__ = [
+    "Access",
+    "AcornMeta",
+    "MetaFormat",
+    "SOURCE_DIR",
+    "SOURCE_FILENAME",
+    "SOURCE_INF_PIEB",
+    "SOURCE_INF_TRAD",
+    "SOURCE_SPARKFS",
+    "build_filename_suffix",
+    "build_mos_filename_suffix",
+    "format_access_hex",
+    "format_access_text",
+    "format_pieb_inf_line",
+    "format_trad_inf_line",
+    "parse_encoded_filename",
+    "parse_inf_line",
+    "read_acorn_xattrs",
+    "read_econet_xattrs",
+    "read_inf_file",
+    "write_acorn_xattrs",
+    "write_econet_xattrs",
+    "write_inf_file",
+]

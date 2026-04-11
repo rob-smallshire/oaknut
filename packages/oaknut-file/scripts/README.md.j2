@@ -1,0 +1,167 @@
+# oaknut-file
+
+[![PyPI version](https://img.shields.io/pypi/v/oaknut-file.svg)](https://pypi.org/project/oaknut-file/)
+[![CI](https://github.com/rob-smallshire/oaknut-file/actions/workflows/tests.yml/badge.svg)](https://github.com/rob-smallshire/oaknut-file/actions/workflows/tests.yml)
+[![Python versions](https://img.shields.io/pypi/pyversions/oaknut-file.svg)](https://pypi.org/project/oaknut-file/)
+[![License: MIT](https://img.shields.io/pypi/l/oaknut-file.svg)](https://github.com/rob-smallshire/oaknut-file/blob/master/LICENSE)
+
+Acorn file metadata handling for the oaknut package family.
+
+`oaknut-file` is the shared metadata layer used by
+[`oaknut-zip`](https://github.com/rob-smallshire/oaknut-zip) and
+[`oaknut-dfs`](https://github.com/rob-smallshire/oaknut-dfs). It provides:
+
+- The `Access` IntFlag enum for Acorn file attribute bytes
+- The `AcornMeta` dataclass for load/exec addresses and attributes
+- INF sidecar file parsing and formatting (traditional and PiEconetBridge variants)
+- Filename metadata encoding (`,xxx`, `,llllllll,eeeeeeee`, `,load-exec`)
+- Extended attribute read/write under `user.acorn.*` and `user.econet_*`
+
+## Installation
+
+Using [uv](https://docs.astral.sh/uv/) (recommended):
+
+```bash
+uv add oaknut-file
+```
+
+`pip install oaknut-file` also works.
+
+The `xattr` package is automatically installed on macOS, where it is
+required for extended attribute support. Linux uses `os.setxattr` from
+the standard library and needs no additional dependency. Windows does
+not support extended attributes; the xattr functions will raise on use.
+
+## Quick start
+
+### Access flags
+
+The `Access` IntFlag enum represents the standard Acorn OSFILE attribute byte.
+Bit values match the filing system API convention used by PiEconetBridge and
+the `user.acorn.attr` extended attribute.
+
+```python
+from oaknut_file import Access
+
+# Compose flags with bitwise OR
+flags = Access.R | Access.W | Access.L
+print(repr(flags))   # {{ access_example }}
+print(hex(flags))    # {{ access_int }}
+```
+
+| Flag | Value | Meaning |
+|------|-------|---------|
+| `Access.R`  | 0x01 | Owner read |
+| `Access.W`  | 0x02 | Owner write |
+| `Access.E`  | 0x04 | Execute only |
+| `Access.L`  | 0x08 | Locked |
+| `Access.PR` | 0x10 | Public read |
+| `Access.PW` | 0x20 | Public write |
+
+### INF sidecar files
+
+Two INF sidecar formats are supported. `parse_inf_line()` auto-detects which
+format a line uses, while `format_trad_inf_line()` and `format_pieb_inf_line()`
+let you choose explicitly when writing.
+
+```python
+from oaknut_file import (
+    Access, format_trad_inf_line, format_pieb_inf_line, parse_inf_line,
+)
+
+# Traditional INF: filename load exec length [attr]
+trad = format_trad_inf_line(
+    filename="HELLO",
+    load_addr=0x1900,
+    exec_addr=0x8023,
+    length=0x100,
+    attr=int(Access.R | Access.W),
+)
+print(trad)
+# {{ trad_line }}
+
+# PiEconetBridge INF: owner load exec perm
+pieb = format_pieb_inf_line(
+    load_addr=0xFFFFDD00,
+    exec_addr=0xFFFFDD00,
+    attr=int(Access.R | Access.W | Access.L | Access.PR),
+)
+print(pieb)
+# {{ pieb_line }}
+
+# Auto-detect format on parse
+source, meta = parse_inf_line(trad)
+print(meta)
+# AcornMeta({{ trad_parsed }})
+
+source, meta = parse_inf_line(pieb)
+print(meta)
+# AcornMeta({{ pieb_parsed }})
+```
+
+### Filename metadata encoding
+
+Three filename suffix conventions are supported for embedding load/exec
+addresses or RISC OS filetypes in host filenames.
+
+```python
+from oaknut_file import parse_encoded_filename
+
+# RISC OS filetype suffix (3 hex digits)
+clean, meta = parse_encoded_filename("PROG,ffb")
+print(clean, meta.infer_filetype())
+# {{ filename_parsed }}
+
+# MOS load-exec suffix (variable-width hex)
+clean, meta = parse_encoded_filename("PROG,1900-801f")
+print(clean, meta.load_addr, meta.exec_addr)
+# {{ mos_parsed }}
+```
+
+### Filetype-stamped load addresses
+
+When a load address has its top 12 bits set to `0xFFF`, the next 12 bits
+encode a RISC OS filetype.
+
+```python
+from oaknut_file import AcornMeta
+
+meta = AcornMeta(load_addr=0xFFFF0E10)
+print(meta.is_filetype_stamped, hex(meta.infer_filetype()))
+# {{ filetype_demo }}
+```
+
+### Extended attributes
+
+```python
+from oaknut_file import write_acorn_xattrs, read_acorn_xattrs
+
+# Write to user.acorn.* namespace
+write_acorn_xattrs(
+    "myfile.bin",
+    load_addr=0x1900,
+    exec_addr=0x8023,
+    attr=0x03,
+)
+
+# Read back (falls through to user.econet_* if user.acorn.* is absent)
+meta = read_acorn_xattrs("myfile.bin")
+print(meta.load_addr, meta.exec_addr, meta.attr)
+```
+
+## Public API
+
+| Module | Exports |
+|--------|---------|
+| `oaknut_file.access` | `Access`, `format_access_hex`, `format_access_text` |
+| `oaknut_file.meta` | `AcornMeta` |
+| `oaknut_file.formats` | `MetaFormat`, `SOURCE_*` labels |
+| `oaknut_file.inf` | `parse_inf_line`, `format_trad_inf_line`, `format_pieb_inf_line`, `read_inf_file`, `write_inf_file` |
+| `oaknut_file.filename_encoding` | `parse_encoded_filename`, `build_filename_suffix`, `build_mos_filename_suffix` |
+| `oaknut_file.xattr` | `read_acorn_xattrs`, `write_acorn_xattrs`, `read_econet_xattrs`, `write_econet_xattrs` |
+
+All public symbols are also re-exported from the top-level `oaknut_file` package.
+
+## License
+
+MIT
