@@ -15,12 +15,13 @@ the bytecode). The canonical way to move a BASIC program through a
 disc image is ``DFSPath.read_basic`` / ``write_basic``, which wrap
 these functions with the correct load-address default.
 
-This module is deliberately self-contained — it imports nothing
-from the rest of ``oaknut.dfs`` — so it can later be lifted into a
-dedicated ``oaknut-basic`` package without refactoring.
+This module is deliberately self-contained and has no runtime
+dependencies on any other oaknut package.
 """
 
 from __future__ import annotations
+
+__version__ = "1.0.0"
 
 # Canonical load addresses for BBC BASIC programs on each host.
 # Programs saved by *SAVE on a real machine use these by default.

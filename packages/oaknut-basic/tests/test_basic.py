@@ -6,8 +6,8 @@ public API shape so the stubs can be replaced with working code
 without disturbing callers.
 """
 
+import oaknut.basic as basic
 import pytest
-from oaknut.dfs import basic
 
 
 class TestConstants:

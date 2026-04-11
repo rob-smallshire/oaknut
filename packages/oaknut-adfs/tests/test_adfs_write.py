@@ -183,27 +183,27 @@ class TestReadText:
 class TestWriteBasic:
 
     def test_write_basic_propagates_not_implemented(self):
-        from oaknut.dfs import basic  # noqa: F401 (module reference for docs)
+        import oaknut.basic as basic  # noqa: F401 (module reference for docs)
         adfs = ADFS.create(ADFS_S)
         with pytest.raises(NotImplementedError):
             (adfs.root / "Prog").write_basic("10 PRINT")
 
     def test_write_basic_composes_tokenise_then_write_bytes(self, monkeypatch):
-        from oaknut.dfs import basic
+        import oaknut.basic as basic
         monkeypatch.setattr(basic, "tokenise", lambda src: b"\x0d\xff\x0d")
         adfs = ADFS.create(ADFS_S)
         (adfs.root / "Prog").write_basic("10 PRINT")
         assert (adfs.root / "Prog").read_bytes() == b"\x0d\xff\x0d"
 
     def test_write_basic_default_load_address_is_bbc(self, monkeypatch):
-        from oaknut.dfs import basic
+        import oaknut.basic as basic
         monkeypatch.setattr(basic, "tokenise", lambda src: b"\x00")
         adfs = ADFS.create(ADFS_S)
         (adfs.root / "Prog").write_basic("10 PRINT")
         assert (adfs.root / "Prog").stat().load_address == 0x1900
 
     def test_write_basic_explicit_electron_load_address(self, monkeypatch):
-        from oaknut.dfs import basic
+        import oaknut.basic as basic
         monkeypatch.setattr(basic, "tokenise", lambda src: b"\x00")
         adfs = ADFS.create(ADFS_S)
         (adfs.root / "Prog").write_basic(
@@ -212,7 +212,7 @@ class TestWriteBasic:
         assert (adfs.root / "Prog").stat().load_address == 0x0E00
 
     def test_write_basic_forwards_exec_and_locked(self, monkeypatch):
-        from oaknut.dfs import basic
+        import oaknut.basic as basic
         monkeypatch.setattr(basic, "tokenise", lambda src: b"\x00")
         adfs = ADFS.create(ADFS_S)
         (adfs.root / "Prog").write_basic(
@@ -232,14 +232,14 @@ class TestReadBasic:
             (adfs.root / "Prog").read_basic()
 
     def test_read_basic_composes_read_bytes_then_detokenise(self, monkeypatch):
-        from oaknut.dfs import basic
+        import oaknut.basic as basic
         monkeypatch.setattr(basic, "detokenise", lambda data: "10 PRINT")
         adfs = ADFS.create(ADFS_S)
         (adfs.root / "Prog").write_bytes(b"\x0d\xff")
         assert (adfs.root / "Prog").read_basic() == "10 PRINT"
 
     def test_read_basic_forwards_bytes_to_detokenise(self, monkeypatch):
-        from oaknut.dfs import basic
+        import oaknut.basic as basic
         captured = []
 
         def stub(data):

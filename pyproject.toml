@@ -42,6 +42,7 @@ classifiers = [
 dependencies = [
     "oaknut-file>=1.0",
     "oaknut-image>=1.0",
+    "oaknut-basic>=1.0",
     "oaknut-dfs>=4.0",
     "oaknut-adfs>=1.0",
     "oaknut-zip>=2.0",
@@ -62,6 +63,7 @@ members = ["packages/oaknut-*"]
 [tool.uv.sources]
 oaknut-file  = { workspace = true }
 oaknut-image = { workspace = true }
+oaknut-basic = { workspace = true }
 oaknut-dfs   = { workspace = true }
 oaknut-adfs  = { workspace = true }
 oaknut-zip   = { workspace = true }
@@ -91,6 +93,7 @@ addopts = ["--import-mode=importlib"]
 testpaths = [
     "packages/oaknut-file/tests",
     "packages/oaknut-image/tests",
+    "packages/oaknut-basic/tests",
     "packages/oaknut-dfs/tests",
     "packages/oaknut-adfs/tests",
     "packages/oaknut-zip/tests",

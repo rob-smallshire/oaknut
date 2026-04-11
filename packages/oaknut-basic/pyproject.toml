@@ -3,32 +3,23 @@ requires = ["setuptools>=68.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "oaknut-adfs"
+name = "oaknut-basic"
 dynamic = ["version"]
 authors = [{ name = "Robert Smallshire", email = "robert@smallshire.org.uk" }]
-description = "Acorn ADFS disc image support for Archimedes, RISC OS, and BBC Master"
+description = "BBC BASIC tokeniser and detokeniser for Acorn 8-bit and 32-bit BASIC source files"
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
-requires-python = ">=3.11"
+requires-python = ">=3.10"
 classifiers = [
     "Development Status :: 3 - Alpha",
-    "Environment :: Console",
     "Intended Audience :: Developers",
-    "Operating System :: OS Independent",
-    "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
-    "Topic :: System :: Filesystems",
 ]
-dependencies = [
-    "oaknut-file>=1.0",
-    "oaknut-image>=1.0",
-    "oaknut-basic>=1.0",
-    "typename>=1.0.4",
-]
+dependencies = []
 
 [project.urls]
 Homepage = "https://github.com/rob-smallshire/oaknut"
@@ -46,7 +37,7 @@ dev = [
 ]
 
 [tool.setuptools.dynamic]
-version = { attr = "oaknut.adfs.__version__" }
+version = { attr = "oaknut.basic.__version__" }
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -58,8 +49,8 @@ serialize = ["{major}.{minor}.{patch}"]
 tag = true
 commit = true
 message = "Bump version: {current_version} → {new_version}"
-tag_name = "oaknut-adfs-v{new_version}"
+tag_name = "oaknut-basic-v{new_version}"
 tag_message = "Bump version: {current_version} → {new_version}"
 files = [
-    { filename = "src/oaknut/adfs/__init__.py" },
+    { filename = "src/oaknut/basic/__init__.py" },
 ]

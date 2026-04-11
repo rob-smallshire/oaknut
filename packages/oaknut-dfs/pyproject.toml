@@ -25,6 +25,7 @@ classifiers = [
 dependencies = [
     "oaknut-file>=1.0",
     "oaknut-image>=1.0",
+    "oaknut-basic>=1.0",
     "typename>=1.0.4",
 ]
 

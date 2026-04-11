@@ -22,6 +22,7 @@ from os import PathLike
 from pathlib import Path
 from typing import Iterator, Union
 
+import oaknut.basic as basic
 from oaknut.adfs.directory import (
     Access,
     ADFSDirectoryFormat,
@@ -37,7 +38,6 @@ from oaknut.adfs.exceptions import (
     ADFSPathError,
 )
 from oaknut.adfs.free_space_map import OldFreeSpaceMap
-from oaknut.dfs import basic
 from oaknut.file import AcornMeta, MetaFormat
 from oaknut.file.host_bridge import (
     DEFAULT_EXPORT_META_FORMAT,

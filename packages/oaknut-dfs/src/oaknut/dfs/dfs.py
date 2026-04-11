@@ -10,7 +10,7 @@ from os import PathLike
 from pathlib import Path
 from typing import Iterator, Union
 
-from oaknut.dfs import basic
+import oaknut.basic as basic
 from oaknut.dfs.catalogue import FileEntry
 from oaknut.dfs.catalogued_surface import CataloguedSurface
 from oaknut.dfs.formats import DiskFormat
