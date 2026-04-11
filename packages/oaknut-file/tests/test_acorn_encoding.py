@@ -1,7 +1,7 @@
 """Tests for Acorn character encoding."""
 
 import pytest
-from oaknut.dfs.acorn_encoding import (
+from oaknut.file.acorn_encoding import (
     acorn_to_unicode,
     is_valid_acorn_filename_char,
     sanitize_for_acorn,

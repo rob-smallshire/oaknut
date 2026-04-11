@@ -5,7 +5,7 @@ and write_text().
 """
 
 # Ensure acorn codec is registered
-import oaknut.dfs.acorn_encoding  # noqa: F401
+import oaknut.file.acorn_encoding  # noqa: F401
 import pytest
 from oaknut.dfs.adfs import ADFS, ADFS_L, ADFS_M, ADFS_S
 from oaknut.dfs.exceptions import (

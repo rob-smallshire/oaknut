@@ -2,10 +2,10 @@ from collections import namedtuple
 
 # Import catalogue implementations to register them
 import oaknut.dfs.acorn_dfs_catalogue  # noqa: F401
+import oaknut.dfs.watford_dfs_catalogue  # noqa: F401
 
 # Import acorn_encoding to register the codec
-import oaknut.dfs.acorn_encoding  # noqa: F401
-import oaknut.dfs.watford_dfs_catalogue  # noqa: F401
+import oaknut.file.acorn_encoding  # noqa: F401
 from oaknut.dfs.adfs import (
     ADFS,
     ADFS_L,

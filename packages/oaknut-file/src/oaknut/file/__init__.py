@@ -7,6 +7,8 @@ and access flag management.
 
 __version__ = "1.0.0"
 
+# Side-effect import registers the 'acorn' text codec on package import.
+import oaknut.file.acorn_encoding  # noqa: F401
 from oaknut.file.access import Access, format_access_hex, format_access_text
 from oaknut.file.filename_encoding import (
     build_filename_suffix,
