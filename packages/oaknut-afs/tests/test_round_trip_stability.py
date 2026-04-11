@@ -86,9 +86,7 @@ class TestRoundTrip:
         initialise(b, spec=spec)
         # Read the AFS region from both and compare sector-by-sector.
         a_afs = a.afs_partition
-        b_afs = b.afs_partition
         start = a_afs.start_cylinder * 16
-        end = a._fsm.total_sectors
         # Note: a and b have the same _total_sectors after shrink.
         # Compare byte-for-byte in the AFS region.
         for sector in range(start, a.total_size // 256):
