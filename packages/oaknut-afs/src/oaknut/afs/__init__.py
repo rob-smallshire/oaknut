@@ -16,6 +16,7 @@ wired up yet; the full public API will come online phase by phase (see
 __version__ = "0.1.0"
 
 from oaknut.afs.access import AFSAccess
+from oaknut.afs.afs import AFS, AFSNotPresentError
 from oaknut.afs.exceptions import (
     AFSAccessDeniedError,
     AFSAlreadyPartitionedError,
@@ -35,6 +36,8 @@ from oaknut.afs.exceptions import (
     AFSQuotaExceededError,
     AFSRepartitionError,
 )
+from oaknut.afs.passwords import PasswordsFile, UserRecord
+from oaknut.afs.path import AFSPath
 from oaknut.afs.types import (
     AfsDate,
     Cylinder,
@@ -44,7 +47,12 @@ from oaknut.afs.types import (
 )
 
 __all__ = [
+    "AFS",
     "AFSAccess",
+    "AFSNotPresentError",
+    "AFSPath",
+    "PasswordsFile",
+    "UserRecord",
     "AFSAccessDeniedError",
     "AFSAlreadyPartitionedError",
     "AFSBrokenDirectoryError",

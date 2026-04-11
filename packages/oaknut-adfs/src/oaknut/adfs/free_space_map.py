@@ -19,6 +19,14 @@ _OLD_NAME_0_OFFSET = 0x0F7  # 5 bytes (chars 1, 3, 5, 7, 9 of disc name)
 _OLD_SIZE_OFFSET = 0x0FC  # 3 bytes, disc size in sectors
 _CHECK_0_OFFSET = 0x0FF  # 1 byte, checksum
 
+# Offsets of the Level 3 File Server AFS info-sector pointers, installed
+# by WFSINIT when an AFS partition occupies the tail of the disc. These
+# are 4-byte little-endian writes (BBC BASIC ``!``-operator), and they
+# overlap the reserved byte and the OldName0/OldName1 disc-name fields.
+# Uade02.asm:203 — ``SZOFF = &F6``. Matches WFSINIT.bas:760, 780.
+_AFS_SEC1_OFFSET = 0x0F6  # 4 bytes LE: primary info sector address
+_AFS_SEC2_OFFSET = 0x1F6  # 4 bytes LE: secondary info sector address
+
 # Sector 1 offsets
 _FREE_LEN_OFFSET = 0x100  # 82 × 3-byte lengths
 _OLD_NAME_1_OFFSET = 0x1F6  # 5 bytes (chars 0, 2, 4, 6, 8 of disc name)
@@ -187,6 +195,46 @@ class OldFreeSpaceMap:
     def disc_id(self) -> int:
         """Disc identifier (2 bytes, little-endian)."""
         return self._data[_OLD_ID_OFFSET] | (self._data[_OLD_ID_OFFSET + 1] << 8)
+
+    def install_afs_pointers(self, sec1: int, sec2: int) -> None:
+        """Write the ``(sec1, sec2)`` AFS info-sector pointers into the map.
+
+        WFSINIT stores these as 4-byte little-endian values at offsets
+        ``&F6`` (sector 0) and ``&1F6`` (sector 1). Both map sector
+        checksums are recomputed to match. This is the in-place
+        equivalent of what ``WFSINIT.bas:760-800`` does before writing
+        the AFS region; phase 15's ``wfsinit.partition.apply`` drives
+        it after shrinking the ADFS free-space map.
+
+        Callers must have already shrunk the ADFS map to make room
+        for AFS; this method does not validate that the target
+        sectors lie outside the ADFS data region.
+        """
+        if not (0 <= sec1 <= 0xFFFFFFFF):
+            raise ValueError(f"sec1 {sec1} outside 0..0xFFFFFFFF")
+        if not (0 <= sec2 <= 0xFFFFFFFF):
+            raise ValueError(f"sec2 {sec2} outside 0..0xFFFFFFFF")
+        sec1_bytes = sec1.to_bytes(4, "little")
+        sec2_bytes = sec2.to_bytes(4, "little")
+        for i, byte in enumerate(sec1_bytes):
+            self._data[_AFS_SEC1_OFFSET + i] = byte
+        for i, byte in enumerate(sec2_bytes):
+            self._data[_AFS_SEC2_OFFSET + i] = byte
+        self._recalculate_checksums()
+
+    @property
+    def afs_info_pointers(self) -> tuple[int, int]:
+        """Return the (sec1, sec2) AFS info-sector pointers from the map.
+
+        WFSINIT stores two 4-byte little-endian sector addresses at
+        offsets ``&F6`` (sector 0) and ``&1F6`` (sector 1) when an AFS
+        partition is installed in the tail cylinders of the disc. Both
+        are zero on a disc without AFS, in which case the caller should
+        treat it as "no AFS partition present".
+        """
+        sec1 = int.from_bytes(bytes(self._data[_AFS_SEC1_OFFSET : _AFS_SEC1_OFFSET + 4]), "little")
+        sec2 = int.from_bytes(bytes(self._data[_AFS_SEC2_OFFSET : _AFS_SEC2_OFFSET + 4]), "little")
+        return sec1, sec2
 
     @property
     def boot_option(self) -> int:
