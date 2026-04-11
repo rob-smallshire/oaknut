@@ -61,3 +61,28 @@ INFO_SECTOR_MEDIA_FLAG = 0  # Winchester
 
 # The PDF says the second copy (at sector 0x61, cylinder 6) is "identical".
 INFO_SECTOR_COPY_BYTES: bytes = INFO_SECTOR_BYTES
+
+
+# ---------------------------------------------------------------------------
+# Root directory map sector (JesMap)
+#
+# PDF page 11 — "Using our Test Disc example, we can see that the SIN of
+# the test disc's root directory is &000071". The map sector is read from
+# disc address &7100; the PDF shows its contents:
+#
+#     007100: 4A 65 73 4D 61 70 00 00 00 00 72 00 00 02 00 00
+#     007110: 00 00 ...
+#
+# It is the map for a single-extent, 2-sector (512 byte) directory
+# starting at sector &72.
+# ---------------------------------------------------------------------------
+
+ROOT_MAP_SECTOR_BYTES: bytes = (
+    bytes.fromhex("4A 65 73 4D 61 70 00 00 00 00 72 00 00 02 00 0000 00")
+).ljust(256, b"\x00")
+
+ROOT_MAP_SECTOR_SIN = 0x000071
+ROOT_MAP_EXTENT_START = 0x000072
+ROOT_MAP_EXTENT_LENGTH = 2
+ROOT_MAP_OBJECT_SIZE_BYTES = 512
+ROOT_MAP_SEQUENCE_NUMBER = 0
