@@ -1,0 +1,10 @@
+line-length = 100
+target-version = "py311"
+
+[lint]
+select = ["E", "F", "W", "I"]
+
+[lint.per-file-ignores]
+# Tests routinely re-import symbols for readability and occasionally
+# have unused imports for fixtures.
+"**/tests/**/*.py" = ["F401", "E501"]

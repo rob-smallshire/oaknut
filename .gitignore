@@ -1,0 +1,44 @@
+# Python bytecode — note the namespace-package entries. Python creates
+# __pycache__ directories at the PEP 420 namespace root as well as at
+# the regular package level, and a stray oaknut/__pycache__ checked
+# into git looks alarmingly like a missing-namespace bug.
+__pycache__/
+*.py[cod]
+*$py.class
+
+packages/*/src/oaknut/__pycache__/
+packages/*/src/oaknut/*/__pycache__/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Build artefacts
+build/
+dist/
+*.egg-info/
+*.egg
+wheels/
+pip-wheel-metadata/
+
+# Editors and tools
+.idea/
+.vscode/
+.DS_Store
+*.swp
+
+# Test and coverage
+.pytest_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.mypy_cache/
+.hypothesis/
+
+# uv lockfile is NOT committed for oaknut — we ship libraries, not
+# applications, and a committed lockfile would over-constrain end-user
+# dependency resolvers. Developers regenerate on demand with `uv sync`.
+uv.lock

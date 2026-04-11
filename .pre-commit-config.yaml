@@ -1,0 +1,25 @@
+# Shared pre-commit configuration for the oaknut workspace.
+# Runs ruff, ruff-format, and the PEP 420 namespace-init guard on
+# every commit. Per-package pre-commit configs do not exist — this
+# root configuration is authoritative.
+
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.9.0
+    hooks:
+      - id: ruff
+        args: [--fix, --exit-non-zero-on-fix]
+      - id: ruff-format
+
+  - repo: local
+    hooks:
+      - id: namespace-init-guard
+        name: No src/oaknut/__init__.py in any package
+        entry: scripts/check_no_namespace_init.sh
+        language: system
+        pass_filenames: false
+        always_run: true
+        description: |
+          PEP 420 implicit namespace packages require that no package
+          ships src/oaknut/__init__.py. Each package's code lives at
+          src/oaknut/<name>/__init__.py instead.

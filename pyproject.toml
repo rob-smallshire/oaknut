@@ -1,0 +1,99 @@
+# oaknut — workspace root.
+#
+# This pyproject.toml serves two purposes:
+#
+# 1. It declares the uv workspace that stitches together the
+#    packages/oaknut-* members into a single development environment.
+#
+# 2. It defines an optional `oaknut` meta-distribution on PyPI whose
+#    only job is to depend on every family member, so `pip install
+#    oaknut` is a one-shot install of the whole suite. Publishing it
+#    also claims the bare `oaknut` name on PyPI before anyone else.
+#
+# All packages in packages/ contribute to a single PEP 420 implicit
+# namespace package (`oaknut`). No package ever ships
+# src/oaknut/__init__.py — that is enforced by scripts/check_no_namespace_init.sh
+# which runs both locally via pre-commit and in CI.
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "oaknut"
+version = "0.1.0"
+requires-python = ">=3.11"
+description = "Oaknut family meta-distribution — tools for Acorn computer filesystems, files, and formats."
+readme = "README.md"
+license = "MIT"
+authors = [{ name = "Robert Smallshire", email = "robert@smallshire.org.uk" }]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+]
+dependencies = [
+    "oaknut-file",
+    "oaknut-dfs",
+    "oaknut-zip",
+]
+
+[project.urls]
+Homepage = "https://github.com/rob-smallshire/oaknut"
+Repository = "https://github.com/rob-smallshire/oaknut"
+Issues = "https://github.com/rob-smallshire/oaknut/issues"
+
+[tool.setuptools]
+# The meta-distribution itself ships no code — only dependencies.
+packages = []
+
+[tool.uv.workspace]
+members = ["packages/oaknut-*"]
+
+[tool.uv.sources]
+oaknut-file = { workspace = true }
+oaknut-dfs  = { workspace = true }
+oaknut-zip  = { workspace = true }
+
+[tool.uv]
+default-groups = ["test", "lint", "dev"]
+
+[dependency-groups]
+test = [
+    "pytest>=8.3",
+    "pytest-cov>=5",
+]
+lint = [
+    "ruff>=0.9",
+]
+dev = [
+    "pre-commit>=3",
+    "bump-my-version>=0.28",
+]
+
+[tool.pytest.ini_options]
+# importlib mode is required for PEP 420 namespace packages. The
+# default prepend mode collides with sibling packages that contribute
+# to the same namespace — they stop resolving each other.
+minversion = "8.0"
+addopts = ["--import-mode=importlib"]
+testpaths = [
+    "packages/oaknut-file/tests",
+    "packages/oaknut-dfs/tests",
+    "packages/oaknut-zip/tests",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
