@@ -94,7 +94,7 @@ uv sync
 #### Opening and reading files
 
 ```python
-from oaknut_dfs import DFS, ACORN_DFS_80T_SINGLE_SIDED
+from oaknut.dfs import DFS, ACORN_DFS_80T_SINGLE_SIDED
 
 with DFS.from_file("Zalaga.ssd", ACORN_DFS_80T_SINGLE_SIDED) as dfs:
     print(dfs.title)   # 'ZALAG-L'
@@ -111,7 +111,7 @@ with DFS.from_file("Zalaga.ssd", ACORN_DFS_80T_SINGLE_SIDED) as dfs:
 #### Creating a new DFS disc
 
 ```python
-from oaknut_dfs import DFS, ACORN_DFS_80T_SINGLE_SIDED
+from oaknut.dfs import DFS, ACORN_DFS_80T_SINGLE_SIDED
 
 with DFS.create_file("demo.ssd", ACORN_DFS_80T_SINGLE_SIDED, title="DEMO") as dfs:
     dfs.save("$.HELLO", b"Hello, World!", load_address=0x1900)
@@ -125,7 +125,7 @@ This mirrors the BBC Micro, where double-sided discs were accessed as
 separate drives using `*DRIVE 0` and `*DRIVE 2`.
 
 ```python
-from oaknut_dfs import DFS, ACORN_DFS_80T_DOUBLE_SIDED_INTERLEAVED
+from oaknut.dfs import DFS, ACORN_DFS_80T_DOUBLE_SIDED_INTERLEAVED
 
 with DFS.from_file("game.dsd", ACORN_DFS_80T_DOUBLE_SIDED_INTERLEAVED) as side0:
     print(side0.title)
@@ -153,7 +153,7 @@ ADFS supports hierarchical directories. The format is auto-detected from
 the image size:
 
 ```python
-from oaknut_dfs import ADFS
+from oaknut.dfs import ADFS
 
 with ADFS.from_file("MasterWelcome.adl") as adfs:
     print(adfs.title)   # '80T Welcome & Utils'
@@ -178,7 +178,7 @@ with ADFS.from_file("disc.adl") as adfs:
 #### Creating a new ADFS floppy
 
 ```python
-from oaknut_dfs import ADFS, ADFS_L
+from oaknut.dfs import ADFS, ADFS_L
 
 with ADFS.create_file("blank.adl", ADFS_L, title="My Disc") as adfs:
     pass  # empty formatted disc ready for use
@@ -195,7 +195,7 @@ the companion is located automatically.
 #### Opening a hard disc image
 
 ```python
-from oaknut_dfs import ADFS
+from oaknut.dfs import ADFS
 
 with ADFS.from_file("scsi0.dat") as adfs:
     print(adfs.title)
@@ -213,7 +213,7 @@ Specify a capacity and the geometry is chosen automatically (4 heads,
 33 sectors/track --- the Acorn convention):
 
 ```python
-from oaknut_dfs import ADFS
+from oaknut.dfs import ADFS
 
 # Create a 20MB hard disc image
 with ADFS.create_file("scsi0.dat", capacity_bytes=20 * 1024 * 1024, title="Data") as adfs:

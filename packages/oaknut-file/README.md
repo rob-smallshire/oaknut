@@ -41,7 +41,7 @@ Bit values match the filing system API convention used by PiEconetBridge and
 the `user.acorn.attr` extended attribute.
 
 ```python
-from oaknut_file import Access
+from oaknut.file import Access
 
 # Compose flags with bitwise OR
 flags = Access.R | Access.W | Access.L
@@ -65,7 +65,7 @@ format a line uses, while `format_trad_inf_line()` and `format_pieb_inf_line()`
 let you choose explicitly when writing.
 
 ```python
-from oaknut_file import (
+from oaknut.file import (
     Access, format_trad_inf_line, format_pieb_inf_line, parse_inf_line,
 )
 
@@ -105,7 +105,7 @@ Three filename suffix conventions are supported for embedding load/exec
 addresses or RISC OS filetypes in host filenames.
 
 ```python
-from oaknut_file import parse_encoded_filename
+from oaknut.file import parse_encoded_filename
 
 # RISC OS filetype suffix (3 hex digits)
 clean, meta = parse_encoded_filename("PROG,ffb")
@@ -124,7 +124,7 @@ When a load address has its top 12 bits set to `0xFFF`, the next 12 bits
 encode a RISC OS filetype.
 
 ```python
-from oaknut_file import AcornMeta
+from oaknut.file import AcornMeta
 
 meta = AcornMeta(load_addr=0xFFFF0E10)
 print(meta.is_filetype_stamped, hex(meta.infer_filetype()))
@@ -134,7 +134,7 @@ print(meta.is_filetype_stamped, hex(meta.infer_filetype()))
 ### Extended attributes
 
 ```python
-from oaknut_file import write_acorn_xattrs, read_acorn_xattrs
+from oaknut.file import write_acorn_xattrs, read_acorn_xattrs
 
 # Write to user.acorn.* namespace
 write_acorn_xattrs(
@@ -153,14 +153,14 @@ print(meta.load_addr, meta.exec_addr, meta.attr)
 
 | Module | Exports |
 |--------|---------|
-| `oaknut_file.access` | `Access`, `format_access_hex`, `format_access_text` |
-| `oaknut_file.meta` | `AcornMeta` |
-| `oaknut_file.formats` | `MetaFormat`, `SOURCE_*` labels |
-| `oaknut_file.inf` | `parse_inf_line`, `format_trad_inf_line`, `format_pieb_inf_line`, `read_inf_file`, `write_inf_file` |
-| `oaknut_file.filename_encoding` | `parse_encoded_filename`, `build_filename_suffix`, `build_mos_filename_suffix` |
-| `oaknut_file.xattr` | `read_acorn_xattrs`, `write_acorn_xattrs`, `read_econet_xattrs`, `write_econet_xattrs` |
+| `oaknut.file.access` | `Access`, `format_access_hex`, `format_access_text` |
+| `oaknut.file.meta` | `AcornMeta` |
+| `oaknut.file.formats` | `MetaFormat`, `SOURCE_*` labels |
+| `oaknut.file.inf` | `parse_inf_line`, `format_trad_inf_line`, `format_pieb_inf_line`, `read_inf_file`, `write_inf_file` |
+| `oaknut.file.filename_encoding` | `parse_encoded_filename`, `build_filename_suffix`, `build_mos_filename_suffix` |
+| `oaknut.file.xattr` | `read_acorn_xattrs`, `write_acorn_xattrs`, `read_econet_xattrs`, `write_econet_xattrs` |
 
-All public symbols are also re-exported from the top-level `oaknut_file` package.
+All public symbols are also re-exported from the top-level `oaknut.file` package.
 
 ## License
 
