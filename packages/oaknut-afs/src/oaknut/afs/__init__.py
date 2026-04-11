@@ -41,6 +41,7 @@ from oaknut.afs.exceptions import (
     AFSQuotaExceededError,
     AFSRepartitionError,
 )
+from oaknut.afs.merge import merge
 from oaknut.afs.passwords import PasswordsFile, UserRecord
 from oaknut.afs.path import AFSPath
 from oaknut.afs.types import (
@@ -59,6 +60,7 @@ __all__ = [
     "Allocator",
     "PasswordsFile",
     "UserRecord",
+    "merge",
     "AFSAccessDeniedError",
     "AFSAlreadyPartitionedError",
     "AFSBrokenDirectoryError",
