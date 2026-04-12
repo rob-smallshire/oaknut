@@ -472,18 +472,121 @@ def _find_recursive(node, pattern: str, fs: FilingSystem) -> None:
 
 @cli.command()
 @click.argument("image", type=click.Path(exists=True, path_type=Path))
-def freemap(image: Path) -> None:
-    """Show free-space map."""
-    # TODO: Implement ASCII fragmentation visualisation (needs L8).
-    fs = detect_filing_system(image)
+@click.argument("path", required=False, default=None)
+def freemap(image: Path, path: str | None) -> None:
+    """Show free-space map with ASCII fragmentation bar."""
+    fs, bare = resolve_path(image, path)
+
     with open_image(image, fs) as handle:
         if fs is FilingSystem.DFS:
-            click.echo(f"Free: {handle.free_sectors} sectors")
+            _freemap_dfs(handle)
         elif fs is FilingSystem.AFS:
-            click.echo(f"Free: {handle.free_sectors} sectors")
+            _freemap_afs(handle)
         else:
-            click.echo(f"Free: {handle.free_space:,} bytes")
-    click.echo("(detailed fragmentation map not yet implemented)")
+            _freemap_adfs(handle)
+
+
+def _sector_bar(total: int, free_regions: list[tuple[int, int]], width: int = 64) -> str:
+    """Build an ASCII bar showing sector usage.
+
+    *free_regions* is a list of ``(start, length)`` in sector units.
+    ``#`` = used, ``.`` = free.
+    """
+    if total == 0:
+        return ""
+    # Build a boolean bitmap: True = free.
+    bitmap = [False] * total
+    for start, length in free_regions:
+        for s in range(start, min(start + length, total)):
+            bitmap[s] = True
+
+    # Scale to *width* characters.
+    bar = []
+    for col in range(width):
+        lo = col * total // width
+        hi = (col + 1) * total // width
+        if hi <= lo:
+            hi = lo + 1
+        # If any sector in this column is free, show it as free.
+        if any(bitmap[s] for s in range(lo, min(hi, total))):
+            bar.append(".")
+        else:
+            bar.append("#")
+    return "".join(bar)
+
+
+def _freemap_dfs(handle) -> None:
+    """DFS free-space map."""
+    regions = handle._catalogued_surface.get_free_map()
+    disk_info = handle._catalogued_surface.catalogue.get_disk_info()
+    total = disk_info.total_sectors
+    free = handle.free_sectors
+
+    bar = _sector_bar(total, regions)
+    click.echo(f"Sectors: 0{' ' * (len(bar) - 2)}{total}")
+    click.echo(f"         {bar}")
+
+    if regions:
+        largest = max(length for _, length in regions)
+        click.echo(
+            f"Free: {free} sectors in {len(regions)} region(s) "
+            f"(largest {largest} contiguous)"
+        )
+    else:
+        click.echo("Free: 0 sectors")
+
+
+def _freemap_adfs(handle) -> None:
+    """ADFS free-space map using the old-map free_space_entries."""
+    # Convert byte-addressed entries to sector-addressed.
+    byte_entries = handle._fsm.free_space_entries()
+    sector_entries = [(start // 256, length // 256) for start, length in byte_entries]
+    total_sectors = handle._fsm.total_sectors
+    free_bytes = handle.free_space
+
+    bar = _sector_bar(total_sectors, sector_entries)
+    click.echo(f"Sectors: 0{' ' * (len(bar) - 2)}{total_sectors}")
+    click.echo(f"         {bar}")
+
+    if sector_entries:
+        largest = max(length for _, length in sector_entries)
+        click.echo(
+            f"Free: {free_bytes:,} bytes ({sum(n for _, n in sector_entries)} sectors) "
+            f"in {len(sector_entries)} region(s) (largest {largest} contiguous)"
+        )
+    else:
+        click.echo("Free: 0 bytes")
+
+
+def _freemap_afs(handle) -> None:
+    """AFS free-space map showing per-cylinder occupancy."""
+    shadow = handle._bitmap_shadow()
+    geom = handle.geometry
+    spc = geom.sectors_per_cylinder
+    start_cyl = handle.start_cylinder
+    num_cylinders = geom.cylinders - start_cyl
+
+    total_free = 0
+    total_sectors = 0
+    bar_chars = []
+    for i in range(num_cylinders):
+        bm = shadow.bitmap_for(i)
+        free = bm.free_count()
+        total_free += free
+        total_sectors += spc
+        # Proportional fill for this cylinder.
+        if free == spc:
+            bar_chars.append(".")
+        elif free == 0:
+            bar_chars.append("#")
+        else:
+            bar_chars.append(":")  # partially used
+
+    bar = "".join(bar_chars)
+    click.echo(f"Cylinders: {start_cyl}{' ' * max(0, len(bar) - 2)}{geom.cylinders}")
+    click.echo(f"           {bar}")
+    click.echo(f"Free: {total_free} sectors of {total_sectors} ({num_cylinders} cylinders)")
+    click.echo("Legend: # = full, : = partial, . = empty")
 
 
 @cli.command()

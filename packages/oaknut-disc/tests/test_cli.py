@@ -511,6 +511,26 @@ class TestCreate:
 # ---------------------------------------------------------------------------
 
 
+class TestFreemap:
+    def test_freemap_dfs(self, runner: CliRunner, dfs_image_filepath: Path) -> None:
+        result = runner.invoke(cli, ["freemap", str(dfs_image_filepath)])
+        assert result.exit_code == 0
+        assert "Free:" in result.output
+        assert "#" in result.output or "." in result.output
+
+    def test_freemap_adfs(self, runner: CliRunner, adfs_image_filepath: Path) -> None:
+        result = runner.invoke(cli, ["freemap", str(adfs_image_filepath)])
+        assert result.exit_code == 0
+        assert "Free:" in result.output
+        assert "region" in result.output
+
+    def test_freemap_afs(self, runner: CliRunner, afs_image_filepath: Path) -> None:
+        result = runner.invoke(cli, ["freemap", str(afs_image_filepath), "afs:"])
+        assert result.exit_code == 0
+        assert "Free:" in result.output
+        assert "cylinders" in result.output
+
+
 class TestCompact:
     def test_compact_adfs(self, runner: CliRunner, adfs_image_filepath: Path) -> None:
         result = runner.invoke(cli, ["compact", str(adfs_image_filepath)])
