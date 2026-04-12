@@ -30,8 +30,12 @@ class TestCLIBasics:
         assert "cat" in result.output
         assert "create" in result.output
 
-    def test_star_alias_cat(self, runner: CliRunner, dfs_image_filepath: Path) -> None:
+    def test_star_alias_cat_lowercase(self, runner: CliRunner, dfs_image_filepath: Path) -> None:
         result = runner.invoke(cli, ["*cat", str(dfs_image_filepath)])
+        assert result.exit_code == 0
+
+    def test_star_alias_cat_uppercase(self, runner: CliRunner, dfs_image_filepath: Path) -> None:
+        result = runner.invoke(cli, ["*CAT", str(dfs_image_filepath)])
         assert result.exit_code == 0
 
 

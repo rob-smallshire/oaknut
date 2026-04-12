@@ -27,13 +27,20 @@ _ALIASES: dict[str, str] = {}
 class AliasGroup(click.Group):
     """Click group that supports star-prefixed Acorn aliases."""
 
+    def _resolve_alias(self, cmd_name: str) -> str | None:
+        """Look up an alias, case-insensitively."""
+        canonical = _ALIASES.get(cmd_name)
+        if canonical is not None:
+            return canonical
+        return _ALIASES.get(cmd_name.upper())
+
     def get_command(self, ctx: click.Context, cmd_name: str) -> click.Command | None:
         # Try exact match first.
         rv = click.Group.get_command(self, ctx, cmd_name)
         if rv is not None:
             return rv
-        # Try alias lookup.
-        canonical = _ALIASES.get(cmd_name)
+        # Try alias lookup (case-insensitive).
+        canonical = self._resolve_alias(cmd_name)
         if canonical is not None:
             return click.Group.get_command(self, ctx, canonical)
         return None
@@ -41,8 +48,10 @@ class AliasGroup(click.Group):
     def resolve_command(self, ctx: click.Context, args: list[str]):
         # Override to allow aliases to appear in help / error messages.
         cmd_name = args[0] if args else None
-        if cmd_name and cmd_name in _ALIASES:
-            args = [_ALIASES[cmd_name]] + args[1:]
+        if cmd_name:
+            canonical = self._resolve_alias(cmd_name)
+            if canonical is not None:
+                args = [canonical] + args[1:]
         return super().resolve_command(ctx, args)
 
     def format_commands(self, ctx: click.Context, formatter: click.HelpFormatter) -> None:
@@ -219,7 +228,7 @@ def cli() -> None:
 @click.argument("image", type=click.Path(exists=True, path_type=Path))
 @click.argument("path", required=False, default=None)
 def ls(image: Path, path: str | None) -> None:
-    """List directory contents (Acorn alias: *cat)."""
+    """List directory contents (Acorn alias: *CAT)."""
     from oaknut.file import format_access_text
     from rich.console import Console
     from rich.table import Table
@@ -287,7 +296,7 @@ def ls(image: Path, path: str | None) -> None:
         Console().print(table)
 
 
-_alias("*cat", "ls")
+_alias("*CAT", "ls")
 
 
 @cli.command()
@@ -326,7 +335,7 @@ def _print_tree(node, prefix: str, is_last: bool) -> None:
 @click.argument("image", type=click.Path(exists=True, path_type=Path))
 @click.argument("path", required=False, default=None)
 def stat(image: Path, path: str | None) -> None:
-    """Disc summary (no path) or file metadata (with path). Alias: *info."""
+    """Disc summary (no path) or file metadata (with path). Alias: *INFO."""
     from oaknut.file import format_access_text
 
     fs, bare = resolve_path(image, path)
@@ -357,7 +366,7 @@ def stat(image: Path, path: str | None) -> None:
                 click.echo(f"Dir:     {st.is_directory}")
 
 
-_alias("*info", "stat")
+_alias("*INFO", "stat")
 
 
 def _stat_disc(image_filepath: Path, fs: FilingSystem) -> None:
@@ -419,7 +428,7 @@ def _stat_disc(image_filepath: Path, fs: FilingSystem) -> None:
 @click.argument("image", type=click.Path(exists=True, path_type=Path))
 @click.argument("path")
 def cat(image: Path, path: str) -> None:
-    """Dump file contents to stdout (Acorn alias: *type)."""
+    """Dump file contents to stdout (Acorn alias: *TYPE)."""
     fs, bare = resolve_path(image, path)
     with open_image(image, fs) as handle:
         target = _navigate(handle, bare, fs)
@@ -430,7 +439,7 @@ def cat(image: Path, path: str) -> None:
         sys.stdout.buffer.write(target.read_bytes())
 
 
-_alias("*type", "cat")
+_alias("*TYPE", "cat")
 
 
 @cli.command()
@@ -638,7 +647,7 @@ def validate(image: Path) -> None:
 )
 @click.option("--owner", type=int, default=0, help="Econet owner ID for PiEB formats.")
 def get(image: Path, path: str, host_path: Path | None, meta_format: str, owner: int) -> None:
-    """Export a file from the image (Acorn alias: *load)."""
+    """Export a file from the image."""
     from oaknut.file import AcornMeta, MetaFormat, export_with_metadata
 
     fs, bare = resolve_path(image, path)
@@ -685,9 +694,6 @@ def get(image: Path, path: str, host_path: Path | None, meta_format: str, owner:
         )
 
 
-_alias("*load", "get")
-
-
 @cli.command()
 @click.argument("image", type=click.Path(exists=True, path_type=Path))
 @click.argument("path")
@@ -719,7 +725,7 @@ def put(
     exec_addr: str | None,
     meta_format: str | None,
 ) -> None:
-    """Import a file into the image (Acorn alias: *save)."""
+    """Import a file into the image."""
     fs, bare = resolve_path(image, path)
 
     # Read data.
@@ -758,9 +764,6 @@ def put(
             handle.flush()
 
 
-_alias("*save", "put")
-
-
 # ---------------------------------------------------------------------------
 # Modification commands
 # ---------------------------------------------------------------------------
@@ -773,7 +776,7 @@ _alias("*save", "put")
 @click.option("-r", "--recursive", is_flag=True, help="Remove directories recursively.")
 @click.option("--dry-run", is_flag=True, help="Print what would be removed.")
 def rm(image: Path, paths: tuple[str, ...], force: bool, recursive: bool, dry_run: bool) -> None:
-    """Delete file(s) from the image (Acorn alias: *delete)."""
+    """Delete file(s) from the image (Acorn alias: *DELETE)."""
     fs_type = detect_filing_system(image)
     first_prefix = None
     targets: list[tuple[FilingSystem, str]] = []
@@ -814,7 +817,7 @@ def rm(image: Path, paths: tuple[str, ...], force: bool, recursive: bool, dry_ru
             handle.flush()
 
 
-_alias("*delete", "rm")
+_alias("*DELETE", "rm")
 
 
 @cli.command()
@@ -823,7 +826,7 @@ _alias("*delete", "rm")
 @click.argument("dst")
 @click.option("-f", "--force", is_flag=True, help="Overwrite existing destination.")
 def mv(image: Path, src: str, dst: str, force: bool) -> None:
-    """Rename or move a file within the image (Acorn alias: *rename)."""
+    """Rename or move a file within the image (Acorn alias: *RENAME)."""
     fs, bare_src = resolve_path(image, src)
     _, bare_dst = parse_prefix(dst)
 
@@ -836,7 +839,7 @@ def mv(image: Path, src: str, dst: str, force: bool) -> None:
             handle.flush()
 
 
-_alias("*rename", "mv")
+_alias("*RENAME", "mv")
 
 
 @cli.command()
@@ -845,7 +848,7 @@ _alias("*rename", "mv")
 @click.argument("dst")
 @click.option("-f", "--force", is_flag=True, help="Overwrite existing destination.")
 def cp(image: Path, src: str, dst: str, force: bool) -> None:
-    """Copy a file within the image (Acorn alias: *copy)."""
+    """Copy a file within the image (Acorn alias: *COPY)."""
     # TODO: Cross-image copy (L7), within-image copy (L3).
     fs, bare_src = resolve_path(image, src)
     _, bare_dst = parse_prefix(dst)
@@ -870,7 +873,7 @@ def cp(image: Path, src: str, dst: str, force: bool) -> None:
             handle.flush()
 
 
-_alias("*copy", "cp")
+_alias("*COPY", "cp")
 
 
 @cli.command()
@@ -878,7 +881,7 @@ _alias("*copy", "cp")
 @click.argument("path")
 @click.option("-p", is_flag=True, help="No error if directory already exists.")
 def mkdir(image: Path, path: str, p: bool) -> None:
-    """Create a directory (ADFS/AFS only). Alias: *cdir."""
+    """Create a directory (ADFS/AFS only). Alias: *CDIR."""
     fs, bare = resolve_path(image, path)
     if fs is FilingSystem.DFS:
         raise click.ClickException("mkdir is not supported for DFS images")
@@ -893,7 +896,7 @@ def mkdir(image: Path, path: str, p: bool) -> None:
             handle.flush()
 
 
-_alias("*cdir", "mkdir")
+_alias("*CDIR", "mkdir")
 
 
 @cli.command()
@@ -901,7 +904,7 @@ _alias("*cdir", "mkdir")
 @click.argument("path")
 @click.argument("access")
 def chmod(image: Path, path: str, access: str) -> None:
-    """Set file access permissions (Acorn alias: *access).
+    """Set file access permissions (Acorn alias: *ACCESS).
 
     ACCESS is symbolic (e.g. LWR/R, WR/WR) or hex (0x0B, 33).
     DFS only supports the L (locked) bit; other flags are ignored.
@@ -926,7 +929,7 @@ def chmod(image: Path, path: str, access: str) -> None:
                 handle.flush()
 
 
-_alias("*access", "chmod")
+_alias("*ACCESS", "chmod")
 
 
 @cli.command()
@@ -1025,7 +1028,7 @@ def get_exec(image: Path, path: str) -> None:
 @click.argument("image", type=click.Path(exists=True, path_type=Path))
 @click.argument("new_title", required=False, default=None)
 def title(image: Path, new_title: str | None) -> None:
-    """Read or set disc title (Acorn alias: *title)."""
+    """Read or set disc title (Acorn alias: *TITLE)."""
     fs = detect_filing_system(image)
     if new_title is None:
         with open_image(image, fs) as handle:
@@ -1035,14 +1038,14 @@ def title(image: Path, new_title: str | None) -> None:
             handle.title = new_title
 
 
-_alias("*title", "title")
+_alias("*TITLE", "title")
 
 
 @cli.command()
 @click.argument("image", type=click.Path(exists=True, path_type=Path))
 @click.argument("boot_option", required=False, default=None, type=int)
 def opt(image: Path, boot_option: int | None) -> None:
-    """Read or set boot option (Acorn alias: *opt4)."""
+    """Read or set boot option (Acorn alias: *OPT4)."""
     from oaknut.file import BootOption
 
     fs = detect_filing_system(image)
@@ -1057,7 +1060,7 @@ def opt(image: Path, boot_option: int | None) -> None:
             handle.boot_option = boot_option
 
 
-_alias("*opt4", "opt")
+_alias("*OPT4", "opt")
 
 
 # ---------------------------------------------------------------------------
