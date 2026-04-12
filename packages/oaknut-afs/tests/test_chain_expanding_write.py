@@ -37,7 +37,6 @@ class TestChainExpandingCreate:
         # Pre-fragment: allocate 1 sector in each of the first 60
         # cylinders so the next big allocation gets split across many
         # cylinders and produces > 48 extents.
-        allocator = afs._allocator()
         shadow = afs._bitmap_shadow()
         for cyl_index in range(min(60, shadow.num_cylinders)):
             # Allocate sector 1 of each cylinder so the allocator
@@ -61,7 +60,6 @@ class TestChainExpandingCreate:
     def test_chain_round_trip_survives_reopen(self) -> None:
         adfs = build_synthetic_adfs_with_afs(start_cylinder=5)
         afs = adfs.afs_partition
-        allocator = afs._allocator()
         shadow = afs._bitmap_shadow()
         for cyl_index in range(min(60, shadow.num_cylinders)):
             shadow.mark_allocated(cyl_index, 2)
