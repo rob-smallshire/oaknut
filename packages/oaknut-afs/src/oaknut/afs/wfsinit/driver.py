@@ -294,11 +294,15 @@ def initialise(adfs: "ADFS", *, spec: InitSpec) -> None:
             boot_option=user.boot,
         )
     passwords_raw = passwords.to_bytes()
-    passwords_logical_size = len(passwords_raw)
-    # Pad to a whole sector for on-disc writing, but remember the
-    # true logical size so the map sector's BILB field reports it.
-    if len(passwords_raw) < _SECTOR_SIZE:
-        passwords_raw = passwords_raw.ljust(_SECTOR_SIZE, b"\x00")
+    # WFSINIT allocates with FNablk(pssz%) where pssz% = &100 (256),
+    # so BILB = 256 MOD 256 = 0. The passwords file is always padded
+    # to whole sectors; the logical size for the map sector is the
+    # padded size, not the raw data length.
+    passwords_padded_size = (
+        ((len(passwords_raw) + _SECTOR_SIZE - 1) // _SECTOR_SIZE) * _SECTOR_SIZE
+    )
+    if len(passwords_raw) < passwords_padded_size:
+        passwords_raw = passwords_raw.ljust(passwords_padded_size, b"\x00")
 
     # ---- Step 9: write everything to disc ----
     def write_object(map_sin: int, extents: list[Extent], data: bytes, logical_size: int) -> None:
@@ -335,7 +339,7 @@ def initialise(adfs: "ADFS", *, spec: InitSpec) -> None:
         write_object(urd_map_sin, urd_extents, urd_bytes, 0)
 
     # Passwords file map block + data.
-    write_object(passwords_map_sin, passwords_extents, passwords_raw, passwords_logical_size)
+    write_object(passwords_map_sin, passwords_extents, passwords_raw, passwords_padded_size)
 
     # ---- Step 10: emplace libraries ----
     if spec.libraries:

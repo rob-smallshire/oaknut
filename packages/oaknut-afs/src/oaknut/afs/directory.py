@@ -471,23 +471,27 @@ def build_directory_bytes(
     else:
         buf[_OFF_FIRST_POINTER : _OFF_FIRST_POINTER + 2] = (0).to_bytes(2, "little")
 
-    # Thread the free list: walk through the unused slot indices in
-    # ascending order (so the first free slot is the lowest-numbered
-    # one, matching where the server would place the next created
-    # entry).
+    # Thread the free list: WFSINIT's PROCmake_dir (line 2730-2750)
+    # sets freep = highest slot offset and chains each slot's next
+    # pointer to the slot below it, ending at 0. This means
+    # entries are popped from the highest free slot first, which
+    # matches the in-use placement above (highest slots for the
+    # first entries by name).
     used_slot_indices = set(slot_index_for_entry)
     free_slots = [i for i in range(capacity) if i not in used_slot_indices]
 
     if free_slots:
-        first_free_off = slot_pointer(free_slots[0])
+        # Head is the highest-indexed free slot.
+        first_free_off = slot_pointer(free_slots[-1])
         buf[_OFF_FREE_POINTER : _OFF_FREE_POINTER + 2] = first_free_off.to_bytes(2, "little")
-        for i in range(len(free_slots) - 1):
+        # Chain from high to low: each slot points to the one below.
+        for i in range(len(free_slots) - 1, 0, -1):
             src_off = slot_pointer(free_slots[i])
-            next_off = slot_pointer(free_slots[i + 1])
+            next_off = slot_pointer(free_slots[i - 1])
             buf[src_off + _ENT_OFF_LINK : src_off + _ENT_OFF_LINK + 2] = next_off.to_bytes(
                 2, "little"
             )
-        # Last free slot has link = 0 (end of free list).
+        # Lowest free slot has link = 0 (end of free list).
     else:
         buf[_OFF_FREE_POINTER : _OFF_FREE_POINTER + 2] = (0).to_bytes(2, "little")
 

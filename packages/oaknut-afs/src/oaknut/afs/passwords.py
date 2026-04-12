@@ -178,14 +178,17 @@ class PasswordsFile(Sequence[UserRecord]):
     def from_bytes(cls, data: bytes) -> PasswordsFile:
         """Parse a passwords file image.
 
-        The server requires the file to be a whole number of sectors;
-        we tolerate any length that is a multiple of ``ENTRY_SIZE``.
+        WFSINIT allocates the passwords file as a whole sector
+        (``pssz% = &100``) and stores ``BILB = 0``, so the raw data
+        may be 256 bytes — not a clean multiple of the 31-byte entry
+        size. The L3FS server reads as many complete entries as fit
+        and ignores any trailing fragment.
         """
-        if len(data) % ENTRY_SIZE != 0:
-            raise ValueError(f"passwords file length {len(data)} is not a multiple of {ENTRY_SIZE}")
+        # Truncate to the largest whole number of entries.
+        usable = (len(data) // ENTRY_SIZE) * ENTRY_SIZE
         records = [
             UserRecord.from_bytes(bytes(data[offset : offset + ENTRY_SIZE]))
-            for offset in range(0, len(data), ENTRY_SIZE)
+            for offset in range(0, usable, ENTRY_SIZE)
         ]
         return cls(records)
 

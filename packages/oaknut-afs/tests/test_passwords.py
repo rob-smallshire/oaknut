@@ -113,9 +113,14 @@ class TestPasswordsFileParse:
         with pytest.raises(KeyError):
             passwords.find("alice")
 
-    def test_non_multiple_length_rejected(self) -> None:
-        with pytest.raises(ValueError, match="multiple"):
-            PasswordsFile.from_bytes(b"\x00" * (ENTRY_SIZE + 1))
+    def test_trailing_fragment_ignored(self) -> None:
+        # WFSINIT writes whole sectors (256 bytes) which is not a
+        # clean multiple of the 31-byte entry size. The parser
+        # reads as many complete entries as fit and ignores the
+        # trailing fragment.
+        data = b"\x00" * (ENTRY_SIZE + 1)
+        pw = PasswordsFile.from_bytes(data)
+        assert len(pw) == 1
 
     def test_boot_mask_is_two_bits(self) -> None:
         assert BOOT_MASK == 0b11
