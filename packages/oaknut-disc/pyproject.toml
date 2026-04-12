@@ -43,7 +43,7 @@ where = ["src"]
 [tool.bumpversion]
 current_version = "1.0.2"
 tag_name = "oaknut-disc-v{new_version}"
-tag = false
+tag = true
 commit = true
 
 [[tool.bumpversion.files]]
