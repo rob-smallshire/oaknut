@@ -88,6 +88,12 @@ dev = [
     "bump-my-version>=0.28",
     "jinja2>=3.1",
 ]
+docs = [
+    "sphinx>=8.0",
+    "furo>=2024.1",
+    "sphinx-click>=6.0",
+    "sphinx-copybutton>=0.5",
+]
 
 [tool.pytest.ini_options]
 # importlib mode is required for PEP 420 namespace packages. The
