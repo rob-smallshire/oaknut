@@ -26,6 +26,20 @@ class DiskFormat:
         if not self.surface_specs:
             raise ValueError("At least one surface_spec is required")
 
+    @property
+    def image_size(self) -> int:
+        """Total number of bytes required for a full disc image in this format."""
+        max_offset = 0
+        for spec in self.surface_specs:
+            bytes_per_track = spec.sectors_per_track * spec.bytes_per_sector
+            end = (
+                spec.track_zero_offset_bytes
+                + (spec.num_tracks - 1) * spec.track_stride_bytes
+                + bytes_per_track
+            )
+            max_offset = max(max_offset, end)
+        return max_offset
+
 
 def single_sided_spec(
     num_tracks: int, sectors_per_track: int, bytes_per_sector: int = BYTES_PER_SECTOR

@@ -13,7 +13,7 @@ from typing import Iterator, Union
 import oaknut.basic as basic
 from oaknut.dfs.catalogue import FileEntry
 from oaknut.dfs.catalogued_surface import CataloguedSurface
-from oaknut.dfs.formats import DiskFormat
+from oaknut.dfs.formats import BYTES_PER_SECTOR, DiskFormat
 from oaknut.discimage.surface import DiscImage
 from oaknut.file import Access, AcornMeta, MetaFormat
 from oaknut.file.host_bridge import (
@@ -529,14 +529,33 @@ class DFS:
         if mode not in ("rb", "r+b"):
             raise ValueError(f"mode must be 'rb' or 'r+b', got {mode!r}")
 
-        access = mmap.ACCESS_READ if mode == "rb" else mmap.ACCESS_WRITE
-        with open(filepath, mode) as f:
-            mm = mmap.mmap(f.fileno(), 0, access=access)
-            dfs = DFS.from_buffer(memoryview(mm), disk_format, side)
-            try:
+        filepath = Path(filepath)
+        file_size = filepath.stat().st_size
+        expected_size = disk_format.image_size
+        is_truncated = file_size < expected_size
+
+        if mode == "rb":
+            if is_truncated:
+                # Read into a bytearray and let from_buffer pad it
+                data = bytearray(filepath.read_bytes())
+                dfs = DFS.from_buffer(memoryview(data), disk_format, side)
                 yield dfs
-            finally:
-                if mode == "r+b":
+            else:
+                with open(filepath, mode) as f:
+                    mm = mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ)
+                    dfs = DFS.from_buffer(memoryview(mm), disk_format, side)
+                    yield dfs
+        else:
+            # Read-write: extend the file on disc before mmapping
+            if is_truncated:
+                with open(filepath, "ab") as f:
+                    f.write(b"\x00" * (expected_size - file_size))
+            with open(filepath, mode) as f:
+                mm = mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_WRITE)
+                dfs = DFS.from_buffer(memoryview(mm), disk_format, side)
+                try:
+                    yield dfs
+                finally:
                     mm.flush()
 
     @classmethod
@@ -585,12 +604,49 @@ class DFS:
             )
         catalogue_class = Catalogue._registry[disk_format.catalogue_name]
 
+        # Pad truncated images to the canonical format size
+        buffer = cls._pad_buffer(buffer, disk_format)
+
         # Create disc and surface
         disc = DiscImage(buffer, disk_format.surface_specs)
         surface = disc.surface(side)
         catalogued = CataloguedSurface(surface, catalogue_class)
 
         return cls(catalogued)
+
+    @staticmethod
+    def _pad_buffer(buffer: memoryview, disk_format: DiskFormat) -> memoryview:
+        """Pad a truncated buffer to the canonical format size with zero bytes.
+
+        Accepts buffers that are shorter than the format requires, provided
+        the size is a whole number of sectors (a multiple of 256 bytes).
+        Full-size buffers are returned unchanged.
+
+        Raises:
+            ValueError: If the buffer size is not a multiple of the sector
+                size, or if the buffer is empty.
+        """
+        buffer_size = len(buffer)
+        expected_size = disk_format.image_size
+
+        if buffer_size == expected_size:
+            return buffer
+
+        if buffer_size == 0:
+            raise ValueError("Buffer is empty")
+
+        if buffer_size % BYTES_PER_SECTOR != 0:
+            raise ValueError(
+                f"Buffer size {buffer_size} is not a multiple of "
+                f"the sector size ({BYTES_PER_SECTOR} bytes)"
+            )
+
+        if buffer_size > expected_size:
+            return buffer
+
+        padded = bytearray(expected_size)
+        padded[:buffer_size] = buffer
+        return memoryview(padded)
 
     @classmethod
     def create(
