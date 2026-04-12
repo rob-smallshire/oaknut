@@ -37,6 +37,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from oaknut.afs.access import AFSAccess
+from oaknut.afs.allocator import Allocator
+from oaknut.afs.bitmap import BitmapShadow, CylinderBitmap
 from oaknut.afs.directory import build_directory_bytes
 from oaknut.afs.info_sector import InfoSector
 from oaknut.afs.map_sector import Extent, MapSector
@@ -107,84 +109,106 @@ def initialise(adfs: "ADFS", *, spec: InitSpec) -> None:
 
     disc = adfs._disc
 
-    # ---- Step 3: cylinder bitmaps ----
-    # Build a fresh-bitmap for every AFS cylinder with sector 0
-    # allocated and sectors 1..spc-1 free.
-    def build_fresh_bitmap() -> bytearray:
-        bitmap = bytearray(_SECTOR_SIZE)
+    def write_sector(addr: int, data: bytes) -> None:
+        assert len(data) == _SECTOR_SIZE, (addr, len(data))
+        view = disc.sector_range(addr, 1)
+        view[:] = data
+
+    # ---- Step 3: cylinder bitmaps + allocator ----
+    # Build fresh bitmaps (sector 0 allocated, rest free) and wrap
+    # them in a BitmapShadow + Allocator. This gives us WFSINIT's
+    # FNablk allocation policy (FNDCY best-fit by cylinder, ALBLK
+    # first-fit within cylinder) so objects are distributed across
+    # cylinders exactly as WFSINIT does.
+    fresh_bitmaps: dict[int, CylinderBitmap] = {}
+    for cyl in range(afs_cylinders):
+        bm = CylinderBitmap(spc)
+        # Mark sectors 1..spc-1 as free; sector 0 (bitmap) stays allocated.
         for sector in range(1, spc):
-            bitmap[sector >> 3] |= 1 << (sector & 7)
-        return bitmap
+            bm.set_free(sector)
+        fresh_bitmaps[cyl] = bm
 
-    cylinder_bitmaps: dict[int, bytearray] = {
-        cyl: build_fresh_bitmap() for cyl in range(afs_cylinders)
-    }
+    def _bitmap_reader(cylinder: int) -> bytes:
+        return bytes(fresh_bitmaps[cylinder].to_bytes())
 
-    def mark_allocated(absolute_sector: int) -> None:
-        cyl_abs, sec_in_cyl = divmod(absolute_sector, spc)
-        cyl_index = cyl_abs - start_cylinder
-        if not (0 <= cyl_index < afs_cylinders):
-            return
-        bitmap = cylinder_bitmaps[cyl_index]
-        bitmap[sec_in_cyl >> 3] &= ~(1 << (sec_in_cyl & 7)) & 0xFF
+    def _bitmap_writer(cylinder: int, data: bytes) -> None:
+        write_sector((start_cylinder + cylinder) * spc, data)
 
-    # Mark the info sectors and every cylinder's bitmap sector
-    # as allocated.
-    mark_allocated(sec1)
-    mark_allocated(sec2)
+    shadow = BitmapShadow(
+        afs_cylinders, spc,
+        reader=_bitmap_reader,
+        writer=_bitmap_writer,
+    )
 
-    # ---- Step 4: allocate all objects ----
-    # We allocate SINs manually (bypassing the Allocator) because
-    # the cylinder bitmaps are held in memory as mutable bytearrays
-    # during initialisation and not yet written out. After we know
-    # every allocation we write bitmaps + data in one go.
+    # Pre-populate the shadow cache from our fresh bitmaps so that
+    # the allocator sees the correct free counts without hitting
+    # the reader (which would give a snapshot, not the live state).
+    for cyl, bm in fresh_bitmaps.items():
+        shadow._cache[cyl] = bm
+        shadow._free_counts[cyl] = bm.free_count()
+        shadow._dirty.add(cyl)
+
+    allocator = Allocator(shadow, start_cylinder=start_cylinder, sectors_per_cylinder=spc)
+
+    # Mark the info sectors as allocated. They sit on cylinders 0
+    # and 1 at sector offset 1 (sec1 = start_cylinder*spc + 1,
+    # sec2 = sec1 + spc).
+    sec1_cyl = (sec1 // spc) - start_cylinder
+    sec2_cyl = (sec2 // spc) - start_cylinder
+    shadow.mark_range_allocated(sec1_cyl, sec1 % spc, 1)
+    shadow.mark_range_allocated(sec2_cyl, sec2 % spc, 1)
+
+    # ---- Step 4: allocate all objects via FNablk policy ----
+    # WFSINIT's FNablk (lines 1650-1930) allocates the map block as
+    # the first free sector on the best cylinder, then allocates the
+    # data sectors contiguously from the same cylinder. Our Allocator
+    # does exactly this: allocate_sector() picks the best cylinder
+    # for the map block, then allocate() picks the (same) best
+    # cylinder for the data sectors.
     #
     # Allocation order matches WFSINIT: root dir, then per-user
     # URDs, then passwords file.
-    cursor_cyl = start_cylinder + 2  # leave cyls 0/1 for info sectors
-    cursor_sec = cursor_cyl * spc + 1  # skip cyl's sector 0 (bitmap)
 
-    def alloc_one() -> int:
-        nonlocal cursor_sec
-        while True:
-            cyl_abs, sec_in_cyl = divmod(cursor_sec, spc)
-            if sec_in_cyl == 0:
-                cursor_sec += 1
-                continue
-            addr = cursor_sec
-            cursor_sec += 1
-            return addr
+    def _fnablk(data_sectors: int) -> tuple[int, list[Extent]]:
+        """Emulate FNablk: allocate a map block + data sectors.
 
-    def alloc_many(n: int) -> list[int]:
-        return [alloc_one() for _ in range(n)]
+        WFSINIT's FNablk (lines 1650-1930) picks the best cylinder
+        and allocates the map block as the first free sector, then
+        allocates the data sectors contiguously from that same
+        cylinder. We replicate this by allocating (1 + data_sectors)
+        in a single call — the allocator's FNDCY policy keeps them
+        on the same cylinder — then splitting the first sector off
+        as the map block SIN.
+        """
+        all_extents = allocator.allocate(1 + data_sectors)
+        # The first sector of the first extent is the map block.
+        first = all_extents[0]
+        map_sin = int(first.start)
+        # Trim the map block sector from the data extents.
+        if first.length == 1:
+            data_extents = all_extents[1:]
+        else:
+            data_extents = [
+                Extent(start=first.start + 1, length=first.length - 1),
+                *all_extents[1:],
+            ]
+        return map_sin, data_extents
 
     # Root directory: map block + 2 data sectors.
-    root_map_sin = alloc_one()
-    root_data_sectors = alloc_many(_DEFAULT_ROOT_DIR_SECTORS)
-    mark_allocated(root_map_sin)
-    for s in root_data_sectors:
-        mark_allocated(s)
+    root_map_sin, root_extents = _fnablk(_DEFAULT_ROOT_DIR_SECTORS)
 
     # Per-user URDs: map block + 2 data sectors each.
     # WFSINIT allocates these at lines 2270-2280 (FNablk(drsz%),
     # PROCmake_dir) for each interactively-entered user name.
-    urd_allocations: list[tuple[str, int, list[int]]] = []
+    urd_allocations: list[tuple[str, int, list[Extent]]] = []
     for user in spec.users:
-        urd_map_sin = alloc_one()
-        urd_data_sectors = alloc_many(_DEFAULT_ROOT_DIR_SECTORS)
-        mark_allocated(urd_map_sin)
-        for s in urd_data_sectors:
-            mark_allocated(s)
-        urd_allocations.append((user.name, urd_map_sin, urd_data_sectors))
+        urd_map_sin, urd_extents = _fnablk(_DEFAULT_ROOT_DIR_SECTORS)
+        urd_allocations.append((user.name, urd_map_sin, urd_extents))
 
     # Passwords file: map block + 1 data sector.
     # WFSINIT allocates this last, at line 3030 (FNablk(pssz%)),
     # called from FNwrite_PW via PROCsetup line 2320.
-    passwords_map_sin = alloc_one()
-    passwords_sectors = alloc_many(1)  # one sector ≈ 8 entries
-    mark_allocated(passwords_map_sin)
-    for s in passwords_sectors:
-        mark_allocated(s)
+    passwords_map_sin, passwords_extents = _fnablk(1)
 
     # ---- Step 5: build info sector bytes ----
     info = InfoSector(
@@ -277,68 +301,41 @@ def initialise(adfs: "ADFS", *, spec: InitSpec) -> None:
         passwords_raw = passwords_raw.ljust(_SECTOR_SIZE, b"\x00")
 
     # ---- Step 9: write everything to disc ----
-    def write_sector(addr: int, data: bytes) -> None:
-        assert len(data) == _SECTOR_SIZE, (addr, len(data))
-        view = disc.sector_range(addr, 1)
-        view[:] = data
+    def write_object(map_sin: int, extents: list[Extent], data: bytes, logical_size: int) -> None:
+        """Write a map block + data sectors for one object."""
+        map_block = MapSector(
+            sin=SystemInternalName(map_sin),
+            extents=tuple(extents),
+            last_sector_bytes=logical_size % _SECTOR_SIZE,
+        )
+        write_sector(map_sin, map_block.to_bytes())
+        offset = 0
+        for ext in extents:
+            for s in range(ext.length):
+                chunk = data[offset : offset + _SECTOR_SIZE]
+                if len(chunk) < _SECTOR_SIZE:
+                    chunk = chunk.ljust(_SECTOR_SIZE, b"\x00")
+                write_sector(int(ext.start) + s, chunk)
+                offset += _SECTOR_SIZE
 
     # Info sectors (both copies).
     write_sector(sec1, info_bytes)
     write_sector(sec2, info_bytes)
 
-    # Cylinder bitmaps.
-    for cyl_index, bitmap in cylinder_bitmaps.items():
-        physical = start_cylinder + cyl_index
-        write_sector(physical * spc, bytes(bitmap))
+    # Cylinder bitmaps (flush the shadow, which writes via _bitmap_writer).
+    shadow.flush()
 
     # Root directory map block + data.
-    root_map = MapSector(
-        sin=SystemInternalName(root_map_sin),
-        extents=(
-            Extent(
-                start=root_data_sectors[0],
-                length=_DEFAULT_ROOT_DIR_SECTORS,
-            ),
-        ),
-        last_sector_bytes=0,
-    )
-    write_sector(root_map_sin, root_map.to_bytes())
-    for i, sector in enumerate(root_data_sectors):
-        write_sector(sector, root_bytes[i * _SECTOR_SIZE : (i + 1) * _SECTOR_SIZE])
+    write_object(root_map_sin, root_extents, root_bytes, 0)
 
     # Per-user URD map blocks + data.
-    for (user_name, urd_map_sin, urd_data_sectors), urd_bytes in zip(
+    for (user_name, urd_map_sin, urd_extents), urd_bytes in zip(
         urd_allocations, urd_bytes_list
     ):
-        urd_map = MapSector(
-            sin=SystemInternalName(urd_map_sin),
-            extents=(
-                Extent(
-                    start=urd_data_sectors[0],
-                    length=_DEFAULT_ROOT_DIR_SECTORS,
-                ),
-            ),
-            last_sector_bytes=0,
-        )
-        write_sector(urd_map_sin, urd_map.to_bytes())
-        for i, sector in enumerate(urd_data_sectors):
-            write_sector(sector, urd_bytes[i * _SECTOR_SIZE : (i + 1) * _SECTOR_SIZE])
+        write_object(urd_map_sin, urd_extents, urd_bytes, 0)
 
     # Passwords file map block + data.
-    passwords_map = MapSector(
-        sin=SystemInternalName(passwords_map_sin),
-        extents=(
-            Extent(
-                start=passwords_sectors[0],
-                length=len(passwords_sectors),
-            ),
-        ),
-        last_sector_bytes=passwords_logical_size % _SECTOR_SIZE,
-    )
-    write_sector(passwords_map_sin, passwords_map.to_bytes())
-    for i, sector in enumerate(passwords_sectors):
-        chunk = passwords_raw[i * _SECTOR_SIZE : (i + 1) * _SECTOR_SIZE]
-        write_sector(sector, chunk)
+    write_object(passwords_map_sin, passwords_extents, passwords_raw, passwords_logical_size)
 
     # ---- Step 10: emplace libraries ----
     if spec.libraries:
