@@ -756,11 +756,15 @@ def put(
     """Import a file into the image."""
     fs, bare = resolve_path(image, path)
 
+    # Default addresses: 0xFFFF matches the convention for text/data
+    # files on DFS and ADFS where the address is not meaningful.
+    _DEFAULT_ADDR = 0xFFFF
+
     # Read data.
     if host_path is not None and str(host_path) == "-":
         data = sys.stdin.buffer.read()
-        resolved_load = int(load_addr, 0) if load_addr else 0
-        resolved_exec = int(exec_addr, 0) if exec_addr else 0
+        resolved_load = int(load_addr, 0) if load_addr else _DEFAULT_ADDR
+        resolved_exec = int(exec_addr, 0) if exec_addr else _DEFAULT_ADDR
     elif host_path is not None:
         # Try to import with metadata.
         from oaknut.file import DEFAULT_IMPORT_META_FORMATS, MetaFormat, import_with_metadata
