@@ -563,6 +563,32 @@ class TestCreate:
         assert result.exit_code == 0
         assert out.exists()
 
+    def test_create_adfs_hard_with_mib(self, runner: CliRunner, tmp_path: Path) -> None:
+        out = tmp_path / "new.dat"
+        result = runner.invoke(
+            cli, ["create", str(out), "--format", "adfs-hard", "--capacity", "5MiB"]
+        )
+        assert result.exit_code == 0
+        assert out.exists()
+        # 5 MiB = 5,242,880 bytes; image rounds up to whole cylinders.
+        assert out.stat().st_size >= 5 * 1024 * 1024
+
+    def test_create_adfs_hard_with_mb(self, runner: CliRunner, tmp_path: Path) -> None:
+        out = tmp_path / "new.dat"
+        result = runner.invoke(
+            cli, ["create", str(out), "--format", "adfs-hard", "--capacity", "5 MB"]
+        )
+        assert result.exit_code == 0
+        assert out.exists()
+
+    def test_create_adfs_hard_bare_bytes(self, runner: CliRunner, tmp_path: Path) -> None:
+        out = tmp_path / "new.dat"
+        result = runner.invoke(
+            cli, ["create", str(out), "--format", "adfs-hard", "--capacity", "1048576"]
+        )
+        assert result.exit_code == 0
+        assert out.exists()
+
     def test_create_adfs_hard_requires_capacity(self, runner: CliRunner, tmp_path: Path) -> None:
         out = tmp_path / "new.dat"
         result = runner.invoke(cli, ["create", str(out), "--format", "adfs-hard"])

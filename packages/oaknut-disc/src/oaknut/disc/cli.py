@@ -1168,8 +1168,12 @@ _alias("*OPT4", "opt")
     help="Disc image format.",
 )
 @click.option("--title", "disc_title", default="", help="Disc title.")
-@click.option("--capacity", type=int, default=None, help="Capacity in bytes (hard disc).")
-def create(host_path: Path, fmt: str, disc_title: str, capacity: int | None) -> None:
+@click.option(
+    "--capacity",
+    default=None,
+    help="Capacity (hard disc). Accepts e.g. 10MB, 40MiB, 1024kB, or plain bytes.",
+)
+def create(host_path: Path, fmt: str, disc_title: str, capacity: str | None) -> None:
     """Create a new empty disc image."""
     if fmt == "ssd":
         from oaknut.dfs import ACORN_DFS_80T_SINGLE_SIDED, DFS
@@ -1198,10 +1202,15 @@ def create(host_path: Path, fmt: str, disc_title: str, capacity: int | None) -> 
             pass
     elif fmt == "adfs-hard":
         from oaknut.adfs import ADFS
+        from oaknut.file.capacity import parse_capacity
 
         if capacity is None:
             raise click.ClickException("--capacity is required for adfs-hard")
-        with ADFS.create_file(host_path, capacity_bytes=capacity, title=disc_title):
+        try:
+            capacity_bytes = parse_capacity(capacity)
+        except ValueError as exc:
+            raise click.ClickException(str(exc))
+        with ADFS.create_file(host_path, capacity_bytes=capacity_bytes, title=disc_title):
             pass
 
     click.echo(f"Created {host_path}")
