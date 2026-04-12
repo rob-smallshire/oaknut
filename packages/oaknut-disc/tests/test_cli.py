@@ -598,6 +598,40 @@ class TestImport:
         assert result.exit_code == 0
 
 
+class TestAfsPlan:
+    def test_afs_plan_max(self, runner: CliRunner, adfs_no_afs_filepath: Path) -> None:
+        result = runner.invoke(cli, ["afs-plan", str(adfs_no_afs_filepath)])
+        assert result.exit_code == 0
+        assert "Disc geometry" in result.output
+        assert "cylinders" in result.output
+        assert "Proposed AFS partition" in result.output
+        assert "disc afs-init" in result.output
+
+    def test_afs_plan_explicit_cylinders(
+        self, runner: CliRunner, adfs_no_afs_filepath: Path,
+    ) -> None:
+        result = runner.invoke(
+            cli, ["afs-plan", str(adfs_no_afs_filepath), "--cylinders", "10"]
+        )
+        assert result.exit_code == 0
+        assert "10 cylinders" in result.output
+
+    def test_afs_plan_already_partitioned(
+        self, runner: CliRunner, afs_image_filepath: Path,
+    ) -> None:
+        result = runner.invoke(cli, ["afs-plan", str(afs_image_filepath)])
+        assert result.exit_code == 0
+        assert "already has an AFS partition" in result.output
+
+    def test_afs_plan_too_large(
+        self, runner: CliRunner, adfs_no_afs_filepath: Path,
+    ) -> None:
+        result = runner.invoke(
+            cli, ["afs-plan", str(adfs_no_afs_filepath), "--cylinders", "9999"]
+        )
+        assert result.exit_code != 0
+
+
 class TestAfsInit:
     def test_afs_init(self, runner: CliRunner, adfs_no_afs_filepath: Path) -> None:
         result = runner.invoke(

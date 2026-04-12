@@ -1294,6 +1294,73 @@ def _import_host_dir(handle, target_dir, host_dir: Path, meta_formats, verbose, 
 # ---------------------------------------------------------------------------
 
 
+@cli.command(name="afs-plan")
+@click.argument("image", type=click.Path(exists=True, path_type=Path))
+@click.option("--cylinders", type=int, default=None, help="Proposed AFS region size in cylinders.")
+def afs_plan(image: Path, cylinders: int | None) -> None:
+    """Show what afs-init would do, without modifying the image.
+
+    With no options, shows the maximum available AFS region. With
+    --cylinders N, shows the plan for that specific size. Reports
+    disc geometry, current ADFS occupancy, whether compaction is
+    needed, and the resulting partition layout.
+    """
+    from oaknut.adfs import ADFS
+    from oaknut.afs.wfsinit import AFSSizeSpec
+    from oaknut.afs.wfsinit.partition import plan
+
+    with ADFS.from_file(image) as adfs:
+        geom = adfs.geometry
+        total_sectors = geom.total_sectors
+        free_bytes = adfs.free_space
+        free_sectors = free_bytes // 256
+        used_sectors = total_sectors - free_sectors
+
+        click.echo("Disc geometry")
+        click.echo(
+            f"  {geom.cylinders} cylinders, {geom.heads} heads, "
+            f"{geom.sectors_per_track} sectors/track"
+        )
+        click.echo(f"  {total_sectors} total sectors ({geom.cylinders} cylinders)")
+        click.echo(
+            f"  {used_sectors} used sectors, "
+            f"{free_sectors} free sectors ({free_bytes:,} bytes)"
+        )
+        click.echo()
+
+        # Check for existing AFS partition.
+        sec1, sec2 = adfs._fsm.afs_info_pointers
+        if sec1 != 0 or sec2 != 0:
+            click.echo("This disc already has an AFS partition.")
+            afs = adfs.afs_partition
+            if afs is not None:
+                click.echo(
+                    f"  AFS disc name: {afs.disc_name}, "
+                    f"start cylinder: {afs.start_cylinder}"
+                )
+            return
+
+        # Compute the plan.
+        size = AFSSizeSpec.cylinders(cylinders) if cylinders else AFSSizeSpec.max()
+        try:
+            p = plan(adfs, size=size)
+        except Exception as exc:
+            raise click.ClickException(str(exc))
+
+        click.echo("Proposed AFS partition")
+        click.echo(f"  AFS region:    {p.afs_cylinders} cylinders ({p.total_afs_sectors} sectors)")
+        click.echo(f"  Start cylinder: {p.start_cylinder}")
+        click.echo(f"  ADFS retained:  {p.new_adfs_cylinders} cylinders")
+        click.echo(f"  Compaction:     {'required' if p.will_compact else 'not required'}")
+
+        if not cylinders:
+            click.echo()
+            click.echo(
+                f"To proceed: disc afs-init {image} --disc-name NAME "
+                f"--cylinders {p.afs_cylinders}"
+            )
+
+
 @cli.command(name="afs-init")
 @click.argument("image", type=click.Path(exists=True, path_type=Path))
 @click.option("--disc-name", required=True, help="AFS disc name.")
