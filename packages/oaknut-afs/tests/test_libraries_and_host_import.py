@@ -18,16 +18,14 @@ class TestLibraryImageEnum:
         for entry in LibraryImage:
             assert entry.value.endswith(".img")
 
-    def test_not_available_in_dev_install(self) -> None:
-        # No build script has produced the shipped assets yet, so
-        # .is_available() must report False for every entry.
+    def test_all_available_after_build(self) -> None:
         for entry in LibraryImage:
-            assert not entry.is_available()
+            assert entry.is_available()
 
-    def test_open_missing_raises(self) -> None:
-        with pytest.raises(FileNotFoundError, match="not bundled"):
-            with LibraryImage.UTILS.open():
-                pass
+    def test_open_reads_root(self) -> None:
+        with LibraryImage.UTILS.open() as afs:
+            names = [p.name for p in afs.root]
+            assert "Passwords" in names
 
 
 class TestSanitiseName:
