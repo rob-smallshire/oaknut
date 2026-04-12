@@ -27,9 +27,7 @@ import tempfile
 from pathlib import Path
 
 from oaknut.adfs import ADFS, ADFS_L
-from oaknut.afs.host_import import import_host_tree
 from oaknut.afs.libraries import LibraryImage
-from oaknut.afs.wfsinit import AFSSizeSpec, InitSpec, UserSpec, initialise
 
 _DEFAULT_TAR = Path("/Users/rjs/Code/beebium/discs/l3fs/libraries/econet-fs.tar")
 
@@ -48,37 +46,21 @@ def build_one(
     source_dirpath: Path,
     dest_dirpath: Path,
 ) -> Path:
-    """Build one library ``.adl`` from an extracted host directory."""
+    """Build one library ``.adl`` from an extracted host directory.
+
+    The result is a plain ADFS-L image (no AFS partition) with the
+    library files stored as regular ADFS files in the root directory.
+    """
     dest_filepath = dest_dirpath / library.value
     print(f"  {library.name:15s} ← {source_dirpath} → {dest_filepath.name}")
 
-    # Create a blank ADFS-L disc as the host.
-    adfs = ADFS.create(ADFS_L)
+    adfs = ADFS.create(ADFS_L, title=library.name)
 
-    # Initialise a generous AFS partition with a single Syst user.
-    initialise(
-        adfs,
-        spec=InitSpec(
-            disc_name=library.name,
-            date=datetime.date.today(),
-            size=AFSSizeSpec.cylinders(150),
-            users=[UserSpec("Syst", system=True, quota=0xFFFFFF)],
-        ),
-    )
+    for host_file in sorted(source_dirpath.iterdir()):
+        if host_file.is_file() and not host_file.name.startswith("."):
+            target = adfs.root / host_file.name
+            target.import_file(host_file)
 
-    afs = adfs.afs_partition
-    assert afs is not None
-
-    # Import the host tree into the AFS root.
-    import_host_tree(
-        afs,
-        source=source_dirpath,
-        target_path=afs.root,
-        on_collision="overwrite",
-    )
-    afs.flush()
-
-    # Write the raw disc bytes to the .adl file.
     disc_bytes = bytes(adfs._disc._disc_image._buffer)
     dest_filepath.write_bytes(disc_bytes)
     return dest_filepath

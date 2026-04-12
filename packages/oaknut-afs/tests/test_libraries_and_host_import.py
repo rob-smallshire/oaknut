@@ -25,7 +25,9 @@ class TestLibraryImageEnum:
     def test_open_reads_root(self) -> None:
         with LibraryImage.UTILS.open() as afs:
             names = [p.name for p in afs.root]
-            assert "Passwords" in names
+            assert len(names) > 0
+            # Library images are pure content — no Passwords file.
+            assert "Passwords" not in names
 
 
 class TestSanitiseName:

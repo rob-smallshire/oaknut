@@ -76,12 +76,15 @@ class LibraryImage(Enum):
             return False
 
     @contextmanager
-    def open(self) -> "Iterator[AFS]":
-        """Yield a read-only :class:`AFS` handle on the shipped image.
+    def open(self) -> "Iterator":
+        """Yield a read-only ADFS handle on the shipped image.
+
+        The library images are plain ADFS-L discs with no AFS
+        partition. Files sit in the ADFS root directory.
 
         Raises :class:`FileNotFoundError` if the asset isn't bundled.
         """
-        from oaknut.afs.afs import AFS
+        from oaknut.adfs import ADFS
 
         if not self.is_available():
             raise FileNotFoundError(
@@ -90,8 +93,8 @@ class LibraryImage(Enum):
                 f"scripts/build_library_images.py to produce it"
             )
         with resources.as_file(resources.files(__name__).joinpath(self.value)) as path:
-            with AFS.from_file(path) as afs:
-                yield afs
+            with ADFS.from_file(path) as adfs:
+                yield adfs
 
     def merge_into(
         self,
@@ -100,20 +103,36 @@ class LibraryImage(Enum):
         target_path: "AFSPath | None" = None,
         conflict: str = "error",
     ) -> None:
-        """Merge this library's entire tree into ``target``.
+        """Copy this library's files into the target AFS path.
 
-        Thin wrapper around :func:`oaknut.afs.merge` for the common
-        "drop a shipped library onto a fresh disc" case.
+        Reads each file from the ADFS library image and writes it
+        into the target AFS directory via ``write_bytes``.
         """
-        from oaknut.afs.merge import merge
+        if target_path is None:
+            target_path = target.root
 
-        with self.open() as source:
-            merge(
-                target,
-                source,
-                target_path=target_path,
-                conflict=conflict,
-            )
+        with self.open() as adfs:
+            for adfs_entry in adfs.root.iterdir():
+                st = adfs_entry.stat()
+                if st.is_directory:
+                    continue  # Library images are flat.
+                dest = target_path / adfs_entry.name
+                if dest.exists():
+                    if conflict == "skip":
+                        continue
+                    elif conflict == "overwrite":
+                        dest.unlink()
+                    else:
+                        from oaknut.afs.exceptions import AFSMergeConflictError
+
+                        raise AFSMergeConflictError(
+                            f"'{adfs_entry.name}' already exists at {target_path}"
+                        )
+                dest.write_bytes(
+                    adfs_entry.read_bytes(),
+                    load_address=st.load_address,
+                    exec_address=st.exec_address,
+                )
 
 
 _TARGET_DIRNAMES: dict[LibraryImage, str] = {
