@@ -100,14 +100,13 @@ class AFS:
         self._disc = unified_disc
         self._sec1 = sec1
         self._sec2 = sec2
+        # Write-back buffer must be initialised before _read_and_verify_info
+        # because _read_sector checks it.
+        self._pending_writes: dict[int, bytes] = {}
         self._info: InfoSector = self._read_and_verify_info()
-        # Lazy cache of the passwords file parse; None until first access.
         self._passwords_cache: PasswordsFile | None = None
-        # Lazy-initialised bitmap shadow + allocator, reused across
-        # every mutation in the session so the free-count cache is
-        # consistent across grows and allocations.
-        self._bitmap_shadow_cache = None  # oaknut.afs.bitmap.BitmapShadow
-        self._allocator_cache = None  # oaknut.afs.allocator.Allocator
+        self._bitmap_shadow_cache = None
+        self._allocator_cache = None
 
     # ------------------------------------------------------------------
     # Named constructors
@@ -188,7 +187,14 @@ class AFS:
     # ------------------------------------------------------------------
 
     def _read_sector(self, sector: int) -> bytes:
-        """Read one 256-byte sector by absolute address."""
+        """Read one 256-byte sector by absolute address.
+
+        Checks the write-back buffer first; if the sector has been
+        written but not yet flushed, the buffered copy is returned
+        instead of reading from the underlying disc.
+        """
+        if sector in self._pending_writes:
+            return self._pending_writes[sector]
         if sector < 0 or sector >= self._disc.num_sectors:
             raise AFSError(
                 f"sector {sector:#x} outside disc range 0..{self._disc.num_sectors - 1:#x}"
@@ -308,7 +314,13 @@ class AFS:
     # ------------------------------------------------------------------
 
     def _write_sector(self, sector: int, data: bytes) -> None:
-        """Write one 256-byte sector at absolute address ``sector``."""
+        """Buffer a 256-byte sector write at absolute address ``sector``.
+
+        The write is held in memory until :meth:`flush` is called
+        (either explicitly or by the context manager's ``__exit__``
+        on a clean exit). On exception the buffer is discarded and
+        the underlying disc is untouched.
+        """
         if len(data) != MAP_SECTOR_SIZE:
             raise ValueError(
                 f"sector write must be {MAP_SECTOR_SIZE} bytes, got {len(data)}"
@@ -317,8 +329,7 @@ class AFS:
             raise AFSError(
                 f"sector {sector:#x} outside disc range 0..{self._disc.num_sectors - 1:#x}"
             )
-        view = self._disc.sector_range(sector, 1)
-        view[:] = data
+        self._pending_writes[sector] = bytes(data)
 
     def _write_object_bytes(self, sin: SystemInternalName, data: bytes) -> None:
         """Write ``data`` to the object identified by ``sin``.
@@ -688,14 +699,32 @@ class AFS:
     # ------------------------------------------------------------------
 
     def flush(self) -> None:
-        """Flush pending mutations. Write-through in phase 10 — the
-        bitmap shadow writes dirty cylinders on every allocation, and
-        map/data sectors are written directly via the unified disc.
-        This call flushes any remaining dirty bitmap sectors as a
-        safety net.
+        """Commit all buffered sector writes to the underlying disc.
+
+        The bitmap shadow is flushed first (which adds any dirty
+        bitmap sectors to ``_pending_writes`` via the shadow's writer
+        callback), then every entry in the buffer is written to the
+        ``UnifiedDisc`` in a single pass. After a successful flush
+        the buffer is empty.
         """
         if self._bitmap_shadow_cache is not None:
             self._bitmap_shadow_cache.flush()
+        for sector, data in sorted(self._pending_writes.items()):
+            view = self._disc.sector_range(sector, 1)
+            view[:] = data
+        self._pending_writes.clear()
+
+    def discard(self) -> None:
+        """Drop all buffered writes without touching the disc.
+
+        Called on exception exit. Also invalidates the bitmap shadow
+        and allocator caches so they don't carry stale state from
+        the discarded session.
+        """
+        self._pending_writes.clear()
+        self._bitmap_shadow_cache = None
+        self._allocator_cache = None
+        self._passwords_cache = None
 
     def __enter__(self) -> AFS:
         return self
@@ -703,6 +732,8 @@ class AFS:
     def __exit__(self, exc_type, exc, tb) -> None:
         if exc_type is None:
             self.flush()
+        else:
+            self.discard()
 
     def __repr__(self) -> str:
         return (

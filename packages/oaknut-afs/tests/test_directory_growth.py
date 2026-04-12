@@ -148,6 +148,7 @@ class TestInsertIntoDirectoryAutoGrow:
         adfs = build_synthetic_adfs_with_afs()
         afs = adfs.afs_partition
         _insert_n_files(afs, 25)
+        afs.flush()
         # Fetch a fresh AFS handle against the same ADFS.
         afs2 = adfs.afs_partition
         names = [p.name for p in afs2.root]

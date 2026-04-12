@@ -52,6 +52,7 @@ def _populated_disc() -> ADFS:
     (afs.root / "Dir" / "Nested").write_bytes(b"nested content")
     for i in range(10):
         (afs.root / f"F{i:02d}").write_bytes(f"body-{i}".encode())
+    afs.flush()
     return adfs
 
 

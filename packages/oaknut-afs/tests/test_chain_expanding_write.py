@@ -67,6 +67,7 @@ class TestChainExpandingCreate:
 
         payload = bytes(i & 0xFF for i in range(800 * 256))
         (afs.root / "Huge").write_bytes(payload)
+        afs.flush()
 
         afs2 = adfs.afs_partition
         assert (afs2.root / "Huge").read_bytes() == payload

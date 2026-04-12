@@ -140,6 +140,7 @@ def cmd_put(args: argparse.Namespace) -> int:
             load_address=args.load,
             exec_address=args.exec_,
         )
+        afs.flush()
     return 0
 
 
