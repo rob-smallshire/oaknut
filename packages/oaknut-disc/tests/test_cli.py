@@ -801,3 +801,73 @@ class TestAfsPrefixErrors:
         result = runner.invoke(cli, ["ls", str(adfs_image_filepath), "dfs:$"])
         assert result.exit_code != 0
         assert "cannot access as DFS" in result.output
+
+
+# ---------------------------------------------------------------------------
+# expand
+# ---------------------------------------------------------------------------
+
+
+class TestExpand:
+    """Tests for the ``disc expand`` subcommand."""
+
+    def _make_truncated_ssd(self, tmp_path: Path, num_sectors: int = 136) -> Path:
+        """Create a truncated .ssd with a minimal DFS catalogue."""
+        from oaknut.dfs import ACORN_DFS_80T_SINGLE_SIDED, DFS
+
+        # Create a full image, then truncate it
+        full_filepath = tmp_path / "full.ssd"
+        with DFS.create_file(full_filepath, ACORN_DFS_80T_SINGLE_SIDED, title="Trunc"):
+            pass
+        data = full_filepath.read_bytes()
+        truncated_filepath = tmp_path / "truncated.ssd"
+        truncated_filepath.write_bytes(data[: num_sectors * 256])
+        return truncated_filepath
+
+    def test_expand_truncated_ssd(self, runner: CliRunner, tmp_path: Path) -> None:
+        filepath = self._make_truncated_ssd(tmp_path)
+        result = runner.invoke(cli, ["expand", str(filepath)])
+        assert result.exit_code == 0
+        assert filepath.stat().st_size == 204800
+        assert "Expanded" in result.output
+
+    def test_expand_with_explicit_format(self, runner: CliRunner, tmp_path: Path) -> None:
+        filepath = self._make_truncated_ssd(tmp_path, num_sectors=20)
+        result = runner.invoke(cli, ["expand", str(filepath), "--format", "ssd"])
+        assert result.exit_code == 0
+        assert filepath.stat().st_size == 204800
+
+    def test_expand_full_size_reports_no_change(
+        self, runner: CliRunner, dfs_image_filepath: Path
+    ) -> None:
+        original_size = dfs_image_filepath.stat().st_size
+        result = runner.invoke(cli, ["expand", str(dfs_image_filepath)])
+        assert result.exit_code == 0
+        assert "already" in result.output.lower()
+        assert dfs_image_filepath.stat().st_size == original_size
+
+    def test_expand_not_sector_aligned(self, runner: CliRunner, tmp_path: Path) -> None:
+        filepath = tmp_path / "bad.ssd"
+        filepath.write_bytes(b"\x00" * 257)
+        result = runner.invoke(cli, ["expand", str(filepath)])
+        assert result.exit_code != 0
+
+    def test_expand_nonexistent_file(self, runner: CliRunner, tmp_path: Path) -> None:
+        filepath = tmp_path / "nonexistent.ssd"
+        result = runner.invoke(cli, ["expand", str(filepath)])
+        assert result.exit_code != 0
+
+    def test_expand_dsd(self, runner: CliRunner, tmp_path: Path) -> None:
+        from oaknut.dfs import ACORN_DFS_80T_DOUBLE_SIDED_INTERLEAVED, DFS
+
+        full_filepath = tmp_path / "full.dsd"
+        with DFS.create_file(
+            full_filepath, ACORN_DFS_80T_DOUBLE_SIDED_INTERLEAVED, title="DSD"
+        ):
+            pass
+        data = full_filepath.read_bytes()
+        truncated_filepath = tmp_path / "truncated.dsd"
+        truncated_filepath.write_bytes(data[:20480])
+        result = runner.invoke(cli, ["expand", str(truncated_filepath)])
+        assert result.exit_code == 0
+        assert truncated_filepath.stat().st_size == 409600

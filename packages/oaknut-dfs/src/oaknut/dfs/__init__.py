@@ -7,7 +7,7 @@ import oaknut.dfs.watford_dfs_catalogue  # noqa: F401
 # Import acorn_encoding to register the codec
 import oaknut.file.acorn_encoding  # noqa: F401
 from oaknut.dfs.catalogue import DiskInfo
-from oaknut.dfs.dfs import DFS, DFSPath, DFSStat
+from oaknut.dfs.dfs import DFS, DFSPath, DFSStat, expand
 from oaknut.dfs.formats import (
     ACORN_DFS_40T_DOUBLE_SIDED_INTERLEAVED,
     ACORN_DFS_40T_DOUBLE_SIDED_SEQUENTIAL,
@@ -67,6 +67,7 @@ __all__ = [
     "SOURCE_XATTR_PIEB",
     "DEFAULT_EXPORT_META_FORMAT",
     "DEFAULT_IMPORT_META_FORMATS",
+    "expand",
     "export_with_metadata",
     "import_with_metadata",
 ]

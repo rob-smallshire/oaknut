@@ -1,11 +1,13 @@
-"""Tests for transparent reading of truncated disc images (GitHub issue #1, phase 1).
+"""Tests for transparent reading of truncated disc images (GitHub issue #1).
+
+Phase 1: from_buffer / from_file padding.
+Phase 2: expand() function.
 
 Truncated images are shorter than the canonical format size but still a
 whole number of sectors.  They arise from tools like BeebAsm that omit
 trailing empty sectors.
 """
 
-import os
 import sys
 from pathlib import Path
 
@@ -18,7 +20,7 @@ for _path in (_TESTS_DIRPATH, _WORKSPACE_ROOT):
     if str(_path) not in sys.path:
         sys.path.insert(0, str(_path))
 
-from oaknut.dfs.dfs import DFS  # noqa: E402
+from oaknut.dfs.dfs import DFS, expand  # noqa: E402
 from oaknut.dfs.formats import (  # noqa: E402
     ACORN_DFS_40T_SINGLE_SIDED,
     ACORN_DFS_80T_DOUBLE_SIDED_INTERLEAVED,
@@ -264,3 +266,118 @@ class TestFromFileTruncatedReadWrite:
             _ = dfs.title
 
         assert filepath.stat().st_size == full_size
+
+
+# ===================================================================
+# Phase 2: expand() function
+# ===================================================================
+
+
+class TestExpand:
+    """expand() physically extends a truncated image file on disc."""
+
+    def test_expand_truncated_image(self, tmp_path):
+        """A truncated image should be extended to the canonical size."""
+        truncated_size = 136 * BYTES_PER_SECTOR
+        expected_size = 80 * SECTORS_PER_TRACK * BYTES_PER_SECTOR  # 204800
+        buf = bytearray(truncated_size)
+        _minimal_catalogue(buf)
+
+        filepath = tmp_path / "truncated.ssd"
+        filepath.write_bytes(buf)
+
+        bytes_added = expand(filepath, ACORN_DFS_80T_SINGLE_SIDED)
+
+        assert filepath.stat().st_size == expected_size
+        assert bytes_added == expected_size - truncated_size
+
+    def test_expand_preserves_original_data(self, tmp_path):
+        """Original data must be preserved after expansion."""
+        truncated_size = 20 * BYTES_PER_SECTOR
+        buf = bytearray(truncated_size)
+        _minimal_catalogue(buf)
+        buf[-4:] = b"\xDE\xAD\xBE\xEF"
+
+        filepath = tmp_path / "truncated.ssd"
+        filepath.write_bytes(buf)
+
+        expand(filepath, ACORN_DFS_80T_SINGLE_SIDED)
+
+        data = filepath.read_bytes()
+        assert data[:truncated_size] == bytes(buf)
+
+    def test_expand_fills_with_zeros(self, tmp_path):
+        """The extended region should be filled with zeros."""
+        truncated_size = 20 * BYTES_PER_SECTOR
+        expected_size = 80 * SECTORS_PER_TRACK * BYTES_PER_SECTOR
+        buf = bytearray(truncated_size)
+        _minimal_catalogue(buf)
+
+        filepath = tmp_path / "truncated.ssd"
+        filepath.write_bytes(buf)
+
+        expand(filepath, ACORN_DFS_80T_SINGLE_SIDED)
+
+        data = filepath.read_bytes()
+        assert data[truncated_size:] == b"\x00" * (expected_size - truncated_size)
+
+    def test_expand_full_size_returns_zero(self, tmp_path):
+        """A full-size image should not be modified; returns 0 bytes added."""
+        full_size = 80 * SECTORS_PER_TRACK * BYTES_PER_SECTOR
+        buf = bytearray(full_size)
+        _minimal_catalogue(buf)
+
+        filepath = tmp_path / "full.ssd"
+        filepath.write_bytes(buf)
+
+        bytes_added = expand(filepath, ACORN_DFS_80T_SINGLE_SIDED)
+
+        assert bytes_added == 0
+        assert filepath.stat().st_size == full_size
+
+    def test_expand_40t_format(self, tmp_path):
+        """Expansion should respect the target format's size."""
+        truncated_size = 20 * BYTES_PER_SECTOR
+        expected_size = 40 * SECTORS_PER_TRACK * BYTES_PER_SECTOR  # 102400
+        buf = bytearray(truncated_size)
+        _minimal_catalogue(buf)
+
+        filepath = tmp_path / "truncated.ssd"
+        filepath.write_bytes(buf)
+
+        bytes_added = expand(filepath, ACORN_DFS_40T_SINGLE_SIDED)
+
+        assert filepath.stat().st_size == expected_size
+        assert bytes_added == expected_size - truncated_size
+
+    def test_expand_not_sector_aligned_raises(self, tmp_path):
+        """A file whose size is not a multiple of the sector size should be rejected."""
+        filepath = tmp_path / "bad.ssd"
+        filepath.write_bytes(b"\x00" * 257)
+
+        with pytest.raises(ValueError, match="not a multiple of the sector size"):
+            expand(filepath, ACORN_DFS_80T_SINGLE_SIDED)
+
+    def test_expand_oversized_raises(self, tmp_path):
+        """A file larger than the canonical format size should be rejected."""
+        oversized = 80 * SECTORS_PER_TRACK * BYTES_PER_SECTOR + BYTES_PER_SECTOR
+        filepath = tmp_path / "oversized.ssd"
+        filepath.write_bytes(b"\x00" * oversized)
+
+        with pytest.raises(ValueError, match="larger than"):
+            expand(filepath, ACORN_DFS_80T_SINGLE_SIDED)
+
+    def test_expand_empty_file_raises(self, tmp_path):
+        """An empty file should be rejected."""
+        filepath = tmp_path / "empty.ssd"
+        filepath.write_bytes(b"")
+
+        with pytest.raises(ValueError, match="empty"):
+            expand(filepath, ACORN_DFS_80T_SINGLE_SIDED)
+
+    def test_expand_nonexistent_raises(self, tmp_path):
+        """A nonexistent file should raise FileNotFoundError."""
+        filepath = tmp_path / "nonexistent.ssd"
+
+        with pytest.raises(FileNotFoundError):
+            expand(filepath, ACORN_DFS_80T_SINGLE_SIDED)

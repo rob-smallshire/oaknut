@@ -939,3 +939,51 @@ class DFS:
 
     # Helpers
     # _parse_filename() removed - parsing now delegated to Catalogue layer
+
+
+def expand(filepath: Union[str, PathLike], disk_format: DiskFormat) -> int:
+    """Physically extend a truncated disc image file to its canonical format size.
+
+    Appends zero bytes to *filepath* until it reaches the size required
+    by *disk_format*.  The original data is preserved.
+
+    Args:
+        filepath: Path to the disc image file.
+        disk_format: Target format whose ``image_size`` the file should
+            match after expansion.
+
+    Returns:
+        The number of bytes appended (0 if the file was already the
+        correct size).
+
+    Raises:
+        FileNotFoundError: If the file does not exist.
+        ValueError: If the file is empty, not a whole number of sectors,
+            or already larger than the canonical format size.
+    """
+    filepath = Path(filepath)
+    file_size = filepath.stat().st_size
+    expected_size = disk_format.image_size
+
+    if file_size == 0:
+        raise ValueError(f"{filepath.name} is empty")
+
+    if file_size % BYTES_PER_SECTOR != 0:
+        raise ValueError(
+            f"{filepath.name} size ({file_size}) is not a multiple of "
+            f"the sector size ({BYTES_PER_SECTOR} bytes)"
+        )
+
+    if file_size > expected_size:
+        raise ValueError(
+            f"{filepath.name} ({file_size} bytes) is larger than "
+            f"the canonical format size ({expected_size} bytes)"
+        )
+
+    if file_size == expected_size:
+        return 0
+
+    padding = expected_size - file_size
+    with open(filepath, "ab") as f:
+        f.write(b"\x00" * padding)
+    return padding
