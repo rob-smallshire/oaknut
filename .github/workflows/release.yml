@@ -2,10 +2,15 @@ name: Release
 
 # Publishes a package to PyPI when a namespaced tag is pushed.
 #
-#   oaknut-v<x.y.z>      → publish the oaknut meta-distribution
-#   oaknut-file-v<x.y.z> → publish oaknut-file
-#   oaknut-dfs-v<x.y.z>  → publish oaknut-dfs
-#   oaknut-zip-v<x.y.z>  → publish oaknut-zip
+#   oaknut-v<x.y.z>          → publish the oaknut meta-distribution
+#   oaknut-file-v<x.y.z>     → publish oaknut-file
+#   oaknut-discimage-v<x.y.z>→ publish oaknut-discimage
+#   oaknut-basic-v<x.y.z>    → publish oaknut-basic
+#   oaknut-dfs-v<x.y.z>      → publish oaknut-dfs
+#   oaknut-adfs-v<x.y.z>     → publish oaknut-adfs
+#   oaknut-afs-v<x.y.z>      → publish oaknut-afs
+#   oaknut-zip-v<x.y.z>      → publish oaknut-zip
+#   oaknut-disc-v<x.y.z>     → publish oaknut-disc
 #
 # Each tag fires the workflow once; a determine-package step parses
 # the tag and picks the right build command. Authentication uses the
@@ -17,8 +22,13 @@ on:
     tags:
       - 'oaknut-v*'
       - 'oaknut-file-v*'
+      - 'oaknut-discimage-v*'
+      - 'oaknut-basic-v*'
       - 'oaknut-dfs-v*'
+      - 'oaknut-adfs-v*'
+      - 'oaknut-afs-v*'
       - 'oaknut-zip-v*'
+      - 'oaknut-disc-v*'
 
 jobs:
   publish:
@@ -41,40 +51,25 @@ jobs:
         run: |
           set -euo pipefail
           tag="${GITHUB_REF_NAME}"
-          case "$tag" in
-            oaknut-v*)
-              # Meta-distribution. `uv build` at the workspace root
-              # builds the top-level oaknut package, not the workspace
-              # members — the members are built via --package.
-              echo "package=oaknut" >> "$GITHUB_OUTPUT"
-              echo "build_cmd=uv build" >> "$GITHUB_OUTPUT"
-              ;;
-            oaknut-file-v*)
-              echo "package=oaknut-file" >> "$GITHUB_OUTPUT"
-              echo "build_cmd=uv build --package oaknut-file" >> "$GITHUB_OUTPUT"
-              ;;
-            oaknut-dfs-v*)
-              echo "package=oaknut-dfs" >> "$GITHUB_OUTPUT"
-              echo "build_cmd=uv build --package oaknut-dfs" >> "$GITHUB_OUTPUT"
-              ;;
-            oaknut-zip-v*)
-              echo "package=oaknut-zip" >> "$GITHUB_OUTPUT"
-              echo "build_cmd=uv build --package oaknut-zip" >> "$GITHUB_OUTPUT"
-              ;;
-            *)
-              echo "ERROR: unrecognised tag format: $tag" >&2
-              exit 1
-              ;;
-          esac
-          echo "Determined package: $tag → $(grep '^package=' "$GITHUB_OUTPUT" | cut -d= -f2)"
+          # Strip the version suffix to get the package name:
+          # oaknut-disc-v1.0.0 → oaknut-disc
+          pkg_name="${tag%-v*}"
+          if [ "$pkg_name" = "oaknut" ]; then
+            # Meta-distribution: build at workspace root.
+            echo "package=oaknut" >> "$GITHUB_OUTPUT"
+            echo "build_cmd=uv build" >> "$GITHUB_OUTPUT"
+          else
+            # Workspace member: build with --package.
+            echo "package=$pkg_name" >> "$GITHUB_OUTPUT"
+            echo "build_cmd=uv build --package $pkg_name" >> "$GITHUB_OUTPUT"
+          fi
+          echo "Determined package: $tag → $pkg_name"
 
       - name: Install workspace
         run: uv sync
 
       - name: Build ${{ steps.pkg.outputs.package }}
         run: |
-          # Wipe any stale dist/ artefacts from the sync step to keep
-          # the publish step from picking up wheels from other packages.
           rm -rf dist/
           ${{ steps.pkg.outputs.build_cmd }}
           ls -la dist/
