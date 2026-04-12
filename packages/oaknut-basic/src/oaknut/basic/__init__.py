@@ -21,7 +21,7 @@ dependencies on any other oaknut package.
 
 from __future__ import annotations
 
-__version__ = "10.0.1"
+__version__ = "10.0.2"
 
 # Canonical load addresses for BBC BASIC programs on each host.
 # Programs saved by *SAVE on a real machine use these by default.
