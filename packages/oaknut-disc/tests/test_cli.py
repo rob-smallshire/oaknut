@@ -541,10 +541,10 @@ class TestCompact:
         assert result.exit_code == 0
         assert "Compacted" in result.output
 
-    def test_compact_dfs_errors(self, runner: CliRunner, dfs_image_filepath: Path) -> None:
+    def test_compact_dfs(self, runner: CliRunner, dfs_image_filepath: Path) -> None:
         result = runner.invoke(cli, ["compact", str(dfs_image_filepath)])
-        assert result.exit_code != 0
-        assert "not supported for DFS" in result.output
+        assert result.exit_code == 0
+        assert "Compacted" in result.output
 
 
 # ---------------------------------------------------------------------------

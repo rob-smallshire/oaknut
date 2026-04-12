@@ -1123,16 +1123,16 @@ def create(host_path: Path, fmt: str, disc_title: str, capacity: int | None) -> 
 @cli.command()
 @click.argument("image", type=click.Path(exists=True, path_type=Path))
 def compact(image: Path) -> None:
-    """Defragment an ADFS disc image."""
+    """Defragment a disc image, consolidating free space."""
     fs = detect_filing_system(image)
-    if fs is FilingSystem.DFS:
-        raise click.ClickException("compact is not supported for DFS images")
     with open_image(image, fs, mode="r+b") as handle:
         if hasattr(handle, "compact"):
             count = handle.compact()
             click.echo(f"Compacted {count} object(s)")
         else:
-            click.echo("Compact not available for this format")
+            raise click.ClickException(
+                f"compact is not yet implemented for {fs.value.upper()} images"
+            )
 
 
 # ---------------------------------------------------------------------------
