@@ -11,6 +11,7 @@ __version__ = "1.0.0"
 import oaknut.file.acorn_encoding  # noqa: F401
 from oaknut.file.access import Access, format_access_hex, format_access_text, parse_access
 from oaknut.file.boot_option import BootOption
+from oaknut.file.copy import copy_file
 from oaknut.file.exceptions import FSError
 from oaknut.file.filename_encoding import (
     build_filename_suffix,
@@ -51,6 +52,7 @@ from oaknut.file.xattr import (
 __all__ = [
     "Access",
     "AcornMeta",
+    "copy_file",
     "BootOption",
     "DEFAULT_EXPORT_META_FORMAT",
     "DEFAULT_IMPORT_META_FORMATS",

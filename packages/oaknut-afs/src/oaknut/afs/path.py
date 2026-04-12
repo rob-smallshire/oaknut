@@ -275,6 +275,8 @@ class AFSPath:
             # ACCDEF at Uade01:271 — owner R+W, no public access,
             # unlocked. Matches what the ROM's create path defaults to.
             access = AFSAccess.from_string("WR/")
+        elif isinstance(access, int) and not isinstance(access, AFSAccess):
+            access = AFSAccess.from_byte(access)
         if date is None:
             date = AfsDate(datetime.date.today())
 
@@ -359,9 +361,7 @@ class AFSPath:
             child_raw = afs._read_object_bytes(entry.sin)
             child_dir = AfsDirectory.from_bytes(child_raw)
             if len(child_dir) > 0:
-                raise AFSDirectoryNotEmptyError(
-                    f"{self} is not empty ({len(child_dir)} entries)"
-                )
+                raise AFSDirectoryNotEmptyError(f"{self} is not empty ({len(child_dir)} entries)")
         afs._delete_object(entry.sin)
         new_parent = delete_entry(parent_raw, name)
         afs._write_object_bytes(parent_sin, new_parent)

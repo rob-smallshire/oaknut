@@ -105,16 +105,17 @@ class LibraryImage(Enum):
     ) -> None:
         """Copy this library's files into the target AFS path.
 
-        Reads each file from the ADFS library image and writes it
-        into the target AFS directory via ``write_bytes``.
+        Uses :func:`oaknut.file.copy_file` to bridge from the ADFS
+        library image into the target AFS directory.
         """
+        from oaknut.file.copy import copy_file
+
         if target_path is None:
             target_path = target.root
 
         with self.open() as adfs:
             for adfs_entry in adfs.root.iterdir():
-                st = adfs_entry.stat()
-                if st.is_directory:
+                if adfs_entry.stat().is_directory:
                     continue  # Library images are flat.
                 dest = target_path / adfs_entry.name
                 if dest.exists():
@@ -128,11 +129,7 @@ class LibraryImage(Enum):
                         raise AFSMergeConflictError(
                             f"'{adfs_entry.name}' already exists at {target_path}"
                         )
-                dest.write_bytes(
-                    adfs_entry.read_bytes(),
-                    load_address=st.load_address,
-                    exec_address=st.exec_address,
-                )
+                copy_file(adfs_entry, dest, target_fs="afs")
 
 
 _TARGET_DIRNAMES: dict[LibraryImage, str] = {

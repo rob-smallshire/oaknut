@@ -905,6 +905,8 @@ def cp(image: Path, src: str, dst: str, force: bool, dst_image: Path | None) -> 
 
 def _cp_within_image(image: Path, src: str, dst: str, force: bool) -> None:
     """Copy a file within a single disc image."""
+    from oaknut.file import copy_file
+
     fs, bare_src = resolve_path(image, src)
     _, bare_dst = parse_prefix(dst)
 
@@ -919,14 +921,7 @@ def _cp_within_image(image: Path, src: str, dst: str, force: bool) -> None:
             raise click.ClickException(f"'{bare_dst}' already exists (use -f to overwrite)")
         if dest.exists() and force:
             dest.unlink()
-        data = source.read_bytes()
-        st = source.stat()
-        dest.write_bytes(
-            data,
-            load_address=getattr(st, "load_address", 0),
-            exec_address=getattr(st, "exec_address", 0),
-            locked=getattr(st, "locked", False),
-        )
+        copy_file(source, dest, target_fs=fs.value)
         if fs is FilingSystem.AFS:
             handle.flush()
 
@@ -935,10 +930,12 @@ def _cp_cross_image(
     src_image: Path, src: str, dst: str, dst_image: Path, force: bool,
 ) -> None:
     """Copy a file between two disc images (possibly different formats)."""
+    from oaknut.file.access_mapping import access_from_stat, access_to_write_kwargs
+
     src_fs, src_bare = resolve_path(src_image, src)
     dst_fs, dst_bare = resolve_path(dst_image, dst)
 
-    # Read from source (read-only).
+    # Read source data and metadata while the source image is open.
     with open_image(src_image, src_fs) as src_handle:
         source = _navigate(src_handle, src_bare, src_fs)
         if not source.exists():
@@ -947,23 +944,22 @@ def _cp_cross_image(
             raise click.ClickException("directory copy not yet implemented")
         data = source.read_bytes()
         st = source.stat()
-        load_addr = getattr(st, "load_address", 0)
-        exec_addr = getattr(st, "exec_address", 0)
-        locked = getattr(st, "locked", False)
+        access = access_from_stat(st)
 
-    # Write to destination.
+    # Write to destination with mapped access attributes.
+    kwargs = {
+        "load_address": getattr(st, "load_address", 0),
+        "exec_address": getattr(st, "exec_address", 0),
+    }
+    kwargs.update(access_to_write_kwargs(access, dst_fs.value))
+
     with open_image(dst_image, dst_fs, mode="r+b") as dst_handle:
         dest = _navigate(dst_handle, dst_bare, dst_fs)
         if dest.exists() and not force:
             raise click.ClickException(f"'{dst_bare}' already exists (use -f to overwrite)")
         if dest.exists() and force:
             dest.unlink()
-        dest.write_bytes(
-            data,
-            load_address=load_addr,
-            exec_address=exec_addr,
-            locked=locked,
-        )
+        dest.write_bytes(data, **kwargs)
         if dst_fs is FilingSystem.AFS:
             dst_handle.flush()
 
