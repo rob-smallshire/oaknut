@@ -48,7 +48,14 @@ from oaknut.afs.exceptions import (
     AFSPathError,
 )
 from oaknut.afs.info_sector import INFO_SECTOR_SIZE, InfoSector, InfoSectorPair
-from oaknut.afs.map_sector import MAP_SECTOR_SIZE, Extent, ExtentStream, MapChain, MapSector
+from oaknut.afs.map_sector import (
+    _MAX_DATA_EXTENTS,
+    MAP_SECTOR_SIZE,
+    Extent,
+    ExtentStream,
+    MapChain,
+    MapSector,
+)
 from oaknut.afs.passwords import PASSWORDS_FILENAME, PasswordsFile
 from oaknut.afs.path import AFSPath
 from oaknut.afs.types import Geometry, SystemInternalName
@@ -404,17 +411,12 @@ class AFS:
     ) -> int:
         """Extend an object's map chain by ``additional_sectors`` sectors.
 
-        Allocates fresh data sectors via the session allocator and
-        appends them as extents to the **last** map block in the
-        chain, writing the updated map block back to disc. This is
-        the MAPMAN.CHANGESIZE grow path (``Uade10:355`` ``MPCHSZ``)
-        simplified for phase-10 scope: directories max out at 26
-        sectors, which easily fits in a single map block's 48 data
-        extents, so no chain expansion is required.
-
-        Coalesces a new extent into the existing last extent when
-        their physical sectors are contiguous, mirroring what the
-        ROM's ABLKS-in-a-loop path produces naturally.
+        Allocates fresh data sectors and appends them as extents to
+        the last map block in the chain. If the last block would
+        overflow 48 data extents, a new successor map block is
+        allocated and chained from slot 48, matching
+        ``MAPMAN.CHANGESIZE`` (``Uade10:355`` ``MPCHSZ``) and
+        ``MKRLN`` (``Uade12:187``).
 
         Returns the new total size in sectors.
         """
@@ -427,96 +429,58 @@ class AFS:
         chain = self._read_map_chain(sin)
         last_block = chain.last
 
-        # Merge into the existing extent list, coalescing where
-        # physically adjacent.
-        merged_extents: list[Extent] = list(last_block.extents)
+        merged = list(last_block.extents)
         for extent in new_extents:
-            if merged_extents and int(merged_extents[-1].end) == int(extent.start):
-                prev = merged_extents[-1]
-                merged_extents[-1] = Extent(
-                    start=prev.start,
-                    length=prev.length + extent.length,
-                )
+            if merged and int(merged[-1].end) == int(extent.start):
+                prev = merged[-1]
+                merged[-1] = Extent(start=prev.start, length=prev.length + extent.length)
             else:
-                merged_extents.append(extent)
+                merged.append(extent)
 
-        if len(merged_extents) > 48:
-            # Phase 10 does not implement chain-expansion growth;
-            # callers requesting this much at once should bump the
-            # grow step or wait for phase 12 (file extend).
-            raise AFSError(
-                f"object {int(sin):#x} grow would overflow the last map block's "
-                f"48 data extents (would need {len(merged_extents)}); "
-                f"chain-expansion growth not implemented in phase 10"
+        if len(merged) <= _MAX_DATA_EXTENTS:
+            new_last = MapSector(
+                sin=last_block.sin,
+                extents=tuple(merged),
+                last_sector_bytes=0,
+                sequence_number=(last_block.sequence_number + 1) & 0xFF,
+                next_sin=last_block.next_sin,
             )
+            self._write_sector(int(last_block.sin), new_last.to_bytes())
+        else:
+            # Overflow: keep the first 48 in the current block and
+            # spill the rest into a freshly-allocated successor.
+            keep = merged[:_MAX_DATA_EXTENTS]
+            spill = merged[_MAX_DATA_EXTENTS:]
+            successor_sin = allocator.allocate_sector()
+            updated_last = MapSector(
+                sin=last_block.sin,
+                extents=tuple(keep),
+                last_sector_bytes=0,
+                sequence_number=(last_block.sequence_number + 1) & 0xFF,
+                next_sin=successor_sin,
+            )
+            self._write_sector(int(last_block.sin), updated_last.to_bytes())
+            successor = MapSector(
+                sin=successor_sin,
+                extents=tuple(spill),
+                last_sector_bytes=0,
+                sequence_number=0,
+                next_sin=None,
+            )
+            self._write_sector(int(successor_sin), successor.to_bytes())
 
-        new_last_block = MapSector(
-            sin=last_block.sin,
-            extents=tuple(merged_extents),
-            last_sector_bytes=0,  # whole-sector growth, no partial last sector yet
-            sequence_number=(last_block.sequence_number + 1) & 0xFF,
-            next_sin=last_block.next_sin,
-        )
-        self._write_sector(int(last_block.sin), new_last_block.to_bytes())
-
-        # Flush bitmap shadow so the new allocations persist.
         self._bitmap_shadow().flush()
-
-        # Return the new total sector count.
         return chain.total_sectors() + additional_sectors
 
     # ------------------------------------------------------------------
     # Object creation / destruction — phase 11+
     # ------------------------------------------------------------------
 
-    def _create_object(
-        self,
-        data: bytes,
-    ) -> SystemInternalName:
-        """Allocate a new file or directory object from ``data`` bytes.
-
-        Mirrors ``MPCRSP`` (``Uade10.asm:84-255``): allocate one
-        sector for the JesMap map block, allocate enough data
-        sectors to cover ``data``, build the map block with the
-        extents + BILB, write the map block and all data sectors
-        to disc, and return the map block's SIN.
-
-        For phase 11 this handles objects that fit in a single map
-        block (up to 48 data extents × 0xFFFF sectors each). The
-        empty-object case (``data == b""``) is allowed and produces
-        a map block with zero data extents.
-        """
-        allocator = self._allocator()
-
-        # Allocate data extents first — if this fails we haven't
-        # consumed the map-block SIN yet.
-        n_data_sectors = (len(data) + MAP_SECTOR_SIZE - 1) // MAP_SECTOR_SIZE
-        data_extents: list[Extent] = []
-        if n_data_sectors > 0:
-            data_extents = allocator.allocate(n_data_sectors)
-
-        # Now take the map block SIN.
-        try:
-            map_sin = allocator.allocate_sector()
-        except Exception:
-            if data_extents:
-                allocator.free_extents(data_extents)
-            raise
-
-        if len(data_extents) > 48:
-            # Chain expansion — phase 11 refuses this.
-            allocator.free_extents(data_extents)
-            allocator.free_sector(map_sin)
-            raise AFSError(
-                f"object needs {len(data_extents)} extents; "
-                f"chain-expansion create not implemented in phase 11"
-            )
-
-        # Coalesce adjacent extents (the allocator already tries to
-        # do this in-cylinder, but runs in separate cylinders don't
-        # get merged by it).
+    @staticmethod
+    def _coalesce_extents(extents: list[Extent]) -> list[Extent]:
+        """Merge physically-adjacent extents into longer runs."""
         coalesced: list[Extent] = []
-        for extent in data_extents:
+        for extent in extents:
             if coalesced and int(coalesced[-1].end) == int(extent.start):
                 prev = coalesced[-1]
                 coalesced[-1] = Extent(
@@ -525,31 +489,78 @@ class AFS:
                 )
             else:
                 coalesced.append(extent)
+        return coalesced
+
+    def _create_object(
+        self,
+        data: bytes,
+    ) -> SystemInternalName:
+        """Allocate a new file or directory object from ``data`` bytes.
+
+        Mirrors ``MPCRSP`` (``Uade10.asm:84-255``): allocate data
+        sectors, allocate one map block SIN per 48-extent chunk,
+        build the chain with slot-48 pointers between blocks, write
+        everything to disc, return the head block's SIN.
+
+        Handles arbitrarily large objects by chaining multiple map
+        blocks when the coalesced extent count exceeds 48.
+        """
+        allocator = self._allocator()
+
+        n_data_sectors = (len(data) + MAP_SECTOR_SIZE - 1) // MAP_SECTOR_SIZE
+        data_extents: list[Extent] = []
+        if n_data_sectors > 0:
+            data_extents = allocator.allocate(n_data_sectors)
+
+        coalesced = self._coalesce_extents(data_extents)
+
+        # Split into 48-extent chunks, one per map block.
+        n_blocks = max(1, (len(coalesced) + _MAX_DATA_EXTENTS - 1) // _MAX_DATA_EXTENTS)
+        chunks: list[tuple[Extent, ...]] = []
+        for i in range(n_blocks):
+            start = i * _MAX_DATA_EXTENTS
+            end = min(start + _MAX_DATA_EXTENTS, len(coalesced))
+            chunks.append(tuple(coalesced[start:end]))
+
+        # Allocate one SIN per map block.
+        block_sins: list[SystemInternalName] = []
+        try:
+            for _ in range(n_blocks):
+                block_sins.append(allocator.allocate_sector())
+        except Exception:
+            for sin in block_sins:
+                allocator.free_sector(sin)
+            if data_extents:
+                allocator.free_extents(data_extents)
+            raise
 
         last_sector_bytes = len(data) % MAP_SECTOR_SIZE
-        map_block = MapSector(
-            sin=SystemInternalName(map_sin),
-            extents=tuple(coalesced),
-            last_sector_bytes=last_sector_bytes,
-            sequence_number=0,
-            next_sin=None,
-        )
-        self._write_sector(int(map_sin), map_block.to_bytes())
+
+        # Build and write each map block.
+        for i, (sin, chunk) in enumerate(zip(block_sins, chunks)):
+            is_last = i == n_blocks - 1
+            next_sin = None if is_last else block_sins[i + 1]
+            block = MapSector(
+                sin=sin,
+                extents=chunk,
+                last_sector_bytes=last_sector_bytes if is_last else 0,
+                sequence_number=0,
+                next_sin=next_sin,
+            )
+            self._write_sector(int(sin), block.to_bytes())
 
         # Write data sectors (tail-padded if needed).
         cursor = 0
         for extent in coalesced:
             for offset in range(extent.length):
-                chunk = data[cursor : cursor + MAP_SECTOR_SIZE]
-                if len(chunk) < MAP_SECTOR_SIZE:
-                    chunk = chunk + b"\x00" * (MAP_SECTOR_SIZE - len(chunk))
-                self._write_sector(int(extent.start) + offset, chunk)
+                chunk_data = data[cursor : cursor + MAP_SECTOR_SIZE]
+                if len(chunk_data) < MAP_SECTOR_SIZE:
+                    chunk_data = chunk_data + b"\x00" * (MAP_SECTOR_SIZE - len(chunk_data))
+                self._write_sector(int(extent.start) + offset, chunk_data)
                 cursor += MAP_SECTOR_SIZE
 
-        # Flush the bitmap shadow so the allocations are persistent.
         self._bitmap_shadow().flush()
-
-        return SystemInternalName(map_sin)
+        return block_sins[0]
 
     def _delete_object(self, sin: SystemInternalName) -> None:
         """Free every sector belonging to the object at ``sin``.
