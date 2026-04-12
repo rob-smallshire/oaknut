@@ -14,6 +14,10 @@ from typing import Sequence
 from oaknut.afs.wfsinit.partition import AFSSizeSpec
 from oaknut.file import BootOption
 
+# Names reserved for the built-in accounts that initialise() creates
+# automatically (WFSINIT.bas lines 2140-2160 and DATA at line 3930).
+BUILTIN_ACCOUNT_NAMES = frozenset({"Syst", "Boot", "Welcome"})
+
 
 @dataclass(frozen=True)
 class UserSpec:
@@ -47,6 +51,7 @@ class InitSpec:
     users: Sequence[UserSpec] = ()
     libraries: Sequence[str] = ()  # names or paths passed to emplace_library
     repartition: bool = True
+    omit_builtins: frozenset[str] = field(default_factory=frozenset)
 
     def __post_init__(self) -> None:
         if not self.disc_name:
@@ -55,9 +60,26 @@ class InitSpec:
             raise ValueError(f"disc_name exceeds 16 chars: {self.disc_name!r}")
         if self.default_quota < 0:
             raise ValueError("default_quota must be non-negative")
+        # Validate omit_builtins against the known set.
+        builtin_upper = {n.upper(): n for n in BUILTIN_ACCOUNT_NAMES}
+        for name in self.omit_builtins:
+            if name.upper() not in builtin_upper:
+                raise ValueError(
+                    f"omit_builtins name {name!r} is not a built-in account; "
+                    f"valid names are {', '.join(sorted(BUILTIN_ACCOUNT_NAMES))}"
+                )
+        omitted_upper = {n.upper() for n in self.omit_builtins}
+        # User-specified names must not collide with non-omitted built-ins.
+        active_builtin_upper = set(builtin_upper) - omitted_upper
         names_seen: set[str] = set()
         for user in self.users:
             upper = user.name.upper()
+            if upper in active_builtin_upper:
+                raise ValueError(
+                    f"user name {user.name!r} is reserved (built-in account); "
+                    f"initialise() creates {', '.join(sorted(BUILTIN_ACCOUNT_NAMES))} automatically "
+                    f"(use omit_builtins to suppress)"
+                )
             if upper in names_seen:
                 raise ValueError(f"duplicate user name: {user.name!r}")
             names_seen.add(upper)

@@ -9,6 +9,10 @@ from oaknut.adfs import ADFS, ADFS_L
 from oaknut.afs.wfsinit import AFSSizeSpec, InitSpec, UserSpec, initialise
 from oaknut.file import BootOption
 
+# The three built-in password entries that initialise() always creates
+# (matching WFSINIT.bas lines 2140-2160): Syst, Boot, Welcome.
+_BUILTIN_USERS = {"Syst", "Boot", "Welcome"}
+
 
 class TestInitialise:
     def test_initialise_produces_afs_partition(self) -> None:
@@ -19,10 +23,7 @@ class TestInitialise:
                 disc_name="TestDisc",
                 date=datetime.date(2026, 4, 11),
                 size=AFSSizeSpec.cylinders(20),
-                users=[
-                    UserSpec("Syst", system=True),
-                    UserSpec("guest"),
-                ],
+                users=[UserSpec("guest")],
             ),
         )
         afs = adfs.afs_partition
@@ -38,7 +39,6 @@ class TestInitialise:
                 disc_name="UsersTest",
                 size=AFSSizeSpec.cylinders(20),
                 users=[
-                    UserSpec("Syst", system=True),
                     UserSpec("alice", password="s3cret", quota=0x10000),
                     UserSpec("bob"),
                 ],
@@ -46,27 +46,41 @@ class TestInitialise:
         )
         afs = adfs.afs_partition
         active = {u.name for u in afs.users.active}
-        assert active == {"Syst", "alice", "bob"}
+        assert active == _BUILTIN_USERS | {"alice", "bob"}
         assert afs.users.find("Syst").is_system
         assert afs.users.find("alice").password == "s3cret"
         assert afs.users.find("alice").free_space == 0x10000
 
-    def test_initialised_root_is_empty_except_passwords(self) -> None:
+    def test_initialised_root_has_passwords_and_urds(self) -> None:
         adfs = ADFS.create(ADFS_L)
         initialise(
             adfs,
             spec=InitSpec(
                 disc_name="Empty",
                 size=AFSSizeSpec.cylinders(20),
-                users=[UserSpec("Syst", system=True)],
+                users=[],
             ),
         )
         afs = adfs.afs_partition
         names = [p.name for p in afs.root]
-        assert "Passwords" in names
-        # Filter out the passwords file; there should be nothing else.
-        non_passwords = [n for n in names if n != "Passwords"]
-        assert non_passwords == []
+        # With no user-specified accounts, root should only have
+        # the Passwords file — built-in accounts don't get URDs.
+        assert names == ["Passwords"]
+
+    def test_initialised_root_has_user_urds(self) -> None:
+        adfs = ADFS.create(ADFS_L)
+        initialise(
+            adfs,
+            spec=InitSpec(
+                disc_name="WithURDs",
+                size=AFSSizeSpec.cylinders(20),
+                users=[UserSpec("Holmes"), UserSpec("Moriarty")],
+            ),
+        )
+        afs = adfs.afs_partition
+        names = sorted(p.name for p in afs.root)
+        # Each user-specified account gets a URD in root.
+        assert names == ["Holmes", "Moriarty", "Passwords"]
 
     def test_write_file_after_initialise(self) -> None:
         adfs = ADFS.create(ADFS_L)
@@ -75,7 +89,7 @@ class TestInitialise:
             spec=InitSpec(
                 disc_name="WritesOK",
                 size=AFSSizeSpec.cylinders(30),
-                users=[UserSpec("Syst", system=True)],
+                users=[],
             ),
         )
         afs = adfs.afs_partition
@@ -90,11 +104,12 @@ class TestInitialise:
                 disc_name="Quota",
                 size=AFSSizeSpec.cylinders(20),
                 default_quota=0xAA00,
-                users=[UserSpec("Syst", system=True), UserSpec("bob")],
+                users=[UserSpec("bob")],
             ),
         )
         afs = adfs.afs_partition
         assert afs.users.find("bob").free_space == 0xAA00
+        # Built-in accounts also receive the default quota.
         assert afs.users.find("Syst").free_space == 0xAA00
 
     def test_initspec_rejects_empty_name(self) -> None:
@@ -108,6 +123,38 @@ class TestInitialise:
                 users=[UserSpec("Alice"), UserSpec("alice")],
             )
 
+    @pytest.mark.parametrize("name", ["Syst", "Boot", "Welcome", "syst", "BOOT"])
+    def test_initspec_rejects_builtin_names(self, name: str) -> None:
+        with pytest.raises(ValueError, match="reserved"):
+            InitSpec(
+                disc_name="Reserved",
+                users=[UserSpec(name)],
+            )
+
+    def test_omit_builtins_suppresses_accounts(self) -> None:
+        adfs = ADFS.create(ADFS_L)
+        initialise(
+            adfs,
+            spec=InitSpec(
+                disc_name="Omitted",
+                size=AFSSizeSpec.cylinders(20),
+                users=[],
+                omit_builtins=frozenset({"Boot", "Welcome"}),
+            ),
+        )
+        afs = adfs.afs_partition
+        active = {u.name for u in afs.users.active}
+        assert "Syst" in active
+        assert "Boot" not in active
+        assert "Welcome" not in active
+
+    def test_omit_builtins_rejects_unknown_names(self) -> None:
+        with pytest.raises(ValueError, match="not a built-in"):
+            InitSpec(
+                disc_name="Bad",
+                omit_builtins=frozenset({"Gandalf"}),
+            )
+
     def test_boot_option_persists(self) -> None:
         adfs = ADFS.create(ADFS_L)
         initialise(
@@ -116,9 +163,9 @@ class TestInitialise:
                 disc_name="BootTest",
                 size=AFSSizeSpec.cylinders(20),
                 users=[
-                    UserSpec("Syst", system=True, boot=BootOption.RUN),
+                    UserSpec("alice", boot=BootOption.RUN),
                 ],
             ),
         )
         afs = adfs.afs_partition
-        assert afs.users.find("Syst").boot_option == BootOption.RUN
+        assert afs.users.find("alice").boot_option == BootOption.RUN

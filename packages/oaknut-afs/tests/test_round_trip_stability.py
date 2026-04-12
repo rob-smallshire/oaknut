@@ -39,7 +39,6 @@ def _populated_disc() -> ADFS:
             date=datetime.date(2026, 4, 11),
             size=AFSSizeSpec.cylinders(30),
             users=[
-                UserSpec("Syst", system=True),
                 UserSpec("alice", password="s3cret", quota=0x1000),
                 UserSpec("bob"),
             ],
@@ -70,7 +69,7 @@ class TestRoundTrip:
         adfs = _populated_disc()
         afs = adfs.afs_partition
         active = {u.name for u in afs.users.active}
-        assert active == {"Syst", "alice", "bob"}
+        assert active == {"Syst", "Boot", "Welcome", "alice", "bob"}
         assert afs.users.find("alice").password == "s3cret"
         assert afs.users.find("alice").free_space == 0x1000
 
@@ -79,7 +78,7 @@ class TestRoundTrip:
             disc_name="Deterministic",
             date=datetime.date(2026, 4, 11),
             size=AFSSizeSpec.cylinders(20),
-            users=[UserSpec("Syst", system=True)],
+            users=[],
         )
         a = ADFS.create(ADFS_L)
         b = ADFS.create(ADFS_L)

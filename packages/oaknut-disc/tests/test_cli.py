@@ -723,7 +723,7 @@ class TestAfsInit:
                 "--cylinders",
                 "10",
                 "--user",
-                "Syst:S",
+                "alice",
             ],
         )
         assert result.exit_code == 0

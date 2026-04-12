@@ -36,7 +36,7 @@ class TestMergeExcludesPasswords:
 
         # Source has its own Passwords.
         assert any(c.name == PASSWORDS_FILENAME for c in src.root)
-        # Target has 2 users.
+        # Target has 2 users (synthetic builder, not initialise()).
         assert len(tgt.users.active) == 2
         original_names = {u.name for u in tgt.users.active}
 
@@ -67,7 +67,7 @@ class TestEmplaceLibrary:
             spec=InitSpec(
                 disc_name="LibTest",
                 size=AFSSizeSpec.cylinders(20),
-                users=[UserSpec("Syst", system=True)],
+                users=[],
                 libraries=["Library"],
             ),
         )
@@ -89,7 +89,6 @@ class TestEmplaceLibrary:
                 disc_name="Users",
                 size=AFSSizeSpec.cylinders(20),
                 users=[
-                    UserSpec("Syst", system=True),
                     UserSpec("guest"),
                 ],
                 libraries=["Library"],
@@ -98,7 +97,7 @@ class TestEmplaceLibrary:
         afs = adfs.afs_partition
         assert afs is not None
         names = {u.name for u in afs.users.active}
-        assert names == {"Syst", "guest"}
+        assert names == {"Syst", "Boot", "Welcome", "guest"}
 
 
 class TestAFSContextManager:

@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 from oaknut.adfs import ADFS, ADFS_L
 from oaknut.afs.cli import main
-from oaknut.afs.wfsinit import AFSSizeSpec, InitSpec, UserSpec, initialise
+from oaknut.afs.wfsinit import AFSSizeSpec, InitSpec, initialise
 
 
 @pytest.fixture
@@ -29,7 +29,7 @@ def disc_filepath(tmp_path: Path) -> Path:
             spec=InitSpec(
                 disc_name="CliTest",
                 size=AFSSizeSpec.cylinders(20),
-                users=[UserSpec("Syst", system=True)],
+                users=[],
             ),
         )
     return target_filepath
@@ -86,8 +86,6 @@ class TestInitialiseCommand:
                 "--cylinders",
                 "10",
                 "--user",
-                "Syst:S",
-                "--user",
                 "bob",
             ]
         )
@@ -97,5 +95,5 @@ class TestInitialiseCommand:
             afs = adfs.afs_partition
             assert afs.disc_name == "FromCli"
             names = {u.name for u in afs.users.active}
-            assert names == {"Syst", "bob"}
+            assert names == {"Syst", "Boot", "Welcome", "bob"}
             assert afs.users.find("Syst").is_system

@@ -20,7 +20,6 @@ def _init_disc(*, quota: int) -> ADFS:
             size=AFSSizeSpec.cylinders(30),
             default_quota=quota,
             users=[
-                UserSpec("Syst", system=True),
                 UserSpec("alice"),
             ],
         ),

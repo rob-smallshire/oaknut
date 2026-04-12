@@ -1588,6 +1588,12 @@ def afs_plan(image: Path, cylinders: int | None) -> None:
     help="Default quota for users without an explicit quota (e.g. 256KiB).",
 )
 @click.option(
+    "--omit-user",
+    "omit_users",
+    multiple=True,
+    help="Suppress a built-in account (Syst, Boot, or Welcome). Repeat for multiple.",
+)
+@click.option(
     "--emplace",
     "emplacements",
     multiple=True,
@@ -1602,6 +1608,7 @@ def afs_init(
     cylinders: int | None,
     users: tuple[str, ...],
     default_quota: str | None,
+    omit_users: tuple[str, ...],
     emplacements: tuple[str, ...],
 ) -> None:
     """Initialise an AFS partition on an ADFS hard disc image."""
@@ -1609,8 +1616,6 @@ def afs_init(
     from oaknut.afs.wfsinit import AFSSizeSpec, InitSpec, UserSpec, initialise
 
     user_specs: list[UserSpec] = _parse_user_specs(users)
-    if not user_specs:
-        user_specs = [UserSpec("Syst", system=True)]
 
     size = AFSSizeSpec.cylinders(cylinders) if cylinders else AFSSizeSpec.max()
 
@@ -1618,6 +1623,7 @@ def afs_init(
         "disc_name": disc_name,
         "size": size,
         "users": user_specs,
+        "omit_builtins": frozenset(omit_users),
     }
     if default_quota is not None:
         from oaknut.file.capacity import parse_capacity

@@ -156,8 +156,8 @@ def cmd_initialise(args: argparse.Namespace) -> int:
                 system="S" in flags,
             )
         )
-    if not users:
-        users = [UserSpec("Syst", system=True)]
+
+    omit_builtins = frozenset(args.omit_user or [])
 
     if args.cylinders:
         size = AFSSizeSpec.cylinders(args.cylinders)
@@ -171,6 +171,7 @@ def cmd_initialise(args: argparse.Namespace) -> int:
                 disc_name=args.disc_name,
                 size=size,
                 users=users,
+                omit_builtins=omit_builtins,
             ),
         )
     print(f"initialised AFS region on {args.path}")
@@ -221,6 +222,11 @@ def main(argv: Iterable[str] | None = None) -> int:
         "--user",
         action="append",
         help="User spec as NAME or NAME:S (system); repeat for multiple",
+    )
+    p_init.add_argument(
+        "--omit-user",
+        action="append",
+        help="Suppress a built-in account (Syst, Boot, or Welcome); repeat for multiple",
     )
     p_init.set_defaults(func=cmd_initialise)
 

@@ -70,7 +70,7 @@ def afs_image_filepath(tmp_path: Path) -> Path:
             spec=InitSpec(
                 disc_name="TestAFS",
                 size=AFSSizeSpec.cylinders(20),
-                users=[UserSpec("Syst", system=True)],
+                users=[],
             ),
         )
     # Put a test file into the AFS partition.
@@ -102,7 +102,6 @@ def afs_image_with_spare_slot(tmp_path: Path) -> Path:
                 disc_name="SpareSlot",
                 size=AFSSizeSpec.cylinders(20),
                 users=[
-                    UserSpec("Syst", system=True),
                     UserSpec("alice"),
                 ],
             ),
