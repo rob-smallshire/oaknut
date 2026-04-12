@@ -77,10 +77,12 @@ def create_equivalent_image(output_filepath: Path) -> None:
         )
 
         # Step 4: Create !BOOT with *RUN $.FS3v126
+        # The original was: printf '*RUN $.FS3v126\r' | disc put l3fs.dat '$.!BOOT' -
+        # disc put defaults load/exec to 0xFFFF when no --load/--exec given.
         adfs.path("$.!BOOT").write_bytes(
             b"*RUN $.FS3v126\r",
-            load_address=0,
-            exec_address=0,
+            load_address=0xFFFF,
+            exec_address=0xFFFF,
         )
 
     # Step 5: Re-open and run initialise().
@@ -174,9 +176,13 @@ def _annotate_sector(
     cyl, sec_in_cyl = divmod(sector, _SPC)
     parts = [f"cyl {cyl}, sec {sec_in_cyl}"]
 
-    # ADFS free space map
+    # ADFS free space map and root directory
     if sector <= 2:
-        labels = {0: "ADFS FSM sector 0", 1: "ADFS FSM sector 1", 2: "ADFS boot block"}
+        labels = {
+            0: "ADFS FSM sector 0",
+            1: "ADFS FSM sector 1",
+            2: "ADFS root directory (sector 1 of 5)",
+        }
         parts.append(labels[sector])
         return " | ".join(parts)
 
@@ -257,13 +263,34 @@ def compare_images(reference_filepath: Path, candidate_filepath: Path) -> None:
 
     print()
 
-    # Collect differences.
+    # Bytes to ignore when comparing. ADFS 1.30 writes the System VIA
+    # T1 counter low byte (&FE44) as the disc ID low byte on every
+    # directory/FSM flush (write_dir_and_validate at &8FB7-&8FC3 in
+    # the ADFS 1.30 disassembly). This is non-deterministic — it
+    # depends on the exact microsecond the flush occurs. The checksum
+    # at 0x1FF is derived from it.
+    #
+    # We mask these bytes out so they don't appear as differences.
+    _NON_DETERMINISTIC: dict[int, set[int]] = {
+        # Sector 1 (FSM part 2):
+        1: {
+            0xFB,  # disc ID low byte (T1 counter sample)
+            0xFF,  # checksum (derived from disc ID)
+        },
+    }
+
+    # Collect differences, ignoring non-deterministic bytes.
     differences = []
     for sector in range(num_sectors):
         offset = sector * _SECTOR_SIZE
         ref_sector = ref_bytes[offset : offset + _SECTOR_SIZE]
         cand_sector = cand_bytes[offset : offset + _SECTOR_SIZE]
-        if ref_sector != cand_sector:
+        ignored = _NON_DETERMINISTIC.get(sector, set())
+        if any(
+            ref_sector[i] != cand_sector[i]
+            for i in range(_SECTOR_SIZE)
+            if i not in ignored
+        ):
             differences.append(sector)
 
     if not differences:
@@ -281,9 +308,10 @@ def compare_images(reference_filepath: Path, candidate_filepath: Path) -> None:
         annotation = _annotate_sector(sector, ref_sector, cand_sector, ref_afs_start, cand_afs_start)
         print(f"--- Sector {sector} (0x{offset:06X}) --- {annotation}")
 
+        ignored = _NON_DETERMINISTIC.get(sector, set())
         diff_positions = []
         for i in range(_SECTOR_SIZE):
-            if ref_sector[i] != cand_sector[i]:
+            if ref_sector[i] != cand_sector[i] and i not in ignored:
                 diff_positions.append(i)
 
         if len(diff_positions) <= 32:

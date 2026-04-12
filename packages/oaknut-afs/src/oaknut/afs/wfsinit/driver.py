@@ -107,6 +107,13 @@ def initialise(adfs: "ADFS", *, spec: InitSpec) -> None:
     spc = physical_spc
     total_cyls = physical_total_cyls
 
+    # ---- Step 2: set ADFS boot option ----
+    # WFSINIT line 990: PROCoscli("Opt 4 2") — sets boot option to
+    # "run" so the file server auto-starts on power-on. This triggers
+    # a full write_dir_and_validate in real ADFS, but we just need
+    # the FSM byte + checksum recalculation.
+    adfs._fsm.set_boot_option(2)
+
     disc = adfs._disc
 
     def write_sector(addr: int, data: bytes) -> None:
