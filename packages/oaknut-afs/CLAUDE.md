@@ -50,13 +50,19 @@ See `docs/afs-implementation-plan.md` §2–3 for the module layout. In
 brief, modules are layered:
 
 ```
-AFS (afs.py)
+cli.py (oaknut-afs-disc entry point)
   ↓
-AFSPath (path.py)  +  PasswordsFile (passwords.py)  +  merge (merge.py)
+wfsinit/ (partition.py, layout.py, driver.py)
   ↓
-AfsDirectory (directory.py)
+AFS (afs.py)  ←  ADFS.afs_partition (oaknut-adfs)
   ↓
-MapSector / ExtentStream (map_sector.py)  +  Allocator (allocator.py)
+AFSPath (path.py)  +  PasswordsFile (passwords.py)
+  ↓
+merge (merge.py)  +  host_import (host_import.py)  +  libraries/ (LibraryImage)
+  ↓
+AfsDirectory (directory.py — read + insert/delete/rename/grow)
+  ↓
+MapSector / MapChain / ExtentStream (map_sector.py)  +  Allocator (allocator.py)
   ↓
 CylinderBitmap / BitmapShadow (bitmap.py)
   ↓
@@ -68,18 +74,22 @@ SectorsView (oaknut.discimage.sectors_view)
 Dependencies flow strictly downward. Info sector, bitmap, and map
 sector are the three foundational format layers; directory and
 passwords build on them; the AFS class and path wrap the whole stack.
+The `wfsinit/` sub-package orchestrates partitioning and initialisation.
+`merge.py` and `host_import.py` compose the lower layers for bulk copy.
 
 ## Testing
 
-- `uv run pytest packages/oaknut-afs/tests -q`
+- `uv run pytest packages/oaknut-afs/tests -q` — currently 487+ tests.
 - Every format structure gets hand-crafted byte fixtures before it
   acquires any logic. Round-trip tests (parse → serialise, compare
   bytes) are the cheapest bug-finders.
 - Golden fixtures transcribed from Beebmaster's PDF live in
-  `tests/fixtures/beebmaster_test_disc.py`.
-- Round-trip tests for every write operation assert the quota
-  invariant `sum(user.free_space) + used == capacity` after each
-  mutation.
+  `tests/helpers/beebmaster.py`.
+- `tests/helpers/afs_image.py` synthesises complete in-memory AFS
+  regions inside `ADFS.create(ADFS_L)` for integration tests without
+  needing a captured disc image.
+- End-to-end round-trip stability tests in
+  `test_round_trip_stability.py` initialise → mutate → reopen → verify.
 
 ## Naming conventions
 

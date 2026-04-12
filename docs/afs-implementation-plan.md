@@ -1,6 +1,6 @@
 # Implementation plan: `oaknut-afs`
 
-Status: approved plan, coding in progress.
+Status: **complete** — all 21 phases landed plus follow-up items 1-3, 5-6.
 Companion to `docs/afs-proposal.md` — read the proposal first for rationale
 and naming. This document is about **what gets built, in what order, with
 what public surface**.

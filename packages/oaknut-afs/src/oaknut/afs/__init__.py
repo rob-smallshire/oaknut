@@ -8,9 +8,9 @@ at the front of the disc coexists with it.
 The ``A`` in ``AFS0`` most likely stands for *Acorn File Server*,
 though no primary source spells it out — the ``0`` is a format version.
 
-Status: phase 1 scaffold. Only the low-level types and exceptions are
-wired up yet; the full public API will come online phase by phase (see
-``docs/afs-implementation-plan.md``).
+The full public API — read, write, merge, initialise, and CLI — is
+implemented. See ``docs/afs-implementation-plan.md`` for the design
+and ``docs/afs-onwire.md`` for the on-disc format specification.
 """
 
 __version__ = "0.1.0"

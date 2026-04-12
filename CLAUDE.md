@@ -10,7 +10,7 @@ See `docs/monorepo.md` for the architectural doc and `docs/cli-design.md` for th
 
 ## Package layering
 
-Six packages, layered strictly bottom-up:
+Seven packages, layered strictly bottom-up:
 
 | PyPI distribution | Import path | Depends on | Scope |
 |---|---|---|---|
@@ -19,6 +19,7 @@ Six packages, layered strictly bottom-up:
 | `oaknut-basic` | `oaknut.basic` | — | BBC BASIC tokeniser/detokeniser, language constants |
 | `oaknut-dfs` | `oaknut.dfs` | `file`, `discimage`, `basic` | Acorn DFS / Watford DDFS / Opus DDOS — flat-catalogue BBC/Electron floppies |
 | `oaknut-adfs` | `oaknut.adfs` | `file`, `discimage`, `basic` | ADFS hierarchical directories, free space maps, hard-disc images |
+| `oaknut-afs` | `oaknut.afs` | `file`, `discimage`, `adfs` | Acorn Level 3 File Server private on-disc format (`AFS0` magic). Read/write, `wfsinit` partitioning + initialisation, merge, host-tree import, shipped library images, `oaknut-afs-disc` CLI |
 | `oaknut-zip` | `oaknut.zip` | `file` | ZIP archives containing Acorn files (SparkFS extras, INF resolution, RISC OS filetypes) |
 
 `oaknut-dfs` and `oaknut-adfs` are independent siblings — `from oaknut.dfs import ADFS` is **intentionally broken**. ADFS lives in `oaknut.adfs`; do not restore the compatibility re-export.
@@ -109,5 +110,7 @@ Package-specific CLAUDE.md files that inherit from this one:
 
 - `packages/oaknut-dfs/CLAUDE.md` — DFS module layout, layer flow, testing entry points.
 - `packages/oaknut-zip/CLAUDE.md` — ZIP archive handling specifics.
+
+- `packages/oaknut-afs/CLAUDE.md` — AFS module architecture, primary sources, testing.
 
 The other packages (`oaknut-file`, `oaknut-discimage`, `oaknut-adfs`, `oaknut-basic`) don't currently ship a per-package CLAUDE.md; their scope is described in the layering table above.
