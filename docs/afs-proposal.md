@@ -141,7 +141,7 @@ lists, master-sequence-number tail byte).
 ```python
 from oaknut.adfs import ADFS
 
-with ADFS.from_file("l3fs-master.img") as adfs:
+with ADFS.from_file("l3fs-master.dat") as adfs:
     print(adfs.root.name)                  # ADFS side still works
     afs = adfs.afs_partition               # or None
     if afs is not None:
@@ -156,7 +156,7 @@ Opening directly:
 ```python
 from oaknut.afs import AFS
 
-with AFS.from_file("l3fs-master.img") as afs:
+with AFS.from_file("l3fs-master.dat") as afs:
     ...
 ```
 
