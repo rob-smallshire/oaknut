@@ -91,6 +91,9 @@ class AFS:
         unified_disc: "UnifiedDisc",
         sec1: int,
         sec2: int,
+        *,
+        user: str = "Syst",
+        enforce_quota: bool = True,
     ) -> None:
         if sec1 <= 0 or sec2 <= 0:
             raise AFSNotPresentError(
@@ -107,6 +110,8 @@ class AFS:
         self._passwords_cache: PasswordsFile | None = None
         self._bitmap_shadow_cache = None
         self._allocator_cache = None
+        self._acting_user: str = user
+        self._enforce_quota: bool = enforce_quota
 
     # ------------------------------------------------------------------
     # Named constructors
@@ -487,6 +492,62 @@ class AFS:
     # Object creation / destruction — phase 11+
     # ------------------------------------------------------------------
 
+    # ------------------------------------------------------------------
+    # Quota enforcement — follow-up 5
+    # ------------------------------------------------------------------
+
+    def _debit_quota(self, num_sectors: int) -> None:
+        """Debit ``num_sectors`` worth of space from the acting user's quota.
+
+        Raises :class:`AFSQuotaExceededError` if the user's remaining
+        free space would go negative. No-op when ``enforce_quota`` is
+        False (for tests and system-level operations).
+        """
+        from oaknut.afs.exceptions import AFSQuotaExceededError
+
+        if not self._enforce_quota:
+            return
+        try:
+            user_record = self.users.find(self._acting_user)
+        except KeyError:
+            return
+        cost = num_sectors * MAP_SECTOR_SIZE
+        if user_record.free_space < cost:
+            raise AFSQuotaExceededError(
+                f"user {self._acting_user!r} has {user_record.free_space} bytes free "
+                f"but {cost} bytes are needed"
+            )
+        new_passwords = self.users.with_quota(self._acting_user, user_record.free_space - cost)
+        self._update_passwords_on_disc(new_passwords)
+
+    def _credit_quota(self, num_sectors: int) -> None:
+        """Credit ``num_sectors`` worth of space back to the acting user."""
+        if not self._enforce_quota:
+            return
+        try:
+            user_record = self.users.find(self._acting_user)
+        except KeyError:
+            return
+        credit = num_sectors * MAP_SECTOR_SIZE
+        new_free = min(user_record.free_space + credit, 0xFFFFFFFF)
+        new_passwords = self.users.with_quota(self._acting_user, new_free)
+        self._update_passwords_on_disc(new_passwords)
+
+    def _update_passwords_on_disc(self, new_passwords: PasswordsFile) -> None:
+        """Serialise ``new_passwords`` and write through the passwords file's
+        existing map chain, replacing the cached parse.
+        """
+        passwords_path = self.root / PASSWORDS_FILENAME
+        try:
+            _, entry = self._resolve(passwords_path)
+        except AFSPathError:
+            return
+        raw = new_passwords.to_bytes()
+        if len(raw) < MAP_SECTOR_SIZE:
+            raw = raw.ljust(MAP_SECTOR_SIZE, b"\x00")
+        self._write_object_bytes(entry.sin, raw)
+        self._passwords_cache = new_passwords
+
     @staticmethod
     def _coalesce_extents(extents: list[Extent]) -> list[Extent]:
         """Merge physically-adjacent extents into longer runs."""
@@ -514,11 +575,16 @@ class AFS:
         everything to disc, return the head block's SIN.
 
         Handles arbitrarily large objects by chaining multiple map
-        blocks when the coalesced extent count exceeds 48.
+        blocks when the coalesced extent count exceeds 48. Debits
+        the acting user's quota when enforcement is on.
         """
         allocator = self._allocator()
 
         n_data_sectors = (len(data) + MAP_SECTOR_SIZE - 1) // MAP_SECTOR_SIZE
+
+        # Quota check before touching the allocator.
+        total_sectors_needed = n_data_sectors + max(1, (n_data_sectors + _MAX_DATA_EXTENTS - 1) // _MAX_DATA_EXTENTS)
+        self._debit_quota(total_sectors_needed)
         data_extents: list[Extent] = []
         if n_data_sectors > 0:
             data_extents = allocator.allocate(n_data_sectors)
@@ -578,15 +644,17 @@ class AFS:
 
         Walks the map chain, releases each data extent back to the
         allocator, then releases every map block in the chain.
-        Mirrors ``CLRBLK`` + ``DAGRP`` (``Uade12.asm:891``/``1116``).
+        Credits the acting user's quota when enforcement is on.
         """
         allocator = self._allocator()
         chain = self._read_map_chain(sin)
+        total_freed = chain.total_sectors() + len(chain.blocks)
         for block in chain.blocks:
             for extent in block.extents:
                 allocator.free_extent(extent)
             allocator.free_sector(int(block.sin))
         self._bitmap_shadow().flush()
+        self._credit_quota(total_freed)
 
     # ------------------------------------------------------------------
     # High-level file write — phase 11
