@@ -1503,7 +1503,6 @@ def afs_init(
         "disc_name": disc_name,
         "size": size,
         "users": user_specs,
-        "libraries": list(emplacements),
     }
     if default_quota is not None:
         from oaknut.file.capacity import parse_capacity
@@ -1515,6 +1514,22 @@ def afs_init(
 
     with ADFS.from_file(image, mode="r+b") as adfs:
         initialise(adfs, spec=InitSpec(**init_kwargs))
+
+        # Emplace libraries after initialisation so we can report
+        # replacements to the user.
+        if emplacements:
+            from oaknut.afs.libraries import emplace_library
+
+            afs = adfs.afs_partition
+            with afs:
+                for name in emplacements:
+                    try:
+                        replaced = emplace_library(afs, name)
+                    except (ValueError, FileNotFoundError) as exc:
+                        raise click.ClickException(str(exc))
+                    if replaced:
+                        for fname in replaced:
+                            click.echo(f"  replaced $.{name}/{fname}", err=True)
 
     click.echo(f"Initialised AFS region on {image}")
 

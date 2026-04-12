@@ -61,7 +61,7 @@ def emplace_library(
     name: str,
     *,
     conflict: str = "overwrite",
-) -> None:
+) -> list[str]:
     """Emplace a library onto an AFS partition.
 
     If *name* matches a shipped library (e.g. ``"Library"``), the
@@ -94,6 +94,7 @@ def emplace_library(
     if not target_dir.exists():
         target_dir.mkdir()
 
+    replaced: list[str] = []
     with ctx as adfs:
         for entry in adfs.root.iterdir():
             if entry.stat().is_directory:
@@ -103,6 +104,7 @@ def emplace_library(
                 if conflict == "skip":
                     continue
                 elif conflict == "overwrite":
+                    replaced.append(entry.name)
                     dest.unlink()
                 else:
                     from oaknut.afs.exceptions import AFSMergeConflictError
@@ -111,3 +113,4 @@ def emplace_library(
                         f"'{entry.name}' already exists in $.{dirname}"
                     )
             copy_file(entry, dest, target_fs="afs")
+    return replaced
