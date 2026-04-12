@@ -995,7 +995,10 @@ def _initialise_old_root_directory(
     data[0x00] = 0  # StartMasSeq
     data[0x01:0x05] = b"Hugo"  # StartName
 
-    # Entries area: all zeros (empty) — already zero from buffer init
+    # Zero the entries area — required when reinitialising an
+    # existing directory (e.g. during compact).
+    for i in range(0x05, 0x4CB):
+        data[i] = 0
 
     # Tail at offset 0x4CB
     tail = 0x4CB
@@ -1651,15 +1654,27 @@ class ADFS:
         disc_address: int,
         entry: _ADFSDirectoryEntry,
     ) -> None:
-        """Add an entry to a directory and write it back."""
+        """Add an entry to a directory in sorted order and write it back.
+
+        ADFS directories must be sorted in ascending ASCII order
+        (case-insensitive) because the ROM uses binary search for
+        file lookup. Inserting out of order makes files unfindable.
+        """
         directory = self._read_directory_at(disc_address)
-        new_entries = directory.entries + (entry,)
+        entries = list(directory.entries)
+        insert_key = entry.name.upper()
+        insert_pos = len(entries)
+        for i, existing in enumerate(entries):
+            if existing.name.upper() > insert_key:
+                insert_pos = i
+                break
+        entries.insert(insert_pos, entry)
         updated = _ADFSDirectory(
             name=directory.name,
             title=directory.title,
             parent_address=directory.parent_address,
             disc_address=directory.disc_address,
-            entries=new_entries,
+            entries=tuple(entries),
             sequence_number=directory.sequence_number,
         )
         self._write_directory_at(updated, disc_address)
@@ -1806,7 +1821,7 @@ class ADFS:
                 raise ADFSDirectoryFullError(
                     f"Directory full: maximum {self._dir_format.max_entries} entries"
                 )
-            new_entries = parent_dir.entries + (new_entry,)
+            new_entries = _insert_sorted(parent_dir.entries, new_entry)
 
         # Increment sequence number
         new_seq = (parent_dir.sequence_number + 1) & 0xFF
@@ -1935,7 +1950,7 @@ class ADFS:
             ),
         )
 
-        new_entries = parent_dir.entries + (new_entry,)
+        new_entries = _insert_sorted(parent_dir.entries, new_entry)
         new_seq = (parent_dir.sequence_number + 1) & 0xFF
 
         updated_parent = _ADFSDirectory(
@@ -2228,6 +2243,27 @@ class ADFS:
             sequence_number=new_seq,
         )
         self._write_directory_at(updated_dir, parent_disc_address)
+
+
+def _insert_sorted(
+    entries: tuple[_ADFSDirectoryEntry, ...],
+    new_entry: _ADFSDirectoryEntry,
+) -> tuple[_ADFSDirectoryEntry, ...]:
+    """Insert a directory entry in case-insensitive sorted order.
+
+    ADFS directories must be sorted ascending by name because the
+    ROM uses binary search for file lookup. Inserting out of order
+    makes files unfindable.
+    """
+    key = new_entry.name.upper()
+    items = list(entries)
+    pos = len(items)
+    for i, existing in enumerate(items):
+        if existing.name.upper() > key:
+            pos = i
+            break
+    items.insert(pos, new_entry)
+    return tuple(items)
 
 
 def _detect_directory_format(unified: UnifiedDisc) -> ADFSDirectoryFormat:
