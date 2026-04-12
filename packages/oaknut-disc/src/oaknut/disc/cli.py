@@ -1460,8 +1460,12 @@ def afs_plan(image: Path, cylinders: int | None) -> None:
         except Exception as exc:
             raise click.ClickException(str(exc))
 
+        afs_bytes = p.total_afs_sectors * 256
         click.echo("Proposed AFS partition")
-        click.echo(f"  AFS region:    {p.afs_cylinders} cylinders ({p.total_afs_sectors} sectors)")
+        click.echo(
+            f"  AFS region:     {p.afs_cylinders} cylinders "
+            f"({p.total_afs_sectors} sectors, {afs_bytes:,} bytes)"
+        )
         click.echo(f"  Start cylinder: {p.start_cylinder}")
         click.echo(f"  ADFS retained:  {p.new_adfs_cylinders} cylinders")
         click.echo(f"  Compaction:     {'required' if p.will_compact else 'not required'}")
