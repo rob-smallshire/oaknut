@@ -209,9 +209,7 @@ class OldFreeSpaceMap:
         """
         old_total = self.total_sectors
         if new_total_sectors <= 0 or new_total_sectors > old_total:
-            raise ValueError(
-                f"new_total_sectors {new_total_sectors} must be in 1..{old_total}"
-            )
+            raise ValueError(f"new_total_sectors {new_total_sectors} must be in 1..{old_total}")
 
         # Rewrite total size.
         _write_24bit_le(self._data, _OLD_SIZE_OFFSET, new_total_sectors)

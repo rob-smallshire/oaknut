@@ -84,10 +84,7 @@ class TestChainedMapFileRead:
 
 class TestLargeDirectoryRead:
     def test_50_entry_directory(self) -> None:
-        files = [
-            SyntheticFile(name=f"F{i:03d}", contents=f"body{i}".encode())
-            for i in range(50)
-        ]
+        files = [SyntheticFile(name=f"F{i:03d}", contents=f"body{i}".encode()) for i in range(50)]
         # 50 entries + the automatic Passwords entry = 51. A 6-sector
         # directory gives capacity floor((1536 - 18) / 26) = 58.
         adfs = build_synthetic_adfs_with_afs(
@@ -102,8 +99,7 @@ class TestLargeDirectoryRead:
 
     def test_large_directory_round_trip_contents(self) -> None:
         files = [
-            SyntheticFile(name=f"File{i:02d}", contents=f"body-{i}".encode())
-            for i in range(30)
+            SyntheticFile(name=f"File{i:02d}", contents=f"body-{i}".encode()) for i in range(30)
         ]
         adfs = build_synthetic_adfs_with_afs(
             root_files=files,

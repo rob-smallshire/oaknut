@@ -182,9 +182,7 @@ class PasswordsFile(Sequence[UserRecord]):
         we tolerate any length that is a multiple of ``ENTRY_SIZE``.
         """
         if len(data) % ENTRY_SIZE != 0:
-            raise ValueError(
-                f"passwords file length {len(data)} is not a multiple of {ENTRY_SIZE}"
-            )
+            raise ValueError(f"passwords file length {len(data)} is not a multiple of {ENTRY_SIZE}")
         records = [
             UserRecord.from_bytes(bytes(data[offset : offset + ENTRY_SIZE]))
             for offset in range(0, len(data), ENTRY_SIZE)

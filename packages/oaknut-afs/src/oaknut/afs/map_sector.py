@@ -255,8 +255,8 @@ class MapSector:
         buf = bytearray(MAP_SECTOR_SIZE)
         buf[_OFF_MAGIC : _OFF_MAGIC + len(MAGIC)] = MAGIC
         buf[_OFF_SEQ_LEADING] = self.sequence_number
-        buf[_OFF_LAST_SECTOR_BYTES : _OFF_LAST_SECTOR_BYTES + 2] = (
-            self.last_sector_bytes.to_bytes(2, "little")
+        buf[_OFF_LAST_SECTOR_BYTES : _OFF_LAST_SECTOR_BYTES + 2] = self.last_sector_bytes.to_bytes(
+            2, "little"
         )
 
         cursor = _OFF_EXTENTS
@@ -404,9 +404,7 @@ class MapChain:
         while current_sin is not None:
             sin_int = int(current_sin)
             if sin_int in seen:
-                raise AFSBrokenMapError(
-                    f"cycle in map chain at sin {sin_int:#x}"
-                )
+                raise AFSBrokenMapError(f"cycle in map chain at sin {sin_int:#x}")
             seen.add(sin_int)
             block = read_map(current_sin)
             blocks.append(block)

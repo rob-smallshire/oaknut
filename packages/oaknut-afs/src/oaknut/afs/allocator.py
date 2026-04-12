@@ -99,9 +99,7 @@ class Allocator:
         if start_cylinder < 0:
             raise ValueError(f"start_cylinder must be non-negative, got {start_cylinder}")
         if sectors_per_cylinder <= 0:
-            raise ValueError(
-                f"sectors_per_cylinder must be positive, got {sectors_per_cylinder}"
-            )
+            raise ValueError(f"sectors_per_cylinder must be positive, got {sectors_per_cylinder}")
         if shadow.sectors_per_cylinder != sectors_per_cylinder:
             raise ValueError(
                 f"shadow.sectors_per_cylinder ({shadow.sectors_per_cylinder}) "
@@ -191,8 +189,7 @@ class Allocator:
                 cyl = self._pick_best_cylinder(exclude=visited)
                 if cyl is None:
                     raise AFSInsufficientSpaceError(
-                        f"not enough free space for {num_sectors} sectors "
-                        f"(short by {remaining})"
+                        f"not enough free space for {num_sectors} sectors (short by {remaining})"
                     )
                 taken = self._drain_cylinder(cyl, remaining, subs)
                 remaining -= taken
@@ -341,6 +338,4 @@ class Allocator:
         and dirty set are updated by :meth:`BitmapShadow.mark_range_free`.
         """
         for sub in subs:
-            self._shadow.mark_range_free(
-                sub.cylinder_index, sub.start_in_cylinder, sub.length
-            )
+            self._shadow.mark_range_free(sub.cylinder_index, sub.start_in_cylinder, sub.length)

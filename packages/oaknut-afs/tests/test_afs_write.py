@@ -141,9 +141,7 @@ class TestUnlink:
     def test_refuse_locked_file(self) -> None:
         adfs = build_synthetic_adfs_with_afs()
         afs = adfs.afs_partition
-        (afs.root / "Locked").write_bytes(
-            b"data", access=AFSAccess.from_string("LR/R")
-        )
+        (afs.root / "Locked").write_bytes(b"data", access=AFSAccess.from_string("LR/R"))
         # LR/R access has the L bit set per AFSAccess.from_string.
         with pytest.raises(AFSFileLockedError):
             (afs.root / "Locked").unlink()

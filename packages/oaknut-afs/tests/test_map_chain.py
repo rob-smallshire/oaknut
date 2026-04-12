@@ -113,6 +113,7 @@ class TestMapChainWalk:
     def _make_chain_reader(self, blocks: dict[int, MapSector]):
         def reader(sin: SystemInternalName) -> MapSector:
             return blocks[int(sin)]
+
         return reader
 
     def test_single_block_chain(self) -> None:

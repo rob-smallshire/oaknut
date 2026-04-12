@@ -565,9 +565,7 @@ def _slot_link(buf: bytes | bytearray, slot_offset: int) -> int:
 
 
 def _set_slot_link(buf: bytearray, slot_offset: int, value: int) -> None:
-    buf[slot_offset + _ENT_OFF_LINK : slot_offset + _ENT_OFF_LINK + 2] = value.to_bytes(
-        2, "little"
-    )
+    buf[slot_offset + _ENT_OFF_LINK : slot_offset + _ENT_OFF_LINK + 2] = value.to_bytes(2, "little")
 
 
 def _slot_name(buf: bytes | bytearray, slot_offset: int) -> str:
@@ -598,8 +596,8 @@ def _write_entry_payload(
     Leaves the ``DRLINK`` field untouched — the caller is responsible
     for threading the slot into whichever list it belongs to.
     """
-    buf[slot_offset + _ENT_OFF_NAME : slot_offset + _ENT_OFF_NAME + MAX_NAME_LENGTH] = (
-        _encode_name(entry.name)
+    buf[slot_offset + _ENT_OFF_NAME : slot_offset + _ENT_OFF_NAME + MAX_NAME_LENGTH] = _encode_name(
+        entry.name
     )
     buf[slot_offset + _ENT_OFF_LOAD : slot_offset + _ENT_OFF_LOAD + 4] = (
         entry.load_address.to_bytes(4, "little")
@@ -683,9 +681,7 @@ def _find_in_use_entry(
         pred_link_offset = current_slot + _ENT_OFF_LINK
         current_slot = _slot_link(buf, current_slot)
 
-    raise AFSDirectoryEntryNotFoundError(
-        f"no entry named {name!r} in the directory"
-    )
+    raise AFSDirectoryEntryNotFoundError(f"no entry named {name!r} in the directory")
 
 
 # ---------------------------------------------------------------------------
@@ -715,8 +711,7 @@ def insert_entry(raw: bytes, entry: DirectoryEntry) -> bytes:
     free_head = _header_free_pointer(buf)
     if free_head == 0:
         raise AFSDirectoryFullError(
-            "directory has no free slots (capacity reached); "
-            "phase 10 will auto-grow"
+            "directory has no free slots (capacity reached); phase 10 will auto-grow"
         )
 
     # Step 2 is done first so we can reject duplicates without touching
@@ -833,8 +828,8 @@ def rename_entry(raw: bytes, old_name: str, new_name: str) -> bytes:
                 f"directory already contains an entry named {new_name!r}"
             )
 
-    buf[slot_offset + _ENT_OFF_NAME : slot_offset + _ENT_OFF_NAME + MAX_NAME_LENGTH] = (
-        _encode_name(new_name)
+    buf[slot_offset + _ENT_OFF_NAME : slot_offset + _ENT_OFF_NAME + MAX_NAME_LENGTH] = _encode_name(
+        new_name
     )
     _bump_sequence(buf)
     return bytes(buf)
@@ -866,14 +861,14 @@ def update_entry_fields(
     if load_address is not None:
         if not (0 <= load_address <= 0xFFFFFFFF):
             raise ValueError(f"load_address {load_address} outside 0..0xFFFFFFFF")
-        buf[slot_offset + _ENT_OFF_LOAD : slot_offset + _ENT_OFF_LOAD + 4] = (
-            load_address.to_bytes(4, "little")
+        buf[slot_offset + _ENT_OFF_LOAD : slot_offset + _ENT_OFF_LOAD + 4] = load_address.to_bytes(
+            4, "little"
         )
     if exec_address is not None:
         if not (0 <= exec_address <= 0xFFFFFFFF):
             raise ValueError(f"exec_address {exec_address} outside 0..0xFFFFFFFF")
-        buf[slot_offset + _ENT_OFF_EXEC : slot_offset + _ENT_OFF_EXEC + 4] = (
-            exec_address.to_bytes(4, "little")
+        buf[slot_offset + _ENT_OFF_EXEC : slot_offset + _ENT_OFF_EXEC + 4] = exec_address.to_bytes(
+            4, "little"
         )
     if date is not None:
         buf[slot_offset + _ENT_OFF_DATE : slot_offset + _ENT_OFF_DATE + 2] = date.to_bytes()
@@ -921,13 +916,9 @@ def grow_directory_bytes(raw: bytes, new_size_bytes: int) -> bytes:
     """
     old_size = len(raw)
     if new_size_bytes <= old_size:
-        raise ValueError(
-            f"new_size_bytes ({new_size_bytes}) must exceed current size ({old_size})"
-        )
+        raise ValueError(f"new_size_bytes ({new_size_bytes}) must exceed current size ({old_size})")
     if new_size_bytes % 256 != 0:
-        raise ValueError(
-            f"new_size_bytes ({new_size_bytes}) must be a multiple of 256"
-        )
+        raise ValueError(f"new_size_bytes ({new_size_bytes}) must be a multiple of 256")
 
     old_capacity = (old_size - HEADER_SIZE - TRAILING_SEQ_SIZE) // ENTRY_SIZE
     if old_capacity > MAX_ENTRIES:
