@@ -1657,8 +1657,9 @@ class ADFS:
         """Add an entry to a directory in sorted order and write it back.
 
         ADFS directories must be sorted in ascending ASCII order
-        (case-insensitive) because the ROM uses binary search for
-        file lookup. Inserting out of order makes files unfindable.
+        (case-insensitive) because the ROM uses a linear scan with
+        early termination for file lookup. Out-of-order entries are
+        silently unreachable.
         """
         directory = self._read_directory_at(disc_address)
         entries = list(directory.entries)
@@ -1729,7 +1730,9 @@ class ADFS:
         """Read and parse a directory at the given sector address."""
         num_sectors = self._dir_format.size_in_sectors
         data = self._disc.sector_range(disc_address, num_sectors)
-        return self._dir_format.parse(data, disc_address)
+        directory = self._dir_format.parse(data, disc_address)
+        _assert_entries_sorted(directory.entries)
+        return directory
 
     def _read_file_data(self, entry: _ADFSDirectoryEntry) -> bytes:
         """Read file data for a directory entry."""
@@ -1742,6 +1745,7 @@ class ADFS:
 
     def _write_directory_at(self, directory: _ADFSDirectory, disc_address: int) -> None:
         """Serialize a directory back to its sectors on disc."""
+        _assert_entries_sorted(directory.entries)
         num_sectors = self._dir_format.size_in_sectors
         data = self._disc.sector_range(disc_address, num_sectors)
         self._dir_format.serialize(directory, data)
@@ -2245,6 +2249,23 @@ class ADFS:
         self._write_directory_at(updated_dir, parent_disc_address)
 
 
+def _assert_entries_sorted(entries: tuple[_ADFSDirectoryEntry, ...]) -> None:
+    """Assert that directory entries are in case-insensitive ascending order.
+
+    ADFS uses a linear scan with early termination for file lookup.
+    Out-of-order entries are silently unreachable. This assertion
+    catches sort-order violations at write time rather than letting
+    them surface as mysterious "Not found" errors on real hardware.
+    """
+    for i in range(1, len(entries)):
+        prev = entries[i - 1].name.upper()
+        curr = entries[i].name.upper()
+        assert prev <= curr, (
+            f"ADFS directory entries out of order: "
+            f"{entries[i - 1].name!r} (#{i - 1}) > {entries[i].name!r} (#{i})"
+        )
+
+
 def _insert_sorted(
     entries: tuple[_ADFSDirectoryEntry, ...],
     new_entry: _ADFSDirectoryEntry,
@@ -2252,8 +2273,8 @@ def _insert_sorted(
     """Insert a directory entry in case-insensitive sorted order.
 
     ADFS directories must be sorted ascending by name because the
-    ROM uses binary search for file lookup. Inserting out of order
-    makes files unfindable.
+    ROM uses a linear scan with early termination for file lookup.
+    Inserting out of order makes files unreachable.
     """
     key = new_entry.name.upper()
     items = list(entries)
