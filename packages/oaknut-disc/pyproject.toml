@@ -41,7 +41,7 @@ version = { attr = "oaknut.disc.__version__" }
 where = ["src"]
 
 [tool.bumpversion]
-current_version = "0.1.0"
+current_version = "1.0.0"
 tag_name = "oaknut-disc-v{new_version}"
 tag = false
 commit = true
