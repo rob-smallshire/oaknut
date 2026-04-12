@@ -44,6 +44,7 @@ from pathlib import Path
 import pytest
 from oaknut.adfs import ADFS
 from oaknut.afs.wfsinit import InitSpec, UserSpec, initialise
+
 from tests.fixtures import REFERENCE_IMAGES_DIRPATH
 
 _SECTOR_SIZE = 256

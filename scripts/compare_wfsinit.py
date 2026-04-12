@@ -37,10 +37,10 @@ _WORKSPACE_ROOT = Path(__file__).resolve().parent.parent
 if str(_WORKSPACE_ROOT) not in sys.path:
     sys.path.insert(0, str(_WORKSPACE_ROOT))
 
-from oaknut.adfs import ADFS
-from oaknut.afs.wfsinit import InitSpec, UserSpec, initialise
-from oaknut.dfs import DFS
-from oaknut.dfs.formats import ACORN_DFS_80T_SINGLE_SIDED
+from oaknut.adfs import ADFS  # noqa: E402
+from oaknut.afs.wfsinit import InitSpec, UserSpec, initialise  # noqa: E402
+from oaknut.dfs import DFS  # noqa: E402
+from oaknut.dfs.formats import ACORN_DFS_80T_SINGLE_SIDED  # noqa: E402
 
 _SECTOR_SIZE = 256
 _SPC = 4 * 33  # sectors per cylinder (4 heads × 33 SPT = 132)
@@ -201,7 +201,11 @@ def _annotate_sector(
     for label, data in [("ref", ref_data), ("ours", cand_data)]:
         info = _decode_info_sector(data)
         if info:
-            parts.append(f"{label}: AFS info sector (root_sin={info['root_sin']}, start_cyl={info['start_cylinder']})")
+            parts.append(
+                f"{label}: AFS info sector "
+                f"(root_sin={info['root_sin']}, "
+                f"start_cyl={info['start_cylinder']})"
+            )
 
     # Check for JesMap
     for label, data in [("ref", ref_data), ("ours", cand_data)]:
@@ -255,11 +259,17 @@ def compare_images(reference_filepath: Path, candidate_filepath: Path) -> None:
         ref_info = _decode_info_sector(ref_bytes[offset : offset + _SECTOR_SIZE])
         if ref_info and ref_afs_start is None:
             ref_afs_start = ref_info["start_cylinder"]
-            print(f"  Reference AFS: start_cylinder={ref_afs_start}, root_sin={ref_info['root_sin']}, info sector at {sector}")
+            print(
+                f"  Reference AFS: start_cylinder={ref_afs_start}, "
+                f"root_sin={ref_info['root_sin']}, info sector at {sector}"
+            )
         cand_info = _decode_info_sector(cand_bytes[offset : offset + _SECTOR_SIZE])
         if cand_info and cand_afs_start is None:
             cand_afs_start = cand_info["start_cylinder"]
-            print(f"  Candidate AFS: start_cylinder={cand_afs_start}, root_sin={cand_info['root_sin']}, info sector at {sector}")
+            print(
+                f"  Candidate AFS: start_cylinder={cand_afs_start}, "
+                f"root_sin={cand_info['root_sin']}, info sector at {sector}"
+            )
 
     print()
 
@@ -305,7 +315,9 @@ def compare_images(reference_filepath: Path, candidate_filepath: Path) -> None:
         ref_sector = ref_bytes[offset : offset + _SECTOR_SIZE]
         cand_sector = cand_bytes[offset : offset + _SECTOR_SIZE]
 
-        annotation = _annotate_sector(sector, ref_sector, cand_sector, ref_afs_start, cand_afs_start)
+        annotation = _annotate_sector(
+            sector, ref_sector, cand_sector, ref_afs_start, cand_afs_start,
+        )
         print(f"--- Sector {sector} (0x{offset:06X}) --- {annotation}")
 
         ignored = _NON_DETERMINISTIC.get(sector, set())

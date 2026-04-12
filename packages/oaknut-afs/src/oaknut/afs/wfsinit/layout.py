@@ -81,9 +81,11 @@ class InitSpec:
         for user in self.users:
             upper = user.name.upper()
             if upper in active_builtin_upper:
+                names = ", ".join(sorted(BUILTIN_ACCOUNT_NAMES))
                 raise ValueError(
-                    f"user name {user.name!r} is reserved (built-in account); "
-                    f"initialise() creates {', '.join(sorted(BUILTIN_ACCOUNT_NAMES))} automatically "
+                    f"user name {user.name!r} is reserved "
+                    f"(built-in account); initialise() creates "
+                    f"{names} automatically "
                     f"(use omit_builtins to suppress)"
                 )
             if upper in names_seen:
