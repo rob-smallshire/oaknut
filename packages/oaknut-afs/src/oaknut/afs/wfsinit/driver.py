@@ -253,6 +253,7 @@ def initialise(adfs: "ADFS", *, spec: InitSpec) -> None:
                 # LibraryImage.is_available().
                 continue
             library.merge_into(afs, conflict="overwrite")
+        afs.flush()
 
 
 def _dir_entry(*, name, sin, access, date):

@@ -82,21 +82,48 @@ def _alias(acorn_name: str, unix_name: str) -> None:
 
 
 def _detect_dfs_format(image_filepath: Path):
-    """Detect DFS disc format from file extension and size."""
+    """Detect DFS disc format from file extension and size.
+
+    Handles standard sizes (40T/80T) and also short/truncated .ssd
+    images that contain fewer sectors than a full disc.
+    """
     from oaknut.dfs import (
         ACORN_DFS_40T_DOUBLE_SIDED_INTERLEAVED,
         ACORN_DFS_40T_SINGLE_SIDED,
         ACORN_DFS_80T_DOUBLE_SIDED_INTERLEAVED,
         ACORN_DFS_80T_SINGLE_SIDED,
+        DiskFormat,
     )
+    from oaknut.discimage.formats import SurfaceSpec
 
     size = image_filepath.stat().st_size
     ext = image_filepath.suffix.lower()
 
     if ext == ".ssd":
-        if size <= 102400:
+        if size == 102400:
             return ACORN_DFS_40T_SINGLE_SIDED
-        return ACORN_DFS_80T_SINGLE_SIDED
+        if size == 204800:
+            return ACORN_DFS_80T_SINGLE_SIDED
+        # Non-standard (short or padded) SSD — build a format that
+        # matches the actual file size. The catalogue type is always
+        # Acorn DFS for .ssd files.
+        if size % 256 != 0:
+            raise click.ClickException(
+                f"SSD image size ({size}) is not a multiple of 256 bytes"
+            )
+        total_sectors = size // 256
+        return DiskFormat(
+            surface_specs=[
+                SurfaceSpec(
+                    num_tracks=1,
+                    sectors_per_track=total_sectors,
+                    bytes_per_sector=256,
+                    track_zero_offset_bytes=0,
+                    track_stride_bytes=size,
+                )
+            ],
+            catalogue_name="acorn-dfs",
+        )
     elif ext == ".dsd":
         if size <= 204800:
             return ACORN_DFS_40T_DOUBLE_SIDED_INTERLEAVED
@@ -1364,34 +1391,102 @@ def afs_plan(image: Path, cylinders: int | None) -> None:
 @cli.command(name="afs-init")
 @click.argument("image", type=click.Path(exists=True, path_type=Path))
 @click.option("--disc-name", required=True, help="AFS disc name.")
-@click.option("--cylinders", type=int, default=None, help="AFS region size in cylinders.")
+@click.option(
+    "--cylinders", type=int, default=None, help="AFS region size in cylinders (default: max).",
+)
 @click.option(
     "--user",
     "users",
     multiple=True,
-    help="User spec as NAME or NAME:S (system flag). Repeat for multiple.",
+    help=(
+        "User spec as NAME, NAME:S (system), or NAME:QUOTA (decimal bytes), "
+        "or NAME:S:QUOTA. Repeat for multiple."
+    ),
 )
-def afs_init(image: Path, disc_name: str, cylinders: int | None, users: tuple[str, ...]) -> None:
+@click.option(
+    "--default-quota",
+    type=int,
+    default=None,
+    help="Default quota in bytes for users without an explicit quota.",
+)
+@click.option(
+    "--library",
+    "libraries",
+    multiple=True,
+    type=click.Choice(["utils", "model-b", "master", "archimedes"], case_sensitive=False),
+    help="Install a library disc image. Repeat for multiple.",
+)
+def afs_init(
+    image: Path,
+    disc_name: str,
+    cylinders: int | None,
+    users: tuple[str, ...],
+    default_quota: int | None,
+    libraries: tuple[str, ...],
+) -> None:
     """Initialise an AFS partition on an ADFS hard disc image."""
     from oaknut.adfs import ADFS
+    from oaknut.afs.libraries import LibraryImage
     from oaknut.afs.wfsinit import AFSSizeSpec, InitSpec, UserSpec, initialise
 
-    user_specs: list[UserSpec] = []
-    for user_spec in users:
-        parts = user_spec.split(":")
-        name = parts[0]
-        flags = parts[1] if len(parts) > 1 else ""
-        user_specs.append(UserSpec(name=name, system="S" in flags))
-
+    user_specs: list[UserSpec] = _parse_user_specs(users)
     if not user_specs:
         user_specs = [UserSpec("Syst", system=True)]
 
+    library_map = {
+        "utils": LibraryImage.UTILS,
+        "model-b": LibraryImage.MODEL_B,
+        "master": LibraryImage.MASTER,
+        "archimedes": LibraryImage.ARCHIMEDES,
+    }
+    library_specs = [library_map[lib.lower()] for lib in libraries]
+
     size = AFSSizeSpec.cylinders(cylinders) if cylinders else AFSSizeSpec.max()
 
+    init_kwargs: dict = {"disc_name": disc_name, "size": size, "users": user_specs}
+    if default_quota is not None:
+        init_kwargs["default_quota"] = default_quota
+    if library_specs:
+        init_kwargs["libraries"] = library_specs
+
     with ADFS.from_file(image, mode="r+b") as adfs:
-        initialise(adfs, spec=InitSpec(disc_name=disc_name, size=size, users=user_specs))
+        initialise(adfs, spec=InitSpec(**init_kwargs))
 
     click.echo(f"Initialised AFS region on {image}")
+
+
+def _parse_user_specs(raw_specs: tuple[str, ...]) -> list:
+    """Parse user specs from command-line strings.
+
+    Accepted forms:
+    - ``NAME``        — plain user
+    - ``NAME:S``      — system user
+    - ``NAME:12345``  — user with explicit quota in bytes
+    - ``NAME:S:12345``— system user with explicit quota
+    """
+    from oaknut.afs.wfsinit import UserSpec
+
+    specs: list[UserSpec] = []
+    for raw in raw_specs:
+        parts = raw.split(":")
+        name = parts[0]
+        system = False
+        quota = None
+        for part in parts[1:]:
+            if part.upper() == "S":
+                system = True
+            else:
+                try:
+                    quota = int(part, 0)
+                except ValueError:
+                    raise click.ClickException(
+                        f"unrecognised user spec component '{part}' in '{raw}'"
+                    )
+        kwargs: dict = {"name": name, "system": system}
+        if quota is not None:
+            kwargs["quota"] = quota
+        specs.append(UserSpec(**kwargs))
+    return specs
 
 
 @cli.command(name="afs-users")
