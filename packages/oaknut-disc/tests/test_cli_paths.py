@@ -8,6 +8,7 @@ import pytest
 from oaknut.disc.cli_paths import (
     FilingSystem,
     detect_filing_system,
+    parse_image_path,
     parse_prefix,
     resolve_path,
     validate_prefix_for_image,
@@ -157,3 +158,55 @@ class TestResolvePath:
         p.write_bytes(b"\x00" * 100)
         with pytest.raises(click.ClickException, match="cannot access as ADFS"):
             resolve_path(p, "adfs:$")
+
+
+class TestParseImagePath:
+    """Tests for the image:path colon syntax parser."""
+
+    def test_simple_colon_split(self, tmp_path: Path) -> None:
+        img = tmp_path / "disc.ssd"
+        img.write_bytes(b"\x00" * 100)
+        result = parse_image_path(f"{img}:$.Hello")
+        assert result is not None
+        assert result[0] == img
+        assert result[1] == "$.Hello"
+
+    def test_with_fs_prefix(self, tmp_path: Path) -> None:
+        img = tmp_path / "disc.adl"
+        img.write_bytes(b"\x00" * 100)
+        result = parse_image_path(f"{img}:afs:$.Library")
+        assert result is not None
+        assert result[0] == img
+        assert result[1] == "afs:$.Library"
+
+    def test_no_colon_returns_none(self) -> None:
+        assert parse_image_path("$.Hello") is None
+
+    def test_nonexistent_file_returns_none(self) -> None:
+        assert parse_image_path("/no/such/file.ssd:$.Hello") is None
+
+    def test_bare_image_no_path(self, tmp_path: Path) -> None:
+        img = tmp_path / "disc.ssd"
+        img.write_bytes(b"\x00" * 100)
+        result = parse_image_path(f"{img}:")
+        assert result is not None
+        assert result[0] == img
+        assert result[1] == ""
+
+    def test_windows_drive_letter_skipped(self, tmp_path: Path) -> None:
+        # C:\path looks like a drive letter — the first colon is not a split point.
+        # This should return None since C: is not a real file in tmp_path.
+        assert parse_image_path(r"C:\images\disc.ssd:$.Hello") is None
+
+    def test_windows_drive_with_real_file(self, tmp_path: Path) -> None:
+        # Simulate a path that starts with what looks like a drive letter
+        # but where the actual file exists after the drive prefix.
+        # On Unix this is just a directory named "C" — tests the logic.
+        d = tmp_path / "C"
+        d.mkdir()
+        img = d / "disc.ssd"
+        img.write_bytes(b"\x00" * 100)
+        # The path C/disc.ssd doesn't start with X:\ so it's not a drive letter.
+        result = parse_image_path(f"{img}:$.Test")
+        assert result is not None
+        assert result[0] == img

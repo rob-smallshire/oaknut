@@ -875,32 +875,50 @@ _alias("*RENAME", "mv")
 
 
 @cli.command()
-@click.argument("image", type=click.Path(exists=True, path_type=Path))
-@click.argument("src")
-@click.argument("dst")
+@click.argument("args", nargs=-1, required=True)
 @click.option("-f", "--force", is_flag=True, help="Overwrite existing destination.")
-@click.option(
-    "--to",
-    "dst_image",
-    type=click.Path(exists=True, path_type=Path),
-    default=None,
-    help="Destination image for cross-image copy.",
-)
-def cp(image: Path, src: str, dst: str, force: bool, dst_image: Path | None) -> None:
+def cp(args: tuple[str, ...], force: bool) -> None:
     """Copy a file within or between disc images (Acorn alias: *COPY).
 
-    Within one image: disc cp IMAGE SRC DST
+    \b
+    Colon syntax (preferred for cross-image):
+      disc cp source.ssd:$.HELLO target.dat:$.HELLO
 
-    Between images:   disc cp SRC_IMAGE SRC_PATH DST_PATH --to DST_IMAGE
+    \b
+    Three-arg form (within one image):
+      disc cp IMAGE SRC DST
 
     Copies across DFS, ADFS, and AFS in any combination. Load and
     exec addresses are preserved; access attributes are mapped
     best-effort (DFS only has the locked bit).
     """
-    if dst_image is not None:
-        _cp_cross_image(image, src, dst, dst_image, force)
+    from .cli_paths import parse_image_path
+
+    if len(args) == 2:
+        src_parsed = parse_image_path(args[0])
+        dst_parsed = parse_image_path(args[1])
+        if src_parsed is not None and dst_parsed is not None:
+            # Both use colon syntax: cross-image (or same image).
+            _cp_cross_image(src_parsed[0], src_parsed[1], dst_parsed[1], dst_parsed[0], force)
+            return
+        if src_parsed is not None or dst_parsed is not None:
+            raise click.ClickException(
+                "when using image:path syntax, both source and destination must use it"
+            )
+        # Neither has colons — ambiguous with two args.
+        raise click.ClickException(
+            "cp requires either image:path colon syntax or three arguments (IMAGE SRC DST)"
+        )
+    elif len(args) == 3:
+        # Classic three-arg form: IMAGE SRC DST (within one image).
+        image = Path(args[0])
+        if not image.is_file():
+            raise click.ClickException(f"image not found: {args[0]}")
+        _cp_within_image(image, args[1], args[2], force)
     else:
-        _cp_within_image(image, src, dst, force)
+        raise click.ClickException(
+            "cp takes 2 arguments (image:path image:path) or 3 (IMAGE SRC DST)"
+        )
 
 
 def _cp_within_image(image: Path, src: str, dst: str, force: bool) -> None:

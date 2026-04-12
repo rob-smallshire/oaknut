@@ -391,11 +391,8 @@ class TestCp:
             cli,
             [
                 "cp",
-                str(dfs_image_filepath),
-                "$.HELLO",
-                "$.FromDFS",
-                "--to",
-                str(adfs_image_filepath),
+                f"{dfs_image_filepath}:$.HELLO",
+                f"{adfs_image_filepath}:$.FromDFS",
             ],
         )
         assert result.exit_code == 0
@@ -411,11 +408,8 @@ class TestCp:
             cli,
             [
                 "cp",
-                str(adfs_image_filepath),
-                "$.Hello",
-                "$.FrmADF",
-                "--to",
-                str(dfs_image_filepath),
+                f"{adfs_image_filepath}:$.Hello",
+                f"{dfs_image_filepath}:$.FrmADF",
             ],
         )
         assert result.exit_code == 0
@@ -430,11 +424,8 @@ class TestCp:
             cli,
             [
                 "cp",
-                str(dfs_image_filepath),
-                "$.HELLO",
-                "$.Copied",
-                "--to",
-                str(adfs_image_filepath),
+                f"{dfs_image_filepath}:$.HELLO",
+                f"{adfs_image_filepath}:$.Copied",
             ],
         )
         result = runner.invoke(

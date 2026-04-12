@@ -131,3 +131,46 @@ def resolve_path(
 
     validate_prefix_for_image(requested, detected)
     return requested, bare
+
+
+def parse_image_path(text: str) -> tuple[Path, str] | None:
+    """Try to parse ``image:in-image-path`` colon syntax.
+
+    Returns ``(image_filepath, in_image_path)`` if the text contains
+    a colon where the portion before it is an existing file. The
+    in-image portion may itself carry a filing-system prefix (e.g.
+    ``afs:$.Library``).
+
+    Returns ``None`` if the text does not match — no colon, or the
+    portion before the colon is not an existing file.
+
+    Windows drive letters (``C:\\...``) are recognised and skipped:
+    when the text matches ``X:\\`` at the start (a single letter
+    followed by ``:\\``), the first colon is not treated as a split
+    point.
+    """
+    if ":" not in text:
+        return None
+
+    # Skip a Windows drive letter: single ASCII letter followed by :\
+    start = 0
+    if (
+        len(text) >= 3
+        and text[1] == ":"
+        and text[2] in ("\\", "/")
+        and text[0].isalpha()
+    ):
+        start = 2
+
+    idx = text.find(":", start)
+    if idx < 0:
+        return None
+
+    image_part = text[:idx]
+    in_image_part = text[idx + 1 :]
+
+    image_filepath = Path(image_part)
+    if not image_filepath.is_file():
+        return None
+
+    return image_filepath, in_image_part
