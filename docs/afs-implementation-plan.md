@@ -57,7 +57,7 @@ packages/oaknut-afs/
 │   ├── access.py           # Access flags, parsing/formatting
 │   ├── info_sector.py      # AFS0 info block: parse, build, redundant-copy
 │   ├── bitmap.py           # Per-cylinder bitmap + in-memory shadow
-│   ├── allocator.py        # MBBMCM-faithful allocator
+│   ├── allocator.py        # MAPMAN-faithful allocator (MBBMCM is the cache manager)
 │   ├── map_sector.py       # JesMap: extents, chain traversal, extent stream
 │   ├── directory.py        # Linked-list directory read/insert/delete/grow
 │   ├── path.py             # AFSPath (pathlib-inspired)
@@ -125,7 +125,7 @@ Touches to existing packages:
 | `access`          | `Access` flag set, `from_string("LR/WR")`, `to_string()`, access-byte pack|
 | `info_sector`     | `InfoSector` dataclass; `parse(bytes)`, `to_bytes()`; handles redundant copy|
 | `bitmap`          | `CylinderBitmap` (one cylinder's sector-0); `BitmapShadow` (all cylinders)|
-| `allocator`       | `Allocator.allocate(n)`, `free(sin)`; implements MBBMCM policy            |
+| `allocator`       | `Allocator.allocate(n)`, `free(sin)`; implements MAPMAN allocation policy (MBBMCM is the cache layer)            |
 | `map_sector`      | `MapSector` (JesMap): parse/build, extent list, chain follow; `ExtentStream` giving a `SectorsView`-like concat |
 | `directory`       | `AfsDirectory`: iterate, lookup, insert, delete, grow; linked-list walker |
 | `path`            | `AFSPath`: navigation, `/`, `read_bytes`, `write_bytes`, `mkdir`, `unlink`|
@@ -659,10 +659,15 @@ produced.
   50-entry directory.
 
 ### Phase 8 — Allocator
-- **Inputs:** L3V126 **MBBMCM**.
+- **Inputs:** L3V126 **MAPMAN** (`Uade10`–`Uade13`). Note: the original
+  plan cited **MBBMCM** as the allocator, but ROM reading revealed that
+  MBBMCM is the bit-map / map-block **cache manager**. The allocation
+  *policy* (cylinder selection via FNDCY, first-fit bitmap scan via
+  ALBLK, cross-cylinder spill via FLBLKS, deallocation via
+  DAGRP/CLRBLK) lives in MAPMAN.
 - `allocator.py`: `allocate(n_sectors)` returns a list of extents plus
   the chosen map sector SIN; `free(sin)` walks the map and releases.
-- Policy matches MBBMCM where it matters for byte equality with WFSINIT
+- Policy matches MAPMAN where it matters for byte equality with WFSINIT
   output.
 - **Tests:** `test_allocator.py` — free space accounting invariants,
   contiguous and fragmented allocation, spill across cylinders.
@@ -811,7 +816,7 @@ test.
 | Risk                                                   | Mitigation                                                       |
 |--------------------------------------------------------|------------------------------------------------------------------|
 | Directory growth strategy in DIRMAN is subtler than expected | Phase 7 reads DIRMAN *before* any write code ships; growth tests in phase 10 |
-| MBBMCM allocator heuristic is hard to match byte-exact | Split the test into "correctness" (phase 8) and "byte-exact" (phase 20); the former ships independently |
+| MAPMAN allocator heuristic is hard to match byte-exact (MBBMCM is just the cache layer) | Split the test into "correctness" (phase 8) and "byte-exact" (phase 20); the former ships independently |
 | Quota accounting drift on edge cases                   | Invariant assertion on every mutation in every round-trip test   |
 | Reference WFSINIT image unavailable                    | Phase 20 is optional for v1 shipping; phases 1–19 stand alone    |
 | New-map ADFS disc encountered in the wild              | `partition.plan` raises `AFSNewMapNotSupportedError` early; revisit only if demand appears |

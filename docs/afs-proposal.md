@@ -59,7 +59,7 @@ this project. They are listed in decreasing order of authority:
    | DIRMAN            | `Uade0C`–`Uade0E` | **Directory growth past 19 entries**       |
    | AUTMAN            | `Uade0F`        | Authorisation + quota credit/debit rules    |
    | MAPMAN            | `Uade10`–`Uade13` | **Map-sector chaining for large files**    |
-   | MBBMCM            | `MBBMCM.asm`    | The real allocator (vs WFSINIT's simpler one)|
+   | MBBMCM            | `MBBMCM.asm`    | Bit-map / map-block **cache manager** (allocation *policy* is in MAPMAN) |
    | DSCMAN            | `Uade14`        | Disc-level operations                        |
    | RNDMAN            | `Rman01`–`Rman05` | Random access: **extend / truncate**       |
 
@@ -251,11 +251,12 @@ to consult.
   each run as a 5-byte extent. Maintain a shadow "cylinder map" (total
   free, per-cylinder free) to avoid scanning every bitmap sector on each
   allocation. WFSINIT's `FNablk` is one implementation of this, but the
-  running server's heuristic (in `MBBMCM.asm`) is the one to match if we
-  want discs that the real server will accept as well-formed.
+  running server's heuristic (in MAPMAN, `Uade10`–`Uade13` — not MBBMCM,
+  which is the cache manager) is the one to match if we want discs that the
+  real server will accept as well-formed.
 - **Free**: walk the map sector's extents, set bits back to 1, increment the
   shadow cylinder map, rewrite bitmap sectors touched. Cross-check with
-  MBBMCM for any edge cases around partially-freed extents.
+  MAPMAN's DAGRP/CLRBLK for any edge cases around partially-freed extents.
 - **Map-sector chaining for large files.** Undocumented in both WFSINIT and
   the PDF. Reference: **MAPMAN** (`Uade10`–`Uade13`) — the sequence number
   at byte 6/255 exists specifically to support multiple map sectors per
@@ -349,7 +350,7 @@ is deliberately not a thing.
    and **DIRMAN** for grown directories, implement both, and extend
    `afs-onwire.md` with the findings.
 6. Write path: allocator + bitmap updates + directory mutation, guided by
-   **MBBMCM** and **DIRMAN**. Quota credit/debit per **AUTMAN**. Behind a
+   **MAPMAN** and **DIRMAN**. Quota credit/debit per **AUTMAN**. Behind a
    feature flag until round-trip tests (initialise → populate → reopen →
    verify) are solid.
 7. File extend / truncate, guided by **RNDMAN** + **MAPMAN**.

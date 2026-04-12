@@ -386,7 +386,8 @@ Bit 1 = free, bit 0 = allocated, per the PDF and WFSINIT. The bit
 ordering within a byte (high sector first) is documented in the PDF,
 byte 0 covering the first 8 sectors of the cylinder. This file will be
 extended with the authoritative bit order after phase 3 cross-checks
-it against MBBMCM.
+it against MAPMAN (the allocation policy is in MAPMAN, not MBBMCM —
+MBBMCM is the bit-map / map-block cache manager).
 
 ## FS error codes
 
@@ -453,7 +454,8 @@ phase.
   tail as free slots threaded onto the free list. Phase 7 for the
   read path (large directories read automatically once chained maps
   work); phase 10 for the write path.
-- **Allocation policy** — MBBMCM, phase 8.
+- **Allocation policy** — MAPMAN (`Uade10`–`Uade13`), phase 8. (MBBMCM
+  is the bit-map / map-block cache manager, not the allocator.)
 - **Extend / truncate semantics** — RNDMAN (`Rman01`–`Rman05`) + MAPMAN,
   phase 12.
 - **Quota credit/debit points** — AUTMAN (`Uade0F`) + USRMAN (`Uade06`),
