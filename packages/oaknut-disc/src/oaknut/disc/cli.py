@@ -798,9 +798,29 @@ _alias("*cdir", "mkdir")
 @click.argument("path")
 @click.argument("access")
 def chmod(image: Path, path: str, access: str) -> None:
-    """Set file access permissions (Acorn alias: *access)."""
-    # TODO: Parse symbolic (LWR/PR) and hex access strings (L4/L5).
-    click.echo("chmod not yet implemented")
+    """Set file access permissions (Acorn alias: *access).
+
+    ACCESS is symbolic (e.g. LWR/R, WR/WR) or hex (0x0B, 33).
+    DFS only supports the L (locked) bit; other flags are ignored.
+    """
+    from oaknut.file import Access, parse_access
+
+    flags = parse_access(access)
+    fs, bare = resolve_path(image, path)
+    with open_image(image, fs, mode="r+b") as handle:
+        target = _navigate(handle, bare, fs)
+        if not target.exists():
+            raise click.ClickException(f"path not found: {bare}")
+        if fs is FilingSystem.DFS:
+            # DFS only has lock/unlock.
+            if flags & Access.L:
+                target.lock()
+            else:
+                target.unlock()
+        else:
+            target.chmod(int(flags))
+            if fs is FilingSystem.AFS:
+                handle.flush()
 
 
 _alias("*access", "chmod")

@@ -1,7 +1,12 @@
-"""Tests for Access IntFlag enum and access formatting."""
+"""Tests for Access IntFlag enum and access formatting/parsing."""
 
 import pytest
-from oaknut.file.access import Access, format_access_hex, format_access_text
+from oaknut.file.access import (
+    Access,
+    format_access_hex,
+    format_access_text,
+    parse_access,
+)
 
 
 class TestAccessFlags:
@@ -99,3 +104,73 @@ class TestFormatAccessText:
     def test_none(self):
         result = format_access_text(None)
         assert result == "/"
+
+
+class TestParseAccess:
+    """Test parse_access() — the reverse of format_access_text/hex."""
+
+    # Symbolic form: "owner/public" where letters are L, W, R, E / W, R
+    def test_wr_slash_r(self):
+        assert parse_access("WR/R") == Access.W | Access.R | Access.PR
+
+    def test_lwr_slash_r(self):
+        assert parse_access("LWR/R") == Access.L | Access.W | Access.R | Access.PR
+
+    def test_r_slash_empty(self):
+        assert parse_access("R/") == Access.R
+
+    def test_empty_slash_empty(self):
+        assert parse_access("/") == Access(0)
+
+    def test_wr_slash_wr(self):
+        assert parse_access("WR/WR") == Access.W | Access.R | Access.PW | Access.PR
+
+    def test_locked_only(self):
+        assert parse_access("L/") == Access.L
+
+    def test_case_insensitive(self):
+        assert parse_access("lwr/r") == Access.L | Access.W | Access.R | Access.PR
+
+    def test_e_flag(self):
+        assert parse_access("ER/") == Access.E | Access.R
+
+    # No slash — treat as owner-only
+    def test_no_slash_wr(self):
+        assert parse_access("WR") == Access.W | Access.R
+
+    # Hex form: 0x prefix
+    def test_hex_0x0b(self):
+        assert parse_access("0x0B") == Access(0x0B)
+
+    def test_hex_0x33(self):
+        assert parse_access("0x33") == Access(0x33)
+
+    def test_hex_0x00(self):
+        assert parse_access("0x00") == Access(0)
+
+    # Bare hex (no 0x prefix) — two hex digits
+    def test_bare_hex_0b(self):
+        assert parse_access("0B") == Access(0x0B)
+
+    def test_bare_hex_33(self):
+        assert parse_access("33") == Access(0x33)
+
+    # Round-trip: format then parse
+    def test_round_trip_lwr_r(self):
+        original = Access.L | Access.W | Access.R | Access.PR
+        text = format_access_text(int(original))
+        assert parse_access(text) == original
+
+    def test_round_trip_wr_wr(self):
+        original = Access.W | Access.R | Access.PW | Access.PR
+        text = format_access_text(int(original))
+        assert parse_access(text) == original
+
+    def test_round_trip_empty(self):
+        text = format_access_text(0)
+        assert parse_access(text) == Access(0)
+
+    # Error cases
+    def test_invalid_letter_raises(self):
+        with pytest.raises(ValueError, match="nrecogni"):
+            parse_access("XWR/R")

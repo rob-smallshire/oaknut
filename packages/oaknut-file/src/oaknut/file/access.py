@@ -33,6 +33,61 @@ class Access(IntFlag):
     PW = 0x20  # Public write
 
 
+_OWNER_LETTERS = {"L": Access.L, "W": Access.W, "R": Access.R, "E": Access.E}
+_PUBLIC_LETTERS = {"W": Access.PW, "R": Access.PR}
+
+
+def parse_access(text: str) -> Access:
+    """Parse an access string back to an ``Access`` value.
+
+    Accepts three forms:
+
+    - **Symbolic**: ``"LWR/R"``, ``"WR/WR"``, ``"R/"`` — letters
+      before the slash are owner flags (L, W, R, E), letters after
+      are public flags (W, R). Case-insensitive. A missing slash
+      treats the entire string as owner flags.
+    - **Hex with prefix**: ``"0x0B"``, ``"0x33"`` — parsed as an
+      integer.
+    - **Bare hex**: ``"0B"``, ``"33"`` — two hex digits without
+      prefix.
+
+    Raises :class:`ValueError` on unrecognised input.
+    """
+    stripped = text.strip()
+
+    # Hex with 0x prefix.
+    if stripped.lower().startswith("0x"):
+        return Access(int(stripped, 16))
+
+    # Bare hex: exactly two hex digits, no letters outside [0-9A-Fa-f].
+    if len(stripped) == 2 and all(c in "0123456789ABCDEFabcdef" for c in stripped):
+        # Disambiguate from symbolic: "WR" has letters that are valid
+        # access flags *and* valid hex digits. If both chars are valid
+        # flag letters (L, W, R, E) *and* valid hex, prefer symbolic.
+        upper = stripped.upper()
+        all_flag_letters = all(c in "LWRE" for c in upper)
+        if not all_flag_letters:
+            return Access(int(stripped, 16))
+
+    # Symbolic: owner/public or owner-only.
+    if "/" in stripped:
+        owner_part, public_part = stripped.split("/", 1)
+    else:
+        owner_part = stripped
+        public_part = ""
+
+    result = Access(0)
+    for ch in owner_part.upper():
+        if ch not in _OWNER_LETTERS:
+            raise ValueError(f"unrecognised owner access letter '{ch}'")
+        result |= _OWNER_LETTERS[ch]
+    for ch in public_part.upper():
+        if ch not in _PUBLIC_LETTERS:
+            raise ValueError(f"unrecognised public access letter '{ch}'")
+        result |= _PUBLIC_LETTERS[ch]
+    return result
+
+
 def format_access_hex(attr: int | None) -> str:
     """Format an attribute byte as a two-digit uppercase hex string.
 

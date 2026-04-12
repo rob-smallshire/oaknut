@@ -386,6 +386,34 @@ class TestCp:
 # ---------------------------------------------------------------------------
 
 
+class TestChmod:
+    def test_chmod_adfs_symbolic(self, runner: CliRunner, adfs_image_filepath: Path) -> None:
+        result = runner.invoke(
+            cli, ["chmod", str(adfs_image_filepath), "$.Hello", "LWR/R"]
+        )
+        assert result.exit_code == 0
+        # Verify the access changed.
+        result = runner.invoke(cli, ["stat", str(adfs_image_filepath), "$.Hello"])
+        assert result.exit_code == 0
+        assert "L" in result.output
+
+    def test_chmod_adfs_hex(self, runner: CliRunner, adfs_image_filepath: Path) -> None:
+        result = runner.invoke(
+            cli, ["chmod", str(adfs_image_filepath), "$.Hello", "0x0B"]
+        )
+        assert result.exit_code == 0
+
+    def test_chmod_dfs_lock(self, runner: CliRunner, dfs_image_filepath: Path) -> None:
+        result = runner.invoke(cli, ["chmod", str(dfs_image_filepath), "$.HELLO", "L/"])
+        assert result.exit_code == 0
+
+    def test_chmod_star_alias(self, runner: CliRunner, adfs_image_filepath: Path) -> None:
+        result = runner.invoke(
+            cli, ["*access", str(adfs_image_filepath), "$.Hello", "WR/"]
+        )
+        assert result.exit_code == 0
+
+
 class TestMkdir:
     def test_mkdir_adfs(self, runner: CliRunner, adfs_image_filepath: Path) -> None:
         result = runner.invoke(cli, ["mkdir", str(adfs_image_filepath), "$.NewDir"])
