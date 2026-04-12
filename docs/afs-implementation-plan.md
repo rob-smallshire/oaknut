@@ -68,17 +68,17 @@ packages/oaknut-afs/
 │   ├── afs.py              # AFS class: from_file, context manager, root
 │   ├── libraries/          # shipped AFS image assets (binary)
 │   │   ├── __init__.py     # LibraryImage enum + importlib.resources loader
-│   │   ├── library_model_b.img
-│   │   ├── library_master.img
-│   │   ├── library_archimedes.img
-│   │   └── library_utils.img
+│   │   ├── library_model_b.adl
+│   │   ├── library_master.adl
+│   │   ├── library_archimedes.adl
+│   │   └── library_utils.adl
 │   └── wfsinit/
 │       ├── __init__.py     # initialise(), partition entry points
 │       ├── partition.py    # AFSSizeSpec, plan(), apply() — flexible sizing
 │       ├── layout.py       # InitSpec, UserSpec
 │       └── driver.py       # Orchestrates partition → init → library merges
 ├── scripts/
-│   └── build_library_images.py   # one-off: econet-fs.tar → libraries/*.img
+│   └── build_library_images.py   # one-off: econet-fs.tar → libraries/*.adl
 └── tests/
     ├── conftest.py         # sys.path shim (see workspace CLAUDE.md)
     ├── helpers/            # AFS-specific test builders
@@ -144,7 +144,7 @@ Touches to existing packages:
 ```python
 from oaknut.afs import AFS, Access
 
-with AFS.from_file("l3fs-master.img") as fs:
+with AFS.from_file("l3fs-master.adl") as fs:
     fs.disc_name                      # "Level3MasterDisc"
     fs.geometry                       # Geometry(cylinders=160, heads=4, ...)
     fs.start_cylinder                 # 5
@@ -174,7 +174,7 @@ it, the natural entry point is:
 ```python
 from oaknut.adfs import ADFS
 
-with ADFS.from_file("l3fs-master.img") as adfs:
+with ADFS.from_file("l3fs-master.adl") as adfs:
     afs = adfs.afs_partition          # Optional[AFS]
     if afs is not None:
         ...                           # same surface as above
@@ -192,7 +192,7 @@ context exit or explicit flush.
 ```python
 from oaknut.afs import AFS, Access, BootOption
 
-with AFS.from_file("disc.img", writable=True, user="Syst") as fs:
+with AFS.from_file("disc.adl", writable=True, user="Syst") as fs:
     (fs.root / "Docs").mkdir()                           # DIRMAN insert + allocate dir
     (fs.root / "Docs" / "README").write_bytes(
         b"...",
@@ -240,7 +240,7 @@ into (or out of) running `ADFS.compact()` as a preparatory step.
 from oaknut.adfs import ADFS
 from oaknut.afs.wfsinit import partition, AFSSizeSpec
 
-with ADFS.from_file("disc.img", writable=True) as adfs:
+with ADFS.from_file("disc.adl", writable=True) as adfs:
     plan = partition.plan(
         adfs,
         size=AFSSizeSpec.max(),     # largest AFS region the disc can hold
@@ -315,7 +315,7 @@ from oaknut.adfs import ADFS
 from oaknut.afs import BootOption, LibraryImage
 from oaknut.afs.wfsinit import initialise, InitSpec, UserSpec, AFSSizeSpec
 
-with ADFS.from_file("blank-l-disc.img", writable=True) as adfs:
+with ADFS.from_file("blank-l-disc.adl", writable=True) as adfs:
     initialise(
         adfs,
         spec=InitSpec(
@@ -391,8 +391,8 @@ quota.
 ```python
 from oaknut.afs import AFS, merge
 
-with AFS.from_file("target.img", writable=True, user="Syst") as target:
-    with AFS.from_file("library.img") as source:
+with AFS.from_file("target.adl", writable=True, user="Syst") as target:
+    with AFS.from_file("library.adl") as source:
         merge(
             target,
             source,
@@ -422,10 +422,10 @@ Four AFS disc images ship as package resources under
 
 ```python
 class LibraryImage(Enum):
-    UTILS      = "library_utils.img"      # Utils (shared)
-    MODEL_B    = "library_model_b.img"    # "Library" — BBC B / B+ (ANFS)
-    MASTER     = "library_master.img"     # "Library1" — Master 128/Compact
-    ARCHIMEDES = "library_archimedes.img" # "ArthurLib" — Archimedes
+    UTILS      = "library_utils.adl"      # Utils (shared)
+    MODEL_B    = "library_model_b.adl"    # "Library" — BBC B / B+ (ANFS)
+    MASTER     = "library_master.adl"     # "Library1" — Master 128/Compact
+    ARCHIMEDES = "library_archimedes.adl" # "ArthurLib" — Archimedes
 
     @classmethod
     def ALL(cls) -> list[LibraryImage]:
@@ -439,7 +439,7 @@ class LibraryImage(Enum):
 The images are built once from `econet-fs.tar` by
 `scripts/build_library_images.py`, which uses `import_host_tree()` to
 pull each source directory into a fresh AFS image and writes the result
-under `src/oaknut/afs/libraries/`. The resulting `.img` files are
+under `src/oaknut/afs/libraries/`. The resulting `.adl` files are
 committed as binary assets and serve as runtime resources for
 `initialise()` and as regression fixtures for tests.
 
@@ -453,7 +453,7 @@ from pathlib import Path
 
 from oaknut.afs import AFS, import_host_tree
 
-with AFS.from_file("new.img", writable=True, user="Syst") as target:
+with AFS.from_file("new.adl", writable=True, user="Syst") as target:
     import_host_tree(
         target,
         source=Path("library/econet-fs/Library"),
@@ -741,8 +741,8 @@ produced.
   17 to produce four AFS images under `src/oaknut/afs/libraries/`.
 - `libraries/__init__.py` with the `LibraryImage` enum and
   `importlib.resources` loader.
-- Commit the four `.img` files as binary assets.
-- **Tests:** `test_library_images.py` — each committed `.img` opens and
+- Commit the four `.adl` files as binary assets.
+- **Tests:** `test_library_images.py` — each committed `.adl` opens and
   contains the expected directory tree.
 
 ### Phase 19 — `wfsinit.initialise`

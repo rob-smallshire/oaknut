@@ -6,7 +6,7 @@ Phase 18 of the oaknut-afs build. Walks a host-side directory
 into the target AFS region through the public write path.
 
 Mostly used by the ``scripts/build_library_images.py`` helper that
-assembles the shipped ``.img`` assets from
+assembles the shipped ``.adl`` assets from
 ``/Users/rjs/Code/beebium/discs/l3fs/libraries/econet-fs.tar``, but
 also usable directly for ad-hoc bulk imports.
 
@@ -101,9 +101,7 @@ def import_host_tree(
     if not source.is_dir():
         raise AFSHostImportError(f"source {source} is not a directory")
     if target_path.afs is not target:
-        raise AFSHostImportError(
-            "target_path must be bound to the target AFS handle"
-        )
+        raise AFSHostImportError("target_path must be bound to the target AFS handle")
 
     # Ensure the landing directory exists.
     if not target_path.is_root() and not target_path.exists():
@@ -114,9 +112,7 @@ def import_host_tree(
         child_path = target_path / name
         if child_path.exists():
             if on_collision == "error":
-                raise AFSHostImportError(
-                    f"target {child_path} already exists for host {entry}"
-                )
+                raise AFSHostImportError(f"target {child_path} already exists for host {entry}")
             if on_collision == "skip":
                 continue
             if on_collision == "overwrite":

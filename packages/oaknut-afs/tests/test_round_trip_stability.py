@@ -1,7 +1,7 @@
 """Phase 20 — round-trip stability tests.
 
 A full byte-exact comparison against a WFSINIT reference image
-needs a corpus of trusted reference .img files that we don't
+needs a corpus of trusted reference disc images that we don't
 currently have checked in. This test suite instead validates that
 the oaknut-afs write path produces images which remain internally
 consistent after an arbitrary sequence of mutations and reopens.

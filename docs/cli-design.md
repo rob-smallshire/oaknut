@@ -290,7 +290,7 @@ The following additions are needed. Status updated 2026-04-12.
 | A4 | `PasswordsFile` mutation surface (add / remove / quota / password / boot / system) | Done (phase 14) |
 | A5 | `merge(target, source, ...)` AFS → AFS subtree copy | Done (phase 16) |
 | A6 | `import_host_tree(target, source=, ...)` | Done (phase 18) |
-| A7 | `LibraryImage` enum + shipped `.img` assets | Done (phases 17, follow-up 3) |
+| A7 | `LibraryImage` enum + shipped `.adl` assets | Done (phases 17, follow-up 3) |
 | A8 | Allocator with chain-expanding writes | Done (phases 8, follow-up 1) |
 | A9 | Transactional flush (buffered `_write_sector`, commit/discard on exit) | Done (follow-up 2) |
 | A10 | Quota enforcement (`_debit_quota` / `_credit_quota` on create/delete) | Done (follow-up 5) |

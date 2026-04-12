@@ -14,9 +14,9 @@ class TestLibraryImageEnum:
     def test_enum_has_four_values(self) -> None:
         assert len(LibraryImage.all()) == 4
 
-    def test_values_are_img_filenames(self) -> None:
+    def test_values_are_adl_filenames(self) -> None:
         for entry in LibraryImage:
-            assert entry.value.endswith(".img")
+            assert entry.value.endswith(".adl")
 
     def test_all_available_after_build(self) -> None:
         for entry in LibraryImage:

@@ -4,7 +4,7 @@
 Extracts the four library directories (Library, Library1, ArthurLib,
 Utils) from the source tarball and packages each into a standalone
 ADFS-L disc image with an initialised AFS partition whose root
-contains that library's files. The resulting ``.img`` files are
+contains that library's files. The resulting ``.adl`` files are
 written to ``src/oaknut/afs/libraries/`` where
 :class:`oaknut.afs.libraries.LibraryImage` discovers them at
 runtime via ``importlib.resources``.
@@ -31,9 +31,7 @@ from oaknut.afs.host_import import import_host_tree
 from oaknut.afs.libraries import LibraryImage
 from oaknut.afs.wfsinit import AFSSizeSpec, InitSpec, UserSpec, initialise
 
-_DEFAULT_TAR = Path(
-    "/Users/rjs/Code/beebium/discs/l3fs/libraries/econet-fs.tar"
-)
+_DEFAULT_TAR = Path("/Users/rjs/Code/beebium/discs/l3fs/libraries/econet-fs.tar")
 
 _LIBRARY_MAP: dict[LibraryImage, str] = {
     LibraryImage.MODEL_B: "Library",
@@ -42,13 +40,7 @@ _LIBRARY_MAP: dict[LibraryImage, str] = {
     LibraryImage.UTILS: "Utils",
 }
 
-_DEST_DIRPATH = (
-    Path(__file__).resolve().parent.parent
-    / "src"
-    / "oaknut"
-    / "afs"
-    / "libraries"
-)
+_DEST_DIRPATH = Path(__file__).resolve().parent.parent / "src" / "oaknut" / "afs" / "libraries"
 
 
 def build_one(
@@ -56,7 +48,7 @@ def build_one(
     source_dirpath: Path,
     dest_dirpath: Path,
 ) -> Path:
-    """Build one library ``.img`` from an extracted host directory."""
+    """Build one library ``.adl`` from an extracted host directory."""
     dest_filepath = dest_dirpath / library.value
     print(f"  {library.name:15s} ← {source_dirpath} → {dest_filepath.name}")
 
@@ -86,7 +78,7 @@ def build_one(
     )
     afs.flush()
 
-    # Write the raw disc bytes to the .img file.
+    # Write the raw disc bytes to the .adl file.
     disc_bytes = bytes(adfs._disc._disc_image._buffer)
     dest_filepath.write_bytes(disc_bytes)
     return dest_filepath

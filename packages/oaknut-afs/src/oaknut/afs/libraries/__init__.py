@@ -43,10 +43,10 @@ class LibraryImage(Enum):
     ``oaknut.afs.libraries`` (an ``importlib.resources`` package).
     """
 
-    UTILS = "library_utils.img"
-    MODEL_B = "library_model_b.img"
-    MASTER = "library_master.img"
-    ARCHIMEDES = "library_archimedes.img"
+    UTILS = "library_utils.adl"
+    MODEL_B = "library_model_b.adl"
+    MASTER = "library_master.adl"
+    ARCHIMEDES = "library_archimedes.adl"
 
     @classmethod
     def all(cls) -> list["LibraryImage"]:
@@ -78,9 +78,7 @@ class LibraryImage(Enum):
                 f"installation of oaknut-afs; run "
                 f"scripts/build_library_images.py to produce it"
             )
-        with resources.as_file(
-            resources.files(__name__).joinpath(self.value)
-        ) as path:
+        with resources.as_file(resources.files(__name__).joinpath(self.value)) as path:
             with AFS.from_file(path) as afs:
                 yield afs
 
