@@ -1114,11 +1114,70 @@ def _export_recursive(
 @cli.command(name="import")
 @click.argument("image", type=click.Path(exists=True, path_type=Path))
 @click.argument("host_dir", type=click.Path(exists=True, path_type=Path))
+@click.option(
+    "--meta-format",
+    type=click.Choice(
+        [
+            "inf-trad",
+            "inf-pieb",
+            "xattr-acorn",
+            "xattr-pieb",
+            "filename-riscos",
+            "filename-mos",
+            "none",
+        ],
+        case_sensitive=False,
+    ),
+    default=None,
+    help="Metadata format to read from host files.",
+)
 @click.option("-v", "--verbose", is_flag=True, help="Show import progress.")
-def import_cmd(image: Path, host_dir: Path, verbose: bool) -> None:
+def import_cmd(
+    image: Path, host_dir: Path, meta_format: str | None, verbose: bool,
+) -> None:
     """Bulk-import a host directory into the image."""
-    # TODO: Needs library support (L6) for full recursive import.
-    click.echo("import not yet implemented")
+    from oaknut.file import DEFAULT_IMPORT_META_FORMATS, MetaFormat
+
+    if meta_format is not None and meta_format != "none":
+        meta_formats = (MetaFormat(meta_format),)
+    else:
+        meta_formats = DEFAULT_IMPORT_META_FORMATS
+
+    fs = detect_filing_system(image)
+    with open_image(image, fs, mode="r+b") as handle:
+        _import_host_dir(handle, handle.root, host_dir, meta_formats, verbose, fs)
+        if fs is FilingSystem.AFS:
+            handle.flush()
+
+
+def _import_host_dir(handle, target_dir, host_dir: Path, meta_formats, verbose, fs):
+    """Recursively import files from a host directory."""
+    for entry in sorted(host_dir.iterdir()):
+        if entry.name.startswith("."):
+            continue  # Skip hidden files and INF sidecars.
+        if entry.suffix.lower() == ".inf":
+            continue  # Skip INF sidecar files.
+        if entry.is_file():
+            # Derive the in-image name from the host filename (strip metadata suffixes).
+            leaf = entry.stem if entry.suffix.lower() in (",inf",) else entry.name
+            # Strip any filename-encoded suffixes (,xxx or ,load,exec).
+            for sep in (",",):
+                if sep in leaf:
+                    leaf = leaf[: leaf.index(sep)]
+            target = target_dir / leaf
+            target.import_file(entry, meta_formats=meta_formats)
+            if verbose:
+                click.echo(target.name, err=True)
+        elif entry.is_dir():
+            if fs is FilingSystem.DFS:
+                # DFS is flat — import files from subdirectories directly.
+                _import_host_dir(handle, target_dir, entry, meta_formats, verbose, fs)
+            else:
+                # ADFS/AFS — create a subdirectory and recurse.
+                sub = target_dir / entry.name
+                if not sub.exists():
+                    sub.mkdir()
+                _import_host_dir(handle, sub, entry, meta_formats, verbose, fs)
 
 
 # ---------------------------------------------------------------------------

@@ -528,6 +528,52 @@ class TestCompact:
 # ---------------------------------------------------------------------------
 
 
+class TestImport:
+    def test_import_dfs(
+        self, runner: CliRunner, dfs_image_filepath: Path, tmp_path: Path,
+    ) -> None:
+        # Create a host directory with files.
+        src = tmp_path / "import_src"
+        src.mkdir()
+        (src / "NEW").write_bytes(b"imported file")
+        result = runner.invoke(
+            cli, ["import", str(dfs_image_filepath), str(src)]
+        )
+        assert result.exit_code == 0
+        # Verify the file was imported.
+        result = runner.invoke(cli, ["cat", str(dfs_image_filepath), "$.NEW"])
+        assert result.exit_code == 0
+        assert b"imported file" in result.output_bytes
+
+    def test_import_adfs_with_subdir(
+        self, runner: CliRunner, adfs_image_filepath: Path, tmp_path: Path,
+    ) -> None:
+        src = tmp_path / "import_src"
+        src.mkdir()
+        (src / "Docs").mkdir()
+        (src / "Docs" / "README").write_bytes(b"readme data")
+        result = runner.invoke(
+            cli, ["import", str(adfs_image_filepath), str(src)]
+        )
+        assert result.exit_code == 0
+        result = runner.invoke(
+            cli, ["cat", str(adfs_image_filepath), "$.Docs.README"]
+        )
+        assert result.exit_code == 0
+        assert b"readme data" in result.output_bytes
+
+    def test_import_verbose(
+        self, runner: CliRunner, dfs_image_filepath: Path, tmp_path: Path,
+    ) -> None:
+        src = tmp_path / "import_src"
+        src.mkdir()
+        (src / "VER").write_bytes(b"verbose test")
+        result = runner.invoke(
+            cli, ["import", "-v", str(dfs_image_filepath), str(src)]
+        )
+        assert result.exit_code == 0
+
+
 class TestAfsInit:
     def test_afs_init(self, runner: CliRunner, adfs_no_afs_filepath: Path) -> None:
         result = runner.invoke(
