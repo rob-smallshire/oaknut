@@ -1498,14 +1498,23 @@ def _import_host_dir(handle, target_dir, host_dir: Path, meta_formats, verbose, 
 
 @cli.command(name="afs-plan")
 @click.argument("image", type=click.Path(exists=True, path_type=Path))
-@click.option("--cylinders", type=int, default=None, help="Proposed AFS region size in cylinders.")
-def afs_plan(image: Path, cylinders: int | None) -> None:
+@click.option(
+    "--cylinders", type=int, default=None,
+    help="Proposed AFS region size in cylinders.",
+)
+@click.option(
+    "--compact", is_flag=True, default=False,
+    help="Plan with ADFS compaction to maximise AFS space.",
+)
+def afs_plan(image: Path, cylinders: int | None, compact: bool) -> None:
     """Show what afs-init would do, without modifying the image.
 
-    With no options, shows the maximum available AFS region. With
-    --cylinders N, shows the plan for that specific size. Reports
-    disc geometry, current ADFS occupancy, whether compaction is
-    needed, and the resulting partition layout.
+    By default, plans using the existing tail free extent (matching
+    WFSINIT behaviour). With --compact, plans a compaction-first
+    layout that reclaims the maximum space. With --cylinders N,
+    shows the plan for that specific size. Reports disc geometry,
+    current ADFS occupancy, whether compaction is needed, and the
+    resulting partition layout.
     """
     from oaknut.adfs import ADFS
     from oaknut.afs.wfsinit import AFSSizeSpec
@@ -1542,10 +1551,17 @@ def afs_plan(image: Path, cylinders: int | None) -> None:
                 )
             return
 
-        # Compute the plan.
-        size = AFSSizeSpec.cylinders(cylinders) if cylinders else AFSSizeSpec.max()
+        # Compute the plan using the same defaults as afs-init:
+        # existing_free() without compaction (matching WFSINIT), or
+        # max() with compaction when --compact is given.
+        if cylinders:
+            size = AFSSizeSpec.cylinders(cylinders)
+        elif compact:
+            size = AFSSizeSpec.max()
+        else:
+            size = AFSSizeSpec.existing_free()
         try:
-            p = plan(adfs, size=size)
+            p = plan(adfs, size=size, compact_adfs=compact)
         except Exception as exc:
             raise click.ClickException(str(exc))
 
@@ -1560,10 +1576,11 @@ def afs_plan(image: Path, cylinders: int | None) -> None:
         click.echo(f"  Compaction:     {'required' if p.will_compact else 'not required'}")
 
         if not cylinders:
+            compact_flag = " --compact" if compact else ""
             click.echo()
             click.echo(
-                f"To proceed: disc afs-init {image} --disc-name NAME "
-                f"--cylinders {p.afs_cylinders}"
+                f"To proceed: disc afs-init {image} --disc-name NAME"
+                f" --cylinders {p.afs_cylinders}{compact_flag}"
             )
 
 
