@@ -6,27 +6,24 @@ from pathlib import Path
 
 import pytest
 from helpers.afs_image import build_synthetic_adfs_with_afs
-from oaknut.afs import LibraryImage, import_host_tree
+from oaknut.afs import SHIPPED_LIBRARIES, import_host_tree
 from oaknut.afs.host_import import _sanitise_name
+from oaknut.afs.libraries import open_shipped, shipped_available
 
 
-class TestLibraryImageEnum:
-    def test_enum_has_four_values(self) -> None:
-        assert len(LibraryImage.all()) == 4
-
-    def test_values_are_adl_filenames(self) -> None:
-        for entry in LibraryImage:
-            assert entry.value.endswith(".adl")
+class TestShippedLibraries:
+    def test_three_shipped_libraries(self) -> None:
+        assert len(SHIPPED_LIBRARIES) == 3
 
     def test_all_available_after_build(self) -> None:
-        for entry in LibraryImage:
-            assert entry.is_available()
+        for name in SHIPPED_LIBRARIES:
+            assert shipped_available(name)
 
     def test_open_reads_root(self) -> None:
-        with LibraryImage.UTILS.open() as afs:
-            names = [p.name for p in afs.root]
+        with open_shipped("Library") as adfs:
+            names = [p.name for p in adfs.root.iterdir()]
             assert len(names) > 0
-            # Library images are pure content — no Passwords file.
+            # Library images are pure ADFS content — no Passwords file.
             assert "Passwords" not in names
 
 

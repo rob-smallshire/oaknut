@@ -58,7 +58,7 @@ AFS (afs.py)  ←  ADFS.afs_partition (oaknut-adfs)
   ↓
 AFSPath (path.py)  +  PasswordsFile (passwords.py)
   ↓
-merge (merge.py)  +  host_import (host_import.py)  +  libraries/ (LibraryImage)
+merge (merge.py)  +  host_import (host_import.py)  +  libraries/ (emplace_library)
   ↓
 AfsDirectory (directory.py — read + insert/delete/rename/grow)
   ↓

@@ -1463,55 +1463,55 @@ def afs_plan(image: Path, cylinders: int | None) -> None:
     "users",
     multiple=True,
     help=(
-        "User spec as NAME, NAME:S (system), or NAME:QUOTA (decimal bytes), "
-        "or NAME:S:QUOTA. Repeat for multiple."
+        "User spec as NAME, NAME:S (system), NAME:QUOTA, "
+        "or NAME:S:QUOTA. Quota accepts e.g. 2MiB. Repeat for multiple."
     ),
 )
 @click.option(
     "--default-quota",
-    type=int,
     default=None,
-    help="Default quota in bytes for users without an explicit quota.",
+    help="Default quota for users without an explicit quota (e.g. 256KiB).",
 )
 @click.option(
-    "--library",
-    "libraries",
+    "--emplace",
+    "emplacements",
     multiple=True,
-    type=click.Choice(["utils", "model-b", "master", "archimedes"], case_sensitive=False),
-    help="Install a library disc image. Repeat for multiple.",
+    help=(
+        "Emplace a library: a shipped name (Library, Library1, ArthurLib) "
+        "or a path to an ADFS .adl image. Repeat for multiple."
+    ),
 )
 def afs_init(
     image: Path,
     disc_name: str,
     cylinders: int | None,
     users: tuple[str, ...],
-    default_quota: int | None,
-    libraries: tuple[str, ...],
+    default_quota: str | None,
+    emplacements: tuple[str, ...],
 ) -> None:
     """Initialise an AFS partition on an ADFS hard disc image."""
     from oaknut.adfs import ADFS
-    from oaknut.afs.libraries import LibraryImage
     from oaknut.afs.wfsinit import AFSSizeSpec, InitSpec, UserSpec, initialise
 
     user_specs: list[UserSpec] = _parse_user_specs(users)
     if not user_specs:
         user_specs = [UserSpec("Syst", system=True)]
 
-    library_map = {
-        "utils": LibraryImage.UTILS,
-        "model-b": LibraryImage.MODEL_B,
-        "master": LibraryImage.MASTER,
-        "archimedes": LibraryImage.ARCHIMEDES,
-    }
-    library_specs = [library_map[lib.lower()] for lib in libraries]
-
     size = AFSSizeSpec.cylinders(cylinders) if cylinders else AFSSizeSpec.max()
 
-    init_kwargs: dict = {"disc_name": disc_name, "size": size, "users": user_specs}
+    init_kwargs: dict = {
+        "disc_name": disc_name,
+        "size": size,
+        "users": user_specs,
+        "libraries": list(emplacements),
+    }
     if default_quota is not None:
-        init_kwargs["default_quota"] = default_quota
-    if library_specs:
-        init_kwargs["libraries"] = library_specs
+        from oaknut.file.capacity import parse_capacity
+
+        try:
+            init_kwargs["default_quota"] = parse_capacity(default_quota)
+        except ValueError as exc:
+            raise click.ClickException(str(exc))
 
     with ADFS.from_file(image, mode="r+b") as adfs:
         initialise(adfs, spec=InitSpec(**init_kwargs))
@@ -1522,13 +1522,15 @@ def afs_init(
 def _parse_user_specs(raw_specs: tuple[str, ...]) -> list:
     """Parse user specs from command-line strings.
 
-    Accepted forms:
-    - ``NAME``        — plain user
-    - ``NAME:S``      — system user
-    - ``NAME:12345``  — user with explicit quota in bytes
-    - ``NAME:S:12345``— system user with explicit quota
+    Accepted forms::
+
+        NAME            — plain user
+        NAME:S          — system user
+        NAME:2MiB       — user with explicit quota
+        NAME:S:2MiB     — system user with explicit quota
     """
     from oaknut.afs.wfsinit import UserSpec
+    from oaknut.file.capacity import parse_capacity
 
     specs: list[UserSpec] = []
     for raw in raw_specs:
@@ -1541,7 +1543,7 @@ def _parse_user_specs(raw_specs: tuple[str, ...]) -> list:
                 system = True
             else:
                 try:
-                    quota = int(part, 0)
+                    quota = parse_capacity(part)
                 except ValueError:
                     raise click.ClickException(
                         f"unrecognised user spec component '{part}' in '{raw}'"

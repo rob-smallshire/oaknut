@@ -1,140 +1,113 @@
 """Shipped AFS library disc images.
 
-Phase 17 of the oaknut-afs build provides the API surface for
-bundled library disc images (Utils, Model B, Master, Archimedes)
-that ``initialise(...)`` (phase 19) can merge into a freshly-
-partitioned AFS region. The actual binary assets are produced by
-``scripts/build_library_images.py`` from
-``/Users/rjs/Code/beebium/discs/l3fs/libraries/econet-fs.tar`` —
-see the script for the provenance.
+Each shipped image is a plain ADFS-L disc containing files to be
+emplaced into an AFS partition during initialisation. The images
+are named for their target AFS directory:
 
-The four images are:
+- ``Library.adl``   — BBC Model B/B+ client libraries + shared Utils
+- ``Library1.adl``  — Master 128/Compact client libraries
+- ``ArthurLib.adl`` — Archimedes client libraries
 
-- ``UTILS`` — shared utilities visible to every client.
-- ``MODEL_B`` — the ``Library`` tree BBC B / B+ (ANFS) clients
-  load from.
-- ``MASTER`` — the ``Library1`` tree Master 128 / Compact clients
-  load from.
-- ``ARCHIMEDES`` — the ``ArthurLib`` tree Archimedes clients
-  load from.
-
-At runtime :meth:`LibraryImage.open` returns a read-only
-:class:`~oaknut.afs.afs.AFS` handle on the image, backed by
-``importlib.resources``. Callers who want to merge a library into
-a target disc use :meth:`LibraryImage.merge_into`.
+At runtime :func:`emplace_library` opens the image (shipped or
+user-supplied), creates the target directory on the AFS partition,
+and copies every file across using :func:`oaknut.file.copy_file`.
 """
 
 from __future__ import annotations
 
 from contextlib import contextmanager
-from enum import Enum
 from importlib import resources
+from pathlib import Path
 from typing import TYPE_CHECKING, Iterator
 
 if TYPE_CHECKING:
+    from oaknut.adfs import ADFS
     from oaknut.afs.afs import AFS
-    from oaknut.afs.path import AFSPath
+
+# Shipped image names (without extension) — the canned library set.
+SHIPPED_LIBRARIES: tuple[str, ...] = ("Library", "Library1", "ArthurLib")
 
 
-class LibraryImage(Enum):
-    """Enum of shipped AFS library disc images.
+def is_shipped(name: str) -> bool:
+    """True if *name* matches a shipped library image."""
+    return name in SHIPPED_LIBRARIES
 
-    Each value is the filename of the binary asset inside
-    ``oaknut.afs.libraries`` (an ``importlib.resources`` package).
+
+def shipped_available(name: str) -> bool:
+    """True if the shipped ``.adl`` for *name* is bundled."""
+    try:
+        return resources.files(__name__).joinpath(f"{name}.adl").is_file()
+    except (FileNotFoundError, ModuleNotFoundError):
+        return False
+
+
+@contextmanager
+def open_shipped(name: str) -> "Iterator[ADFS]":
+    """Yield a read-only ADFS handle on the shipped image *name*."""
+    from oaknut.adfs import ADFS
+
+    if not shipped_available(name):
+        raise FileNotFoundError(
+            f"library image '{name}.adl' is not bundled; "
+            f"run scripts/build_library_images.py to produce it"
+        )
+    with resources.as_file(resources.files(__name__).joinpath(f"{name}.adl")) as path:
+        with ADFS.from_file(path) as adfs:
+            yield adfs
+
+
+def emplace_library(
+    target_afs: "AFS",
+    name: str,
+    *,
+    conflict: str = "overwrite",
+) -> None:
+    """Emplace a library onto an AFS partition.
+
+    If *name* matches a shipped library (e.g. ``"Library"``), the
+    bundled ``.adl`` is used. If *name* ends with ``.adl``, it is
+    treated as a path to a user-supplied ADFS image. In both cases,
+    every file in the ADFS root is copied into ``$.{dirname}`` on
+    the target AFS partition, where *dirname* is the stem of the
+    image filename.
+
+    The target directory is created if it does not already exist.
     """
+    from oaknut.adfs import ADFS
+    from oaknut.file.copy import copy_file
 
-    UTILS = "library_utils.adl"
-    MODEL_B = "library_model_b.adl"
-    MASTER = "library_master.adl"
-    ARCHIMEDES = "library_archimedes.adl"
+    if name.lower().endswith(".adl") or name.lower().endswith(".adf"):
+        # User-supplied ADFS image path.
+        image_filepath = Path(name)
+        dirname = image_filepath.stem
+        ctx = ADFS.from_file(image_filepath)
+    elif is_shipped(name):
+        dirname = name
+        ctx = open_shipped(name)
+    else:
+        raise ValueError(
+            f"'{name}' is not a shipped library name ({', '.join(SHIPPED_LIBRARIES)}) "
+            f"and does not look like an ADFS image path (no .adl/.adf suffix)"
+        )
 
-    @classmethod
-    def all(cls) -> list["LibraryImage"]:
-        return list(cls)
+    target_dir = target_afs.root / dirname
+    if not target_dir.exists():
+        target_dir.mkdir()
 
-    @property
-    def target_dirname(self) -> str:
-        """AFS directory name where this library should be installed.
+    with ctx as adfs:
+        for entry in adfs.root.iterdir():
+            if entry.stat().is_directory:
+                continue
+            dest = target_dir / entry.name
+            if dest.exists():
+                if conflict == "skip":
+                    continue
+                elif conflict == "overwrite":
+                    dest.unlink()
+                else:
+                    from oaknut.afs.exceptions import AFSMergeConflictError
 
-        On a real Level 3 File Server:
-        - ``Library``   — BBC Model B/B+ (ANFS) and shared Utils
-        - ``Library1``  — Master 128/Compact
-        - ``ArthurLib`` — Archimedes
-        """
-        return _TARGET_DIRNAMES[self]
-
-    def is_available(self) -> bool:
-        """True if the shipped binary asset is actually bundled.
-
-        Returns False when this package was installed without the
-        pre-built library images (e.g. during early development
-        before the build script has run).
-        """
-        try:
-            return resources.files(__name__).joinpath(self.value).is_file()
-        except (FileNotFoundError, ModuleNotFoundError):
-            return False
-
-    @contextmanager
-    def open(self) -> "Iterator":
-        """Yield a read-only ADFS handle on the shipped image.
-
-        The library images are plain ADFS-L discs with no AFS
-        partition. Files sit in the ADFS root directory.
-
-        Raises :class:`FileNotFoundError` if the asset isn't bundled.
-        """
-        from oaknut.adfs import ADFS
-
-        if not self.is_available():
-            raise FileNotFoundError(
-                f"library image {self.value!r} is not bundled in this "
-                f"installation of oaknut-afs; run "
-                f"scripts/build_library_images.py to produce it"
-            )
-        with resources.as_file(resources.files(__name__).joinpath(self.value)) as path:
-            with ADFS.from_file(path) as adfs:
-                yield adfs
-
-    def merge_into(
-        self,
-        target: "AFS",
-        *,
-        target_path: "AFSPath | None" = None,
-        conflict: str = "error",
-    ) -> None:
-        """Copy this library's files into the target AFS path.
-
-        Uses :func:`oaknut.file.copy_file` to bridge from the ADFS
-        library image into the target AFS directory.
-        """
-        from oaknut.file.copy import copy_file
-
-        if target_path is None:
-            target_path = target.root
-
-        with self.open() as adfs:
-            for adfs_entry in adfs.root.iterdir():
-                if adfs_entry.stat().is_directory:
-                    continue  # Library images are flat.
-                dest = target_path / adfs_entry.name
-                if dest.exists():
-                    if conflict == "skip":
-                        continue
-                    elif conflict == "overwrite":
-                        dest.unlink()
-                    else:
-                        from oaknut.afs.exceptions import AFSMergeConflictError
-
-                        raise AFSMergeConflictError(
-                            f"'{adfs_entry.name}' already exists at {target_path}"
-                        )
-                copy_file(adfs_entry, dest, target_fs="afs")
-
-
-_TARGET_DIRNAMES: dict[LibraryImage, str] = {
-    LibraryImage.UTILS: "Library",
-    LibraryImage.MODEL_B: "Library",
-    LibraryImage.MASTER: "Library1",
-    LibraryImage.ARCHIMEDES: "ArthurLib",
-}
+                    raise AFSMergeConflictError(
+                        f"'{entry.name}' already exists in $.{dirname}"
+                    )
+            copy_file(entry, dest, target_fs="afs")

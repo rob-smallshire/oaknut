@@ -45,7 +45,7 @@ class InitSpec:
     addition_factor: int = 0
     default_quota: int = 0x40404
     users: Sequence[UserSpec] = ()
-    libraries: Sequence = ()  # LibraryImage enum, phase 17
+    libraries: Sequence[str] = ()  # names or paths passed to emplace_library
     repartition: bool = True
 
     def __post_init__(self) -> None:

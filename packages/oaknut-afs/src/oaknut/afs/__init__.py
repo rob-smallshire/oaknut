@@ -42,7 +42,7 @@ from oaknut.afs.exceptions import (
     AFSRepartitionError,
 )
 from oaknut.afs.host_import import import_host_tree
-from oaknut.afs.libraries import LibraryImage
+from oaknut.afs.libraries import SHIPPED_LIBRARIES, emplace_library
 from oaknut.afs.merge import merge
 from oaknut.afs.passwords import PasswordsFile, UserRecord
 from oaknut.afs.path import AFSPath
@@ -60,7 +60,8 @@ __all__ = [
     "AFSNotPresentError",
     "AFSPath",
     "Allocator",
-    "LibraryImage",
+    "SHIPPED_LIBRARIES",
+    "emplace_library",
     "PasswordsFile",
     "UserRecord",
     "import_host_tree",

@@ -8,7 +8,7 @@ import pytest
 from helpers.afs_image import build_synthetic_adfs_with_afs
 from oaknut.adfs import ADFS, ADFS_L
 from oaknut.afs import merge
-from oaknut.afs.libraries import LibraryImage
+from oaknut.afs.libraries import SHIPPED_LIBRARIES
 from oaknut.afs.passwords import PASSWORDS_FILENAME
 from oaknut.afs.wfsinit import AFSSizeSpec, InitSpec, UserSpec, initialise
 
@@ -52,17 +52,15 @@ class TestMergeExcludesPasswords:
         assert (tgt_reloaded.root / "Tool").read_bytes() == b"tool"
 
 
-class TestLibraryTargetDirectories:
-    """Bug 2: each LibraryImage should know its target directory name,
-    and initialise() should merge libraries into subdirectories, not root."""
+class TestEmplaceLibrary:
+    """Bug 2: libraries should be emplaced into named directories."""
 
-    def test_library_has_target_dirname(self) -> None:
-        assert LibraryImage.MODEL_B.target_dirname == "Library"
-        assert LibraryImage.MASTER.target_dirname == "Library1"
-        assert LibraryImage.ARCHIMEDES.target_dirname == "ArthurLib"
-        assert LibraryImage.UTILS.target_dirname == "Library"
+    def test_shipped_library_names(self) -> None:
+        assert "Library" in SHIPPED_LIBRARIES
+        assert "Library1" in SHIPPED_LIBRARIES
+        assert "ArthurLib" in SHIPPED_LIBRARIES
 
-    def test_initialise_creates_library_directories(self) -> None:
+    def test_initialise_creates_library_directory(self) -> None:
         adfs = ADFS.create(ADFS_L)
         initialise(
             adfs,
@@ -70,22 +68,20 @@ class TestLibraryTargetDirectories:
                 disc_name="LibTest",
                 size=AFSSizeSpec.cylinders(20),
                 users=[UserSpec("Syst", system=True)],
-                libraries=[LibraryImage.MODEL_B],
+                libraries=["Library"],
             ),
         )
         afs = adfs.afs_partition
         assert afs is not None
-        # The Model B library should be under $.Library, not at root.
         lib = afs.root / "Library"
         assert lib.is_dir()
-        # One of the Model B utilities — should be inside Library.
+        # A known file from the Library image should be inside.
         assert (lib / "Free").exists()
         # And NOT at root.
         root_names = {c.name for c in afs.root}
         assert "Free" not in root_names
 
     def test_initialise_preserves_users_with_libraries(self) -> None:
-        """Libraries must not overwrite the Passwords file."""
         adfs = ADFS.create(ADFS_L)
         initialise(
             adfs,
@@ -96,7 +92,7 @@ class TestLibraryTargetDirectories:
                     UserSpec("Syst", system=True),
                     UserSpec("guest"),
                 ],
-                libraries=[LibraryImage.UTILS],
+                libraries=["Library"],
             ),
         )
         afs = adfs.afs_partition

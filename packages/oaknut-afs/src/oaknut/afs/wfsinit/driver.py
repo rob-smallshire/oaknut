@@ -50,10 +50,8 @@ def initialise(adfs: "ADFS", *, spec: InitSpec) -> None:
     6. (Phase 19 scope) skip user URD creation — requires
        directory-per-user write paths that the existing Passwords
        file machinery will create lazily as needed.
-    7. (Phase 19 scope) skip shipped library merges for now — the
-       library images are not yet bundled. When they are, the
-       driver will call :meth:`LibraryImage.merge_into` for each
-       entry in ``spec.libraries``.
+    7. Emplace each library named in ``spec.libraries`` via
+       :func:`emplace_library`.
     """
     from oaknut.afs.afs import AFS  # deferred to avoid cycles
 
@@ -243,18 +241,13 @@ def initialise(adfs: "ADFS", *, spec: InitSpec) -> None:
         chunk = passwords_raw[i * _SECTOR_SIZE : (i + 1) * _SECTOR_SIZE]
         write_sector(sector, chunk)
 
-    # ---- Step 9: libraries (phase 17-aware; assets may not exist) ----
+    # ---- Step 9: emplace libraries ----
     if spec.libraries:
+        from oaknut.afs.libraries import emplace_library
+
         with AFS(disc, sec1, sec2) as afs:
-            for library in spec.libraries:
-                if not library.is_available():
-                    continue
-                # Merge into the library's target directory (e.g.
-                # $.Library for Model B, $.Library1 for Master).
-                target_dir = afs.root / library.target_dirname
-                if not target_dir.exists():
-                    target_dir.mkdir()
-                library.merge_into(afs, target_path=target_dir, conflict="overwrite")
+            for library_name in spec.libraries:
+                emplace_library(afs, library_name, conflict="overwrite")
 
 
 def _dir_entry(*, name, sin, access, date):
