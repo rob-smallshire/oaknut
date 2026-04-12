@@ -22,10 +22,10 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
 ]
 dependencies = [
-    "oaknut-file>=1.0",
-    "oaknut-dfs>=4.0",
-    "oaknut-adfs>=1.0",
-    "oaknut-afs>=0.1",
+    "oaknut-file>=10.0",
+    "oaknut-dfs>=10.0",
+    "oaknut-adfs>=10.0",
+    "oaknut-afs>=10.0",
     "click>=8.1.7",
     "rich>=13.0",
 ]
@@ -39,14 +39,3 @@ version = { attr = "oaknut.disc.__version__" }
 
 [tool.setuptools.packages.find]
 where = ["src"]
-
-[tool.bumpversion]
-current_version = "1.0.3"
-tag_name = "oaknut-disc-v{new_version}"
-tag = true
-commit = true
-
-[[tool.bumpversion.files]]
-filename = "src/oaknut/disc/__init__.py"
-search = '__version__ = "{current_version}"'
-replace = '__version__ = "{new_version}"'

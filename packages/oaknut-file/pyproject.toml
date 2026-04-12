@@ -45,16 +45,3 @@ version = { attr = "oaknut.file.__version__" }
 
 [tool.setuptools.packages.find]
 where = ["src"]
-
-[tool.bumpversion]
-current_version = "2.0.1"
-parse = "(?P<major>\\d+)\\.(?P<minor>\\d+)\\.(?P<patch>\\d+)"
-serialize = ["{major}.{minor}.{patch}"]
-tag = true
-commit = true
-message = "Bump version: {current_version} → {new_version}"
-tag_name = "oaknut-file-v{new_version}"
-tag_message = "Bump version: {current_version} → {new_version}"
-files = [
-    { filename = "src/oaknut/file/__init__.py" },
-]

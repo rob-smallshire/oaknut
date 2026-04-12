@@ -21,7 +21,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "oaknut"
-version = "0.1.0"
+version = "10.0.0"
 requires-python = ">=3.11"
 description = "Oaknut family meta-distribution — tools for Acorn computer filesystems, files, and formats."
 readme = "README.md"
@@ -40,14 +40,14 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
 ]
 dependencies = [
-    "oaknut-file>=1.0",
-    "oaknut-discimage>=1.0",
-    "oaknut-basic>=1.0",
-    "oaknut-dfs>=4.0",
-    "oaknut-adfs>=1.0",
-    "oaknut-afs>=0.1",
-    "oaknut-zip>=2.0",
-    "oaknut-disc>=0.1",
+    "oaknut-file>=10.0",
+    "oaknut-discimage>=10.0",
+    "oaknut-basic>=10.0",
+    "oaknut-dfs>=10.0",
+    "oaknut-adfs>=10.0",
+    "oaknut-afs>=10.0",
+    "oaknut-zip>=10.0",
+    "oaknut-disc>=10.0",
 ]
 
 [project.urls]
@@ -94,6 +94,42 @@ docs = [
     "sphinx-click>=6.0",
     "sphinx-copybutton>=0.5",
 ]
+
+[tool.bumpversion]
+current_version = "10.0.0"
+commit = true
+tag = true
+tag_name = "v{new_version}"
+message = "Bump oaknut to {new_version}"
+
+[[tool.bumpversion.files]]
+filename = "pyproject.toml"
+search = 'version = "{current_version}"'
+replace = 'version = "{new_version}"'
+
+[[tool.bumpversion.files]]
+filename = "packages/oaknut-file/src/oaknut/file/__init__.py"
+
+[[tool.bumpversion.files]]
+filename = "packages/oaknut-discimage/src/oaknut/discimage/__init__.py"
+
+[[tool.bumpversion.files]]
+filename = "packages/oaknut-basic/src/oaknut/basic/__init__.py"
+
+[[tool.bumpversion.files]]
+filename = "packages/oaknut-dfs/src/oaknut/dfs/__init__.py"
+
+[[tool.bumpversion.files]]
+filename = "packages/oaknut-adfs/src/oaknut/adfs/__init__.py"
+
+[[tool.bumpversion.files]]
+filename = "packages/oaknut-afs/src/oaknut/afs/__init__.py"
+
+[[tool.bumpversion.files]]
+filename = "packages/oaknut-zip/src/oaknut/zip/__init__.py"
+
+[[tool.bumpversion.files]]
+filename = "packages/oaknut-disc/src/oaknut/disc/__init__.py"
 
 [tool.pytest.ini_options]
 # importlib mode is required for PEP 420 namespace packages. The

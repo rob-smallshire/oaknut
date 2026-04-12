@@ -1,34 +1,16 @@
 name: Release
 
-# Publishes a package to PyPI when a namespaced tag is pushed.
+# Publishes all packages to PyPI when a version tag is pushed.
 #
-#   oaknut-v<x.y.z>          → publish the oaknut meta-distribution
-#   oaknut-file-v<x.y.z>     → publish oaknut-file
-#   oaknut-discimage-v<x.y.z>→ publish oaknut-discimage
-#   oaknut-basic-v<x.y.z>    → publish oaknut-basic
-#   oaknut-dfs-v<x.y.z>      → publish oaknut-dfs
-#   oaknut-adfs-v<x.y.z>     → publish oaknut-adfs
-#   oaknut-afs-v<x.y.z>      → publish oaknut-afs
-#   oaknut-zip-v<x.y.z>      → publish oaknut-zip
-#   oaknut-disc-v<x.y.z>     → publish oaknut-disc
+#   v10.0.0  → build and publish every oaknut-* package + the meta-distribution
 #
-# Each tag fires the workflow once; a determine-package step parses
-# the tag and picks the right build command. Authentication uses the
-# account-scoped PYPI_TOKEN secret, which has upload permissions for
-# every current and future oaknut-* project.
+# All packages share a single version number. Authentication uses the
+# account-scoped PYPI_TOKEN secret.
 
 on:
   push:
     tags:
-      - 'oaknut-v*'
-      - 'oaknut-file-v*'
-      - 'oaknut-discimage-v*'
-      - 'oaknut-basic-v*'
-      - 'oaknut-dfs-v*'
-      - 'oaknut-adfs-v*'
-      - 'oaknut-afs-v*'
-      - 'oaknut-zip-v*'
-      - 'oaknut-disc-v*'
+      - 'v*'
 
 jobs:
   publish:
@@ -45,33 +27,19 @@ jobs:
             pyproject.toml
             packages/*/pyproject.toml
 
-      - name: Determine package from tag
-        id: pkg
-        shell: bash
-        run: |
-          set -euo pipefail
-          tag="${GITHUB_REF_NAME}"
-          # Strip the version suffix to get the package name:
-          # oaknut-disc-v1.0.0 → oaknut-disc
-          pkg_name="${tag%-v*}"
-          if [ "$pkg_name" = "oaknut" ]; then
-            # Meta-distribution: build at workspace root.
-            echo "package=oaknut" >> "$GITHUB_OUTPUT"
-            echo "build_cmd=uv build" >> "$GITHUB_OUTPUT"
-          else
-            # Workspace member: build with --package.
-            echo "package=$pkg_name" >> "$GITHUB_OUTPUT"
-            echo "build_cmd=uv build --package $pkg_name" >> "$GITHUB_OUTPUT"
-          fi
-          echo "Determined package: $tag → $pkg_name"
-
       - name: Install workspace
         run: uv sync
 
-      - name: Build ${{ steps.pkg.outputs.package }}
+      - name: Build all packages
         run: |
           rm -rf dist/
-          ${{ steps.pkg.outputs.build_cmd }}
+          # Build each workspace member.
+          for pkg in oaknut-file oaknut-discimage oaknut-basic oaknut-dfs oaknut-adfs oaknut-afs oaknut-zip oaknut-disc; do
+            uv build --package "$pkg" --out-dir dist/
+          done
+          # Build the meta-distribution.
+          uv build --out-dir dist/
+          echo "=== Built artefacts ==="
           ls -la dist/
 
       - name: Publish to PyPI

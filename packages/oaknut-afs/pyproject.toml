@@ -24,9 +24,9 @@ classifiers = [
     "Topic :: System :: Filesystems",
 ]
 dependencies = [
-    "oaknut-file>=1.0",
-    "oaknut-discimage>=1.0",
-    "oaknut-adfs>=1.0",
+    "oaknut-file>=10.0",
+    "oaknut-discimage>=10.0",
+    "oaknut-adfs>=10.0",
 ]
 
 [project.scripts]
@@ -52,16 +52,3 @@ version = { attr = "oaknut.afs.__version__" }
 
 [tool.setuptools.packages.find]
 where = ["src"]
-
-[tool.bumpversion]
-current_version = "1.0.1"
-parse = "(?P<major>\\d+)\\.(?P<minor>\\d+)\\.(?P<patch>\\d+)"
-serialize = ["{major}.{minor}.{patch}"]
-tag = true
-commit = true
-message = "Bump version: {current_version} → {new_version}"
-tag_name = "oaknut-afs-v{new_version}"
-tag_message = "Bump version: {current_version} → {new_version}"
-files = [
-    { filename = "src/oaknut/afs/__init__.py" },
-]

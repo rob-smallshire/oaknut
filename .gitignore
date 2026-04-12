@@ -43,3 +43,4 @@ htmlcov/
 # applications, and a committed lockfile would over-constrain end-user
 # dependency resolvers. Developers regenerate on demand with `uv sync`.
 uv.lock
+tmp/
