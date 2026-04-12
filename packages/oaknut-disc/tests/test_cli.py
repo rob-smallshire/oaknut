@@ -19,9 +19,11 @@ from oaknut.disc.cli import cli
 
 class TestCLIBasics:
     def test_version(self, runner: CliRunner) -> None:
+        from oaknut.disc import __version__
+
         result = runner.invoke(cli, ["--version"])
         assert result.exit_code == 0
-        assert "0.1.0" in result.output
+        assert __version__ in result.output
 
     def test_help(self, runner: CliRunner) -> None:
         result = runner.invoke(cli, ["--help"])
