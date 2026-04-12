@@ -125,24 +125,12 @@ class RepartitionPlan:
 # ---------------------------------------------------------------------------
 
 
-def _infer_cylinder_geometry(adfs: "ADFS") -> tuple[int, int]:
-    """Return ``(sectors_per_cylinder, total_cylinders)``.
-
-    Uses the disc's total sector count and a fixed
-    sectors-per-cylinder from the ADFS format. For ADFS-L floppies
-    SPC is 16; for hard discs it is derived from the .dsc geometry
-    (heads × sectors_per_track).
+def _cylinder_geometry(adfs: "ADFS") -> tuple[int, int]:
+    """Return ``(sectors_per_cylinder, total_cylinders)`` from the
+    authoritative geometry stored on the ADFS object.
     """
-    total_sectors = adfs._fsm.total_sectors
-    # Get SPC from the first surface.
-    spec = adfs._disc._disc_image.surface(0)
-    spc = spec.sectors_per_track
-    if total_sectors % spc != 0:
-        # Fall back to treating the whole disc as a single cylinder
-        # — this only happens for pathological test images.
-        spc = total_sectors
-    total_cylinders = total_sectors // spc
-    return spc, total_cylinders
+    geom = adfs.geometry
+    return geom.sectors_per_cylinder, geom.cylinders
 
 
 def plan(
@@ -165,11 +153,10 @@ def plan(
     sec1_existing, sec2_existing = adfs._fsm.afs_info_pointers
     if sec1_existing != 0 or sec2_existing != 0:
         raise AFSAlreadyPartitionedError(
-            f"disc already has AFS pointers: sec1={sec1_existing:#x}, "
-            f"sec2={sec2_existing:#x}"
+            f"disc already has AFS pointers: sec1={sec1_existing:#x}, sec2={sec2_existing:#x}"
         )
 
-    spc, total_cylinders = _infer_cylinder_geometry(adfs)
+    spc, total_cylinders = _cylinder_geometry(adfs)
     total_sectors = total_cylinders * spc
 
     # Compute the post-compaction used-sectors count = used cells.
@@ -188,9 +175,7 @@ def plan(
         will_compact = len(free_entries) > 1
     else:
         if len(free_entries) > 1:
-            raise AFSDiscNotCompactedError(
-                "ADFS free list is fragmented; pass compact_adfs=True"
-            )
+            raise AFSDiscNotCompactedError("ADFS free list is fragmented; pass compact_adfs=True")
 
     # Determine the AFS size.
     if size.kind == "max":
@@ -227,9 +212,7 @@ def plan(
     afs_cylinders = afs_sectors // spc
 
     if afs_cylinders <= 0:
-        raise AFSInsufficientADFSSpaceError(
-            "AFS size would be zero cylinders"
-        )
+        raise AFSInsufficientADFSSpaceError("AFS size would be zero cylinders")
 
     new_adfs_cylinders = total_cylinders - afs_cylinders
     if new_adfs_cylinders < _MIN_ADFS_CYLINDERS:
@@ -275,7 +258,7 @@ def apply(adfs: "ADFS", plan_obj: RepartitionPlan) -> None:
     if plan_obj.will_compact:
         adfs.compact()
 
-    spc, total_cylinders = _infer_cylinder_geometry(adfs)
+    spc, total_cylinders = _cylinder_geometry(adfs)
     new_total = plan_obj.new_adfs_cylinders * spc
     adfs._fsm.shrink_to(new_total)
     adfs._fsm.install_afs_pointers(plan_obj.sec1, plan_obj.sec2)

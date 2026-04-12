@@ -415,7 +415,12 @@ def _stat_disc(image_filepath: Path, fs: FilingSystem) -> None:
             boot = BootOption(handle.boot_option)
             lines.append(f"Boot option: {boot.name} ({boot.value})")
             lines.append("Format:      ADFS")
-            lines.append(f"Total size:  {handle.total_size:,} bytes")
+            geom = handle.geometry
+            lines.append(
+                f"Geometry:    {geom.cylinders} cylinders, "
+                f"{geom.heads} heads, {geom.sectors_per_track} sectors/track"
+            )
+            lines.append(f"Total size:  {handle.total_size:,} bytes ({geom.total_sectors} sectors)")
             lines.append(f"Free space:  {handle.free_space:,} bytes")
             afs = handle.afs_partition
             if afs is not None:

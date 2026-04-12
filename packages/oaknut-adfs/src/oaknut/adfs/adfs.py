@@ -140,15 +140,36 @@ _SCSI_SECTORS_PER_TRACK = 33
 
 
 @dataclass(frozen=True)
-class _DSCGeometry:
-    """Disc geometry from a SCSI .dsc sidecar file."""
+class ADFSGeometry:
+    """Authoritative disc geometry.
+
+    For hard disc images this comes from the ``.dsc`` sidecar file.
+    For floppies it is derived from the format constants (ADFS_S/M/L).
+    """
 
     cylinders: int
     heads: int
     sectors_per_track: int = _SCSI_SECTORS_PER_TRACK
 
+    @property
+    def sectors_per_cylinder(self) -> int:
+        """Sectors per cylinder (heads x sectors per track)."""
+        return self.heads * self.sectors_per_track
 
-def _parse_dsc(filepath: Union[str, PathLike]) -> _DSCGeometry:
+    @property
+    def total_sectors(self) -> int:
+        """Total sectors on the disc."""
+        return self.cylinders * self.sectors_per_cylinder
+
+
+_FLOPPY_GEOMETRY = {
+    ADFS_S.total_bytes: ADFSGeometry(cylinders=40, heads=1, sectors_per_track=16),
+    ADFS_M.total_bytes: ADFSGeometry(cylinders=80, heads=1, sectors_per_track=16),
+    ADFS_L.total_bytes: ADFSGeometry(cylinders=80, heads=2, sectors_per_track=16),
+}
+
+
+def _parse_dsc(filepath: Union[str, PathLike]) -> ADFSGeometry:
     """Parse a 22-byte .dsc sidecar file.
 
     The .dsc file contains SCSI MODE SENSE data with disc geometry:
@@ -159,13 +180,13 @@ def _parse_dsc(filepath: Union[str, PathLike]) -> _DSCGeometry:
     data = Path(filepath).read_bytes()
     if len(data) != _DSC_SIZE:
         raise ADFSError(f"DSC file should be {_DSC_SIZE} bytes, got {len(data)}")
-    return _DSCGeometry(
+    return ADFSGeometry(
         cylinders=(data[13] << 8) | data[14],
         heads=data[15],
     )
 
 
-def _hard_disc_format(geometry: _DSCGeometry, dat_size_bytes: int) -> ADFSFormat:
+def _hard_disc_format(geometry: ADFSGeometry, dat_size_bytes: int) -> ADFSFormat:
     """Create an ADFSFormat for a hard disc image from geometry and file size.
 
     ADFS addresses hard discs using linear SCSI LBA — sector N is at
@@ -213,10 +234,10 @@ def geometry_for_capacity(
     *,
     heads: int = 4,
     sectors_per_track: int = _SCSI_SECTORS_PER_TRACK,
-) -> _DSCGeometry:
+) -> ADFSGeometry:
     """Compute a disc geometry that meets or exceeds a requested capacity.
 
-    Returns a ``_DSCGeometry`` with the minimum number of cylinders
+    Returns a ``ADFSGeometry`` with the minimum number of cylinders
     needed to provide at least *capacity_bytes* of storage.
 
     Args:
@@ -235,14 +256,14 @@ def geometry_for_capacity(
 
     bytes_per_cylinder = heads * sectors_per_track * _ADFS_BYTES_PER_SECTOR
     cylinders = -(-capacity_bytes // bytes_per_cylinder)  # ceiling division
-    return _DSCGeometry(
+    return ADFSGeometry(
         cylinders=cylinders,
         heads=heads,
         sectors_per_track=sectors_per_track,
     )
 
 
-def _write_dsc(filepath: Union[str, PathLike], geometry: _DSCGeometry) -> None:
+def _write_dsc(filepath: Union[str, PathLike], geometry: ADFSGeometry) -> None:
     """Write a 22-byte .dsc sidecar file with SCSI disc geometry."""
     data = bytearray(_DSC_SIZE)
     data[3] = 0x08  # Speed class
@@ -1008,6 +1029,7 @@ def _initialise_old_root_directory(
 def _create_image_file(
     filepath: Path,
     fmt: ADFSFormat,
+    geometry: ADFSGeometry,
     title: str,
     boot_option: int,
 ) -> Iterator[ADFS]:
@@ -1028,7 +1050,7 @@ def _create_image_file(
         fsm = OldFreeSpaceMap(map_data)
         dir_format = OldDirectoryFormat()
 
-        adfs = ADFS(unified, dir_format, fsm)
+        adfs = ADFS(unified, dir_format, fsm, geometry)
         try:
             yield adfs
         finally:
@@ -1046,7 +1068,15 @@ def _create_floppy_file(
     """Create a floppy disc image file."""
     if adfs_format is None:
         raise ValueError("Floppy disc images require an adfs_format (ADFS_S, ADFS_M, or ADFS_L)")
-    with _create_image_file(filepath, adfs_format, title, boot_option) as adfs:
+    geom = _FLOPPY_GEOMETRY.get(adfs_format.total_bytes)
+    if geom is None:
+        spec = adfs_format.surface_specs[0]
+        geom = ADFSGeometry(
+            cylinders=spec.num_tracks,
+            heads=len(adfs_format.surface_specs),
+            sectors_per_track=spec.sectors_per_track,
+        )
+    with _create_image_file(filepath, adfs_format, geom, title, boot_option) as adfs:
         yield adfs
 
 
@@ -1078,7 +1108,7 @@ def _create_hard_disc_file(
             sectors_per_track=sectors_per_track,
         )
     elif cylinders is not None:
-        geometry = _DSCGeometry(
+        geometry = ADFSGeometry(
             cylinders=cylinders,
             heads=heads,
             sectors_per_track=sectors_per_track,
@@ -1097,7 +1127,7 @@ def _create_hard_disc_file(
     dsc_filepath = filepath.with_suffix(".dsc")
     _write_dsc(dsc_filepath, geometry)
 
-    with _create_image_file(dat_filepath, fmt, title, boot_option) as adfs:
+    with _create_image_file(dat_filepath, fmt, geometry, title, boot_option) as adfs:
         yield adfs
 
 
@@ -1122,10 +1152,12 @@ class ADFS:
         unified_disc: UnifiedDisc,
         dir_format: ADFSDirectoryFormat,
         fsm: OldFreeSpaceMap,
+        geometry: ADFSGeometry,
     ):
         self._disc = unified_disc
         self._dir_format = dir_format
         self._fsm = fsm
+        self._geometry = geometry
 
     # --- Named constructors ---
 
@@ -1181,7 +1213,7 @@ class ADFS:
             dat_mode = mode if ext == ".dat" else "rb"
             with open(dat_filepath, dat_mode) as f:
                 mm = mmap.mmap(f.fileno(), 0, access=access)
-                adfs = ADFS._from_buffer_with_format(memoryview(mm), fmt)
+                adfs = ADFS._from_buffer_with_format(memoryview(mm), fmt, geometry)
                 try:
                     yield adfs
                 finally:
@@ -1218,6 +1250,7 @@ class ADFS:
         """
         buf_size = len(buffer)
         fmt = _ADFS_FORMATS_BY_SIZE.get(buf_size)
+        geom = _FLOPPY_GEOMETRY.get(buf_size)
         if fmt is None:
             # Not a known floppy size — treat as flat hard disc image
             if buf_size % _ADFS_BYTES_PER_SECTOR != 0:
@@ -1245,11 +1278,16 @@ class ADFS:
                 total_bytes=buf_size,
                 label="HardDisc",
             )
-        return cls._from_buffer_with_format(buffer, fmt)
+            # Best effort for bare buffer with no .dsc — model as single
+            # cylinder so callers see a valid geometry.
+            geom = ADFSGeometry(cylinders=1, heads=1, sectors_per_track=total_sectors)
+        return cls._from_buffer_with_format(buffer, fmt, geom)
 
     @classmethod
-    def _from_buffer_with_format(cls, buffer: memoryview, fmt: ADFSFormat) -> ADFS:
-        """Create ADFS from a buffer with an explicit format."""
+    def _from_buffer_with_format(
+        cls, buffer: memoryview, fmt: ADFSFormat, geometry: ADFSGeometry,
+    ) -> ADFS:
+        """Create ADFS from a buffer with an explicit format and geometry."""
         disc_image = DiscImage(buffer, fmt.surface_specs)
         unified = UnifiedDisc(disc_image)
 
@@ -1260,7 +1298,7 @@ class ADFS:
         # Detect directory format from root signature
         dir_format = _detect_directory_format(unified)
 
-        return cls(unified, dir_format, fsm)
+        return cls(unified, dir_format, fsm, geometry)
 
     @classmethod
     def create(
@@ -1291,7 +1329,17 @@ class ADFS:
         fsm = OldFreeSpaceMap(map_data)
         dir_format = OldDirectoryFormat()
 
-        return cls(unified, dir_format, fsm)
+        geom = _FLOPPY_GEOMETRY.get(adfs_format.total_bytes)
+        if geom is None:
+            # Non-standard format — derive from surface specs.
+            spec = adfs_format.surface_specs[0]
+            geom = ADFSGeometry(
+                cylinders=spec.num_tracks,
+                heads=len(adfs_format.surface_specs),
+                sectors_per_track=spec.sectors_per_track,
+            )
+
+        return cls(unified, dir_format, fsm, geom)
 
     @staticmethod
     @contextmanager
@@ -1378,6 +1426,11 @@ class ADFS:
         return ADFSPath(self, path)
 
     # --- Disc-level metadata ---
+
+    @property
+    def geometry(self) -> ADFSGeometry:
+        """Authoritative disc geometry (cylinders, heads, sectors per track)."""
+        return self._geometry
 
     @property
     def title(self) -> str:

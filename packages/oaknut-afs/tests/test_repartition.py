@@ -23,9 +23,9 @@ from oaknut.afs.exceptions import (
 )
 from oaknut.afs.wfsinit import AFSSizeSpec, apply, plan
 
-# ADFS-L: 160 cylinders × 16 sectors = 2560 total sectors.
-_SPC = 16
-_TOTAL_CYLS = 160
+# ADFS-L: 80 cylinders × 2 heads × 16 spt = 2560 total sectors.
+_SPC = 32
+_TOTAL_CYLS = 80
 
 
 class TestPlanBasics:
@@ -35,7 +35,7 @@ class TestPlanBasics:
         # Empty disc: used = root dir + fsm = small. So AFS takes
         # almost all cylinders.
         assert p.start_cylinder + p.afs_cylinders == _TOTAL_CYLS
-        assert p.afs_cylinders > 150
+        assert p.afs_cylinders > 75
 
     def test_explicit_cylinders(self) -> None:
         adfs = ADFS.create(ADFS_L)
@@ -46,22 +46,22 @@ class TestPlanBasics:
 
     def test_explicit_sectors_rounds_up(self) -> None:
         adfs = ADFS.create(ADFS_L)
-        # Request 50 sectors — rounds up to 4 cylinders (64 sectors).
+        # Request 50 sectors — rounds up to 2 cylinders (64 sectors).
         p = plan(adfs, size=AFSSizeSpec.sectors(50))
-        assert p.afs_cylinders == 4
+        assert p.afs_cylinders == 2
         assert p.total_afs_sectors == 64
 
     def test_explicit_bytes_rounds_up(self) -> None:
         adfs = ADFS.create(ADFS_L)
         p = plan(adfs, size=AFSSizeSpec.bytes_(50_000))
-        # 50000 / 256 = 195.3125 → 196 sectors → 13 cylinders (208 sec)
-        assert p.afs_cylinders == 13
+        # 50000 / 256 = 195.3 sectors → ceil(195.3/32) = 7 cylinders
+        assert p.afs_cylinders == 7
 
     def test_ratio_half_half(self) -> None:
         adfs = ADFS.create(ADFS_L)
         p = plan(adfs, size=AFSSizeSpec.ratio(afs=1, adfs=1))
         # Roughly half the available cylinders.
-        assert 70 < p.afs_cylinders < 90
+        assert 35 < p.afs_cylinders < 45
 
     def test_sec1_sec2_positions(self) -> None:
         adfs = ADFS.create(ADFS_L)
@@ -100,7 +100,7 @@ class TestApply:
 
     def test_apply_max_keeps_disc_valid(self) -> None:
         adfs = ADFS.create(ADFS_L)
-        p = plan(adfs, size=AFSSizeSpec.cylinders(100))
+        p = plan(adfs, size=AFSSizeSpec.cylinders(50))
         apply(adfs, p)
         # Free space map must still be parseable and pass
         # checksum validation.

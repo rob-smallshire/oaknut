@@ -61,7 +61,7 @@ def initialise(adfs: "ADFS", *, spec: InitSpec) -> None:
     # partition, because the info sector records the total cylinder
     # count of the underlying physical disc, not the shrunken ADFS
     # view.
-    physical_spc, physical_total_cyls = _partition._infer_cylinder_geometry(adfs)
+    physical_spc, physical_total_cyls = _partition._cylinder_geometry(adfs)
 
     # ---- Step 1: repartition ----
     if spec.repartition:
@@ -78,9 +78,7 @@ def initialise(adfs: "ADFS", *, spec: InitSpec) -> None:
     else:
         sec1, sec2 = adfs._fsm.afs_info_pointers
         if sec1 == 0 or sec2 == 0:
-            raise ValueError(
-                "spec.repartition=False but no AFS pointers are installed"
-            )
+            raise ValueError("spec.repartition=False but no AFS pointers are installed")
         start_cylinder = sec1 // physical_spc
         afs_cylinders = physical_total_cyls - start_cylinder
 

@@ -28,7 +28,7 @@ class TestInitialise:
         afs = adfs.afs_partition
         assert afs is not None
         assert afs.disc_name == "TestDisc"
-        assert afs.start_cylinder == 160 - 20
+        assert afs.start_cylinder == 80 - 20
 
     def test_initialised_users_visible(self) -> None:
         adfs = ADFS.create(ADFS_L)

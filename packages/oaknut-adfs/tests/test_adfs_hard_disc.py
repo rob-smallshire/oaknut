@@ -47,9 +47,9 @@ class TestParseDSC:
 
 class TestHardDiscFormat:
     def test_format_from_geometry(self):
-        from oaknut.adfs.adfs import _DSCGeometry
+        from oaknut.adfs.adfs import ADFSGeometry
 
-        geom = _DSCGeometry(cylinders=306, heads=4)
+        geom = ADFSGeometry(cylinders=306, heads=4)
         dat_size = 306 * 4 * 33 * 256  # Full size
         fmt = _hard_disc_format(geom, dat_size)
         # Single surface — ADFS uses linear LBA for hard discs
@@ -59,9 +59,9 @@ class TestHardDiscFormat:
 
     def test_format_uses_cylinder_geometry(self):
         """Cylinders reflect heads × sectors_per_track grouped together."""
-        from oaknut.adfs.adfs import _DSCGeometry
+        from oaknut.adfs.adfs import ADFSGeometry
 
-        geom = _DSCGeometry(cylinders=10, heads=2)
+        geom = ADFSGeometry(cylinders=10, heads=2)
         dat_size = 10 * 2 * 33 * 256
         fmt = _hard_disc_format(geom, dat_size)
         spec = fmt.surface_specs[0]
@@ -71,18 +71,18 @@ class TestHardDiscFormat:
 
     def test_format_truncated_dat(self):
         """A .dat smaller than full geometry uses fewer cylinders."""
-        from oaknut.adfs.adfs import _DSCGeometry
+        from oaknut.adfs.adfs import ADFSGeometry
 
-        geom = _DSCGeometry(cylinders=306, heads=4)
+        geom = ADFSGeometry(cylinders=306, heads=4)
         # Only 10 complete cylinders of data
         dat_size = 10 * 4 * 33 * 256
         fmt = _hard_disc_format(geom, dat_size)
         assert fmt.surface_specs[0].num_tracks == 10
 
     def test_format_not_multiple_of_sector_raises(self):
-        from oaknut.adfs.adfs import _DSCGeometry
+        from oaknut.adfs.adfs import ADFSGeometry
 
-        geom = _DSCGeometry(cylinders=10, heads=1)
+        geom = ADFSGeometry(cylinders=10, heads=1)
         with pytest.raises(ADFSError):
             _hard_disc_format(geom, 1000)  # Not a multiple of 256
 
