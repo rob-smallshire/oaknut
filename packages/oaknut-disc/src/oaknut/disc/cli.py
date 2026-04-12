@@ -358,19 +358,21 @@ def _tree_whole_image(image_filepath: Path) -> None:
     with _open_adfs(image_filepath) as adfs:
         afs = adfs.afs_partition
         if afs is None:
-            # Single ADFS partition — show contents directly under filename.
+            # Single ADFS partition — show $ root under filename.
             click.echo(image_filepath.name)
-            _print_tree(adfs.root, "", False)
+            click.echo("└── $")
+            _print_tree(adfs.root, "    ", False)
         else:
             # Dual partition — ADFS and AFS as children of filename.
             click.echo(image_filepath.name)
-            entries: list[tuple[str, object]] = [("ADFS", adfs.root), ("AFS", afs.root)]
-            for i, (label, root) in enumerate(entries):
-                is_last = i == len(entries) - 1
+            partitions: list[tuple[str, object]] = [("ADFS", adfs.root), ("AFS", afs.root)]
+            for i, (label, root) in enumerate(partitions):
+                is_last = i == len(partitions) - 1
                 connector = "└── " if is_last else "├── "
                 click.echo(f"{connector}{label}")
                 extension = "    " if is_last else "│   "
-                _print_tree(root, extension, False)
+                click.echo(f"{extension}└── $")
+                _print_tree(root, extension + "    ", False)
 
 
 def _print_tree(node, prefix: str, is_root: bool) -> None:
