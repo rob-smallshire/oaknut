@@ -172,8 +172,10 @@ def open_image_for_afs_write(image_filepath: Path) -> Iterator:
 def _navigate(handle, bare_path: str, fs: FilingSystem):
     """Navigate to a path within the filesystem handle.
 
-    Returns the path object at *bare_path*, or the root when
-    *bare_path* is empty.
+    Returns the path object at *bare_path*, or the default root when
+    *bare_path* is empty. For DFS, the default root is ``$`` (the
+    directory that actually contains files), not the virtual root
+    above it.
     """
     if not bare_path:
         return handle.root
@@ -224,7 +226,7 @@ def ls(image: Path, path: str | None) -> None:
     with open_image(image, fs) as handle:
         target = _navigate(handle, bare, fs)
 
-        if not target.exists():
+        if not target.exists() and not target.is_dir():
             raise click.ClickException(f"path not found: {bare or '$'}")
 
         if target.is_file():
@@ -294,7 +296,7 @@ def tree(image: Path, path: str | None) -> None:
     fs, bare = resolve_path(image, path)
     with open_image(image, fs) as handle:
         root = _navigate(handle, bare, fs)
-        if not root.exists():
+        if not root.exists() and not root.is_dir():
             raise click.ClickException(f"path not found: {bare or '$'}")
         _print_tree(root, "", True)
 
@@ -1058,10 +1060,11 @@ def afs_useradd(
 ) -> None:
     """Add a user to the AFS passwords file."""
     with open_image_for_afs_write(image) as (adfs, afs):
-        afs.users.add(name, system=system, password=password)
-        if quota is not None:
-            user = afs.users.find(name)
-            user.free_space = quota
+        new_passwords = afs.users.with_added(
+            name, system=system, password=password,
+            quota=quota or 0,
+        )
+        afs._update_passwords_on_disc(new_passwords)
         afs.flush()
     click.echo(f"Added user '{name}'")
 
@@ -1072,7 +1075,8 @@ def afs_useradd(
 def afs_userdel(image: Path, name: str) -> None:
     """Remove a user from the AFS passwords file."""
     with open_image_for_afs_write(image) as (adfs, afs):
-        afs.users.remove(name)
+        new_passwords = afs.users.with_removed(name)
+        afs._update_passwords_on_disc(new_passwords)
         afs.flush()
     click.echo(f"Removed user '{name}'")
 
