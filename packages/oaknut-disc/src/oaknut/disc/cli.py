@@ -339,23 +339,19 @@ def tree(image: Path, path: str | None) -> None:
         _print_tree(root, "", True)
 
 
-def _print_tree(node, prefix: str, is_last: bool) -> None:
+def _print_tree(node, prefix: str, is_root: bool) -> None:
     """Recursive Unicode box-drawing tree printer."""
-    if prefix:
-        connector = "└── " if is_last else "├── "
-        click.echo(f"{prefix}{connector}{node.name}")
-    else:
+    if is_root:
         click.echo(node.name)
-
     if node.is_dir():
         children = list(node.iterdir())
         for i, child in enumerate(children):
-            is_child_last = i == len(children) - 1
-            if prefix:
+            is_last = i == len(children) - 1
+            connector = "└── " if is_last else "├── "
+            click.echo(f"{prefix}{connector}{child.name}")
+            if child.is_dir():
                 extension = "    " if is_last else "│   "
-            else:
-                extension = ""
-            _print_tree(child, prefix + extension, is_child_last)
+                _print_tree(child, prefix + extension, False)
 
 
 @cli.command()
