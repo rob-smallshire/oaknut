@@ -115,22 +115,25 @@ Guidance for working on the codebase lives in [`CLAUDE.md`](CLAUDE.md) at the wo
 
 ## Installing from PyPI
 
-Each library package is independently installable:
+Install the whole family with [`uv`](https://github.com/astral-sh/uv):
 
 ```sh
-pip install oaknut-file
-pip install oaknut-basic
-pip install oaknut-dfs
-pip install oaknut-adfs
-pip install oaknut-zip
-pip install oaknut-afs
-pip install oaknut-disc
+uv add oaknut
 ```
 
-Or install the whole family via the meta-distribution:
+Or install individual packages as needed:
 
 ```sh
-pip install oaknut
+uv add oaknut-dfs        # DFS floppy images only
+uv add oaknut-adfs       # ADFS floppy and hard disc images
+uv add oaknut-disc       # the disc CLI tool
+```
+
+With pip:
+
+```sh
+pip install oaknut        # everything
+pip install oaknut-disc   # just the CLI
 ```
 
 ## Documentation
