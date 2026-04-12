@@ -187,6 +187,14 @@ class AFS:
         shadow = self._bitmap_shadow()
         return shadow.total_free()
 
+    def compact(self) -> int:
+        """Defragment the AFS region, consolidating free space.
+
+        Raises:
+            NotImplementedError: AFS compaction is not yet implemented.
+        """
+        raise NotImplementedError("AFS compaction is not yet implemented")
+
     # ------------------------------------------------------------------
     # Read primitives
     # ------------------------------------------------------------------
@@ -254,9 +262,7 @@ class AFS:
         raw = self._read_object_bytes(sin)
         return AfsDirectory.from_bytes(raw)
 
-    def _resolve(
-        self, path: AFSPath
-    ) -> tuple[AfsDirectory, DirectoryEntry]:
+    def _resolve(self, path: AFSPath) -> tuple[AfsDirectory, DirectoryEntry]:
         """Walk ``path`` from the root and return (parent_dir, entry).
 
         Raises :class:`AFSPathError` if any component is missing or
@@ -277,9 +283,7 @@ class AFS:
             if is_last:
                 return current_dir, entry
             if not entry.is_directory:
-                raise AFSPathError(
-                    f"component {name!r} of path {path} is a file, not a directory"
-                )
+                raise AFSPathError(f"component {name!r} of path {path} is a file, not a directory")
             current_dir = self._read_directory(entry.sin)
         # Unreachable given the loop structure, but keeps the type
         # checker happy.
@@ -327,9 +331,7 @@ class AFS:
         the underlying disc is untouched.
         """
         if len(data) != MAP_SECTOR_SIZE:
-            raise ValueError(
-                f"sector write must be {MAP_SECTOR_SIZE} bytes, got {len(data)}"
-            )
+            raise ValueError(f"sector write must be {MAP_SECTOR_SIZE} bytes, got {len(data)}")
         if sector < 0 or sector >= self._disc.num_sectors:
             raise AFSError(
                 f"sector {sector:#x} outside disc range 0..{self._disc.num_sectors - 1:#x}"

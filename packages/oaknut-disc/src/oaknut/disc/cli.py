@@ -1126,13 +1126,11 @@ def compact(image: Path) -> None:
     """Defragment a disc image, consolidating free space."""
     fs = detect_filing_system(image)
     with open_image(image, fs, mode="r+b") as handle:
-        if hasattr(handle, "compact"):
+        try:
             count = handle.compact()
-            click.echo(f"Compacted {count} object(s)")
-        else:
-            raise click.ClickException(
-                f"compact is not yet implemented for {fs.value.upper()} images"
-            )
+        except NotImplementedError as exc:
+            raise click.ClickException(str(exc))
+        click.echo(f"Compacted {count} object(s)")
 
 
 # ---------------------------------------------------------------------------
