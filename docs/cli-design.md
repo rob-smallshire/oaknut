@@ -1,12 +1,18 @@
-# oaknut-dfs CLI — Design Document
+# oaknut `disc` CLI — Design Document
 
-**Status:** draft for iteration. Nothing here is decided — flag anything you want to change. Amend this file in place; commit history is the discussion log.
+**Status:** draft for iteration, updated 2026-04-12 to account for `oaknut-afs`. Nothing here is decided — flag anything you want to change. Amend this file in place; commit history is the discussion log.
 
 ## Context
 
-`oaknut-dfs` currently ships as a library only. The `pyproject.toml` entry point is commented out and there is no `cli.py`. The library's public API is substantial — DFS and ADFS images, catalogue/path operations, the `host_bridge` module with full `MetaFormat` coverage, and `basic.py` stubs for BBC BASIC tokenisation — and we now want a user-facing Click CLI that exposes all of it and feels consistent with `oaknut-zip`'s existing CLI.
+The oaknut monorepo now ships library packages for three Acorn filesystem families:
 
-The scope covers 25 operations: import/export (single file and bulk, with metadata), moving/renaming/copying within and between images (including DFS↔ADFS), cataloguing and tree display, metadata inspection and editing, attribute changes, image creation, deletion (files and empty directories), finding, wildcards, compaction, free-space reporting and visualisation, validation, Acorn path syntax, stdin/stdout streaming, boot option, and title management.
+- **DFS** (and variants: Watford DDFS, Opus DDOS) — flat-catalogue BBC/Electron floppies.
+- **ADFS** — hierarchical directories, free space maps, hard-disc images.
+- **AFS** — the Level 3 File Server's private on-disc format (`AFS0` magic), living in the tail cylinders of an old-map ADFS hard-disc image.
+
+We want a unified `disc` CLI that exposes all three surfaces and feels consistent with `oaknut-zip`'s existing CLI.
+
+The scope covers the original 25 DFS/ADFS operations plus AFS-specific operations: initialisation (the WFSINIT analogue), user management (passwords file), library merges, and transparent AFS-through-ADFS access where an ADFS disc carries an AFS partition. An interim standalone CLI (`oaknut-afs-disc`, shipped in phase 21 of the `oaknut-afs` build) already provides basic `info`/`ls`/`cat`/`put`/`initialise` subcommands for AFS; the unified `disc` tool subsumes it.
 
 This document's job is to agree on **shape** before we build: naming conventions, command surface, TTY/output policy, error model, and which library gaps must be closed before which commands can ship.
 
@@ -26,7 +32,7 @@ Until the monorepo migration completes, this document is the agreed shape; no CL
 ## Guiding principles
 
 1. **One binary, flat subcommand surface**, `git`-style. `disc <verb> <image> [args]`. No nested groups. (See "Binary name" below.)
-2. **Consistent across DFS and ADFS.** The binary detects the format of the image on open and dispatches internally; users shouldn't have to know whether to reach for a DFS-specific or ADFS-specific command. Where operations are only meaningful for one format (e.g. `rmdir`, `mkdir`), the command errors cleanly on the other with a "not supported for DFS images" message.
+2. **Consistent across DFS, ADFS, and AFS.** The binary detects the format of the image on open and dispatches internally; users shouldn't have to know whether to reach for a format-specific command. Where operations are only meaningful for one format (e.g. `rmdir` on DFS, `afs-init` on a non-ADFS image), the command errors cleanly with a "not supported for … images" message. For ADFS images that carry an AFS tail partition, the `--afs` flag (or automatic detection via `ADFS.afs_partition`) lets commands reach into the AFS tree transparently — `disc ls image.dat --afs` lists the AFS root instead of the ADFS root.
 3. **Mirror oaknut-zip's feel.** Click group, plain `click.echo` for scriptable output, Rich `Table` / `Tree` / `Panel` only where a human is clearly the audience (`ls`, `tree`, `info`, `freemap`). Lazy Rich imports inside the relevant commands so the fast-path commands don't pay for Rich startup.
 4. **Pipe-friendly.** Every command that reads or writes file data accepts `-` as the host-side path to mean stdin/stdout. This is a single convention applied uniformly, not a per-command flag.
 5. **Acorn-syntax paths in-image, host paths host-side.** In-image arguments look like `$.DIR.FILE`, `^.SIB`, `Games.Elite`, and are parsed by the in-image path machinery. Host-side paths are plain host paths. Ambiguity is resolved by position: the first arg after the image is always an in-image path; any `-o`/`-d`/`-i`/`--to` option is always a host path. See `cp` below for the cross-image case.
@@ -47,17 +53,20 @@ oaknut-disc ls foo.ssd
 
 ### Package layout
 
-The CLI lives in a new `oaknut-disc` package created during the monorepo migration. The `oaknut-dfs` package today over-sells its name by handling both DFS *and* ADFS; the eventual library shape is:
+The CLI lives in a new `oaknut-disc` package inside the monorepo. The monorepo migration and the library splits are done; the current shape is:
 
 | Package | Scope |
 |---|---|
-| `oaknut-file` | Shared metadata (already shipped) |
-| `oaknut-dfs` | DFS / Watford DDFS / Opus DDOS only |
-| `oaknut-adfs` | ADFS only (extracted from today's `oaknut-dfs`) |
-| `oaknut-basic` | BBC BASIC tokeniser (extracted from today's `oaknut_dfs.basic`) |
-| `oaknut-disc` | CLI only — depends on `oaknut-dfs`, `oaknut-adfs`, optionally `oaknut-zip` and `oaknut-basic` |
+| `oaknut-file` | Shared metadata, `host_bridge`, `Access`, `BootOption`, `FSError` base |
+| `oaknut-discimage` | `Surface`, `SectorsView`, `UnifiedDisc` |
+| `oaknut-basic` | BBC BASIC tokeniser/detokeniser |
+| `oaknut-dfs` | DFS / Watford DDFS / Opus DDOS |
+| `oaknut-adfs` | ADFS — hierarchical directories, free space maps, hard-disc images, `ADFS.afs_partition` |
+| `oaknut-afs` | AFS — the Level 3 File Server's on-disc format. Read/write, `wfsinit` init/partition, merge, host-tree import, shipped library images. Ships an interim `oaknut-afs-disc` CLI entry point |
+| `oaknut-zip` | ZIP archives containing Acorn files |
+| `oaknut-disc` | **Unified CLI** — depends on all library packages; `oaknut-zip` optional |
 
-The library splits (`oaknut-adfs`, `oaknut-basic`) are a separate downstream refactor that happens *after* the CLI work, not before. While `oaknut-dfs` is still fat (containing the ADFS code), the CLI just depends on `oaknut-dfs` and uses both surfaces through its public API. When the splits happen later, `oaknut-disc`'s dependency list grows to add `oaknut-adfs` and `oaknut-basic`, and no CLI code changes.
+`oaknut-afs` already ships `oaknut-afs-disc` as a standalone entry point with `info`/`ls`/`cat`/`put`/`initialise`. When the unified `disc` tool ships, it subsumes those subcommands and `oaknut-afs-disc` becomes an alias or is retired.
 
 ---
 
@@ -117,8 +126,8 @@ Grouped by category here for readability; actual `--help` output is a single fla
 |---|---|---|
 | `ls IMAGE [PATH]` (alias `*cat`) | List a directory catalogue as a Rich table | Default PATH is root |
 | `tree IMAGE [PATH]` | Recursive Unicode box-drawing tree | Uses the same technique as `oaknut-zip`'s `_tree_display_names` |
-| `stat IMAGE [PATH]` (alias `*info`) | Whole-disc summary when PATH is omitted (title, boot option, sector count, free space, file count, format detected — Rich panel). Single-file metadata when PATH is given (load, exec, length, attr, filetype — plain text, scriptable). | The two output styles are dispatched by the presence of PATH. |
-| `freemap IMAGE` | Free-space map with ASCII fragmentation visualisation | ADFS: real regions; DFS: single trailing block |
+| `stat IMAGE [PATH]` (alias `*info`) | Whole-disc summary when PATH is omitted (title, boot option, sector count, free space, file count, format detected — Rich panel). With `afs:` prefix and no path, shows AFS disc name, geometry, start cylinder, free sectors, and user list. Single-file metadata when PATH is given (load, exec, length, attr, filetype — plain text, scriptable). | The two output styles are dispatched by the presence of PATH. |
+| `freemap IMAGE` | Free-space map with ASCII fragmentation visualisation | ADFS: real regions; DFS: single trailing block; `freemap IMAGE --afs` or `freemap IMAGE afs:` shows per-cylinder AFS bitmap occupancy. |
 | `validate IMAGE` | Run `DFS.validate()` / `ADFS.validate()`, report errors, exit 0 or 1 | |
 | `find IMAGE PATTERN` | Glob files in-image by Acorn-style wildcard (`*` and `?`) | |
 | `cat IMAGE PATH` (alias `*type`) | Dump file contents to stdout (Unix `cat`, MOS `*TYPE`) | Equivalent to `get IMAGE PATH -` |
@@ -150,8 +159,8 @@ Grouped by category here for readability; actual `--help` output is a single fla
 
 | Command | Purpose |
 |---|---|
-| `create HOST_PATH --format ...` | Create a new empty disc image. Options: `--format ssd/dsd/adfs-s/adfs-m/adfs-l/adfs-hard --capacity N`. |
-| `compact IMAGE` | Defragment. |
+| `create HOST_PATH --format ...` | Create a new empty disc image. Options: `--format ssd/dsd/adfs-s/adfs-m/adfs-l/adfs-hard --capacity N`. For hard-disc images that will carry AFS, follow `create` with `afs-init`. |
+| `compact IMAGE` | Defragment (ADFS). AFS regions do not have a separate compaction step; `ADFS.compact()` moves ADFS data forward to free tail space for AFS. |
 
 ---
 
@@ -170,6 +179,45 @@ In-image path arguments accept:
 - CSD: `@` (equal to `$` at top level; meaningful only if we support `--cd` to set a CSD, which is deferred)
 
 Library prerequisite: we need to add `^`/`@` parsing to the in-image path machinery, or have the CLI parse them and resolve to absolute before handing off to the library. Preference: the CLI does it — keeps the library path types pure — with a shared helper in `cli_paths.py`.
+
+### Dual-partition addressing (ADFS + AFS)
+
+A single hard-disc image (`.dat`/`.dsc`) can carry both an ADFS partition in its front cylinders and an AFS partition in its tail. The two share the same physical disc but expose different directory trees, different metadata models (ADFS has filetype stamping; AFS has user/quota), and different path rules (AFS names max 10 chars, no spaces).
+
+The CLI resolves this using the **Acorn filing-system prefix convention**. On real Acorn hardware, paths were qualified by prefixing the filing system name — `ADFS::HardDisc4.$.Games`, `NET::Server.$.Library`. We adopt the same idiom with a `FS:` prefix on in-image paths:
+
+```sh
+disc ls scsi0.dat                        # default: ADFS root
+disc ls scsi0.dat adfs:$                 # explicit: ADFS root
+disc ls scsi0.dat afs:$                  # AFS root
+disc ls scsi0.dat afs:$.Library          # AFS subdirectory
+disc cat scsi0.dat afs:$.Library.Fs      # read a file from AFS
+disc put scsi0.dat afs:$.NewFile src.bin # write into AFS
+disc stat scsi0.dat afs:                 # AFS disc-level info (name, geometry, users)
+```
+
+The filing-system prefix is parsed by the CLI's `cli_paths.py` module before the path is handed to the library:
+
+- **No prefix** → ADFS (for hard discs) or DFS (for floppies), auto-detected from image format. This is the common case and matches the existing DFS/ADFS design.
+- **`adfs:`** → explicit ADFS. Useful for disambiguation when scripting.
+- **`afs:`** → the AFS tail partition. The CLI opens the image as ADFS, calls `ADFS.afs_partition`, and operates on the resulting `AFS` handle. Errors cleanly if no AFS pointers are present.
+- **`dfs:`** → explicit DFS (for the rare case where format detection is ambiguous).
+
+The prefix is case-insensitive (`AFS:`, `afs:`, `Afs:` all work). The `::disc.` form from Acorn's multi-disc syntax is not needed — we have one image per command invocation — but could be added later if multi-image workflows arise.
+
+**AFS-specific commands** that have no ADFS/DFS counterpart use the `afs-` prefix and always operate on the AFS partition:
+
+| Command | Purpose |
+|---|---|
+| `afs-init IMAGE --disc-name NAME [--cylinders N] [--user NAME[:S]] …` | Partition + initialise an AFS region (wraps `wfsinit.initialise`). |
+| `afs-users IMAGE` | List active users with quota, system flag, boot option. |
+| `afs-useradd IMAGE NAME [--system] [--quota N] [--password PWD]` | Add a user to the passwords file. |
+| `afs-userdel IMAGE NAME` | Remove a user (tombstone the slot). |
+| `afs-merge IMAGE --source SOURCE_IMAGE [--target-path PATH]` | Merge a source AFS subtree into the target. |
+
+These do not have Acorn star-aliases (the Level 3 File Server's admin interface was over Econet, not local `*` commands).
+
+**Paths within the AFS partition** use `$.DIR.FILE` syntax with `.` as separator, just like ADFS. The 10-char / no-space name rules are enforced by `AFSPath` in the library. Users accustomed to ADFS paths will find AFS paths nearly identical.
 
 ### Wildcards
 
@@ -209,20 +257,36 @@ Every command that exports or imports takes `--meta-format` with the same choice
 
 ## Library prerequisites
 
-From the API inventory, **11 of the 25 requirements are directly wrap-able today; 5 are partial; 9 are missing**. Before the CLI can cover the full surface, the library needs these additions. We'd add them smallest first, with each landing as its own commit so the CLI PR can stack cleanly on top.
+The following additions are needed. Status updated 2026-04-12.
 
-| # | Addition | Size | Which CLI command needs it |
-|---|---|---|---|
-| L1 | Acorn wildcard matcher (`?` / `*`) as a small utility module | S | `find`, `rm PATTERN`, `ls PATTERN` |
-| L2 | `DFSPath.glob(pattern)` / `ADFSPath.glob(pattern)` returning iterators | S | `find` |
-| L3 | `DFSPath.copy(target)` / `ADFSPath.copy(target)` (within-image) | S | `cp` |
-| L4 | `DFSPath.set_load_address(addr)` / `set_exec_address(addr)` — catalogue update without data rewrite | M | `setload`, `setexec` |
-| L5 | `ADFSPath.set_load_address` / `set_exec_address` (same) | M | `setload`, `setexec` |
-| L6 | `DFS.import_directory(host_dir)` / `ADFS.import_directory(host_dir)` — bulk importer mirroring `export_all` | M | `import` |
-| L7 | Cross-format copy helper in `host_bridge` (or new module) that reads from one image and writes to another, mapping attributes best-effort | M | `cp` cross-image |
-| L8 | Public `free_space_regions()` on both DFS and ADFS, returning `[(start_sector, length_sectors), …]`. DFS returns a single region; ADFS exposes the real map. | S | `freemap` |
-| L9 | `ADFSPath.rmdir(recursive=True)` or a new `ADFSPath.rmtree()` for the `rm -r` case | M | `rm -r` |
-| L10 | Parity check: ensure `ADFS.export_all` exists and matches the DFS surface | S | `export` |
+| # | Addition | Size | Status | Which CLI command needs it |
+|---|---|---|---|---|
+| L1 | Acorn wildcard matcher (`?` / `*`) as a small utility module | S | TODO | `find`, `rm PATTERN`, `ls PATTERN` |
+| L2 | `DFSPath.glob(pattern)` / `ADFSPath.glob(pattern)` returning iterators | S | TODO | `find` |
+| L3 | `DFSPath.copy(target)` / `ADFSPath.copy(target)` (within-image) | S | TODO | `cp` |
+| L4 | `DFSPath.set_load_address(addr)` / `set_exec_address(addr)` — catalogue update without data rewrite | M | TODO | `setload`, `setexec` |
+| L5 | `ADFSPath.set_load_address` / `set_exec_address` (same) | M | TODO | `setload`, `setexec` |
+| L6 | `DFS.import_directory(host_dir)` / `ADFS.import_directory(host_dir)` — bulk importer mirroring `export_all` | M | TODO | `import` |
+| L7 | Cross-format copy helper in `host_bridge` (or new module) that reads from one image and writes to another, mapping attributes best-effort | M | TODO | `cp` cross-image |
+| L8 | Public `free_space_regions()` on both DFS and ADFS, returning `[(start_sector, length_sectors), …]`. DFS returns a single region; ADFS exposes the real map. | S | TODO | `freemap` |
+| L9 | `ADFSPath.rmdir(recursive=True)` or a new `ADFSPath.rmtree()` for the `rm -r` case | M | TODO | `rm -r` |
+| L10 | Parity check: ensure `ADFS.export_all` exists and matches the DFS surface | S | TODO | `export` |
+| L11 | Filing-system prefix parser (`afs:`, `adfs:`, `dfs:`) in `cli_paths.py` — strips the prefix and returns a partition selector + bare path | S | TODO | all commands with dual-partition images |
+
+**AFS library prerequisites — already landed:**
+
+| # | Addition | Status |
+|---|---|---|
+| A1 | `AFS.from_file`, `ADFS.afs_partition` — read-path entry points | Done (phase 6) |
+| A2 | `AFSPath.read_bytes`, `.write_bytes`, `.mkdir`, `.unlink`, `.iterdir`, `.stat` | Done (phases 6, 11-13) |
+| A3 | `wfsinit.partition.plan` / `.apply` + `wfsinit.initialise` | Done (phases 15, 19) |
+| A4 | `PasswordsFile` mutation surface (add / remove / quota / password / boot / system) | Done (phase 14) |
+| A5 | `merge(target, source, ...)` AFS → AFS subtree copy | Done (phase 16) |
+| A6 | `import_host_tree(target, source=, ...)` | Done (phase 18) |
+| A7 | `LibraryImage` enum + shipped `.img` assets | Done (phases 17, follow-up 3) |
+| A8 | Allocator with chain-expanding writes | Done (phases 8, follow-up 1) |
+| A9 | Transactional flush (buffered `_write_sector`, commit/discard on exit) | Done (follow-up 2) |
+| A10 | Quota enforcement (`_debit_quota` / `_credit_quota` on create/delete) | Done (follow-up 5) |
 
 **Not on the critical path** — we can ship v1 without them:
 
@@ -292,10 +356,12 @@ build-backend = "setuptools.build_meta"
 name = "oaknut-disc"
 requires-python = ">= 3.11"
 dynamic = ["version"]
-description = "CLI for working with Acorn DFS and ADFS disc images."
+description = "CLI for working with Acorn DFS, ADFS, and AFS disc images."
 dependencies = [
     "oaknut-file>=1.0",
     "oaknut-dfs>=4.0",
+    "oaknut-adfs>=1.0",
+    "oaknut-afs>=0.1",
     "click>=8.1.7",
     "rich>=13.0",
 ]
