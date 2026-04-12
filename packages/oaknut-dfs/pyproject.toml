@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "oaknut-dfs"
 dynamic = ["version"]
 authors = [{ name = "Robert Smallshire", email = "robert@smallshire.org.uk" }]
-description = "Python library for handling Acorn DFS disc images (SSD/DSD format) and ADFS disc images"
+description = "Python library for handling Acorn DFS disc images (SSD/DSD format)"
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]

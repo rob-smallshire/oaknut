@@ -14,6 +14,7 @@ This repository is a [`uv`](https://github.com/astral-sh/uv) workspace monorepo 
 from oaknut.file import AcornMeta, MetaFormat
 from oaknut.dfs import DFS
 from oaknut.adfs import ADFS
+from oaknut.afs import AFS
 from oaknut.basic import tokenise
 from oaknut.zip import extract_archive
 ```
@@ -26,7 +27,7 @@ from oaknut.zip import extract_archive
 | [`{{ pkg.name }}`](packages/{{ pkg.name }}/) | `{{ pkg.import_path }}` | {{ pkg.description }} |
 {%- endfor %}
 
-The dependency arrows run strictly bottom-up: `file → {discimage, basic} → {dfs, adfs, zip}`. `oaknut-dfs` and `oaknut-adfs` are independent siblings — neither depends on the other.
+The dependency arrows run strictly bottom-up: `file → discimage → {dfs, adfs} → afs`, with `basic` feeding into `dfs` and `adfs`, and `zip` depending only on `file`. The `disc` CLI package depends on all library packages.
 
 ## Quickstart: opening a disc
 
@@ -35,6 +36,29 @@ The dependency arrows run strictly bottom-up: `file → {discimage, basic} → {
 ## Quickstart: Acorn file metadata
 
 {{ example("file_metadata") }}
+
+## The `disc` CLI
+
+The `oaknut-disc` package provides a unified command-line tool for working with Acorn disc images:
+
+```sh
+# List contents of a DFS floppy
+disc ls games.ssd '$'
+
+# Copy a file between a DFS floppy and an ADFS hard disc
+disc cp games.ssd:'$.ELITE' scsi0.dat:'$.Elite'
+
+# Create and initialise a Level 3 File Server disc
+disc create scsi0.dat --format adfs-hard --capacity 10MiB --title Server
+disc afs-init scsi0.dat --disc-name Server --cylinders 309 \
+  --user Syst:S --user RJS:2MiB \
+  --emplace Library --emplace Library1
+
+# View both ADFS and AFS partitions
+disc tree scsi0.dat
+```
+
+The tool supports DFS, ADFS, and AFS transparently, with filing-system prefix dispatch (`afs:$`, `adfs:$`, `dfs:$`) for dual-partition images. Acorn star-aliases (`*CAT`, `*DELETE`, `*RENAME`, etc.) are accepted alongside their Unix equivalents.
 
 ## Development
 
@@ -54,7 +78,7 @@ Guidance for working on the codebase lives in [`CLAUDE.md`](CLAUDE.md) at the wo
 Each library package is independently installable:
 
 ```sh
-{%- for pkg in packages if pkg.name != "oaknut-discimage" %}
+{%- for pkg in packages if pkg.name not in ("oaknut-discimage",) %}
 pip install {{ pkg.name }}
 {%- endfor %}
 ```
@@ -69,7 +93,7 @@ pip install oaknut
 
 - [`CLAUDE.md`](CLAUDE.md) — workspace conventions, development commands, test infrastructure
 - [`docs/monorepo.md`](docs/monorepo.md) — monorepo design and architectural target
-- [`docs/cli-design.md`](docs/cli-design.md) — design of the forthcoming `disc` CLI
+- [`docs/cli-design.md`](docs/cli-design.md) — design of the `disc` CLI
 
 ## Licence
 

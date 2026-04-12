@@ -8,6 +8,7 @@ This repository is a [`uv`](https://github.com/astral-sh/uv) workspace monorepo 
 from oaknut.file import AcornMeta, MetaFormat
 from oaknut.dfs import DFS
 from oaknut.adfs import ADFS
+from oaknut.afs import AFS
 from oaknut.basic import tokenise
 from oaknut.zip import extract_archive
 ```
@@ -19,11 +20,13 @@ from oaknut.zip import extract_archive
 | [`oaknut-file`](packages/oaknut-file/) | `oaknut.file` | Acorn file metadata handling: INF sidecars, filename encoding, xattrs, and access flags |
 | [`oaknut-discimage`](packages/oaknut-discimage/) | `oaknut.discimage` | Disc image sector abstractions shared by Acorn filesystem packages |
 | [`oaknut-basic`](packages/oaknut-basic/) | `oaknut.basic` | BBC BASIC tokeniser and detokeniser for Acorn 8-bit and 32-bit BASIC source files |
-| [`oaknut-dfs`](packages/oaknut-dfs/) | `oaknut.dfs` | Python library for handling Acorn DFS disc images (SSD/DSD format) and ADFS disc images |
+| [`oaknut-dfs`](packages/oaknut-dfs/) | `oaknut.dfs` | Python library for handling Acorn DFS disc images (SSD/DSD format) |
 | [`oaknut-adfs`](packages/oaknut-adfs/) | `oaknut.adfs` | Acorn ADFS disc image support for Archimedes, RISC OS, and BBC Master |
 | [`oaknut-zip`](packages/oaknut-zip/) | `oaknut.zip` | Work with ZIP files containing Acorn computer metadata |
+| [`oaknut-afs`](packages/oaknut-afs/) | `oaknut.afs` | Acorn Level 3 File Server (AFS) filesystem support — the private on-disc format WFSINIT prepares in the tail of an old-map ADFS disc |
+| [`oaknut-disc`](packages/oaknut-disc/) | `oaknut.disc` | CLI for working with Acorn DFS, ADFS, and AFS disc images |
 
-The dependency arrows run strictly bottom-up: `file → {discimage, basic} → {dfs, adfs, zip}`. `oaknut-dfs` and `oaknut-adfs` are independent siblings — neither depends on the other.
+The dependency arrows run strictly bottom-up: `file → discimage → {dfs, adfs} → afs`, with `basic` feeding into `dfs` and `adfs`, and `zip` depending only on `file`. The `disc` CLI package depends on all library packages.
 
 ## Quickstart: opening a disc
 
@@ -74,6 +77,29 @@ filetype-stamped:  True
 inferred filetype: 0xD94
 ```
 
+## The `disc` CLI
+
+The `oaknut-disc` package provides a unified command-line tool for working with Acorn disc images:
+
+```sh
+# List contents of a DFS floppy
+disc ls games.ssd '$'
+
+# Copy a file between a DFS floppy and an ADFS hard disc
+disc cp games.ssd:'$.ELITE' scsi0.dat:'$.Elite'
+
+# Create and initialise a Level 3 File Server disc
+disc create scsi0.dat --format adfs-hard --capacity 10MiB --title Server
+disc afs-init scsi0.dat --disc-name Server --cylinders 309 \
+  --user Syst:S --user RJS:2MiB \
+  --emplace Library --emplace Library1
+
+# View both ADFS and AFS partitions
+disc tree scsi0.dat
+```
+
+The tool supports DFS, ADFS, and AFS transparently, with filing-system prefix dispatch (`afs:$`, `adfs:$`, `dfs:$`) for dual-partition images. Acorn star-aliases (`*CAT`, `*DELETE`, `*RENAME`, etc.) are accepted alongside their Unix equivalents.
+
 ## Development
 
 ```sh
@@ -97,6 +123,8 @@ pip install oaknut-basic
 pip install oaknut-dfs
 pip install oaknut-adfs
 pip install oaknut-zip
+pip install oaknut-afs
+pip install oaknut-disc
 ```
 
 Or install the whole family via the meta-distribution:
@@ -109,7 +137,7 @@ pip install oaknut
 
 - [`CLAUDE.md`](CLAUDE.md) — workspace conventions, development commands, test infrastructure
 - [`docs/monorepo.md`](docs/monorepo.md) — monorepo design and architectural target
-- [`docs/cli-design.md`](docs/cli-design.md) — design of the forthcoming `disc` CLI
+- [`docs/cli-design.md`](docs/cli-design.md) — design of the `disc` CLI
 
 ## Licence
 
