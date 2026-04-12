@@ -45,11 +45,15 @@ def adfs_image_filepath(tmp_path: Path) -> Path:
     filepath = tmp_path / "test.adl"
     with ADFS.create_file(filepath, ADFS_L, title="TestADFS") as adfs:
         (adfs.root / "Hello").write_bytes(
-            b"Hello ADFS", load_address=0x1900, exec_address=0x8023,
+            b"Hello ADFS",
+            load_address=0x1900,
+            exec_address=0x8023,
         )
         (adfs.root / "Games").mkdir()
         (adfs.root / "Games" / "Elite").write_bytes(
-            b"Elite data", load_address=0x1100, exec_address=0x1100,
+            b"Elite data",
+            load_address=0x1100,
+            exec_address=0x1100,
         )
     return filepath
 
@@ -73,7 +77,9 @@ def afs_image_filepath(tmp_path: Path) -> Path:
     with ADFS.from_file(filepath, mode="r+b") as adfs:
         afs = adfs.afs_partition
         (afs.root / "Greeting").write_bytes(
-            b"Hello AFS", load_address=0, exec_address=0,
+            b"Hello AFS",
+            load_address=0,
+            exec_address=0,
         )
         afs.flush()
     return filepath

@@ -71,6 +71,7 @@ def _alias(acorn_name: str, unix_name: str) -> None:
 # DFS format detection (extension + file size)
 # ---------------------------------------------------------------------------
 
+
 def _detect_dfs_format(image_filepath: Path):
     """Detect DFS disc format from file extension and size."""
     from oaknut.dfs import (
@@ -92,14 +93,13 @@ def _detect_dfs_format(image_filepath: Path):
             return ACORN_DFS_40T_DOUBLE_SIDED_INTERLEAVED
         return ACORN_DFS_80T_DOUBLE_SIDED_INTERLEAVED
 
-    raise click.ClickException(
-        f"cannot detect DFS format for '{image_filepath.name}'"
-    )
+    raise click.ClickException(f"cannot detect DFS format for '{image_filepath.name}'")
 
 
 # ---------------------------------------------------------------------------
 # Image openers — context managers returning (fs_handle, filing_system)
 # ---------------------------------------------------------------------------
+
 
 @contextmanager
 def _open_dfs(image_filepath: Path, mode: str = "rb") -> Iterator:
@@ -203,6 +203,7 @@ def _navigate_afs(afs, bare_path: str):
 # Click group
 # ---------------------------------------------------------------------------
 
+
 @click.group(cls=AliasGroup)
 @click.version_option(version=__version__, prog_name="disc")
 def cli() -> None:
@@ -212,6 +213,7 @@ def cli() -> None:
 # ---------------------------------------------------------------------------
 # Inspection commands
 # ---------------------------------------------------------------------------
+
 
 @cli.command()
 @click.argument("image", type=click.Path(exists=True, path_type=Path))
@@ -369,13 +371,20 @@ def _stat_disc(image_filepath: Path, fs: FilingSystem) -> None:
         if fs is FilingSystem.DFS:
             lines.append(f"Title:       {handle.title}")
             from oaknut.file import BootOption
+
             boot = BootOption(handle.boot_option)
             lines.append(f"Boot option: {boot.name} ({boot.value})")
             lines.append("Format:      DFS")
             lines.append(f"Free:        {handle.free_sectors} sectors")
-            file_count = sum(1 for _ in handle.root.iterdir()
-                            for _ in [None]  # count all files
-                            ) if False else len(handle.files)
+            file_count = (
+                sum(
+                    1
+                    for _ in handle.root.iterdir()
+                    for _ in [None]  # count all files
+                )
+                if False
+                else len(handle.files)
+            )
             lines.append(f"Files:       {file_count}")
         elif fs is FilingSystem.AFS:
             lines.append(f"Disc name:      {handle.disc_name}")
@@ -393,6 +402,7 @@ def _stat_disc(image_filepath: Path, fs: FilingSystem) -> None:
             # ADFS
             lines.append(f"Title:       {handle.title}")
             from oaknut.file import BootOption
+
             boot = BootOption(handle.boot_option)
             lines.append(f"Boot option: {boot.name} ({boot.value})")
             lines.append("Format:      ADFS")
@@ -442,6 +452,7 @@ def _match_acorn_wildcard(pattern: str, name: str) -> bool:
     Case-insensitive to match Acorn convention.
     """
     import fnmatch
+
     # Acorn wildcards use the same semantics as fnmatch.
     return fnmatch.fnmatch(name.upper(), pattern.upper())
 
@@ -500,6 +511,7 @@ def validate(image: Path) -> None:
 # File I/O commands
 # ---------------------------------------------------------------------------
 
+
 @cli.command()
 @click.argument("image", type=click.Path(exists=True, path_type=Path))
 @click.argument("path")
@@ -507,8 +519,15 @@ def validate(image: Path) -> None:
 @click.option(
     "--meta-format",
     type=click.Choice(
-        ["inf-trad", "inf-pieb", "xattr-acorn", "xattr-pieb",
-         "filename-riscos", "filename-mos", "none"],
+        [
+            "inf-trad",
+            "inf-pieb",
+            "xattr-acorn",
+            "xattr-pieb",
+            "filename-riscos",
+            "filename-mos",
+            "none",
+        ],
         case_sensitive=False,
     ),
     default="inf-trad",
@@ -539,9 +558,9 @@ def get(image: Path, path: str, host_path: Path | None, meta_format: str, owner:
         meta = AcornMeta(
             load_addr=getattr(st, "load_address", None),
             exec_addr=getattr(st, "exec_address", None),
-            attr=int(st.access) if hasattr(st, "access") else (
-                0x08 if getattr(st, "locked", False) else 0
-            ),
+            attr=int(st.access)
+            if hasattr(st, "access")
+            else (0x08 if getattr(st, "locked", False) else 0),
         )
 
         if host_path is None:
@@ -575,15 +594,28 @@ _alias("*load", "get")
 @click.option(
     "--meta-format",
     type=click.Choice(
-        ["inf-trad", "inf-pieb", "xattr-acorn", "xattr-pieb",
-         "filename-riscos", "filename-mos", "none"],
+        [
+            "inf-trad",
+            "inf-pieb",
+            "xattr-acorn",
+            "xattr-pieb",
+            "filename-riscos",
+            "filename-mos",
+            "none",
+        ],
         case_sensitive=False,
     ),
     default=None,
     help="Metadata format to read from host file.",
 )
-def put(image: Path, path: str, host_path: Path | None, load_addr: str | None,
-        exec_addr: str | None, meta_format: str | None) -> None:
+def put(
+    image: Path,
+    path: str,
+    host_path: Path | None,
+    load_addr: str | None,
+    exec_addr: str | None,
+    meta_format: str | None,
+) -> None:
     """Import a file into the image (Acorn alias: *save)."""
     fs, bare = resolve_path(image, path)
 
@@ -602,7 +634,8 @@ def put(image: Path, path: str, host_path: Path | None, load_addr: str | None,
             meta_formats = DEFAULT_IMPORT_META_FORMATS
 
         _clean_path, _label, meta = import_with_metadata(
-            host_path, meta_formats=meta_formats,
+            host_path,
+            meta_formats=meta_formats,
         )
         data = host_path.read_bytes()
         resolved_load = int(load_addr, 0) if load_addr else (meta.load_addr or 0)
@@ -628,6 +661,7 @@ _alias("*save", "put")
 # ---------------------------------------------------------------------------
 # Modification commands
 # ---------------------------------------------------------------------------
+
 
 @cli.command()
 @click.argument("image", type=click.Path(exists=True, path_type=Path))
@@ -865,10 +899,12 @@ _alias("*opt4", "opt")
 # Whole-image operations
 # ---------------------------------------------------------------------------
 
+
 @cli.command()
 @click.argument("host_path", type=click.Path(path_type=Path))
 @click.option(
-    "--format", "fmt",
+    "--format",
+    "fmt",
     type=click.Choice(
         ["ssd", "dsd", "adfs-s", "adfs-m", "adfs-l", "adfs-hard"],
         case_sensitive=False,
@@ -882,26 +918,32 @@ def create(host_path: Path, fmt: str, disc_title: str, capacity: int | None) -> 
     """Create a new empty disc image."""
     if fmt == "ssd":
         from oaknut.dfs import ACORN_DFS_80T_SINGLE_SIDED, DFS
+
         with DFS.create_file(host_path, ACORN_DFS_80T_SINGLE_SIDED, title=disc_title):
             pass
     elif fmt == "dsd":
         from oaknut.dfs import ACORN_DFS_80T_DOUBLE_SIDED_INTERLEAVED, DFS
+
         with DFS.create_file(host_path, ACORN_DFS_80T_DOUBLE_SIDED_INTERLEAVED, title=disc_title):
             pass
     elif fmt == "adfs-s":
         from oaknut.adfs import ADFS, ADFS_S
+
         with ADFS.create_file(host_path, ADFS_S, title=disc_title):
             pass
     elif fmt == "adfs-m":
         from oaknut.adfs import ADFS, ADFS_M
+
         with ADFS.create_file(host_path, ADFS_M, title=disc_title):
             pass
     elif fmt == "adfs-l":
         from oaknut.adfs import ADFS, ADFS_L
+
         with ADFS.create_file(host_path, ADFS_L, title=disc_title):
             pass
     elif fmt == "adfs-hard":
         from oaknut.adfs import ADFS
+
         if capacity is None:
             raise click.ClickException("--capacity is required for adfs-hard")
         with ADFS.create_file(host_path, capacity_bytes=capacity, title=disc_title):
@@ -929,14 +971,22 @@ def compact(image: Path) -> None:
 # Bulk export / import
 # ---------------------------------------------------------------------------
 
+
 @cli.command(name="export")
 @click.argument("image", type=click.Path(exists=True, path_type=Path))
 @click.argument("host_dir", type=click.Path(path_type=Path))
 @click.option(
     "--meta-format",
     type=click.Choice(
-        ["inf-trad", "inf-pieb", "xattr-acorn", "xattr-pieb",
-         "filename-riscos", "filename-mos", "none"],
+        [
+            "inf-trad",
+            "inf-pieb",
+            "xattr-acorn",
+            "xattr-pieb",
+            "filename-riscos",
+            "filename-mos",
+            "none",
+        ],
         case_sensitive=False,
     ),
     default="inf-trad",
@@ -962,7 +1012,12 @@ def export_cmd(image: Path, host_dir: Path, meta_format: str, owner: int, verbos
 
 
 def _export_recursive(
-    node, host_dir: Path, meta_format, owner: int, verbose: bool, fs: FilingSystem,
+    node,
+    host_dir: Path,
+    meta_format,
+    owner: int,
+    verbose: bool,
+    fs: FilingSystem,
 ) -> None:
     """Recursively export files from the image to the host directory."""
     from oaknut.file import AcornMeta, export_with_metadata
@@ -978,9 +1033,9 @@ def _export_recursive(
             meta = AcornMeta(
                 load_addr=getattr(st, "load_address", None),
                 exec_addr=getattr(st, "exec_address", None),
-                attr=int(st.access) if hasattr(st, "access") else (
-                    0x08 if getattr(st, "locked", False) else 0
-                ),
+                attr=int(st.access)
+                if hasattr(st, "access")
+                else (0x08 if getattr(st, "locked", False) else 0),
             )
             export_with_metadata(
                 data,
@@ -1008,12 +1063,15 @@ def import_cmd(image: Path, host_dir: Path, verbose: bool) -> None:
 # AFS-specific commands
 # ---------------------------------------------------------------------------
 
+
 @cli.command(name="afs-init")
 @click.argument("image", type=click.Path(exists=True, path_type=Path))
 @click.option("--disc-name", required=True, help="AFS disc name.")
 @click.option("--cylinders", type=int, default=None, help="AFS region size in cylinders.")
 @click.option(
-    "--user", "users", multiple=True,
+    "--user",
+    "users",
+    multiple=True,
     help="User spec as NAME or NAME:S (system flag). Repeat for multiple.",
 )
 def afs_init(image: Path, disc_name: str, cylinders: int | None, users: tuple[str, ...]) -> None:
@@ -1056,12 +1114,18 @@ def afs_users(image: Path) -> None:
 @click.option("--quota", type=int, default=None, help="Quota in bytes.")
 @click.option("--password", default="", help="Initial password.")
 def afs_useradd(
-    image: Path, name: str, system: bool, quota: int | None, password: str,
+    image: Path,
+    name: str,
+    system: bool,
+    quota: int | None,
+    password: str,
 ) -> None:
     """Add a user to the AFS passwords file."""
     with open_image_for_afs_write(image) as (adfs, afs):
         new_passwords = afs.users.with_added(
-            name, system=system, password=password,
+            name,
+            system=system,
+            password=password,
             quota=quota or 0,
         )
         afs._update_passwords_on_disc(new_passwords)
@@ -1083,8 +1147,12 @@ def afs_userdel(image: Path, name: str) -> None:
 
 @cli.command(name="afs-merge")
 @click.argument("image", type=click.Path(exists=True, path_type=Path))
-@click.option("--source", required=True, type=click.Path(exists=True, path_type=Path),
-              help="Source AFS image to merge from.")
+@click.option(
+    "--source",
+    required=True,
+    type=click.Path(exists=True, path_type=Path),
+    help="Source AFS image to merge from.",
+)
 @click.option("--target-path", default=None, help="Target AFS path for merge root.")
 def afs_merge(image: Path, source: Path, target_path: str | None) -> None:
     """Merge a source AFS tree into the target image."""

@@ -16,6 +16,7 @@ from oaknut.disc.cli import cli
 # Version and help
 # ---------------------------------------------------------------------------
 
+
 class TestCLIBasics:
     def test_version(self, runner: CliRunner) -> None:
         result = runner.invoke(cli, ["--version"])
@@ -37,6 +38,7 @@ class TestCLIBasics:
 # ---------------------------------------------------------------------------
 # Inspection: ls
 # ---------------------------------------------------------------------------
+
 
 class TestLs:
     def test_ls_dfs_root(self, runner: CliRunner, dfs_image_filepath: Path) -> None:
@@ -84,6 +86,7 @@ class TestLs:
 # Inspection: tree
 # ---------------------------------------------------------------------------
 
+
 class TestTree:
     def test_tree_dfs(self, runner: CliRunner, dfs_image_filepath: Path) -> None:
         result = runner.invoke(cli, ["tree", str(dfs_image_filepath)])
@@ -100,6 +103,7 @@ class TestTree:
 # ---------------------------------------------------------------------------
 # Inspection: stat
 # ---------------------------------------------------------------------------
+
 
 class TestStat:
     def test_stat_disc_dfs(self, runner: CliRunner, dfs_image_filepath: Path) -> None:
@@ -134,6 +138,7 @@ class TestStat:
 # ---------------------------------------------------------------------------
 # Inspection: cat
 # ---------------------------------------------------------------------------
+
 
 class TestCat:
     def test_cat_dfs(self, runner: CliRunner, dfs_image_filepath: Path) -> None:
@@ -171,6 +176,7 @@ class TestCat:
 # Inspection: validate
 # ---------------------------------------------------------------------------
 
+
 class TestValidate:
     def test_validate_adfs(self, runner: CliRunner, adfs_image_filepath: Path) -> None:
         result = runner.invoke(cli, ["validate", str(adfs_image_filepath)])
@@ -182,19 +188,32 @@ class TestValidate:
 # File I/O: get
 # ---------------------------------------------------------------------------
 
+
 class TestGet:
     def test_get_to_file(self, runner: CliRunner, dfs_image_filepath: Path, tmp_path: Path) -> None:
         out = tmp_path / "hello.bin"
-        result = runner.invoke(cli, [
-            "get", str(dfs_image_filepath), "$.Hello", str(out),
-        ])
+        result = runner.invoke(
+            cli,
+            [
+                "get",
+                str(dfs_image_filepath),
+                "$.Hello",
+                str(out),
+            ],
+        )
         assert result.exit_code == 0
         assert out.read_bytes() == b"Hello world"
 
     def test_get_to_stdout(self, runner: CliRunner, dfs_image_filepath: Path) -> None:
-        result = runner.invoke(cli, [
-            "get", str(dfs_image_filepath), "$.Hello", "-",
-        ])
+        result = runner.invoke(
+            cli,
+            [
+                "get",
+                str(dfs_image_filepath),
+                "$.Hello",
+                "-",
+            ],
+        )
         assert result.exit_code == 0
         assert b"Hello world" in result.output_bytes
 
@@ -203,13 +222,20 @@ class TestGet:
 # File I/O: put
 # ---------------------------------------------------------------------------
 
+
 class TestPut:
     def test_put_dfs(self, runner: CliRunner, dfs_image_filepath: Path, tmp_path: Path) -> None:
         src = tmp_path / "payload.bin"
         src.write_bytes(b"new file data")
-        result = runner.invoke(cli, [
-            "put", str(dfs_image_filepath), "$.NewFile", str(src),
-        ])
+        result = runner.invoke(
+            cli,
+            [
+                "put",
+                str(dfs_image_filepath),
+                "$.NewFile",
+                str(src),
+            ],
+        )
         assert result.exit_code == 0
 
         # Verify the file was written.
@@ -220,9 +246,15 @@ class TestPut:
     def test_put_adfs(self, runner: CliRunner, adfs_image_filepath: Path, tmp_path: Path) -> None:
         src = tmp_path / "payload.bin"
         src.write_bytes(b"adfs payload")
-        result = runner.invoke(cli, [
-            "put", str(adfs_image_filepath), "$.NewFile", str(src),
-        ])
+        result = runner.invoke(
+            cli,
+            [
+                "put",
+                str(adfs_image_filepath),
+                "$.NewFile",
+                str(src),
+            ],
+        )
         assert result.exit_code == 0
 
         result = runner.invoke(cli, ["cat", str(adfs_image_filepath), "$.NewFile"])
@@ -233,6 +265,7 @@ class TestPut:
 # ---------------------------------------------------------------------------
 # Modification: title, opt
 # ---------------------------------------------------------------------------
+
 
 class TestTitle:
     def test_read_title_dfs(self, runner: CliRunner, dfs_image_filepath: Path) -> None:
@@ -268,6 +301,7 @@ class TestOpt:
 # ---------------------------------------------------------------------------
 # Modification: rm, lock, unlock
 # ---------------------------------------------------------------------------
+
 
 class TestRm:
     def test_rm_dfs(self, runner: CliRunner, dfs_image_filepath: Path) -> None:
@@ -309,11 +343,18 @@ class TestLockUnlock:
 # Modification: mv, cp
 # ---------------------------------------------------------------------------
 
+
 class TestMv:
     def test_mv_dfs(self, runner: CliRunner, dfs_image_filepath: Path) -> None:
-        result = runner.invoke(cli, [
-            "mv", str(dfs_image_filepath), "$.Hello", "$.Greet",
-        ])
+        result = runner.invoke(
+            cli,
+            [
+                "mv",
+                str(dfs_image_filepath),
+                "$.Hello",
+                "$.Greet",
+            ],
+        )
         assert result.exit_code == 0
         result = runner.invoke(cli, ["cat", str(dfs_image_filepath), "$.Greet"])
         assert result.exit_code == 0
@@ -322,9 +363,15 @@ class TestMv:
 
 class TestCp:
     def test_cp_dfs(self, runner: CliRunner, dfs_image_filepath: Path) -> None:
-        result = runner.invoke(cli, [
-            "cp", str(dfs_image_filepath), "$.Hello", "$.Copy",
-        ])
+        result = runner.invoke(
+            cli,
+            [
+                "cp",
+                str(dfs_image_filepath),
+                "$.Hello",
+                "$.Copy",
+            ],
+        )
         assert result.exit_code == 0
         result = runner.invoke(cli, ["cat", str(dfs_image_filepath), "$.Copy"])
         assert result.exit_code == 0
@@ -337,6 +384,7 @@ class TestCp:
 # ---------------------------------------------------------------------------
 # Modification: mkdir
 # ---------------------------------------------------------------------------
+
 
 class TestMkdir:
     def test_mkdir_adfs(self, runner: CliRunner, adfs_image_filepath: Path) -> None:
@@ -356,6 +404,7 @@ class TestMkdir:
 # ---------------------------------------------------------------------------
 # Whole-image: create
 # ---------------------------------------------------------------------------
+
 
 class TestCreate:
     def test_create_ssd(self, runner: CliRunner, tmp_path: Path) -> None:
@@ -382,6 +431,7 @@ class TestCreate:
 # Whole-image: compact
 # ---------------------------------------------------------------------------
 
+
 class TestCompact:
     def test_compact_adfs(self, runner: CliRunner, adfs_image_filepath: Path) -> None:
         result = runner.invoke(cli, ["compact", str(adfs_image_filepath)])
@@ -398,14 +448,22 @@ class TestCompact:
 # AFS-specific commands
 # ---------------------------------------------------------------------------
 
+
 class TestAfsInit:
     def test_afs_init(self, runner: CliRunner, adfs_no_afs_filepath: Path) -> None:
-        result = runner.invoke(cli, [
-            "afs-init", str(adfs_no_afs_filepath),
-            "--disc-name", "NewAFS",
-            "--cylinders", "10",
-            "--user", "Syst:S",
-        ])
+        result = runner.invoke(
+            cli,
+            [
+                "afs-init",
+                str(adfs_no_afs_filepath),
+                "--disc-name",
+                "NewAFS",
+                "--cylinders",
+                "10",
+                "--user",
+                "Syst:S",
+            ],
+        )
         assert result.exit_code == 0
         assert "Initialised" in result.output
 
@@ -420,28 +478,45 @@ class TestAfsUsers:
 class TestAfsUserDel:
     def test_afs_userdel(self, runner: CliRunner, afs_image_with_spare_slot: Path) -> None:
         """Remove a pre-existing user (tombstone the slot)."""
-        result = runner.invoke(cli, [
-            "afs-userdel", str(afs_image_with_spare_slot), "alice",
-        ])
+        result = runner.invoke(
+            cli,
+            [
+                "afs-userdel",
+                str(afs_image_with_spare_slot),
+                "alice",
+            ],
+        )
         assert result.exit_code == 0
         assert "Removed" in result.output
 
 
 class TestAfsUserAdd:
     def test_afs_useradd_into_tombstoned_slot(
-        self, runner: CliRunner, afs_image_with_spare_slot: Path,
+        self,
+        runner: CliRunner,
+        afs_image_with_spare_slot: Path,
     ) -> None:
         """Remove a user (tombstone), then add a new one into the freed slot."""
         # Tombstone alice first.
-        result = runner.invoke(cli, [
-            "afs-userdel", str(afs_image_with_spare_slot), "alice",
-        ])
+        result = runner.invoke(
+            cli,
+            [
+                "afs-userdel",
+                str(afs_image_with_spare_slot),
+                "alice",
+            ],
+        )
         assert result.exit_code == 0
 
         # Add bob into the freed slot.
-        result = runner.invoke(cli, [
-            "afs-useradd", str(afs_image_with_spare_slot), "bob",
-        ])
+        result = runner.invoke(
+            cli,
+            [
+                "afs-useradd",
+                str(afs_image_with_spare_slot),
+                "bob",
+            ],
+        )
         assert result.exit_code == 0
         assert "Added" in result.output
 

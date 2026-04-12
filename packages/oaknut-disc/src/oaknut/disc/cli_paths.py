@@ -61,7 +61,7 @@ def parse_prefix(text: str) -> tuple[FilingSystem | None, str]:
     if m is None:
         return None, text
     fs = FilingSystem(m.group(1).lower())
-    bare = text[m.end():]
+    bare = text[m.end() :]
     return fs, bare
 
 
@@ -98,9 +98,7 @@ def validate_prefix_for_image(
             f"image is {detected.value.upper()} format; cannot access as DFS"
         )
     if requested is FilingSystem.ADFS and detected is FilingSystem.DFS:
-        raise click.ClickException(
-            "image is DFS format; cannot access as ADFS"
-        )
+        raise click.ClickException("image is DFS format; cannot access as ADFS")
     if requested is FilingSystem.AFS and detected is FilingSystem.DFS:
         raise click.ClickException(
             "image is DFS format; AFS partitions exist only on ADFS hard discs"
