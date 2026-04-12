@@ -205,6 +205,13 @@ The filing-system prefix is parsed by the CLI's `cli_paths.py` module before the
 
 The prefix is case-insensitive (`AFS:`, `afs:`, `Afs:` all work). The `::disc.` form from Acorn's multi-disc syntax is not needed — we have one image per command invocation — but could be added later if multi-image workflows arise.
 
+**Mismatch errors.** The prefix is a hard assertion, not a hint. If the image format doesn't match the prefix, the command refuses immediately with a specific diagnostic:
+
+- `dfs:` on an ADFS image → `"image is ADFS format; cannot access as DFS"`
+- `adfs:` on a `.ssd` DFS floppy → `"image is DFS format; cannot access as ADFS"`
+- `afs:` on a disc with no AFS pointers → `"no AFS partition found on this disc"`
+- `adfs:` on a disc that has AFS — fine, operates on the ADFS front partition as requested
+
 **AFS-specific commands** that have no ADFS/DFS counterpart use the `afs-` prefix and always operate on the AFS partition:
 
 | Command | Purpose |
