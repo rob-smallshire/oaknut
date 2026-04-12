@@ -47,6 +47,7 @@ dependencies = [
     "oaknut-adfs>=1.0",
     "oaknut-afs>=0.1",
     "oaknut-zip>=2.0",
+    "oaknut-disc>=0.1",
 ]
 
 [project.urls]
@@ -69,6 +70,7 @@ oaknut-dfs   = { workspace = true }
 oaknut-adfs  = { workspace = true }
 oaknut-afs   = { workspace = true }
 oaknut-zip   = { workspace = true }
+oaknut-disc  = { workspace = true }
 
 [tool.uv]
 default-groups = ["test", "lint", "dev"]
@@ -101,6 +103,7 @@ testpaths = [
     "packages/oaknut-adfs/tests",
     "packages/oaknut-afs/tests",
     "packages/oaknut-zip/tests",
+    "packages/oaknut-disc/tests",
 ]
 # The workspace-root tests/ directory holds shared test data and a
 # tiny tests/fixtures.py module consumed by every package's conftest.

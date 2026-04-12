@@ -1,0 +1,52 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "oaknut-disc"
+requires-python = ">= 3.11"
+dynamic = ["version"]
+description = "CLI for working with Acorn DFS, ADFS, and AFS disc images."
+license = "MIT"
+authors = [{ name = "Robert Smallshire", email = "robert@smallshire.org.uk" }]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+]
+dependencies = [
+    "oaknut-file>=1.0",
+    "oaknut-dfs>=4.0",
+    "oaknut-adfs>=1.0",
+    "oaknut-afs>=0.1",
+    "click>=8.1.7",
+    "rich>=13.0",
+]
+
+[project.scripts]
+disc = "oaknut.disc.cli:cli"
+oaknut-disc = "oaknut.disc.cli:cli"
+
+[tool.setuptools.dynamic]
+version = { attr = "oaknut.disc.__version__" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.bumpversion]
+current_version = "0.1.0"
+tag_name = "oaknut-disc-v{new_version}"
+tag = false
+commit = true
+
+[[tool.bumpversion.files]]
+filename = "src/oaknut/disc/__init__.py"
+search = '__version__ = "{current_version}"'
+replace = '__version__ = "{new_version}"'
