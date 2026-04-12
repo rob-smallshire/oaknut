@@ -1,0 +1,1107 @@
+"""Click command-line interface for the unified disc tool.
+
+Provides a single ``disc`` / ``oaknut-disc`` entry point for working
+with Acorn DFS, ADFS, and AFS disc images. See ``docs/cli-design.md``
+for the design rationale.
+"""
+
+from __future__ import annotations
+
+import sys
+from contextlib import contextmanager
+from pathlib import Path
+from typing import Iterator
+
+import click
+
+from . import __version__
+from .cli_paths import FilingSystem, detect_filing_system, parse_prefix, resolve_path
+
+# ---------------------------------------------------------------------------
+# Alias-aware Click group
+# ---------------------------------------------------------------------------
+
+_ALIASES: dict[str, str] = {}
+
+
+class AliasGroup(click.Group):
+    """Click group that supports star-prefixed Acorn aliases."""
+
+    def get_command(self, ctx: click.Context, cmd_name: str) -> click.Command | None:
+        # Try exact match first.
+        rv = click.Group.get_command(self, ctx, cmd_name)
+        if rv is not None:
+            return rv
+        # Try alias lookup.
+        canonical = _ALIASES.get(cmd_name)
+        if canonical is not None:
+            return click.Group.get_command(self, ctx, canonical)
+        return None
+
+    def resolve_command(self, ctx: click.Context, args: list[str]):
+        # Override to allow aliases to appear in help / error messages.
+        cmd_name = args[0] if args else None
+        if cmd_name and cmd_name in _ALIASES:
+            args = [_ALIASES[cmd_name]] + args[1:]
+        return super().resolve_command(ctx, args)
+
+    def format_commands(self, ctx: click.Context, formatter: click.HelpFormatter) -> None:
+        """List commands without aliases to keep --help clean."""
+        commands = []
+        for subcommand in self.list_commands(ctx):
+            if subcommand.startswith("*"):
+                continue
+            cmd = self.commands.get(subcommand)
+            if cmd is None:
+                continue
+            help_text = cmd.get_short_help_str(limit=formatter.width)
+            commands.append((subcommand, help_text))
+
+        if commands:
+            with formatter.section("Commands"):
+                formatter.write_dl(commands)
+
+
+def _alias(acorn_name: str, unix_name: str) -> None:
+    """Register an Acorn star-alias mapping."""
+    _ALIASES[acorn_name] = unix_name
+
+
+# ---------------------------------------------------------------------------
+# DFS format detection (extension + file size)
+# ---------------------------------------------------------------------------
+
+def _detect_dfs_format(image_filepath: Path):
+    """Detect DFS disc format from file extension and size."""
+    from oaknut.dfs import (
+        ACORN_DFS_40T_DOUBLE_SIDED_INTERLEAVED,
+        ACORN_DFS_40T_SINGLE_SIDED,
+        ACORN_DFS_80T_DOUBLE_SIDED_INTERLEAVED,
+        ACORN_DFS_80T_SINGLE_SIDED,
+    )
+
+    size = image_filepath.stat().st_size
+    ext = image_filepath.suffix.lower()
+
+    if ext == ".ssd":
+        if size <= 102400:
+            return ACORN_DFS_40T_SINGLE_SIDED
+        return ACORN_DFS_80T_SINGLE_SIDED
+    elif ext == ".dsd":
+        if size <= 204800:
+            return ACORN_DFS_40T_DOUBLE_SIDED_INTERLEAVED
+        return ACORN_DFS_80T_DOUBLE_SIDED_INTERLEAVED
+
+    raise click.ClickException(
+        f"cannot detect DFS format for '{image_filepath.name}'"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Image openers — context managers returning (fs_handle, filing_system)
+# ---------------------------------------------------------------------------
+
+@contextmanager
+def _open_dfs(image_filepath: Path, mode: str = "rb") -> Iterator:
+    """Open image as DFS, yielding the DFS handle."""
+    from oaknut.dfs import DFS
+
+    disk_format = _detect_dfs_format(image_filepath)
+    with DFS.from_file(image_filepath, disk_format, mode=mode) as dfs:
+        yield dfs
+
+
+@contextmanager
+def _open_adfs(image_filepath: Path, mode: str = "rb") -> Iterator:
+    """Open image as ADFS, yielding the ADFS handle."""
+    from oaknut.adfs import ADFS
+
+    with ADFS.from_file(image_filepath, mode=mode) as adfs:
+        yield adfs
+
+
+@contextmanager
+def _open_afs(image_filepath: Path, mode: str = "rb") -> Iterator:
+    """Open image as ADFS, grab the AFS partition, yield it.
+
+    Raises :class:`click.ClickException` if no AFS partition is
+    present.
+    """
+    from oaknut.adfs import ADFS
+
+    with ADFS.from_file(image_filepath, mode=mode) as adfs:
+        afs = adfs.afs_partition
+        if afs is None:
+            raise click.ClickException("no AFS partition found on this disc")
+        yield afs
+
+
+@contextmanager
+def open_image(
+    image_filepath: Path,
+    fs: FilingSystem,
+    mode: str = "rb",
+) -> Iterator:
+    """Open an image for the given filing system.
+
+    Yields the appropriate handle (DFS, ADFS, or AFS).
+    """
+    if fs is FilingSystem.DFS:
+        with _open_dfs(image_filepath, mode) as handle:
+            yield handle
+    elif fs is FilingSystem.ADFS:
+        with _open_adfs(image_filepath, mode) as handle:
+            yield handle
+    elif fs is FilingSystem.AFS:
+        with _open_afs(image_filepath, mode) as handle:
+            yield handle
+
+
+@contextmanager
+def open_image_for_afs_write(image_filepath: Path) -> Iterator:
+    """Open for AFS write: yields (adfs, afs) so the caller can flush."""
+    from oaknut.adfs import ADFS
+
+    with ADFS.from_file(image_filepath, mode="r+b") as adfs:
+        afs = adfs.afs_partition
+        if afs is None:
+            raise click.ClickException("no AFS partition found on this disc")
+        yield adfs, afs
+
+
+def _navigate(handle, bare_path: str, fs: FilingSystem):
+    """Navigate to a path within the filesystem handle.
+
+    Returns the path object at *bare_path*, or the root when
+    *bare_path* is empty.
+    """
+    if not bare_path:
+        return handle.root
+    if fs is FilingSystem.AFS:
+        return _navigate_afs(handle, bare_path)
+    return handle.path(bare_path)
+
+
+def _navigate_afs(afs, bare_path: str):
+    """Navigate AFS using its root / operator since AFS.path() may not exist."""
+    if bare_path == "$" or not bare_path:
+        return afs.root
+    # Strip leading "$."
+    if bare_path.startswith("$."):
+        bare_path = bare_path[2:]
+    elif bare_path == "$":
+        return afs.root
+    target = afs.root
+    for part in bare_path.split("."):
+        target = target / part
+    return target
+
+
+# ---------------------------------------------------------------------------
+# Click group
+# ---------------------------------------------------------------------------
+
+@click.group(cls=AliasGroup)
+@click.version_option(version=__version__, prog_name="disc")
+def cli() -> None:
+    """Work with Acorn DFS, ADFS, and AFS disc images."""
+
+
+# ---------------------------------------------------------------------------
+# Inspection commands
+# ---------------------------------------------------------------------------
+
+@cli.command()
+@click.argument("image", type=click.Path(exists=True, path_type=Path))
+@click.argument("path", required=False, default=None)
+def ls(image: Path, path: str | None) -> None:
+    """List directory contents (Acorn alias: *cat)."""
+    from oaknut.file import format_access_text
+    from rich.console import Console
+    from rich.table import Table
+
+    fs, bare = resolve_path(image, path)
+    with open_image(image, fs) as handle:
+        target = _navigate(handle, bare, fs)
+
+        if not target.exists():
+            raise click.ClickException(f"path not found: {bare or '$'}")
+
+        if target.is_file():
+            # Single file — just print its name.
+            click.echo(target.name)
+            return
+
+        entries = list(target.iterdir())
+
+        # Build title line.
+        if fs is FilingSystem.DFS:
+            title_str = getattr(handle, "title", "") or ""
+            free = getattr(handle, "free_sectors", None)
+            fmt_name = "DFS"
+        elif fs is FilingSystem.AFS:
+            title_str = getattr(handle, "disc_name", "") or ""
+            free = getattr(handle, "free_sectors", None)
+            fmt_name = "AFS"
+        else:
+            title_str = getattr(handle, "title", "") or ""
+            free = getattr(handle, "free_space", None)
+            fmt_name = "ADFS"
+
+        table_title = f"{image.name}"
+        if title_str:
+            table_title += f" — {title_str}"
+        table_title += f" [{fmt_name}]"
+
+        table = Table(title=table_title)
+        table.add_column("Name", style="cyan", no_wrap=True)
+        table.add_column("Load", justify="right", style="green", no_wrap=True)
+        table.add_column("Exec", justify="right", style="green", no_wrap=True)
+        table.add_column("Length", justify="right", no_wrap=True)
+        table.add_column("Attr", justify="right", style="yellow", no_wrap=True)
+
+        for child in entries:
+            if child.is_dir():
+                table.add_row(f"{child.name}/", "", "", "", "")
+                continue
+            st = child.stat()
+            load_str = f"{st.load_address:08X}" if hasattr(st, "load_address") else ""
+            exec_str = f"{st.exec_address:08X}" if hasattr(st, "exec_address") else ""
+            length_str = f"{st.length:08X}" if hasattr(st, "length") else ""
+            locked = getattr(st, "locked", False)
+            attr_str = "L" if locked else ""
+            if hasattr(st, "access"):
+                attr_str = format_access_text(st.access)
+            table.add_row(child.name, load_str, exec_str, length_str, attr_str)
+
+        if free is not None:
+            if fs is FilingSystem.ADFS:
+                table.caption = f"Free: {free:,} bytes"
+            else:
+                table.caption = f"Free: {free} sectors"
+
+        Console().print(table)
+
+
+_alias("*cat", "ls")
+
+
+@cli.command()
+@click.argument("image", type=click.Path(exists=True, path_type=Path))
+@click.argument("path", required=False, default=None)
+def tree(image: Path, path: str | None) -> None:
+    """Display recursive directory tree."""
+    fs, bare = resolve_path(image, path)
+    with open_image(image, fs) as handle:
+        root = _navigate(handle, bare, fs)
+        if not root.exists():
+            raise click.ClickException(f"path not found: {bare or '$'}")
+        _print_tree(root, "", True)
+
+
+def _print_tree(node, prefix: str, is_last: bool) -> None:
+    """Recursive Unicode box-drawing tree printer."""
+    if prefix:
+        connector = "└── " if is_last else "├── "
+        click.echo(f"{prefix}{connector}{node.name}")
+    else:
+        click.echo(node.name)
+
+    if node.is_dir():
+        children = list(node.iterdir())
+        for i, child in enumerate(children):
+            is_child_last = i == len(children) - 1
+            if prefix:
+                extension = "    " if is_last else "│   "
+            else:
+                extension = ""
+            _print_tree(child, prefix + extension, is_child_last)
+
+
+@cli.command()
+@click.argument("image", type=click.Path(exists=True, path_type=Path))
+@click.argument("path", required=False, default=None)
+def stat(image: Path, path: str | None) -> None:
+    """Disc summary (no path) or file metadata (with path). Alias: *info."""
+    from oaknut.file import format_access_text
+
+    fs, bare = resolve_path(image, path)
+
+    if not bare:
+        # Whole-disc summary.
+        _stat_disc(image, fs)
+    else:
+        # Single file/directory metadata.
+        with open_image(image, fs) as handle:
+            target = _navigate(handle, bare, fs)
+            if not target.exists():
+                raise click.ClickException(f"path not found: {bare}")
+            st = target.stat()
+            click.echo(f"Name:    {target.name}")
+            if hasattr(st, "load_address"):
+                click.echo(f"Load:    {st.load_address:08X}")
+            if hasattr(st, "exec_address"):
+                click.echo(f"Exec:    {st.exec_address:08X}")
+            if hasattr(st, "length"):
+                click.echo(f"Length:  {st.length:08X}")
+            locked = getattr(st, "locked", False)
+            if hasattr(st, "access"):
+                click.echo(f"Attr:    {format_access_text(st.access)}")
+            elif locked:
+                click.echo("Attr:    L")
+            if hasattr(st, "is_directory"):
+                click.echo(f"Dir:     {st.is_directory}")
+
+
+_alias("*info", "stat")
+
+
+def _stat_disc(image_filepath: Path, fs: FilingSystem) -> None:
+    """Print whole-disc summary as a Rich panel."""
+    from rich.console import Console
+    from rich.panel import Panel
+
+    with open_image(image_filepath, fs) as handle:
+        lines: list[str] = []
+
+        if fs is FilingSystem.DFS:
+            lines.append(f"Title:       {handle.title}")
+            from oaknut.file import BootOption
+            boot = BootOption(handle.boot_option)
+            lines.append(f"Boot option: {boot.name} ({boot.value})")
+            lines.append("Format:      DFS")
+            lines.append(f"Free:        {handle.free_sectors} sectors")
+            file_count = sum(1 for _ in handle.root.iterdir()
+                            for _ in [None]  # count all files
+                            ) if False else len(handle.files)
+            lines.append(f"Files:       {file_count}")
+        elif fs is FilingSystem.AFS:
+            lines.append(f"Disc name:      {handle.disc_name}")
+            geom = handle.geometry
+            lines.append(f"Start cylinder: {handle.start_cylinder}")
+            lines.append(f"Cylinders:      {geom.cylinders}")
+            lines.append(f"Sectors/cyl:    {geom.sectors_per_cylinder}")
+            lines.append(f"Total sectors:  {geom.total_sectors}")
+            lines.append(f"Free sectors:   {handle.free_sectors}")
+            lines.append("Users:")
+            for u in handle.users.active:
+                flag = "S" if u.is_system else " "
+                lines.append(f"  {flag} {u.full_id}")
+        else:
+            # ADFS
+            lines.append(f"Title:       {handle.title}")
+            from oaknut.file import BootOption
+            boot = BootOption(handle.boot_option)
+            lines.append(f"Boot option: {boot.name} ({boot.value})")
+            lines.append("Format:      ADFS")
+            lines.append(f"Total size:  {handle.total_size:,} bytes")
+            lines.append(f"Free space:  {handle.free_space:,} bytes")
+            afs = handle.afs_partition
+            if afs is not None:
+                lines.append(f"AFS:         present (disc name: {afs.disc_name})")
+
+        Console().print(Panel("\n".join(lines), title=str(image_filepath.name)))
+
+
+@cli.command()
+@click.argument("image", type=click.Path(exists=True, path_type=Path))
+@click.argument("path")
+def cat(image: Path, path: str) -> None:
+    """Dump file contents to stdout (Acorn alias: *type)."""
+    fs, bare = resolve_path(image, path)
+    with open_image(image, fs) as handle:
+        target = _navigate(handle, bare, fs)
+        if not target.exists():
+            raise click.ClickException(f"path not found: {bare}")
+        if target.is_dir():
+            raise click.ClickException(f"'{bare}' is a directory")
+        sys.stdout.buffer.write(target.read_bytes())
+
+
+_alias("*type", "cat")
+
+
+@cli.command()
+@click.argument("image", type=click.Path(exists=True, path_type=Path))
+@click.argument("pattern")
+def find(image: Path, pattern: str) -> None:
+    """Find files matching an Acorn wildcard pattern."""
+    fs, bare = resolve_path(image, pattern)
+    # For find, the "bare" part is the pattern, not a path to navigate to.
+    # We walk the whole image and match against the pattern.
+    with open_image(image, fs) as handle:
+        _find_recursive(handle.root, bare, fs)
+
+
+def _match_acorn_wildcard(pattern: str, name: str) -> bool:
+    """Match a name against an Acorn-style wildcard pattern.
+
+    ``*`` matches any sequence, ``?`` matches one character.
+    Case-insensitive to match Acorn convention.
+    """
+    import fnmatch
+    # Acorn wildcards use the same semantics as fnmatch.
+    return fnmatch.fnmatch(name.upper(), pattern.upper())
+
+
+def _find_recursive(node, pattern: str, fs: FilingSystem) -> None:
+    """Walk a directory tree, printing paths matching *pattern*."""
+    # The pattern may include directory components separated by '.'
+    # For simplicity, match against full Acorn path and leaf name.
+    for child in node.iterdir():
+        name = child.name
+        path_str = getattr(child, "path", name)
+        if _match_acorn_wildcard(pattern, name) or _match_acorn_wildcard(pattern, path_str):
+            click.echo(path_str)
+        if child.is_dir():
+            _find_recursive(child, pattern, fs)
+
+
+@cli.command()
+@click.argument("image", type=click.Path(exists=True, path_type=Path))
+def freemap(image: Path) -> None:
+    """Show free-space map."""
+    # TODO: Implement ASCII fragmentation visualisation (needs L8).
+    fs = detect_filing_system(image)
+    with open_image(image, fs) as handle:
+        if fs is FilingSystem.DFS:
+            click.echo(f"Free: {handle.free_sectors} sectors")
+        elif fs is FilingSystem.AFS:
+            click.echo(f"Free: {handle.free_sectors} sectors")
+        else:
+            click.echo(f"Free: {handle.free_space:,} bytes")
+    click.echo("(detailed fragmentation map not yet implemented)")
+
+
+@cli.command()
+@click.argument("image", type=click.Path(exists=True, path_type=Path))
+def validate(image: Path) -> None:
+    """Validate disc image structure."""
+    fs = detect_filing_system(image)
+    if fs is FilingSystem.DFS:
+        click.echo("DFS validation not yet implemented")
+        return
+    with open_image(image, fs) as handle:
+        if hasattr(handle, "validate"):
+            errors = handle.validate()
+            if errors:
+                for err in errors:
+                    click.echo(f"Error: {err}", err=True)
+                raise SystemExit(1)
+            else:
+                click.echo("OK")
+        else:
+            click.echo("Validation not available for this format")
+
+
+# ---------------------------------------------------------------------------
+# File I/O commands
+# ---------------------------------------------------------------------------
+
+@cli.command()
+@click.argument("image", type=click.Path(exists=True, path_type=Path))
+@click.argument("path")
+@click.argument("host_path", required=False, default=None, type=click.Path(path_type=Path))
+@click.option(
+    "--meta-format",
+    type=click.Choice(
+        ["inf-trad", "inf-pieb", "xattr-acorn", "xattr-pieb",
+         "filename-riscos", "filename-mos", "none"],
+        case_sensitive=False,
+    ),
+    default="inf-trad",
+    help="Metadata sidecar format.",
+)
+@click.option("--owner", type=int, default=0, help="Econet owner ID for PiEB formats.")
+def get(image: Path, path: str, host_path: Path | None, meta_format: str, owner: int) -> None:
+    """Export a file from the image (Acorn alias: *load)."""
+    from oaknut.file import AcornMeta, MetaFormat, export_with_metadata
+
+    fs, bare = resolve_path(image, path)
+    with open_image(image, fs) as handle:
+        target = _navigate(handle, bare, fs)
+        if not target.exists():
+            raise click.ClickException(f"path not found: {bare}")
+        if target.is_dir():
+            raise click.ClickException(f"'{bare}' is a directory")
+
+        data = target.read_bytes()
+
+        # Stdout mode.
+        if host_path is not None and str(host_path) == "-":
+            sys.stdout.buffer.write(data)
+            return
+
+        # Build metadata.
+        st = target.stat()
+        meta = AcornMeta(
+            load_addr=getattr(st, "load_address", None),
+            exec_addr=getattr(st, "exec_address", None),
+            attr=int(st.access) if hasattr(st, "access") else (
+                0x08 if getattr(st, "locked", False) else 0
+            ),
+        )
+
+        if host_path is None:
+            host_path = Path(target.name)
+
+        resolved_meta_format: MetaFormat | None
+        if meta_format == "none":
+            resolved_meta_format = None
+        else:
+            resolved_meta_format = MetaFormat(meta_format)
+
+        export_with_metadata(
+            data,
+            host_path,
+            meta,
+            meta_format=resolved_meta_format,
+            owner=owner,
+            filename=target.name,
+        )
+
+
+_alias("*load", "get")
+
+
+@cli.command()
+@click.argument("image", type=click.Path(exists=True, path_type=Path))
+@click.argument("path")
+@click.argument("host_path", required=False, default=None, type=click.Path(path_type=Path))
+@click.option("--load", "load_addr", type=str, default=None, help="Load address (hex).")
+@click.option("--exec", "exec_addr", type=str, default=None, help="Exec address (hex).")
+@click.option(
+    "--meta-format",
+    type=click.Choice(
+        ["inf-trad", "inf-pieb", "xattr-acorn", "xattr-pieb",
+         "filename-riscos", "filename-mos", "none"],
+        case_sensitive=False,
+    ),
+    default=None,
+    help="Metadata format to read from host file.",
+)
+def put(image: Path, path: str, host_path: Path | None, load_addr: str | None,
+        exec_addr: str | None, meta_format: str | None) -> None:
+    """Import a file into the image (Acorn alias: *save)."""
+    fs, bare = resolve_path(image, path)
+
+    # Read data.
+    if host_path is not None and str(host_path) == "-":
+        data = sys.stdin.buffer.read()
+        resolved_load = int(load_addr, 0) if load_addr else 0
+        resolved_exec = int(exec_addr, 0) if exec_addr else 0
+    elif host_path is not None:
+        # Try to import with metadata.
+        from oaknut.file import DEFAULT_IMPORT_META_FORMATS, MetaFormat, import_with_metadata
+
+        if meta_format is not None and meta_format != "none":
+            meta_formats = (MetaFormat(meta_format),)
+        else:
+            meta_formats = DEFAULT_IMPORT_META_FORMATS
+
+        _clean_path, _label, meta = import_with_metadata(
+            host_path, meta_formats=meta_formats,
+        )
+        data = host_path.read_bytes()
+        resolved_load = int(load_addr, 0) if load_addr else (meta.load_addr or 0)
+        resolved_exec = int(exec_addr, 0) if exec_addr else (meta.exec_addr or 0)
+    else:
+        raise click.ClickException("HOST_PATH is required (or use - for stdin)")
+
+    mode = "r+b"
+    with open_image(image, fs, mode=mode) as handle:
+        target = _navigate(handle, bare, fs)
+        target.write_bytes(
+            data,
+            load_address=resolved_load,
+            exec_address=resolved_exec,
+        )
+        if fs is FilingSystem.AFS:
+            handle.flush()
+
+
+_alias("*save", "put")
+
+
+# ---------------------------------------------------------------------------
+# Modification commands
+# ---------------------------------------------------------------------------
+
+@cli.command()
+@click.argument("image", type=click.Path(exists=True, path_type=Path))
+@click.argument("paths", nargs=-1, required=True)
+@click.option("-f", "--force", is_flag=True, help="Ignore missing, override locks.")
+@click.option("-r", "--recursive", is_flag=True, help="Remove directories recursively.")
+@click.option("--dry-run", is_flag=True, help="Print what would be removed.")
+def rm(image: Path, paths: tuple[str, ...], force: bool, recursive: bool, dry_run: bool) -> None:
+    """Delete file(s) from the image (Acorn alias: *delete)."""
+    fs_type = detect_filing_system(image)
+    first_prefix = None
+    targets: list[tuple[FilingSystem, str]] = []
+    for p in paths:
+        fs, bare = resolve_path(image, p)
+        if first_prefix is None:
+            first_prefix = fs
+        targets.append((fs, bare))
+
+    mode = "rb" if dry_run else "r+b"
+    with open_image(image, first_prefix or fs_type, mode=mode) as handle:
+        for fs, bare in targets:
+            target = _navigate(handle, bare, fs)
+            if not target.exists():
+                if force:
+                    continue
+                raise click.ClickException(f"path not found: {bare}")
+            if target.is_dir() and not recursive:
+                raise click.ClickException(
+                    f"'{bare}' is a directory (use -r to remove recursively)"
+                )
+            if dry_run:
+                click.echo(f"would remove: {bare}")
+                continue
+
+            # Handle locked files with --force.
+            try:
+                target.unlink()
+            except Exception as exc:
+                if force and "locked" in str(exc).lower():
+                    if hasattr(target, "unlock"):
+                        target.unlock()
+                    target.unlink()
+                else:
+                    raise click.ClickException(str(exc))
+
+        if fs == FilingSystem.AFS and not dry_run:
+            handle.flush()
+
+
+_alias("*delete", "rm")
+
+
+@cli.command()
+@click.argument("image", type=click.Path(exists=True, path_type=Path))
+@click.argument("src")
+@click.argument("dst")
+@click.option("-f", "--force", is_flag=True, help="Overwrite existing destination.")
+def mv(image: Path, src: str, dst: str, force: bool) -> None:
+    """Rename or move a file within the image (Acorn alias: *rename)."""
+    fs, bare_src = resolve_path(image, src)
+    _, bare_dst = parse_prefix(dst)
+
+    with open_image(image, fs, mode="r+b") as handle:
+        source = _navigate(handle, bare_src, fs)
+        if not source.exists():
+            raise click.ClickException(f"path not found: {bare_src}")
+        source.rename(bare_dst)
+        if fs is FilingSystem.AFS:
+            handle.flush()
+
+
+_alias("*rename", "mv")
+
+
+@cli.command()
+@click.argument("image", type=click.Path(exists=True, path_type=Path))
+@click.argument("src")
+@click.argument("dst")
+@click.option("-f", "--force", is_flag=True, help="Overwrite existing destination.")
+def cp(image: Path, src: str, dst: str, force: bool) -> None:
+    """Copy a file within the image (Acorn alias: *copy)."""
+    # TODO: Cross-image copy (L7), within-image copy (L3).
+    fs, bare_src = resolve_path(image, src)
+    _, bare_dst = parse_prefix(dst)
+
+    with open_image(image, fs, mode="r+b") as handle:
+        source = _navigate(handle, bare_src, fs)
+        if not source.exists():
+            raise click.ClickException(f"path not found: {bare_src}")
+        if source.is_dir():
+            raise click.ClickException("directory copy not yet implemented")
+        # Read then write — simple copy via data round-trip.
+        data = source.read_bytes()
+        st = source.stat()
+        dest = _navigate(handle, bare_dst, fs)
+        dest.write_bytes(
+            data,
+            load_address=getattr(st, "load_address", 0),
+            exec_address=getattr(st, "exec_address", 0),
+            locked=getattr(st, "locked", False),
+        )
+        if fs is FilingSystem.AFS:
+            handle.flush()
+
+
+_alias("*copy", "cp")
+
+
+@cli.command()
+@click.argument("image", type=click.Path(exists=True, path_type=Path))
+@click.argument("path")
+@click.option("-p", is_flag=True, help="No error if directory already exists.")
+def mkdir(image: Path, path: str, p: bool) -> None:
+    """Create a directory (ADFS/AFS only). Alias: *cdir."""
+    fs, bare = resolve_path(image, path)
+    if fs is FilingSystem.DFS:
+        raise click.ClickException("mkdir is not supported for DFS images")
+    with open_image(image, fs, mode="r+b") as handle:
+        target = _navigate(handle, bare, fs)
+        if target.exists():
+            if p:
+                return
+            raise click.ClickException(f"'{bare}' already exists")
+        target.mkdir()
+        if fs is FilingSystem.AFS:
+            handle.flush()
+
+
+_alias("*cdir", "mkdir")
+
+
+@cli.command()
+@click.argument("image", type=click.Path(exists=True, path_type=Path))
+@click.argument("path")
+@click.argument("access")
+def chmod(image: Path, path: str, access: str) -> None:
+    """Set file access permissions (Acorn alias: *access)."""
+    # TODO: Parse symbolic (LWR/PR) and hex access strings (L4/L5).
+    click.echo("chmod not yet implemented")
+
+
+_alias("*access", "chmod")
+
+
+@cli.command()
+@click.argument("image", type=click.Path(exists=True, path_type=Path))
+@click.argument("path")
+def lock(image: Path, path: str) -> None:
+    """Lock a file."""
+    fs, bare = resolve_path(image, path)
+    with open_image(image, fs, mode="r+b") as handle:
+        target = _navigate(handle, bare, fs)
+        if not target.exists():
+            raise click.ClickException(f"path not found: {bare}")
+        target.lock()
+        if fs is FilingSystem.AFS:
+            handle.flush()
+
+
+@cli.command()
+@click.argument("image", type=click.Path(exists=True, path_type=Path))
+@click.argument("path")
+def unlock(image: Path, path: str) -> None:
+    """Unlock a file."""
+    fs, bare = resolve_path(image, path)
+    with open_image(image, fs, mode="r+b") as handle:
+        target = _navigate(handle, bare, fs)
+        if not target.exists():
+            raise click.ClickException(f"path not found: {bare}")
+        target.unlock()
+        if fs is FilingSystem.AFS:
+            handle.flush()
+
+
+@cli.command()
+@click.argument("image", type=click.Path(exists=True, path_type=Path))
+@click.argument("path")
+@click.argument("addr")
+def setload(image: Path, path: str, addr: str) -> None:
+    """Set a file's load address."""
+    # TODO: Needs library support (L4/L5).
+    click.echo("setload not yet implemented")
+
+
+@cli.command()
+@click.argument("image", type=click.Path(exists=True, path_type=Path))
+@click.argument("path")
+@click.argument("addr")
+def setexec(image: Path, path: str, addr: str) -> None:
+    """Set a file's exec address."""
+    # TODO: Needs library support (L4/L5).
+    click.echo("setexec not yet implemented")
+
+
+@cli.command()
+@click.argument("image", type=click.Path(exists=True, path_type=Path))
+@click.argument("new_title", required=False, default=None)
+def title(image: Path, new_title: str | None) -> None:
+    """Read or set disc title (Acorn alias: *title)."""
+    fs = detect_filing_system(image)
+    if new_title is None:
+        with open_image(image, fs) as handle:
+            click.echo(handle.title)
+    else:
+        with open_image(image, fs, mode="r+b") as handle:
+            handle.title = new_title
+
+
+_alias("*title", "title")
+
+
+@cli.command()
+@click.argument("image", type=click.Path(exists=True, path_type=Path))
+@click.argument("boot_option", required=False, default=None, type=int)
+def opt(image: Path, boot_option: int | None) -> None:
+    """Read or set boot option (Acorn alias: *opt4)."""
+    from oaknut.file import BootOption
+
+    fs = detect_filing_system(image)
+    if boot_option is None:
+        with open_image(image, fs) as handle:
+            bo = BootOption(handle.boot_option)
+            click.echo(f"{bo.value} ({bo.name})")
+    else:
+        if boot_option not in range(4):
+            raise click.ClickException("boot option must be 0-3")
+        with open_image(image, fs, mode="r+b") as handle:
+            handle.boot_option = boot_option
+
+
+_alias("*opt4", "opt")
+
+
+# ---------------------------------------------------------------------------
+# Whole-image operations
+# ---------------------------------------------------------------------------
+
+@cli.command()
+@click.argument("host_path", type=click.Path(path_type=Path))
+@click.option(
+    "--format", "fmt",
+    type=click.Choice(
+        ["ssd", "dsd", "adfs-s", "adfs-m", "adfs-l", "adfs-hard"],
+        case_sensitive=False,
+    ),
+    required=True,
+    help="Disc image format.",
+)
+@click.option("--title", "disc_title", default="", help="Disc title.")
+@click.option("--capacity", type=int, default=None, help="Capacity in bytes (hard disc).")
+def create(host_path: Path, fmt: str, disc_title: str, capacity: int | None) -> None:
+    """Create a new empty disc image."""
+    if fmt == "ssd":
+        from oaknut.dfs import ACORN_DFS_80T_SINGLE_SIDED, DFS
+        with DFS.create_file(host_path, ACORN_DFS_80T_SINGLE_SIDED, title=disc_title):
+            pass
+    elif fmt == "dsd":
+        from oaknut.dfs import ACORN_DFS_80T_DOUBLE_SIDED_INTERLEAVED, DFS
+        with DFS.create_file(host_path, ACORN_DFS_80T_DOUBLE_SIDED_INTERLEAVED, title=disc_title):
+            pass
+    elif fmt == "adfs-s":
+        from oaknut.adfs import ADFS, ADFS_S
+        with ADFS.create_file(host_path, ADFS_S, title=disc_title):
+            pass
+    elif fmt == "adfs-m":
+        from oaknut.adfs import ADFS, ADFS_M
+        with ADFS.create_file(host_path, ADFS_M, title=disc_title):
+            pass
+    elif fmt == "adfs-l":
+        from oaknut.adfs import ADFS, ADFS_L
+        with ADFS.create_file(host_path, ADFS_L, title=disc_title):
+            pass
+    elif fmt == "adfs-hard":
+        from oaknut.adfs import ADFS
+        if capacity is None:
+            raise click.ClickException("--capacity is required for adfs-hard")
+        with ADFS.create_file(host_path, capacity_bytes=capacity, title=disc_title):
+            pass
+
+    click.echo(f"Created {host_path}")
+
+
+@cli.command()
+@click.argument("image", type=click.Path(exists=True, path_type=Path))
+def compact(image: Path) -> None:
+    """Defragment an ADFS disc image."""
+    fs = detect_filing_system(image)
+    if fs is FilingSystem.DFS:
+        raise click.ClickException("compact is not supported for DFS images")
+    with open_image(image, fs, mode="r+b") as handle:
+        if hasattr(handle, "compact"):
+            count = handle.compact()
+            click.echo(f"Compacted {count} object(s)")
+        else:
+            click.echo("Compact not available for this format")
+
+
+# ---------------------------------------------------------------------------
+# Bulk export / import
+# ---------------------------------------------------------------------------
+
+@cli.command(name="export")
+@click.argument("image", type=click.Path(exists=True, path_type=Path))
+@click.argument("host_dir", type=click.Path(path_type=Path))
+@click.option(
+    "--meta-format",
+    type=click.Choice(
+        ["inf-trad", "inf-pieb", "xattr-acorn", "xattr-pieb",
+         "filename-riscos", "filename-mos", "none"],
+        case_sensitive=False,
+    ),
+    default="inf-trad",
+    help="Metadata sidecar format.",
+)
+@click.option("--owner", type=int, default=0, help="Econet owner ID for PiEB formats.")
+@click.option("-v", "--verbose", is_flag=True, help="Show extraction progress.")
+def export_cmd(image: Path, host_dir: Path, meta_format: str, owner: int, verbose: bool) -> None:
+    """Bulk-export entire image to a host directory."""
+    from oaknut.file import MetaFormat
+
+    resolved_meta_format: MetaFormat | None
+    if meta_format == "none":
+        resolved_meta_format = None
+    else:
+        resolved_meta_format = MetaFormat(meta_format)
+
+    fs = detect_filing_system(image)
+    host_dir.mkdir(parents=True, exist_ok=True)
+
+    with open_image(image, fs) as handle:
+        _export_recursive(handle.root, host_dir, resolved_meta_format, owner, verbose, fs)
+
+
+def _export_recursive(
+    node, host_dir: Path, meta_format, owner: int, verbose: bool, fs: FilingSystem,
+) -> None:
+    """Recursively export files from the image to the host directory."""
+    from oaknut.file import AcornMeta, export_with_metadata
+
+    for child in node.iterdir():
+        if child.is_dir():
+            sub_dir = host_dir / child.name
+            sub_dir.mkdir(exist_ok=True)
+            _export_recursive(child, sub_dir, meta_format, owner, verbose, fs)
+        else:
+            data = child.read_bytes()
+            st = child.stat()
+            meta = AcornMeta(
+                load_addr=getattr(st, "load_address", None),
+                exec_addr=getattr(st, "exec_address", None),
+                attr=int(st.access) if hasattr(st, "access") else (
+                    0x08 if getattr(st, "locked", False) else 0
+                ),
+            )
+            export_with_metadata(
+                data,
+                host_dir / child.name,
+                meta,
+                meta_format=meta_format,
+                owner=owner,
+                filename=child.name,
+            )
+            if verbose:
+                click.echo(child.name, err=True)
+
+
+@cli.command(name="import")
+@click.argument("image", type=click.Path(exists=True, path_type=Path))
+@click.argument("host_dir", type=click.Path(exists=True, path_type=Path))
+@click.option("-v", "--verbose", is_flag=True, help="Show import progress.")
+def import_cmd(image: Path, host_dir: Path, verbose: bool) -> None:
+    """Bulk-import a host directory into the image."""
+    # TODO: Needs library support (L6) for full recursive import.
+    click.echo("import not yet implemented")
+
+
+# ---------------------------------------------------------------------------
+# AFS-specific commands
+# ---------------------------------------------------------------------------
+
+@cli.command(name="afs-init")
+@click.argument("image", type=click.Path(exists=True, path_type=Path))
+@click.option("--disc-name", required=True, help="AFS disc name.")
+@click.option("--cylinders", type=int, default=None, help="AFS region size in cylinders.")
+@click.option(
+    "--user", "users", multiple=True,
+    help="User spec as NAME or NAME:S (system flag). Repeat for multiple.",
+)
+def afs_init(image: Path, disc_name: str, cylinders: int | None, users: tuple[str, ...]) -> None:
+    """Initialise an AFS partition on an ADFS hard disc image."""
+    from oaknut.adfs import ADFS
+    from oaknut.afs.wfsinit import AFSSizeSpec, InitSpec, UserSpec, initialise
+
+    user_specs: list[UserSpec] = []
+    for user_spec in users:
+        parts = user_spec.split(":")
+        name = parts[0]
+        flags = parts[1] if len(parts) > 1 else ""
+        user_specs.append(UserSpec(name=name, system="S" in flags))
+
+    if not user_specs:
+        user_specs = [UserSpec("Syst", system=True)]
+
+    size = AFSSizeSpec.cylinders(cylinders) if cylinders else AFSSizeSpec.max()
+
+    with ADFS.from_file(image, mode="r+b") as adfs:
+        initialise(adfs, spec=InitSpec(disc_name=disc_name, size=size, users=user_specs))
+
+    click.echo(f"Initialised AFS region on {image}")
+
+
+@cli.command(name="afs-users")
+@click.argument("image", type=click.Path(exists=True, path_type=Path))
+def afs_users(image: Path) -> None:
+    """List AFS users with quota and flags."""
+    with _open_afs(image) as afs:
+        for u in afs.users.active:
+            flag = "S" if u.is_system else " "
+            click.echo(f"{flag} {u.full_id:20s} quota={u.free_space:#010x}")
+
+
+@cli.command(name="afs-useradd")
+@click.argument("image", type=click.Path(exists=True, path_type=Path))
+@click.argument("name")
+@click.option("--system", is_flag=True, help="System user flag.")
+@click.option("--quota", type=int, default=None, help="Quota in bytes.")
+@click.option("--password", default="", help="Initial password.")
+def afs_useradd(
+    image: Path, name: str, system: bool, quota: int | None, password: str,
+) -> None:
+    """Add a user to the AFS passwords file."""
+    with open_image_for_afs_write(image) as (adfs, afs):
+        afs.users.add(name, system=system, password=password)
+        if quota is not None:
+            user = afs.users.find(name)
+            user.free_space = quota
+        afs.flush()
+    click.echo(f"Added user '{name}'")
+
+
+@cli.command(name="afs-userdel")
+@click.argument("image", type=click.Path(exists=True, path_type=Path))
+@click.argument("name")
+def afs_userdel(image: Path, name: str) -> None:
+    """Remove a user from the AFS passwords file."""
+    with open_image_for_afs_write(image) as (adfs, afs):
+        afs.users.remove(name)
+        afs.flush()
+    click.echo(f"Removed user '{name}'")
+
+
+@cli.command(name="afs-merge")
+@click.argument("image", type=click.Path(exists=True, path_type=Path))
+@click.option("--source", required=True, type=click.Path(exists=True, path_type=Path),
+              help="Source AFS image to merge from.")
+@click.option("--target-path", default=None, help="Target AFS path for merge root.")
+def afs_merge(image: Path, source: Path, target_path: str | None) -> None:
+    """Merge a source AFS tree into the target image."""
+    from oaknut.adfs import ADFS
+    from oaknut.afs import merge
+
+    with ADFS.from_file(image, mode="r+b") as target_adfs:
+        target_afs = target_adfs.afs_partition
+        if target_afs is None:
+            raise click.ClickException("no AFS partition found on target disc")
+
+        with ADFS.from_file(source) as source_adfs:
+            source_afs = source_adfs.afs_partition
+            if source_afs is None:
+                raise click.ClickException("no AFS partition found on source disc")
+
+            target_root = target_afs.root
+            if target_path:
+                target_root = _navigate_afs(target_afs, target_path)
+
+            merge(target_root, source_afs.root)
+            target_afs.flush()
+
+    click.echo(f"Merged {source} into {image}")
