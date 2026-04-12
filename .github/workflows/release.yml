@@ -1,20 +1,82 @@
 name: Release
 
-# Publishes all packages to PyPI when a version tag is pushed.
-#
-#   v10.0.0  → build and publish every oaknut-* package + the meta-distribution
-#
-# All packages share a single version number. Authentication uses the
-# account-scoped PYPI_TOKEN secret.
+# Triggered by a version tag (v10.0.0, v10.0.1, etc.).
+# Runs the full test suite and docs build first. Only if everything
+# passes does it publish packages to PyPI and deploy docs to
+# GitHub Pages.
 
 on:
   push:
     tags:
       - 'v*'
 
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
 jobs:
+  test:
+    name: Test on ${{ matrix.os }} / Python ${{ matrix.python-version }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: true
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python-version: ["3.12", "3.13"]
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.0.0
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache-dependency-glob: |
+            pyproject.toml
+            packages/*/pyproject.toml
+
+      - name: Install workspace
+        run: uv sync --all-extras
+
+      - name: Run namespace-init guard
+        run: bash scripts/check_no_namespace_init.sh
+
+      - name: Run ruff
+        run: uv run ruff check
+
+      - name: Run tests
+        run: uv run pytest -v
+
+  docs:
+    name: Build docs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.0.0
+        with:
+          python-version: "3.13"
+
+      - name: Install workspace + docs dependencies
+        run: uv sync --group docs
+
+      - name: Build Sphinx docs
+        run: uv run sphinx-build -b html docs docs/_build/html -W
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs/_build/html
+
   publish:
-    name: Publish ${{ github.ref_name }} to PyPI
+    name: Publish to PyPI
+    needs: [test, docs]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -33,11 +95,9 @@ jobs:
       - name: Build all packages
         run: |
           rm -rf dist/
-          # Build each workspace member.
           for pkg in oaknut-file oaknut-discimage oaknut-basic oaknut-dfs oaknut-adfs oaknut-afs oaknut-zip oaknut-disc; do
             uv build --package "$pkg" --out-dir dist/
           done
-          # Build the meta-distribution.
           uv build --out-dir dist/
           echo "=== Built artefacts ==="
           ls -la dist/
@@ -46,3 +106,15 @@ jobs:
         env:
           UV_PUBLISH_TOKEN: ${{ secrets.PYPI_TOKEN }}
         run: uv publish dist/*
+
+  deploy-docs:
+    name: Deploy docs to GitHub Pages
+    needs: [publish]
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
