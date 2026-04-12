@@ -384,6 +384,66 @@ class TestCp:
         result = runner.invoke(cli, ["cat", str(dfs_image_filepath), "$.Hello"])
         assert result.exit_code == 0
 
+    def test_cp_dfs_to_adfs(
+        self, runner: CliRunner, dfs_image_filepath: Path, adfs_image_filepath: Path,
+    ) -> None:
+        result = runner.invoke(
+            cli,
+            [
+                "cp",
+                str(dfs_image_filepath),
+                "$.HELLO",
+                "$.FromDFS",
+                "--to",
+                str(adfs_image_filepath),
+            ],
+        )
+        assert result.exit_code == 0
+        # Verify it arrived in the ADFS image.
+        result = runner.invoke(cli, ["cat", str(adfs_image_filepath), "$.FromDFS"])
+        assert result.exit_code == 0
+        assert b"Hello world" in result.output_bytes
+
+    def test_cp_adfs_to_dfs(
+        self, runner: CliRunner, dfs_image_filepath: Path, adfs_image_filepath: Path,
+    ) -> None:
+        result = runner.invoke(
+            cli,
+            [
+                "cp",
+                str(adfs_image_filepath),
+                "$.Hello",
+                "$.FrmADF",
+                "--to",
+                str(dfs_image_filepath),
+            ],
+        )
+        assert result.exit_code == 0
+        result = runner.invoke(cli, ["cat", str(dfs_image_filepath), "$.FrmADF"])
+        assert result.exit_code == 0
+        assert b"Hello ADFS" in result.output_bytes
+
+    def test_cp_cross_preserves_load_exec(
+        self, runner: CliRunner, dfs_image_filepath: Path, adfs_image_filepath: Path,
+    ) -> None:
+        runner.invoke(
+            cli,
+            [
+                "cp",
+                str(dfs_image_filepath),
+                "$.HELLO",
+                "$.Copied",
+                "--to",
+                str(adfs_image_filepath),
+            ],
+        )
+        result = runner.invoke(
+            cli, ["stat", str(adfs_image_filepath), "$.Copied"]
+        )
+        assert result.exit_code == 0
+        assert "00001900" in result.output  # load address preserved
+        assert "00008023" in result.output  # exec address preserved
+
 
 # ---------------------------------------------------------------------------
 # Modification: mkdir

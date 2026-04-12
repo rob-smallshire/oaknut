@@ -879,9 +879,32 @@ _alias("*RENAME", "mv")
 @click.argument("src")
 @click.argument("dst")
 @click.option("-f", "--force", is_flag=True, help="Overwrite existing destination.")
-def cp(image: Path, src: str, dst: str, force: bool) -> None:
-    """Copy a file within the image (Acorn alias: *COPY)."""
-    # TODO: Cross-image copy (L7), within-image copy (L3).
+@click.option(
+    "--to",
+    "dst_image",
+    type=click.Path(exists=True, path_type=Path),
+    default=None,
+    help="Destination image for cross-image copy.",
+)
+def cp(image: Path, src: str, dst: str, force: bool, dst_image: Path | None) -> None:
+    """Copy a file within or between disc images (Acorn alias: *COPY).
+
+    Within one image: disc cp IMAGE SRC DST
+
+    Between images:   disc cp SRC_IMAGE SRC_PATH DST_PATH --to DST_IMAGE
+
+    Copies across DFS, ADFS, and AFS in any combination. Load and
+    exec addresses are preserved; access attributes are mapped
+    best-effort (DFS only has the locked bit).
+    """
+    if dst_image is not None:
+        _cp_cross_image(image, src, dst, dst_image, force)
+    else:
+        _cp_within_image(image, src, dst, force)
+
+
+def _cp_within_image(image: Path, src: str, dst: str, force: bool) -> None:
+    """Copy a file within a single disc image."""
     fs, bare_src = resolve_path(image, src)
     _, bare_dst = parse_prefix(dst)
 
@@ -891,10 +914,13 @@ def cp(image: Path, src: str, dst: str, force: bool) -> None:
             raise click.ClickException(f"path not found: {bare_src}")
         if source.is_dir():
             raise click.ClickException("directory copy not yet implemented")
-        # Read then write — simple copy via data round-trip.
+        dest = _navigate(handle, bare_dst, fs)
+        if dest.exists() and not force:
+            raise click.ClickException(f"'{bare_dst}' already exists (use -f to overwrite)")
+        if dest.exists() and force:
+            dest.unlink()
         data = source.read_bytes()
         st = source.stat()
-        dest = _navigate(handle, bare_dst, fs)
         dest.write_bytes(
             data,
             load_address=getattr(st, "load_address", 0),
@@ -903,6 +929,43 @@ def cp(image: Path, src: str, dst: str, force: bool) -> None:
         )
         if fs is FilingSystem.AFS:
             handle.flush()
+
+
+def _cp_cross_image(
+    src_image: Path, src: str, dst: str, dst_image: Path, force: bool,
+) -> None:
+    """Copy a file between two disc images (possibly different formats)."""
+    src_fs, src_bare = resolve_path(src_image, src)
+    dst_fs, dst_bare = resolve_path(dst_image, dst)
+
+    # Read from source (read-only).
+    with open_image(src_image, src_fs) as src_handle:
+        source = _navigate(src_handle, src_bare, src_fs)
+        if not source.exists():
+            raise click.ClickException(f"path not found: {src_bare}")
+        if source.is_dir():
+            raise click.ClickException("directory copy not yet implemented")
+        data = source.read_bytes()
+        st = source.stat()
+        load_addr = getattr(st, "load_address", 0)
+        exec_addr = getattr(st, "exec_address", 0)
+        locked = getattr(st, "locked", False)
+
+    # Write to destination.
+    with open_image(dst_image, dst_fs, mode="r+b") as dst_handle:
+        dest = _navigate(dst_handle, dst_bare, dst_fs)
+        if dest.exists() and not force:
+            raise click.ClickException(f"'{dst_bare}' already exists (use -f to overwrite)")
+        if dest.exists() and force:
+            dest.unlink()
+        dest.write_bytes(
+            data,
+            load_address=load_addr,
+            exec_address=exec_addr,
+            locked=locked,
+        )
+        if dst_fs is FilingSystem.AFS:
+            dst_handle.flush()
 
 
 _alias("*COPY", "cp")
