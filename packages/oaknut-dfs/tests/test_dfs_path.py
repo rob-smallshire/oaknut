@@ -287,6 +287,39 @@ class TestDFSPathModification:
         assert new.exists()
         assert new.read_bytes() == b"Hello, World!"
 
+    def test_set_load_address(self):
+        dfs = _make_dfs_with_files()
+        p = dfs.root / "$" / "HELLO"
+        assert p.stat().load_address == 0x1900
+        p.set_load_address(0xFF00)
+        assert p.stat().load_address == 0xFF00
+        # Data should be unchanged.
+        assert p.read_bytes() == b"Hello, World!"
+
+    def test_set_exec_address(self):
+        dfs = _make_dfs_with_files()
+        p = dfs.root / "$" / "HELLO"
+        assert p.stat().exec_address == 0x8000
+        p.set_exec_address(0xABCD)
+        assert p.stat().exec_address == 0xABCD
+        assert p.read_bytes() == b"Hello, World!"
+
+    def test_set_load_address_high_bits(self):
+        dfs = _make_dfs_with_files()
+        p = dfs.root / "$" / "HELLO"
+        p.set_load_address(0x3FF00)
+        assert p.stat().load_address == 0x3FF00
+        # Exec should be unchanged.
+        assert p.stat().exec_address == 0x8000
+
+    def test_set_exec_address_high_bits(self):
+        dfs = _make_dfs_with_files()
+        p = dfs.root / "$" / "HELLO"
+        p.set_exec_address(0x38000)
+        assert p.stat().exec_address == 0x38000
+        # Load should be unchanged.
+        assert p.stat().load_address == 0x1900
+
 
 class TestDFSPathContains:
     def test_root_contains_directory(self):

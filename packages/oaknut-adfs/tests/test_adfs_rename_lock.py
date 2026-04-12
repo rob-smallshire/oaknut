@@ -1,4 +1,4 @@
-"""Tests for ADFSPath.rename(), lock(), and unlock()."""
+"""Tests for ADFSPath.rename(), lock(), unlock(), set_load_address(), and set_exec_address()."""
 
 import pytest
 from oaknut.adfs import ADFS, ADFS_S
@@ -171,4 +171,71 @@ class TestUnlock:
         adfs = ADFS.create(ADFS_S)
         (adfs.root / "File").write_bytes(b"data", locked=True)
         (adfs.root / "File").unlock()
+        assert adfs.validate() == []
+
+
+class TestSetLoadAddress:
+    def test_set_load_address(self):
+        adfs = ADFS.create(ADFS_S)
+        (adfs.root / "File").write_bytes(b"data", load_address=0x1900)
+        (adfs.root / "File").set_load_address(0xFF00)
+        assert (adfs.root / "File").stat().load_address == 0xFF00
+
+    def test_set_load_preserves_data(self):
+        adfs = ADFS.create(ADFS_S)
+        (adfs.root / "File").write_bytes(b"hello", load_address=0x1900)
+        (adfs.root / "File").set_load_address(0xFF00)
+        assert (adfs.root / "File").read_bytes() == b"hello"
+
+    def test_set_load_preserves_exec(self):
+        adfs = ADFS.create(ADFS_S)
+        (adfs.root / "File").write_bytes(
+            b"data", load_address=0x1900, exec_address=0x8023,
+        )
+        (adfs.root / "File").set_load_address(0xFF00)
+        assert (adfs.root / "File").stat().exec_address == 0x8023
+
+    def test_set_load_high_bits(self):
+        adfs = ADFS.create(ADFS_S)
+        (adfs.root / "File").write_bytes(b"data", load_address=0)
+        (adfs.root / "File").set_load_address(0xFFFF1234)
+        assert (adfs.root / "File").stat().load_address == 0xFFFF1234
+
+    def test_validate_after_set_load(self):
+        adfs = ADFS.create(ADFS_S)
+        (adfs.root / "File").write_bytes(b"data", load_address=0x1900)
+        (adfs.root / "File").set_load_address(0xFF00)
+        assert adfs.validate() == []
+
+    def test_set_load_nonexistent_raises(self):
+        adfs = ADFS.create(ADFS_S)
+        with pytest.raises(ADFSPathError):
+            (adfs.root / "NoSuch").set_load_address(0xFF00)
+
+
+class TestSetExecAddress:
+    def test_set_exec_address(self):
+        adfs = ADFS.create(ADFS_S)
+        (adfs.root / "File").write_bytes(b"data", exec_address=0x8023)
+        (adfs.root / "File").set_exec_address(0xABCD)
+        assert (adfs.root / "File").stat().exec_address == 0xABCD
+
+    def test_set_exec_preserves_data(self):
+        adfs = ADFS.create(ADFS_S)
+        (adfs.root / "File").write_bytes(b"hello", exec_address=0x8023)
+        (adfs.root / "File").set_exec_address(0xABCD)
+        assert (adfs.root / "File").read_bytes() == b"hello"
+
+    def test_set_exec_preserves_load(self):
+        adfs = ADFS.create(ADFS_S)
+        (adfs.root / "File").write_bytes(
+            b"data", load_address=0x1900, exec_address=0x8023,
+        )
+        (adfs.root / "File").set_exec_address(0xABCD)
+        assert (adfs.root / "File").stat().load_address == 0x1900
+
+    def test_validate_after_set_exec(self):
+        adfs = ADFS.create(ADFS_S)
+        (adfs.root / "File").write_bytes(b"data", exec_address=0x8023)
+        (adfs.root / "File").set_exec_address(0xABCD)
         assert adfs.validate() == []

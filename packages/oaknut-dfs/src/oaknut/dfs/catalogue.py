@@ -198,6 +198,16 @@ class Catalogue(ABC):
         pass
 
     @abstractmethod
+    def set_load_address(self, filename: str, address: int) -> None:
+        """Set load address for a file without rewriting its data."""
+        pass
+
+    @abstractmethod
+    def set_exec_address(self, filename: str, address: int) -> None:
+        """Set exec address for a file without rewriting its data."""
+        pass
+
+    @abstractmethod
     def parse_filename(self, path: str) -> ParsedFilename:
         """
         Parse and validate filename path.

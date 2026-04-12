@@ -414,6 +414,57 @@ class TestChmod:
         assert result.exit_code == 0
 
 
+class TestSetGetLoad:
+    def test_set_load_dfs(self, runner: CliRunner, dfs_image_filepath: Path) -> None:
+        result = runner.invoke(
+            cli, ["set-load", str(dfs_image_filepath), "$.HELLO", "0xFF00"]
+        )
+        assert result.exit_code == 0
+        result = runner.invoke(
+            cli, ["get-load", str(dfs_image_filepath), "$.HELLO"]
+        )
+        assert result.exit_code == 0
+        assert "0000FF00" in result.output
+
+    def test_set_load_adfs(self, runner: CliRunner, adfs_image_filepath: Path) -> None:
+        result = runner.invoke(
+            cli, ["set-load", str(adfs_image_filepath), "$.Hello", "0xFFFF1234"]
+        )
+        assert result.exit_code == 0
+        result = runner.invoke(
+            cli, ["get-load", str(adfs_image_filepath), "$.Hello"]
+        )
+        assert result.exit_code == 0
+        assert "FFFF1234" in result.output
+
+    def test_get_load_original(self, runner: CliRunner, dfs_image_filepath: Path) -> None:
+        result = runner.invoke(
+            cli, ["get-load", str(dfs_image_filepath), "$.HELLO"]
+        )
+        assert result.exit_code == 0
+        assert "00001900" in result.output
+
+
+class TestSetGetExec:
+    def test_set_exec_dfs(self, runner: CliRunner, dfs_image_filepath: Path) -> None:
+        result = runner.invoke(
+            cli, ["set-exec", str(dfs_image_filepath), "$.HELLO", "0xABCD"]
+        )
+        assert result.exit_code == 0
+        result = runner.invoke(
+            cli, ["get-exec", str(dfs_image_filepath), "$.HELLO"]
+        )
+        assert result.exit_code == 0
+        assert "0000ABCD" in result.output
+
+    def test_get_exec_original(self, runner: CliRunner, dfs_image_filepath: Path) -> None:
+        result = runner.invoke(
+            cli, ["get-exec", str(dfs_image_filepath), "$.HELLO"]
+        )
+        assert result.exit_code == 0
+        assert "00008023" in result.output
+
+
 class TestMkdir:
     def test_mkdir_adfs(self, runner: CliRunner, adfs_image_filepath: Path) -> None:
         result = runner.invoke(cli, ["mkdir", str(adfs_image_filepath), "$.NewDir"])

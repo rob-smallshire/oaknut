@@ -718,6 +718,61 @@ class WatfordDFSCatalogue(Catalogue):
         # Increment cycle number
         sector1[4] = (sector1[4] + 1) & 0xFF
 
+    def _find_file_index(self, filename: str) -> int:
+        """Return the catalogue index for *filename*, or raise."""
+        files = self.list_files()
+        for i, f in enumerate(files):
+            if f.path.upper() == filename.upper():
+                return i
+        raise FileNotFoundError(f"File not found: {filename}")
+
+    def _section_offset(self, file_index: int) -> tuple[int, int]:
+        """Return (sector1_num, entry_offset) for a file index."""
+        if file_index < 31:
+            return 1, 8 + (file_index * 8)
+        else:
+            return 3, 8 + ((file_index - 31) * 8)
+
+    def set_load_address(self, filename: str, address: int) -> None:
+        """Set load address for a file in the catalogue."""
+        file_index = self._find_file_index(filename)
+        sector1_num, entry_offset = self._section_offset(file_index)
+
+        sector1 = self._surface.sector_range(sector1_num, 1)
+
+        # Low 16 bits.
+        sector1[entry_offset] = address & 0xFF
+        sector1[entry_offset + 1] = (address >> 8) & 0xFF
+
+        # High 2 bits in extra byte (bits 2-3), preserve other bits.
+        extra_byte = sector1[entry_offset + 6]
+        extra_byte = (extra_byte & ~0x0C) | (((address >> 16) & 0x03) << 2)
+        sector1[entry_offset + 6] = extra_byte
+
+        # Increment cycle number.
+        cycle_sector = self._surface.sector_range(1, 1)
+        cycle_sector[4] = (cycle_sector[4] + 1) & 0xFF
+
+    def set_exec_address(self, filename: str, address: int) -> None:
+        """Set exec address for a file in the catalogue."""
+        file_index = self._find_file_index(filename)
+        sector1_num, entry_offset = self._section_offset(file_index)
+
+        sector1 = self._surface.sector_range(sector1_num, 1)
+
+        # Low 16 bits.
+        sector1[entry_offset + 2] = address & 0xFF
+        sector1[entry_offset + 3] = (address >> 8) & 0xFF
+
+        # High 2 bits in extra byte (bits 6-7), preserve other bits.
+        extra_byte = sector1[entry_offset + 6]
+        extra_byte = (extra_byte & ~0xC0) | (((address >> 16) & 0x03) << 6)
+        sector1[entry_offset + 6] = extra_byte
+
+        # Increment cycle number.
+        cycle_sector = self._surface.sector_range(1, 1)
+        cycle_sector[4] = (cycle_sector[4] + 1) & 0xFF
+
     def parse_filename(self, path: str) -> ParsedFilename:
         """
         Parse filename path like '$.FILE' or 'A.FILE'.

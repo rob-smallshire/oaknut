@@ -732,6 +732,22 @@ class ADFSPath:
             raise ADFSPathError("Cannot chmod root directory")
         self._adfs._chmod(self._path.split("."), access)
 
+    def set_load_address(self, address: int) -> None:
+        """Set the load address without rewriting the file data.
+
+        Raises:
+            ADFSPathError: If the path doesn't exist.
+        """
+        self._adfs._set_load_address(self._path.split("."), address)
+
+    def set_exec_address(self, address: int) -> None:
+        """Set the exec address without rewriting the file data.
+
+        Raises:
+            ADFSPathError: If the path doesn't exist.
+        """
+        self._adfs._set_exec_address(self._path.split("."), address)
+
     # --- Host filesystem transfer ---
 
     def export_file(
@@ -2077,6 +2093,76 @@ class ADFS:
 
         new_entries = tuple(
             updated_entry if e.name.upper() == filename.upper() else e for e in parent_dir.entries
+        )
+        new_seq = (parent_dir.sequence_number + 1) & 0xFF
+
+        updated_dir = _ADFSDirectory(
+            name=parent_dir.name,
+            title=parent_dir.title,
+            parent_address=parent_dir.parent_address,
+            disc_address=parent_dir.disc_address,
+            entries=new_entries,
+            sequence_number=new_seq,
+        )
+        self._write_directory_at(updated_dir, parent_disc_address)
+
+    def _set_load_address(self, path_parts: list[str], address: int) -> None:
+        """Set load address on a file or directory."""
+        filename = path_parts[-1]
+        parent_dir, parent_disc_address = self._resolve_parent(path_parts)
+
+        existing = parent_dir.find(filename)
+        if existing is None:
+            raise ADFSPathError(f"'{filename}' not found")
+
+        updated_entry = _ADFSDirectoryEntry(
+            name=existing.name,
+            load_address=address,
+            exec_address=existing.exec_address,
+            length=existing.length,
+            indirect_disc_address=existing.indirect_disc_address,
+            sequence_number=existing.sequence_number,
+            attributes=existing.attributes,
+        )
+
+        new_entries = tuple(
+            updated_entry if e.name.upper() == filename.upper() else e
+            for e in parent_dir.entries
+        )
+        new_seq = (parent_dir.sequence_number + 1) & 0xFF
+
+        updated_dir = _ADFSDirectory(
+            name=parent_dir.name,
+            title=parent_dir.title,
+            parent_address=parent_dir.parent_address,
+            disc_address=parent_dir.disc_address,
+            entries=new_entries,
+            sequence_number=new_seq,
+        )
+        self._write_directory_at(updated_dir, parent_disc_address)
+
+    def _set_exec_address(self, path_parts: list[str], address: int) -> None:
+        """Set exec address on a file or directory."""
+        filename = path_parts[-1]
+        parent_dir, parent_disc_address = self._resolve_parent(path_parts)
+
+        existing = parent_dir.find(filename)
+        if existing is None:
+            raise ADFSPathError(f"'{filename}' not found")
+
+        updated_entry = _ADFSDirectoryEntry(
+            name=existing.name,
+            load_address=existing.load_address,
+            exec_address=address,
+            length=existing.length,
+            indirect_disc_address=existing.indirect_disc_address,
+            sequence_number=existing.sequence_number,
+            attributes=existing.attributes,
+        )
+
+        new_entries = tuple(
+            updated_entry if e.name.upper() == filename.upper() else e
+            for e in parent_dir.entries
         )
         new_seq = (parent_dir.sequence_number + 1) & 0xFF
 

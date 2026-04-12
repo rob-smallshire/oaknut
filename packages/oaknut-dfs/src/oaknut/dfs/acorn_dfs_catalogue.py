@@ -554,6 +554,56 @@ class AcornDFSCatalogue(Catalogue):
         disk_info = self.get_disk_info()
         sector1[4] = (disk_info.cycle_number + 1) & 0xFF
 
+    def _find_file_index(self, filename: str) -> int:
+        """Return the catalogue index for *filename*, or raise."""
+        files = self.list_files()
+        for i, f in enumerate(files):
+            if f.path.upper() == filename.upper():
+                return i
+        raise FileNotFoundError(f"File not found: {filename}")
+
+    def set_load_address(self, filename: str, address: int) -> None:
+        """Set load address for a file in the catalogue."""
+        file_index = self._find_file_index(filename)
+        entry_offset = 8 + (file_index * 8)
+
+        sector1 = self._surface.sector_range(1, 1)
+        sector1_offset = entry_offset
+
+        # Low 16 bits.
+        sector1[sector1_offset] = address & 0xFF
+        sector1[sector1_offset + 1] = (address >> 8) & 0xFF
+
+        # High 2 bits in extra byte (bits 2-3), preserve other bits.
+        extra_byte = sector1[sector1_offset + 6]
+        extra_byte = (extra_byte & ~0x0C) | (((address >> 16) & 0x03) << 2)
+        sector1[sector1_offset + 6] = extra_byte
+
+        # Increment cycle number.
+        disk_info = self.get_disk_info()
+        sector1[4] = (disk_info.cycle_number + 1) & 0xFF
+
+    def set_exec_address(self, filename: str, address: int) -> None:
+        """Set exec address for a file in the catalogue."""
+        file_index = self._find_file_index(filename)
+        entry_offset = 8 + (file_index * 8)
+
+        sector1 = self._surface.sector_range(1, 1)
+        sector1_offset = entry_offset
+
+        # Low 16 bits.
+        sector1[sector1_offset + 2] = address & 0xFF
+        sector1[sector1_offset + 3] = (address >> 8) & 0xFF
+
+        # High 2 bits in extra byte (bits 6-7), preserve other bits.
+        extra_byte = sector1[sector1_offset + 6]
+        extra_byte = (extra_byte & ~0xC0) | (((address >> 16) & 0x03) << 6)
+        sector1[sector1_offset + 6] = extra_byte
+
+        # Increment cycle number.
+        disk_info = self.get_disk_info()
+        sector1[4] = (disk_info.cycle_number + 1) & 0xFF
+
     def rename_file(self, old_name: str, new_name: str) -> None:
         """Rename file preserving all metadata and location."""
         # Find the file

@@ -338,6 +338,14 @@ class DFSPath:
         """Unlock file (*ACCESS -L)."""
         self._dfs._catalogued_surface.catalogue.unlock_file(self._path)
 
+    def set_load_address(self, address: int) -> None:
+        """Set the load address without rewriting the file data."""
+        self._dfs._catalogued_surface.catalogue.set_load_address(self._path, address)
+
+    def set_exec_address(self, address: int) -> None:
+        """Set the exec address without rewriting the file data."""
+        self._dfs._catalogued_surface.catalogue.set_exec_address(self._path, address)
+
     # --- Host filesystem transfer ---
 
     def export_file(

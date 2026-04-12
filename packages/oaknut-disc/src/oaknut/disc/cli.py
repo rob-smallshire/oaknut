@@ -856,24 +856,66 @@ def unlock(image: Path, path: str) -> None:
             handle.flush()
 
 
-@cli.command()
+@cli.command(name="set-load")
 @click.argument("image", type=click.Path(exists=True, path_type=Path))
 @click.argument("path")
 @click.argument("addr")
-def setload(image: Path, path: str, addr: str) -> None:
+def set_load(image: Path, path: str, addr: str) -> None:
     """Set a file's load address."""
-    # TODO: Needs library support (L4/L5).
-    click.echo("setload not yet implemented")
+    address = int(addr, 0)
+    fs, bare = resolve_path(image, path)
+    with open_image(image, fs, mode="r+b") as handle:
+        target = _navigate(handle, bare, fs)
+        if not target.exists():
+            raise click.ClickException(f"path not found: {bare}")
+        target.set_load_address(address)
+        if fs is FilingSystem.AFS:
+            handle.flush()
 
 
-@cli.command()
+@cli.command(name="set-exec")
 @click.argument("image", type=click.Path(exists=True, path_type=Path))
 @click.argument("path")
 @click.argument("addr")
-def setexec(image: Path, path: str, addr: str) -> None:
+def set_exec(image: Path, path: str, addr: str) -> None:
     """Set a file's exec address."""
-    # TODO: Needs library support (L4/L5).
-    click.echo("setexec not yet implemented")
+    address = int(addr, 0)
+    fs, bare = resolve_path(image, path)
+    with open_image(image, fs, mode="r+b") as handle:
+        target = _navigate(handle, bare, fs)
+        if not target.exists():
+            raise click.ClickException(f"path not found: {bare}")
+        target.set_exec_address(address)
+        if fs is FilingSystem.AFS:
+            handle.flush()
+
+
+@cli.command(name="get-load")
+@click.argument("image", type=click.Path(exists=True, path_type=Path))
+@click.argument("path")
+def get_load(image: Path, path: str) -> None:
+    """Print a file's load address."""
+    fs, bare = resolve_path(image, path)
+    with open_image(image, fs) as handle:
+        target = _navigate(handle, bare, fs)
+        if not target.exists():
+            raise click.ClickException(f"path not found: {bare}")
+        st = target.stat()
+        click.echo(f"{st.load_address:08X}")
+
+
+@cli.command(name="get-exec")
+@click.argument("image", type=click.Path(exists=True, path_type=Path))
+@click.argument("path")
+def get_exec(image: Path, path: str) -> None:
+    """Print a file's exec address."""
+    fs, bare = resolve_path(image, path)
+    with open_image(image, fs) as handle:
+        target = _navigate(handle, bare, fs)
+        if not target.exists():
+            raise click.ClickException(f"path not found: {bare}")
+        st = target.stat()
+        click.echo(f"{st.exec_address:08X}")
 
 
 @cli.command()
