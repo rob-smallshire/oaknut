@@ -583,7 +583,8 @@ class AFS:
         n_data_sectors = (len(data) + MAP_SECTOR_SIZE - 1) // MAP_SECTOR_SIZE
 
         # Quota check before touching the allocator.
-        total_sectors_needed = n_data_sectors + max(1, (n_data_sectors + _MAX_DATA_EXTENTS - 1) // _MAX_DATA_EXTENTS)
+        n_map_blocks = max(1, (n_data_sectors + _MAX_DATA_EXTENTS - 1) // _MAX_DATA_EXTENTS)
+        total_sectors_needed = n_data_sectors + n_map_blocks
         self._debit_quota(total_sectors_needed)
         data_extents: list[Extent] = []
         if n_data_sectors > 0:
