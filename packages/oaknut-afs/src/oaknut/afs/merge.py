@@ -20,6 +20,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Literal
 
 from oaknut.afs.exceptions import AFSMergeConflictError
+from oaknut.afs.passwords import PASSWORDS_FILENAME
 
 if TYPE_CHECKING:
     from oaknut.afs.afs import AFS
@@ -27,6 +28,11 @@ if TYPE_CHECKING:
 
 
 ConflictPolicy = Literal["error", "skip", "overwrite"]
+
+# Files that are never copied during a merge. The Passwords file
+# is per-disc and must not be overwritten by a library image's own
+# Passwords file.
+_EXCLUDED_NAMES: frozenset[str] = frozenset({PASSWORDS_FILENAME})
 
 
 def merge(
@@ -36,11 +42,16 @@ def merge(
     source_path: "AFSPath | None" = None,
     target_path: "AFSPath | None" = None,
     conflict: ConflictPolicy = "error",
+    exclude: frozenset[str] | None = None,
 ) -> None:
     """Copy a directory subtree from ``source`` to ``target``.
 
     ``source_path`` defaults to ``source.root``; ``target_path``
     defaults to ``target.root``. Both must be directories.
+
+    ``exclude`` is a set of entry names to skip during the merge.
+    By default, the ``Passwords`` file is always excluded so that a
+    library merge never overwrites the target disc's user records.
 
     ``conflict`` controls what happens when a destination name
     already exists:
@@ -51,6 +62,8 @@ def merge(
     - ``"overwrite"``: replace the target entry (its old bytes
       are released back to the allocator).
     """
+    if exclude is None:
+        exclude = _EXCLUDED_NAMES
     if source_path is None:
         source_path = source.root
     if target_path is None:
@@ -59,13 +72,9 @@ def merge(
     if not source_path.is_dir():
         raise ValueError(f"{source_path} is not a directory on source")
     if target_path.afs is not target:
-        raise ValueError(
-            "target_path must be bound to the target AFS handle"
-        )
+        raise ValueError("target_path must be bound to the target AFS handle")
     if source_path.afs is not source:
-        raise ValueError(
-            "source_path must be bound to the source AFS handle"
-        )
+        raise ValueError("source_path must be bound to the source AFS handle")
 
     # Ensure the target subtree root exists.
     if not target_path.is_root() and not target_path.exists():
@@ -75,7 +84,7 @@ def merge(
     if conflict == "error":
         conflicts: list[str] = []
         for src_descendant, tgt_descendant in _walk_pairs(
-            source, source_path, target, target_path
+            source, source_path, target, target_path, exclude,
         ):
             if tgt_descendant.exists():
                 conflicts.append(str(tgt_descendant))
@@ -87,7 +96,7 @@ def merge(
 
     # Actual copy pass.
     for src_descendant, tgt_descendant in _walk_pairs(
-        source, source_path, target, target_path
+        source, source_path, target, target_path, exclude,
     ):
         src_stat = src_descendant.stat()
         if tgt_descendant.exists():
@@ -115,9 +124,11 @@ def _walk_pairs(
     source_root: "AFSPath",
     target: "AFS",
     target_root: "AFSPath",
+    exclude: frozenset[str],
 ):
     """Yield ``(src_path, tgt_path)`` for every entry under ``source_root``.
 
+    Entries whose leaf name is in *exclude* are silently skipped.
     The walk is pre-order: a directory is yielded before its
     contents, so ``mkdir`` happens before any file inside it is
     written.
@@ -126,6 +137,8 @@ def _walk_pairs(
     while stack:
         src_dir = stack.pop()
         for src_entry in src_dir.iterdir():
+            if src_entry.name in exclude:
+                continue
             rel_parts = src_entry.parts[len(source_root.parts) :]
             tgt_entry = target_root
             for part in rel_parts:

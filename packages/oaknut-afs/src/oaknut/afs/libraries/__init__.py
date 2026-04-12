@@ -52,6 +52,17 @@ class LibraryImage(Enum):
     def all(cls) -> list["LibraryImage"]:
         return list(cls)
 
+    @property
+    def target_dirname(self) -> str:
+        """AFS directory name where this library should be installed.
+
+        On a real Level 3 File Server:
+        - ``Library``   — BBC Model B/B+ (ANFS) and shared Utils
+        - ``Library1``  — Master 128/Compact
+        - ``ArthurLib`` — Archimedes
+        """
+        return _TARGET_DIRNAMES[self]
+
     def is_available(self) -> bool:
         """True if the shipped binary asset is actually bundled.
 
@@ -103,3 +114,11 @@ class LibraryImage(Enum):
                 target_path=target_path,
                 conflict=conflict,
             )
+
+
+_TARGET_DIRNAMES: dict[LibraryImage, str] = {
+    LibraryImage.UTILS: "Library",
+    LibraryImage.MODEL_B: "Library",
+    LibraryImage.MASTER: "Library1",
+    LibraryImage.ARCHIMEDES: "ArthurLib",
+}

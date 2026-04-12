@@ -41,12 +41,12 @@ from oaknut.afs.passwords import (
 from oaknut.afs.types import Geometry
 
 _SECTOR_SIZE = 256
-_SPC = 16  # ADFS-L sectors per (unified) cylinder — 160 cyls × 16 spt
+_SPC = 32  # ADFS-L: 80 cylinders × 2 heads × 16 sectors/track
 
-# Default synthetic disc geometry: ADFS-L (160 cyls × 16 sectors) with
-# the AFS region starting at cylinder 140, leaving cylinders 140..159
-# (20 cylinders, 320 sectors) for AFS.
-DEFAULT_START_CYLINDER = 140
+# Default synthetic disc geometry: ADFS-L (80 cyls × 32 sectors) with
+# the AFS region starting at cylinder 70, leaving cylinders 70..79
+# (10 cylinders, 320 sectors) for AFS.
+DEFAULT_START_CYLINDER = 70
 
 
 @dataclass
@@ -189,7 +189,9 @@ def build_synthetic_adfs_with_afs(
     root_map_sin = alloc(1)
     root_data_start = alloc(root_dir_size_sectors)
 
-    file_slots: list[tuple[SyntheticFile, int, int, int]] = []  # (file, map_sin, data_sec, n_sectors)
+    file_slots: list[
+        tuple[SyntheticFile, int, int, int]
+    ] = []  # (file, map_sin, data_sec, n_sectors)
     for f in root_files:
         n_sectors = max(1, (len(f.contents) + _SECTOR_SIZE - 1) // _SECTOR_SIZE)
         map_sin = alloc(1)
@@ -220,9 +222,7 @@ def build_synthetic_adfs_with_afs(
     # is free and the allocator would hand out sectors that already
     # hold live data.
     allocated_sectors: list[int] = [sec1, sec2, root_map_sin]
-    allocated_sectors.extend(
-        root_data_start + i for i in range(root_dir_size_sectors)
-    )
+    allocated_sectors.extend(root_data_start + i for i in range(root_dir_size_sectors))
     for _f, map_sin, data_sec, n_sectors in file_slots:
         allocated_sectors.append(map_sin)
         allocated_sectors.extend(data_sec + i for i in range(n_sectors))
@@ -231,9 +231,7 @@ def build_synthetic_adfs_with_afs(
         for sector_list in per_block_sectors:
             allocated_sectors.extend(sector_list)
     allocated_sectors.append(passwords_map_sin)
-    allocated_sectors.extend(
-        passwords_data_sec + i for i in range(passwords_body_sectors)
-    )
+    allocated_sectors.extend(passwords_data_sec + i for i in range(passwords_body_sectors))
 
     # ----- Build the root directory -----
     entries: list[DirectoryEntry] = []
@@ -354,9 +352,7 @@ def build_synthetic_adfs_with_afs(
     # non-final block's slot 48 points at the next block's SIN.
     for chain, block_sins, per_block_sectors in chain_slots:
         total_sectors_so_far = 0
-        for block_index, (block_sin, sector_list) in enumerate(
-            zip(block_sins, per_block_sectors)
-        ):
+        for block_index, (block_sin, sector_list) in enumerate(zip(block_sins, per_block_sectors)):
             is_last = block_index == len(block_sins) - 1
             extents = tuple(Extent(start=s, length=1) for s in sector_list)
             # Only the final block carries the meaningful BILB.

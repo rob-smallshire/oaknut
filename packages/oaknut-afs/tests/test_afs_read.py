@@ -37,14 +37,14 @@ class TestAFSPartitionDetection:
         assert adfs.afs_partition.disc_name == "HelloThere"
 
     def test_start_cylinder(self) -> None:
-        adfs = build_synthetic_adfs_with_afs(start_cylinder=150)
-        assert adfs.afs_partition.start_cylinder == 150
+        adfs = build_synthetic_adfs_with_afs(start_cylinder=75)
+        assert adfs.afs_partition.start_cylinder == 75
 
     def test_geometry_matches_info_sector(self) -> None:
         adfs = build_synthetic_adfs_with_afs()
         geom = adfs.afs_partition.geometry
         assert geom.total_sectors == ADFS_L.total_sectors
-        assert geom.sectors_per_cylinder == 16
+        assert geom.sectors_per_cylinder == 32
 
 
 class TestRootDirectoryIteration:

@@ -245,15 +245,16 @@ def initialise(adfs: "ADFS", *, spec: InitSpec) -> None:
 
     # ---- Step 9: libraries (phase 17-aware; assets may not exist) ----
     if spec.libraries:
-        afs = AFS(disc, sec1, sec2)
-        for library in spec.libraries:
-            if not library.is_available():
-                # Skip un-built library images silently; caller can
-                # check spec.libraries availability in advance via
-                # LibraryImage.is_available().
-                continue
-            library.merge_into(afs, conflict="overwrite")
-        afs.flush()
+        with AFS(disc, sec1, sec2) as afs:
+            for library in spec.libraries:
+                if not library.is_available():
+                    continue
+                # Merge into the library's target directory (e.g.
+                # $.Library for Model B, $.Library1 for Master).
+                target_dir = afs.root / library.target_dirname
+                if not target_dir.exists():
+                    target_dir.mkdir()
+                library.merge_into(afs, target_path=target_dir, conflict="overwrite")
 
 
 def _dir_entry(*, name, sin, access, date):
