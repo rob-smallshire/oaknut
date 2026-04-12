@@ -331,12 +331,46 @@ _alias("*CAT", "ls")
 @click.argument("path", required=False, default=None)
 def tree(image: Path, path: str | None) -> None:
     """Display recursive directory tree."""
-    fs, bare = resolve_path(image, path)
-    with open_image(image, fs) as handle:
-        root = _navigate(handle, bare, fs)
-        if not root.exists() and not root.is_dir():
-            raise click.ClickException(f"path not found: {bare or '$'}")
-        _print_tree(root, "", True)
+    if path is not None:
+        # Explicit path (possibly with FS prefix) — show that subtree only.
+        fs, bare = resolve_path(image, path)
+        with open_image(image, fs) as handle:
+            root = _navigate(handle, bare, fs)
+            if not root.exists() and not root.is_dir():
+                raise click.ClickException(f"path not found: {bare or '$'}")
+            _print_tree(root, "", True)
+    else:
+        # No path — show all partitions with image filename as root.
+        _tree_whole_image(image)
+
+
+def _tree_whole_image(image_filepath: Path) -> None:
+    """Print a tree of all partitions on the image."""
+    detected = detect_filing_system(image_filepath)
+
+    if detected is FilingSystem.DFS:
+        with _open_dfs(image_filepath) as handle:
+            click.echo(image_filepath.name)
+            _print_tree(handle.root, "", False)
+        return
+
+    # ADFS — check for AFS partition too.
+    with _open_adfs(image_filepath) as adfs:
+        afs = adfs.afs_partition
+        if afs is None:
+            # Single ADFS partition — show contents directly under filename.
+            click.echo(image_filepath.name)
+            _print_tree(adfs.root, "", False)
+        else:
+            # Dual partition — ADFS and AFS as children of filename.
+            click.echo(image_filepath.name)
+            entries: list[tuple[str, object]] = [("ADFS", adfs.root), ("AFS", afs.root)]
+            for i, (label, root) in enumerate(entries):
+                is_last = i == len(entries) - 1
+                connector = "└── " if is_last else "├── "
+                click.echo(f"{connector}{label}")
+                extension = "    " if is_last else "│   "
+                _print_tree(root, extension, False)
 
 
 def _print_tree(node, prefix: str, is_root: bool) -> None:
