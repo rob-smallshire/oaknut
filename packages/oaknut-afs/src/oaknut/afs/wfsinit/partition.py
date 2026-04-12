@@ -49,6 +49,12 @@ _SECTOR_SIZE = 256
 #: practice. Matches the WFSINIT floor of 1 cylinder.
 _MIN_ADFS_CYLINDERS = 1
 
+#: ADFS root directory size in sectors (``adfsdirsize%`` in WFSINIT.bas line 140).
+_ADFS_DIR_SECTORS = 5
+
+#: ADFS free space map size in sectors (sectors 0 and 1).
+_ADFS_FSM_SECTORS = 2
+
 
 @dataclass(frozen=True)
 class AFSSizeSpec:
@@ -200,9 +206,24 @@ def plan(
         if not free_entries:
             afs_sectors = 0
         else:
-            # Use the last free extent (tail).
-            last_start_bytes, last_length_bytes = free_entries[-1]
-            afs_sectors = last_length_bytes // _SECTOR_SIZE
+            # Replicate WFSINIT's partition boundary calculation
+            # (WFSINIT.bas lines 570-710).  It reads the first free
+            # sector from the FSM, adds a 16 KB (&4000) structural
+            # padding, then adds 7 sectors (5 root dir + 2 FSM) and
+            # rounds up to a cylinder boundary:
+            #
+            #   fssze% = first_free_sector * 256 + &4000
+            #   tfree% = 7 + fssze% / 256
+            #   stcyl% = ceiling(tfree% / sectorspcyl%)
+            #
+            # This conservative padding avoids overwriting ADFS
+            # metadata even on discs that were not fully compacted.
+            first_free_bytes, _ = free_entries[0]
+            first_free_sector = first_free_bytes // _SECTOR_SIZE
+            fssze = first_free_sector * _SECTOR_SIZE + 0x4000
+            tfree = _ADFS_DIR_SECTORS + _ADFS_FSM_SECTORS + fssze // _SECTOR_SIZE
+            adfs_cylinders_needed = (tfree + spc - 1) // spc
+            afs_sectors = (total_cylinders - adfs_cylinders_needed) * spc
     else:  # pragma: no cover
         raise ValueError(f"unknown AFSSizeSpec kind: {size.kind}")
 

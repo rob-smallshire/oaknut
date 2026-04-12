@@ -1571,7 +1571,12 @@ def afs_plan(image: Path, cylinders: int | None) -> None:
 @click.argument("image", type=click.Path(exists=True, path_type=Path))
 @click.option("--disc-name", required=True, help="AFS disc name.")
 @click.option(
-    "--cylinders", type=int, default=None, help="AFS region size in cylinders (default: max).",
+    "--cylinders", type=int, default=None,
+    help="AFS region size in cylinders (default: use existing free space).",
+)
+@click.option(
+    "--compact", is_flag=True, default=False,
+    help="Compact the ADFS partition first to maximise AFS space.",
 )
 @click.option(
     "--user",
@@ -1606,6 +1611,7 @@ def afs_init(
     image: Path,
     disc_name: str,
     cylinders: int | None,
+    compact: bool,
     users: tuple[str, ...],
     default_quota: str | None,
     omit_users: tuple[str, ...],
@@ -1617,14 +1623,18 @@ def afs_init(
 
     user_specs: list[UserSpec] = _parse_user_specs(users)
 
-    size = AFSSizeSpec.cylinders(cylinders) if cylinders else AFSSizeSpec.max()
-
     init_kwargs: dict = {
         "disc_name": disc_name,
-        "size": size,
         "users": user_specs,
         "omit_builtins": frozenset(omit_users),
     }
+    if cylinders:
+        init_kwargs["size"] = AFSSizeSpec.cylinders(cylinders)
+    if compact:
+        init_kwargs["compact_adfs"] = True
+        # When compacting, default to max space unless cylinders given.
+        if "size" not in init_kwargs:
+            init_kwargs["size"] = AFSSizeSpec.max()
     if default_quota is not None:
         from oaknut.file.capacity import parse_capacity
 

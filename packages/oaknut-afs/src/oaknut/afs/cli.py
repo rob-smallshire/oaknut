@@ -159,21 +159,21 @@ def cmd_initialise(args: argparse.Namespace) -> int:
 
     omit_builtins = frozenset(args.omit_user or [])
 
+    init_kwargs: dict = {
+        "disc_name": args.disc_name,
+        "users": users,
+        "omit_builtins": omit_builtins,
+    }
     if args.cylinders:
-        size = AFSSizeSpec.cylinders(args.cylinders)
-    else:
-        size = AFSSizeSpec.max()
+        init_kwargs["size"] = AFSSizeSpec.cylinders(args.cylinders)
+    if args.compact:
+        init_kwargs["compact_adfs"] = True
+        # When compacting, default to max space unless cylinders given.
+        if "size" not in init_kwargs:
+            init_kwargs["size"] = AFSSizeSpec.max()
 
     with _open_adfs_rw(args.path) as adfs:
-        initialise(
-            adfs,
-            spec=InitSpec(
-                disc_name=args.disc_name,
-                size=size,
-                users=users,
-                omit_builtins=omit_builtins,
-            ),
-        )
+        initialise(adfs, spec=InitSpec(**init_kwargs))
     print(f"initialised AFS region on {args.path}")
     return 0
 
@@ -216,7 +216,12 @@ def main(argv: Iterable[str] | None = None) -> int:
     p_init.add_argument(
         "--cylinders",
         type=int,
-        help="AFS region size in cylinders (default: max available)",
+        help="AFS region size in cylinders (default: use existing free space)",
+    )
+    p_init.add_argument(
+        "--compact",
+        action="store_true",
+        help="Compact the ADFS partition first to maximise AFS space",
     )
     p_init.add_argument(
         "--user",

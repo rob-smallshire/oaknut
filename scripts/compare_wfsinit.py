@@ -84,6 +84,7 @@ def create_equivalent_image(output_filepath: Path) -> None:
         )
 
     # Step 5: Re-open and run initialise().
+    # Use defaults (no compaction, existing_free) to match WFSINIT.
     with ADFS.from_file(output_filepath, mode="r+b") as adfs:
         spec = InitSpec(
             disc_name="L3DATA",
@@ -92,7 +93,6 @@ def create_equivalent_image(output_filepath: Path) -> None:
                 UserSpec(name="HOLMES"),
                 UserSpec(name="MORIARTY"),
             ),
-            libraries=(),
         )
         initialise(adfs, spec=spec)
 

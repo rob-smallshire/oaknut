@@ -35,6 +35,12 @@ class UserSpec:
 class InitSpec:
     """Caller-facing description of a freshly-initialised AFS disc.
 
+    Defaults match WFSINIT's historical behaviour: the AFS region
+    occupies the existing tail free extent without pre-compaction.
+    Pass ``compact_adfs=True`` (and optionally
+    ``size=AFSSizeSpec.max()``) to compact the ADFS partition first
+    and reclaim the maximum possible space.
+
     The default quota matches WFSINIT's historical value of
     ``0x40404`` (~256 KiB) — kept small because the L3FS address
     encoding caps a single drive at ~512 MB and real-period
@@ -44,8 +50,8 @@ class InitSpec:
 
     disc_name: str
     date: datetime.date = field(default_factory=datetime.date.today)
-    size: AFSSizeSpec = field(default_factory=AFSSizeSpec.max)
-    compact_adfs: bool = True
+    size: AFSSizeSpec = field(default_factory=AFSSizeSpec.existing_free)
+    compact_adfs: bool = False
     addition_factor: int = 0
     default_quota: int = 0x40404
     users: Sequence[UserSpec] = ()
