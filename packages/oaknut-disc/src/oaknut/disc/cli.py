@@ -338,7 +338,8 @@ def tree(image: Path, path: str | None) -> None:
             root = _navigate(handle, bare, fs)
             if not root.exists() and not root.is_dir():
                 raise click.ClickException(f"path not found: {bare or '$'}")
-            _print_tree(root, "", True)
+            click.echo(root.name)
+            _print_children(root, "")
     else:
         # No path — show all partitions with image filename as root.
         _tree_whole_image(image)
@@ -350,44 +351,46 @@ def _tree_whole_image(image_filepath: Path) -> None:
 
     if detected is FilingSystem.DFS:
         with _open_dfs(image_filepath) as handle:
+            # DFS root has $ as a child directory.
             click.echo(image_filepath.name)
-            _print_tree(handle.root, "", False)
+            _print_children(handle.root, "")
         return
 
-    # ADFS — check for AFS partition too.
     with _open_adfs(image_filepath) as adfs:
         afs = adfs.afs_partition
         if afs is None:
-            # Single ADFS partition — show $ root under filename.
+            # Single ADFS — root ($) is the sole child of the image.
             click.echo(image_filepath.name)
-            click.echo("└── $")
-            _print_tree(adfs.root, "    ", False)
+            _print_node(adfs.root, "", True)
         else:
-            # Dual partition — ADFS and AFS as children of filename.
+            # Dual partition — ADFS and AFS each contain a $ root.
             click.echo(image_filepath.name)
-            partitions: list[tuple[str, object]] = [("ADFS", adfs.root), ("AFS", afs.root)]
-            for i, (label, root) in enumerate(partitions):
-                is_last = i == len(partitions) - 1
-                connector = "└── " if is_last else "├── "
-                click.echo(f"{connector}{label}")
-                extension = "    " if is_last else "│   "
-                click.echo(f"{extension}└── $")
-                _print_tree(root, extension + "    ", False)
+            _print_labelled_partition("ADFS", adfs.root, "", False)
+            _print_labelled_partition("AFS", afs.root, "", True)
 
 
-def _print_tree(node, prefix: str, is_root: bool) -> None:
-    """Recursive Unicode box-drawing tree printer."""
-    if is_root:
-        click.echo(node.name)
+def _print_labelled_partition(label: str, root, prefix: str, is_last: bool) -> None:
+    """Print a partition label with its $ root underneath."""
+    connector = "└── " if is_last else "├── "
+    extension = "    " if is_last else "│   "
+    click.echo(f"{prefix}{connector}{label}")
+    _print_node(root, prefix + extension, True)
+
+
+def _print_node(node, prefix: str, is_last: bool) -> None:
+    """Print a node as a tree child, then recurse into its children."""
+    connector = "└── " if is_last else "├── "
+    click.echo(f"{prefix}{connector}{node.name}")
     if node.is_dir():
-        children = list(node.iterdir())
-        for i, child in enumerate(children):
-            is_last = i == len(children) - 1
-            connector = "└── " if is_last else "├── "
-            click.echo(f"{prefix}{connector}{child.name}")
-            if child.is_dir():
-                extension = "    " if is_last else "│   "
-                _print_tree(child, prefix + extension, False)
+        extension = prefix + ("    " if is_last else "│   ")
+        _print_children(node, extension)
+
+
+def _print_children(node, prefix: str) -> None:
+    """Print all children of a directory node."""
+    children = list(node.iterdir())
+    for i, child in enumerate(children):
+        _print_node(child, prefix, i == len(children) - 1)
 
 
 @cli.command()
