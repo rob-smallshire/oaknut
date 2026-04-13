@@ -303,6 +303,32 @@ class TestOpt:
         result = runner.invoke(cli, ["opt", str(dfs_image_filepath)])
         assert "EXEC" in result.output
 
+    def test_set_opt_by_name_lowercase(self, runner: CliRunner, dfs_image_filepath: Path) -> None:
+        result = runner.invoke(cli, ["opt", str(dfs_image_filepath), "run"])
+        assert result.exit_code == 0
+        result = runner.invoke(cli, ["opt", str(dfs_image_filepath)])
+        assert "RUN" in result.output
+
+    def test_set_opt_by_name_uppercase(self, runner: CliRunner, dfs_image_filepath: Path) -> None:
+        result = runner.invoke(cli, ["opt", str(dfs_image_filepath), "LOAD"])
+        assert result.exit_code == 0
+        result = runner.invoke(cli, ["opt", str(dfs_image_filepath)])
+        assert "LOAD" in result.output
+
+    def test_set_opt_by_name_mixed_case(self, runner: CliRunner, dfs_image_filepath: Path) -> None:
+        result = runner.invoke(cli, ["opt", str(dfs_image_filepath), "Exec"])
+        assert result.exit_code == 0
+        result = runner.invoke(cli, ["opt", str(dfs_image_filepath)])
+        assert "EXEC" in result.output
+
+    def test_set_opt_invalid_integer(self, runner: CliRunner, dfs_image_filepath: Path) -> None:
+        result = runner.invoke(cli, ["opt", str(dfs_image_filepath), "5"])
+        assert result.exit_code != 0
+
+    def test_set_opt_invalid_name(self, runner: CliRunner, dfs_image_filepath: Path) -> None:
+        result = runner.invoke(cli, ["opt", str(dfs_image_filepath), "banana"])
+        assert result.exit_code != 0
+
 
 # ---------------------------------------------------------------------------
 # Modification: rm, lock, unlock

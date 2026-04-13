@@ -1189,11 +1189,56 @@ def title(image: Path, new_title: str | None) -> None:
 _alias("*TITLE", "title")
 
 
+class BootOptionParam(click.ParamType):
+    """Click parameter type that accepts boot option as int (0-3) or name."""
+
+    name = "option"
+
+    def convert(self, value, param, ctx):
+        from oaknut.file import BootOption
+
+        if isinstance(value, int):
+            if value not in range(4):
+                self.fail(f"{value} is not a valid boot option (0-3)", param, ctx)
+            return value
+
+        # Try as integer string first
+        try:
+            iv = int(value)
+            if iv not in range(4):
+                self.fail(f"{iv} is not a valid boot option (0-3)", param, ctx)
+            return iv
+        except ValueError:
+            pass
+
+        # Try as name (case-insensitive)
+        upper = value.upper()
+        try:
+            return BootOption[upper].value
+        except KeyError:
+            names = ", ".join(bo.name for bo in BootOption)
+            self.fail(
+                f"{value!r} is not a valid boot option (0-3 or {names})",
+                param,
+                ctx,
+            )
+
+
 @cli.command()
 @click.argument("image", type=click.Path(exists=True, path_type=Path))
-@click.argument("boot_option", required=False, default=None, type=int)
+@click.argument("boot_option", required=False, default=None, type=BootOptionParam())
 def opt(image: Path, boot_option: int | None) -> None:
-    """Read or set boot option (Acorn alias: *OPT4)."""
+    """Read or set boot option (Acorn alias: *OPT4).
+
+    Omit BOOT_OPTION to report the current setting.
+
+    \b
+    Values:
+      0 / OFF   No action
+      1 / LOAD  *LOAD $.!BOOT
+      2 / RUN   *RUN $.!BOOT
+      3 / EXEC  *EXEC $.!BOOT
+    """
     from oaknut.file import BootOption
 
     fs = detect_filing_system(image)
@@ -1202,8 +1247,6 @@ def opt(image: Path, boot_option: int | None) -> None:
             bo = BootOption(handle.boot_option)
             click.echo(f"{bo.value} ({bo.name})")
     else:
-        if boot_option not in range(4):
-            raise click.ClickException("boot option must be 0-3")
         with open_image(image, fs, mode="r+b") as handle:
             handle.boot_option = boot_option
 
