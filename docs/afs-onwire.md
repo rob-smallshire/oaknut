@@ -460,3 +460,14 @@ phase.
   phase 12.
 - **Quota credit/debit points** — AUTMAN (`Uade0F`) + USRMAN (`Uade06`),
   phase 14.
+
+## External references
+
+Third-party write-ups of the AFS0 format. Useful as cross-checks, but
+the ROM remains authoritative where they disagree.
+
+- Rick Murray, *AFS0 disc format* — <https://heyrick.eu/econet/fs/afs0.html>.
+  Covers NFS sector 1 (the info sector), the free-space bitmap (occupied
+  bit = 0), JesMap map sectors with five-byte occupied-range entries,
+  26-byte directory entries, and the SIN → disc-address left-shift. The
+  author flags gaps around floppy-disc bitmap packing.
