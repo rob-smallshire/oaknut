@@ -27,17 +27,36 @@ jobs:
             pyproject.toml
             packages/*/pyproject.toml
 
-      - name: Install workspace
-        run: uv sync --all-extras
+      - name: Install dependency environment (no workspace packages)
+        # Sync all third-party dependencies into the venv but skip
+        # the workspace members themselves. We'll install those from
+        # freshly-built wheels below, so tests run against the
+        # distribution artefacts rather than the editable source
+        # tree. This is what catches wheel-packaging bugs (e.g.
+        # missing package-data declarations, omitted resource files).
+        run: uv sync --all-extras --no-install-workspace
 
       - name: Run namespace-init guard
         run: bash scripts/check_no_namespace_init.sh
 
       - name: Run ruff
-        run: uv run ruff check
+        run: uv run --no-project ruff check
 
-      - name: Run tests
-        run: uv run pytest -v
+      - name: Build all workspace wheels
+        run: uv build --all-packages
+
+      - name: Install wheels into the test environment
+        # Force bash so the glob expands consistently across all
+        # three runner OSes (default pwsh on Windows doesn't expand
+        # dist/*.whl the same way).
+        shell: bash
+        run: uv pip install dist/*.whl
+
+      - name: Run tests against installed wheels
+        # --no-project stops uv re-syncing the environment (which
+        # would reinstate editable installs) so pytest imports the
+        # code from the installed wheels.
+        run: uv run --no-project pytest -v
 
   docs:
     name: Build docs
