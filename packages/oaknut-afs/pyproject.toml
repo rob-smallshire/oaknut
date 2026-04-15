@@ -52,3 +52,10 @@ version = { attr = "oaknut.afs.__version__" }
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+# Include the shipped AFS library disc images in the built wheel.
+# These are consumed at runtime by oaknut.afs.libraries.emplace_library
+# via importlib.resources; without this they'd be skipped because
+# setuptools only picks up .py files by default.
+[tool.setuptools.package-data]
+"oaknut.afs.libraries" = ["*.adl"]
