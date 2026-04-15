@@ -1539,6 +1539,10 @@ def _import_host_dir(handle, target_dir, host_dir: Path, meta_formats, verbose, 
 # ---------------------------------------------------------------------------
 
 
+#: Valid values for --as across commands. Extend as new renderers land.
+_OUTPUT_FORMATS = ("text", "json")
+
+
 @cli.command(name="afs-plan")
 @click.argument("image", type=click.Path(exists=True, path_type=Path))
 @click.option(
@@ -1549,7 +1553,18 @@ def _import_host_dir(handle, target_dir, host_dir: Path, meta_formats, verbose, 
     "--compact", is_flag=True, default=False,
     help="Plan with ADFS compaction to maximise AFS space.",
 )
-def afs_plan(image: Path, cylinders: int | None, compact: bool) -> None:
+@click.option(
+    "--as", "output_format",
+    type=click.Choice(_OUTPUT_FORMATS),
+    default="text",
+    help="Output format (default: text).",
+)
+def afs_plan(
+    image: Path,
+    cylinders: int | None,
+    compact: bool,
+    output_format: str,
+) -> None:
     """Show what afs-init would do, without modifying the image.
 
     By default, plans using the existing tail free extent (matching
@@ -1558,6 +1573,9 @@ def afs_plan(image: Path, cylinders: int | None, compact: bool) -> None:
     shows the plan for that specific size. Reports disc geometry,
     current ADFS occupancy, whether compaction is needed, and the
     resulting partition layout.
+
+    Use ``--as json`` to emit a machine-readable document instead
+    of the human-readable text report.
     """
     from oaknut.adfs import ADFS
     from oaknut.afs.wfsinit import AFSSizeSpec
@@ -1570,29 +1588,35 @@ def afs_plan(image: Path, cylinders: int | None, compact: bool) -> None:
         free_sectors = free_bytes // 256
         used_sectors = total_sectors - free_sectors
 
-        click.echo("Disc geometry")
-        click.echo(
-            f"  {geom.cylinders} cylinders, {geom.heads} heads, "
-            f"{geom.sectors_per_track} sectors/track"
-        )
-        click.echo(f"  {total_sectors} total sectors ({geom.cylinders} cylinders)")
-        click.echo(
-            f"  {used_sectors} used sectors, "
-            f"{free_sectors} free sectors ({free_bytes:,} bytes)"
-        )
-        click.echo()
+        document: dict = {
+            "image": str(image),
+            "geometry": {
+                "cylinders": geom.cylinders,
+                "heads": geom.heads,
+                "sectors_per_track": geom.sectors_per_track,
+                "total_sectors": total_sectors,
+                "total_bytes": total_sectors * 256,
+            },
+            "adfs": {
+                "used_sectors": used_sectors,
+                "free_sectors": free_sectors,
+                "free_bytes": free_bytes,
+            },
+        }
 
         # Check for existing AFS partition.
         sec1, sec2 = adfs._fsm.afs_info_pointers
         if sec1 != 0 or sec2 != 0:
-            click.echo("This disc already has an AFS partition.")
+            existing: dict = {"present": True}
             afs = adfs.afs_partition
             if afs is not None:
-                click.echo(
-                    f"  AFS disc name: {afs.disc_name}, "
-                    f"start cylinder: {afs.start_cylinder}"
-                )
+                existing["disc_name"] = afs.disc_name
+                existing["start_cylinder"] = afs.start_cylinder
+            document["existing_afs"] = existing
+            _render_afs_plan(document, output_format)
             return
+
+        document["existing_afs"] = {"present": False}
 
         # Compute the plan using the same defaults as afs-init:
         # existing_free() without compaction (matching WFSINIT), or
@@ -1608,23 +1632,77 @@ def afs_plan(image: Path, cylinders: int | None, compact: bool) -> None:
         except Exception as exc:
             raise click.ClickException(str(exc))
 
-        afs_bytes = p.total_afs_sectors * 256
-        click.echo("Proposed AFS partition")
-        click.echo(
-            f"  AFS region:     {p.afs_cylinders} cylinders "
-            f"({p.total_afs_sectors} sectors, {afs_bytes:,} bytes)"
-        )
-        click.echo(f"  Start cylinder: {p.start_cylinder}")
-        click.echo(f"  ADFS retained:  {p.new_adfs_cylinders} cylinders")
-        click.echo(f"  Compaction:     {'required' if p.will_compact else 'not required'}")
+        document["plan"] = {
+            "afs_cylinders": p.afs_cylinders,
+            "total_afs_sectors": p.total_afs_sectors,
+            "total_afs_bytes": p.total_afs_sectors * 256,
+            "start_cylinder": p.start_cylinder,
+            "new_adfs_cylinders": p.new_adfs_cylinders,
+            "will_compact": p.will_compact,
+            "compact_requested": compact,
+            "cylinders_requested": cylinders,
+        }
 
         if not cylinders:
             compact_flag = " --compact" if compact else ""
-            click.echo()
-            click.echo(
-                f"To proceed: disc afs-init {image} --disc-name NAME"
+            document["suggested_command"] = (
+                f"disc afs-init {image} --disc-name NAME"
                 f" --cylinders {p.afs_cylinders}{compact_flag}"
             )
+
+        _render_afs_plan(document, output_format)
+
+
+def _render_afs_plan(document: dict, output_format: str) -> None:
+    """Render an afs-plan document in the requested format."""
+    if output_format == "json":
+        import json
+        click.echo(json.dumps(document, indent=2))
+        return
+
+    # Default: human-readable text.
+    geom = document["geometry"]
+    adfs_state = document["adfs"]
+    click.echo("Disc geometry")
+    click.echo(
+        f"  {geom['cylinders']} cylinders, {geom['heads']} heads, "
+        f"{geom['sectors_per_track']} sectors/track"
+    )
+    click.echo(
+        f"  {geom['total_sectors']} total sectors ({geom['cylinders']} cylinders)"
+    )
+    click.echo(
+        f"  {adfs_state['used_sectors']} used sectors, "
+        f"{adfs_state['free_sectors']} free sectors "
+        f"({adfs_state['free_bytes']:,} bytes)"
+    )
+    click.echo()
+
+    existing = document["existing_afs"]
+    if existing["present"]:
+        click.echo("This disc already has an AFS partition.")
+        if "disc_name" in existing:
+            click.echo(
+                f"  AFS disc name: {existing['disc_name']}, "
+                f"start cylinder: {existing['start_cylinder']}"
+            )
+        return
+
+    p = document["plan"]
+    click.echo("Proposed AFS partition")
+    click.echo(
+        f"  AFS region:     {p['afs_cylinders']} cylinders "
+        f"({p['total_afs_sectors']} sectors, {p['total_afs_bytes']:,} bytes)"
+    )
+    click.echo(f"  Start cylinder: {p['start_cylinder']}")
+    click.echo(f"  ADFS retained:  {p['new_adfs_cylinders']} cylinders")
+    click.echo(
+        f"  Compaction:     {'required' if p['will_compact'] else 'not required'}"
+    )
+
+    if "suggested_command" in document:
+        click.echo()
+        click.echo(f"To proceed: {document['suggested_command']}")
 
 
 @cli.command(name="afs-init")

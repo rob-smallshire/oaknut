@@ -736,6 +736,46 @@ class TestAfsPlan:
         )
         assert result.exit_code != 0
 
+    def test_afs_plan_as_json(
+        self, runner: CliRunner, adfs_no_afs_filepath: Path,
+    ) -> None:
+        import json
+
+        result = runner.invoke(
+            cli, ["afs-plan", str(adfs_no_afs_filepath), "--as", "json"]
+        )
+        assert result.exit_code == 0
+        doc = json.loads(result.output)
+        assert "geometry" in doc
+        assert "adfs" in doc
+        assert doc["existing_afs"]["present"] is False
+        assert "plan" in doc
+        assert doc["plan"]["afs_cylinders"] > 0
+        assert doc["plan"]["start_cylinder"] >= 0
+        assert doc["plan"]["will_compact"] is False
+        assert "suggested_command" in doc
+
+    def test_afs_plan_as_json_already_partitioned(
+        self, runner: CliRunner, afs_image_filepath: Path,
+    ) -> None:
+        import json
+
+        result = runner.invoke(
+            cli, ["afs-plan", str(afs_image_filepath), "--as", "json"]
+        )
+        assert result.exit_code == 0
+        doc = json.loads(result.output)
+        assert doc["existing_afs"]["present"] is True
+        assert "plan" not in doc
+
+    def test_afs_plan_rejects_unknown_format(
+        self, runner: CliRunner, adfs_no_afs_filepath: Path,
+    ) -> None:
+        result = runner.invoke(
+            cli, ["afs-plan", str(adfs_no_afs_filepath), "--as", "xml"]
+        )
+        assert result.exit_code != 0
+
 
 class TestAfsInit:
     def test_afs_init(self, runner: CliRunner, adfs_no_afs_filepath: Path) -> None:
