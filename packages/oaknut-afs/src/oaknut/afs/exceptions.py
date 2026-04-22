@@ -31,6 +31,11 @@ Hierarchy::
         │   ├── AFSDiscNotCompactedError
         │   ├── AFSAlreadyPartitionedError
         │   └── AFSInsufficientADFSSpaceError
+        ├── AFSInitSpecError
+        │   ├── AFSDiscNameError
+        │   ├── AFSUserNameError
+        │   ├── AFSPasswordError
+        │   └── AFSQuotaError
         ├── AFSMergeConflictError
         └── AFSHostImportError
 """
@@ -186,6 +191,34 @@ class AFSAlreadyPartitionedError(AFSRepartitionError):
 
 class AFSInsufficientADFSSpaceError(AFSRepartitionError):
     """Refused: the requested AFS size would leave too little space for ADFS."""
+
+
+# ---------------------------------------------------------------------------
+# Init-spec validation errors — raised at InitSpec/UserSpec construction
+# time before any disc mutation (see issue #3).
+# ---------------------------------------------------------------------------
+
+
+class AFSInitSpecError(AFSError):
+    """Base for InitSpec / UserSpec validation failures."""
+
+
+class AFSDiscNameError(AFSInitSpecError):
+    """The proposed AFS disc name is empty, too long, or contains
+    non-printable / space characters (printable ASCII only, 1..16 chars).
+    """
+
+
+class AFSUserNameError(AFSInitSpecError):
+    """A user name is empty, not ASCII, or exceeds 20 characters."""
+
+
+class AFSPasswordError(AFSInitSpecError):
+    """A password is not ASCII or exceeds 6 characters."""
+
+
+class AFSQuotaError(AFSInitSpecError):
+    """A quota (per-user or default) is outside 0..0xFFFFFFFF."""
 
 
 # ---------------------------------------------------------------------------

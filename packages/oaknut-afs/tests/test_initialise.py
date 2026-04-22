@@ -6,6 +6,13 @@ import datetime
 
 import pytest
 from oaknut.adfs import ADFS, ADFS_L
+from oaknut.afs.exceptions import (
+    AFSDiscNameError,
+    AFSInitSpecError,
+    AFSPasswordError,
+    AFSQuotaError,
+    AFSUserNameError,
+)
 from oaknut.afs.wfsinit import AFSSizeSpec, InitSpec, UserSpec, initialise
 from oaknut.file import BootOption
 
@@ -113,11 +120,11 @@ class TestInitialise:
         assert afs.users.find("Syst").free_space == 0xAA00
 
     def test_initspec_rejects_empty_name(self) -> None:
-        with pytest.raises(ValueError):
+        with pytest.raises(AFSDiscNameError):
             InitSpec(disc_name="")
 
     def test_initspec_rejects_duplicate_user(self) -> None:
-        with pytest.raises(ValueError, match="duplicate"):
+        with pytest.raises(AFSUserNameError, match="duplicate"):
             InitSpec(
                 disc_name="Dup",
                 users=[UserSpec("Alice"), UserSpec("alice")],
@@ -125,7 +132,7 @@ class TestInitialise:
 
     @pytest.mark.parametrize("name", ["Syst", "Boot", "Welcome", "syst", "BOOT"])
     def test_initspec_rejects_builtin_names(self, name: str) -> None:
-        with pytest.raises(ValueError, match="reserved"):
+        with pytest.raises(AFSUserNameError, match="reserved"):
             InitSpec(
                 disc_name="Reserved",
                 users=[UserSpec(name)],
@@ -149,7 +156,7 @@ class TestInitialise:
         assert "Welcome" not in active
 
     def test_omit_builtins_rejects_unknown_names(self) -> None:
-        with pytest.raises(ValueError, match="not a built-in"):
+        with pytest.raises(AFSInitSpecError, match="not a built-in"):
             InitSpec(
                 disc_name="Bad",
                 omit_builtins=frozenset({"Gandalf"}),
@@ -184,3 +191,103 @@ class TestInitialise:
             ),
         )
         assert adfs.boot_option == initial_boot_option
+
+
+class TestInitSpecEagerValidation:
+    """Validation that must run at ``InitSpec``/``UserSpec`` construction,
+    before any disc mutation.  See issue #3.
+    """
+
+    @pytest.mark.parametrize(
+        "bad_name",
+        [
+            "Has Space",          # space in the middle
+            " LeadingSpace",      # leading space
+            "TrailingSpace ",     # trailing space
+            "Non\x00Printable",   # NUL
+            "Bell\x07Inside",     # control character
+            "Café",               # non-ASCII
+            "A" * 17,             # too long
+        ],
+    )
+    def test_initspec_rejects_invalid_disc_name(self, bad_name: str) -> None:
+        with pytest.raises(AFSDiscNameError):
+            InitSpec(disc_name=bad_name)
+
+    def test_userspec_rejects_empty_name(self) -> None:
+        with pytest.raises(AFSUserNameError, match="name"):
+            UserSpec(name="")
+
+    def test_userspec_rejects_overlong_name(self) -> None:
+        with pytest.raises(AFSUserNameError, match="21|20"):
+            UserSpec(name="A" * 21)
+
+    def test_userspec_rejects_non_ascii_name(self) -> None:
+        with pytest.raises(AFSUserNameError, match="ASCII|ascii"):
+            UserSpec(name="Renée")
+
+    def test_userspec_rejects_overlong_password(self) -> None:
+        with pytest.raises(AFSPasswordError, match="password"):
+            UserSpec(name="alice", password="sevenCh")
+
+    def test_userspec_rejects_non_ascii_password(self) -> None:
+        with pytest.raises(AFSPasswordError, match="ASCII|ascii"):
+            UserSpec(name="alice", password="pw£")
+
+    @pytest.mark.parametrize("bad_quota", [-1, 0x1_0000_0000])
+    def test_userspec_rejects_out_of_range_quota(self, bad_quota: int) -> None:
+        with pytest.raises(AFSQuotaError, match="quota"):
+            UserSpec(name="alice", quota=bad_quota)
+
+    def test_initspec_rejects_out_of_range_default_quota(self) -> None:
+        with pytest.raises(AFSQuotaError, match="default_quota"):
+            InitSpec(disc_name="Big", default_quota=0x1_0000_0000)
+
+    def test_invalid_spec_leaves_disc_untouched(self) -> None:
+        """Constructing an invalid spec must not mutate any disc —
+        the exact scenario from issue #3 reproduction.
+        """
+        adfs = ADFS.create(ADFS_L)
+        before = bytes(adfs._disc.sector_range(0, adfs.geometry.total_sectors))
+        with pytest.raises(AFSDiscNameError):
+            InitSpec(disc_name="Has Space")
+        after = bytes(adfs._disc.sector_range(0, adfs.geometry.total_sectors))
+        assert before == after
+
+    def test_failing_initialise_leaves_disc_untouched(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """If a validation error somehow escapes InitSpec and fires
+        inside initialise(), the disc must still be byte-identical
+        to its pre-call state.  Exercises the restructured
+        mutation-last ordering (defence in depth).
+        """
+        from oaknut.afs import info_sector as info_sector_mod
+
+        adfs = ADFS.create(ADFS_L)
+        before = bytes(adfs._disc.sector_range(0, adfs.geometry.total_sectors))
+
+        # Force an error from InfoSector construction by patching
+        # _encode_disc_name to raise unconditionally.  This simulates
+        # a yet-to-be-added validation slipping past InitSpec.
+        original = info_sector_mod._encode_disc_name
+
+        def failing(name: str) -> bytes:
+            raise ValueError("simulated deep-stack validation failure")
+
+        monkeypatch.setattr(info_sector_mod, "_encode_disc_name", failing)
+
+        with pytest.raises(ValueError, match="simulated"):
+            initialise(
+                adfs,
+                spec=InitSpec(
+                    disc_name="Valid",
+                    size=AFSSizeSpec.cylinders(20),
+                    users=[],
+                ),
+            )
+
+        # Restore before comparing so the compare itself doesn't recurse.
+        monkeypatch.setattr(info_sector_mod, "_encode_disc_name", original)
+        after = bytes(adfs._disc.sector_range(0, adfs.geometry.total_sectors))
+        assert before == after

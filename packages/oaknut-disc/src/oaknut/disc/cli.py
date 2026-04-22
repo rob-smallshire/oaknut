@@ -1757,32 +1757,38 @@ def afs_init(
 ) -> None:
     """Initialise an AFS partition on an ADFS hard disc image."""
     from oaknut.adfs import ADFS
+    from oaknut.afs.exceptions import AFSInitSpecError
     from oaknut.afs.wfsinit import AFSSizeSpec, InitSpec, UserSpec, initialise
 
-    user_specs: list[UserSpec] = _parse_user_specs(users)
+    try:
+        user_specs: list[UserSpec] = _parse_user_specs(users)
 
-    init_kwargs: dict = {
-        "disc_name": disc_name,
-        "users": user_specs,
-        "omit_builtins": frozenset(omit_users),
-    }
-    if cylinders:
-        init_kwargs["size"] = AFSSizeSpec.cylinders(cylinders)
-    if compact:
-        init_kwargs["compact_adfs"] = True
-        # When compacting, default to max space unless cylinders given.
-        if "size" not in init_kwargs:
-            init_kwargs["size"] = AFSSizeSpec.max()
-    if default_quota is not None:
-        from oaknut.file.capacity import parse_capacity
+        init_kwargs: dict = {
+            "disc_name": disc_name,
+            "users": user_specs,
+            "omit_builtins": frozenset(omit_users),
+        }
+        if cylinders:
+            init_kwargs["size"] = AFSSizeSpec.cylinders(cylinders)
+        if compact:
+            init_kwargs["compact_adfs"] = True
+            # When compacting, default to max space unless cylinders given.
+            if "size" not in init_kwargs:
+                init_kwargs["size"] = AFSSizeSpec.max()
+        if default_quota is not None:
+            from oaknut.file.capacity import parse_capacity
 
-        try:
-            init_kwargs["default_quota"] = parse_capacity(default_quota)
-        except ValueError as exc:
-            raise click.ClickException(str(exc))
+            try:
+                init_kwargs["default_quota"] = parse_capacity(default_quota)
+            except ValueError as exc:
+                raise click.ClickException(str(exc))
+
+        spec = InitSpec(**init_kwargs)
+    except AFSInitSpecError as exc:
+        raise click.ClickException(str(exc))
 
     with ADFS.from_file(image, mode="r+b") as adfs:
-        initialise(adfs, spec=InitSpec(**init_kwargs))
+        initialise(adfs, spec=spec)
 
         # Emplace libraries after initialisation so we can report
         # replacements to the user.

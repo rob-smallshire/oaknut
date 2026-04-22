@@ -40,6 +40,7 @@ from oaknut.afs.access import AFSAccess
 from oaknut.afs.allocator import Allocator
 from oaknut.afs.bitmap import BitmapShadow, CylinderBitmap
 from oaknut.afs.directory import build_directory_bytes
+from oaknut.afs.exceptions import AFSInitSpecError
 from oaknut.afs.info_sector import InfoSector
 from oaknut.afs.map_sector import Extent, MapSector
 from oaknut.afs.passwords import PASSWORDS_FILENAME, PasswordsFile
@@ -79,28 +80,35 @@ def initialise(adfs: "ADFS", *, spec: InitSpec) -> None:
     """
     from oaknut.afs.afs import AFS  # deferred to avoid cycles
 
+    # The overall shape is "validate & pre-compute → mutate".  All
+    # fallible object construction (InfoSector, PasswordsFile,
+    # directory bytes) happens before any disc write so a validation
+    # failure leaves the image untouched.  See issue #3.
+
     # Capture the physical disc geometry BEFORE we shrink the ADFS
     # partition, because the info sector records the total cylinder
     # count of the underlying physical disc, not the shrunken ADFS
     # view.
     physical_spc, physical_total_cyls = _partition._cylinder_geometry(adfs)
 
-    # ---- Step 1: repartition ----
+    # ---- Step 1: compute the repartition plan (no mutation) ----
     if spec.repartition:
-        plan_obj = _partition.plan(
+        plan_obj: "_partition.RepartitionPlan | None" = _partition.plan(
             adfs,
             size=spec.size,
             compact_adfs=spec.compact_adfs,
         )
-        _partition.apply(adfs, plan_obj)
         sec1 = plan_obj.sec1
         sec2 = plan_obj.sec2
         start_cylinder = plan_obj.start_cylinder
         afs_cylinders = plan_obj.afs_cylinders
     else:
+        plan_obj = None
         sec1, sec2 = adfs._fsm.afs_info_pointers
         if sec1 == 0 or sec2 == 0:
-            raise ValueError("spec.repartition=False but no AFS pointers are installed")
+            raise AFSInitSpecError(
+                "spec.repartition=False but no AFS pointers are installed"
+            )
         start_cylinder = sec1 // physical_spc
         afs_cylinders = physical_total_cyls - start_cylinder
 
@@ -310,7 +318,15 @@ def initialise(adfs: "ADFS", *, spec: InitSpec) -> None:
     if len(passwords_raw) < passwords_padded_size:
         passwords_raw = passwords_raw.ljust(passwords_padded_size, b"\x00")
 
-    # ---- Step 8: write everything to disc ----
+    # ---- Step 8: apply the repartition and write everything ----
+    # Every fallible construction above is complete, so from here on
+    # we commit to disc.  If any write raises, we leave the image
+    # half-written — a true transactional backend would be needed to
+    # guard against that — but argument-validation failures (the
+    # common case, issue #3) cannot reach this point.
+    if plan_obj is not None:
+        _partition.apply(adfs, plan_obj)
+
     def write_object(map_sin: int, extents: list[Extent], data: bytes, logical_size: int) -> None:
         """Write a map block + data sectors for one object."""
         map_block = MapSector(

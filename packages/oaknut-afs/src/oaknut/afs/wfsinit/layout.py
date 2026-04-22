@@ -11,12 +11,28 @@ import datetime
 from dataclasses import dataclass, field
 from typing import Sequence
 
+from oaknut.afs.exceptions import (
+    AFSDiscNameError,
+    AFSInitSpecError,
+    AFSPasswordError,
+    AFSQuotaError,
+    AFSUserNameError,
+)
+from oaknut.afs.info_sector import _encode_disc_name
 from oaknut.afs.wfsinit.partition import AFSSizeSpec
 from oaknut.file import BootOption
 
 # Names reserved for the built-in accounts that initialise() creates
 # automatically (WFSINIT.bas lines 2140-2160 and DATA at line 3930).
 BUILTIN_ACCOUNT_NAMES = frozenset({"Syst", "Boot", "Welcome"})
+
+# Mirror of the limits the passwords-file encoder enforces
+# (passwords.py:_LEN_USER_ID / _LEN_PASSWORD).  Kept local so
+# InitSpec/UserSpec can validate eagerly without importing from the
+# encoder module.
+_MAX_USER_NAME_LEN = 20
+_MAX_PASSWORD_LEN = 6
+_MAX_QUOTA = 0xFFFFFFFF
 
 
 @dataclass(frozen=True)
@@ -29,6 +45,37 @@ class UserSpec:
     system: bool = False
     privileged: bool = False
     boot: BootOption = BootOption.OFF
+
+    def __post_init__(self) -> None:
+        if not self.name:
+            raise AFSUserNameError("user name must not be empty")
+        try:
+            encoded_name = self.name.encode("ascii")
+        except UnicodeEncodeError as exc:
+            raise AFSUserNameError(
+                f"user name {self.name!r} must be ASCII"
+            ) from exc
+        if len(encoded_name) > _MAX_USER_NAME_LEN:
+            raise AFSUserNameError(
+                f"user name {self.name!r} exceeds "
+                f"{_MAX_USER_NAME_LEN} characters"
+            )
+        try:
+            encoded_password = self.password.encode("ascii")
+        except UnicodeEncodeError as exc:
+            raise AFSPasswordError(
+                f"user {self.name!r}: password must be ASCII"
+            ) from exc
+        if len(encoded_password) > _MAX_PASSWORD_LEN:
+            raise AFSPasswordError(
+                f"user {self.name!r}: password exceeds "
+                f"{_MAX_PASSWORD_LEN} characters"
+            )
+        if self.quota is not None and not (0 <= self.quota <= _MAX_QUOTA):
+            raise AFSQuotaError(
+                f"user {self.name!r}: quota {self.quota} outside "
+                f"0..{_MAX_QUOTA:#x}"
+            )
 
 
 @dataclass(frozen=True)
@@ -60,17 +107,22 @@ class InitSpec:
     omit_builtins: frozenset[str] = field(default_factory=frozenset)
 
     def __post_init__(self) -> None:
-        if not self.disc_name:
-            raise ValueError("disc_name must not be empty")
-        if len(self.disc_name) > 16:
-            raise ValueError(f"disc_name exceeds 16 chars: {self.disc_name!r}")
-        if self.default_quota < 0:
-            raise ValueError("default_quota must be non-negative")
+        # Validate disc name content eagerly — InfoSector would
+        # otherwise raise deep inside initialise() after the disc
+        # has already been mutated (see issue #3).
+        try:
+            _encode_disc_name(self.disc_name)
+        except ValueError as exc:
+            raise AFSDiscNameError(str(exc)) from exc
+        if not (0 <= self.default_quota <= _MAX_QUOTA):
+            raise AFSQuotaError(
+                f"default_quota {self.default_quota} outside 0..{_MAX_QUOTA:#x}"
+            )
         # Validate omit_builtins against the known set.
         builtin_upper = {n.upper(): n for n in BUILTIN_ACCOUNT_NAMES}
         for name in self.omit_builtins:
             if name.upper() not in builtin_upper:
-                raise ValueError(
+                raise AFSInitSpecError(
                     f"omit_builtins name {name!r} is not a built-in account; "
                     f"valid names are {', '.join(sorted(BUILTIN_ACCOUNT_NAMES))}"
                 )
@@ -82,12 +134,12 @@ class InitSpec:
             upper = user.name.upper()
             if upper in active_builtin_upper:
                 names = ", ".join(sorted(BUILTIN_ACCOUNT_NAMES))
-                raise ValueError(
+                raise AFSUserNameError(
                     f"user name {user.name!r} is reserved "
                     f"(built-in account); initialise() creates "
                     f"{names} automatically "
                     f"(use omit_builtins to suppress)"
                 )
             if upper in names_seen:
-                raise ValueError(f"duplicate user name: {user.name!r}")
+                raise AFSUserNameError(f"duplicate user name: {user.name!r}")
             names_seen.add(upper)
