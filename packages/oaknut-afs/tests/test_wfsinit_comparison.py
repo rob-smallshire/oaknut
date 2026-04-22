@@ -61,10 +61,13 @@ _MASKED_BYTES: dict[int, dict[int, str]] = {
     # FSM sector 1: disc-ID low byte is the System VIA T1 counter
     # sampled on every ADFS flush (write_dir_and_validate at &8FB7
     # in the ADFS 1.30 disassembly).  The checksum at 0xFF is
-    # derived from it.
+    # derived from it.  Byte 0xFD is the ADFS boot option: WFSINIT
+    # forces it to 2 (Opt 4 2) at line 990; oaknut deliberately
+    # leaves it alone (see issue #9).
     1: {
         0xFB: "disc-ID low byte (VIA T1 counter sample, non-deterministic)",
-        0xFF: "FSM sector 1 checksum (derived from disc-ID)",
+        0xFD: "ADFS boot option (WFSINIT forces Opt 4 2; oaknut leaves it alone)",
+        0xFF: "FSM sector 1 checksum (derived from disc-ID and boot option)",
     },
     # MORIARTY's empty URD: PROCmake_dir's BBC BASIC $ indirection
     # writes name + 10 spaces + CR.  For "MORIARTY" (8 chars), the

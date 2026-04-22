@@ -107,12 +107,11 @@ def initialise(adfs: "ADFS", *, spec: InitSpec) -> None:
     spc = physical_spc
     total_cyls = physical_total_cyls
 
-    # ---- Step 2: set ADFS boot option ----
-    # WFSINIT line 990: PROCoscli("Opt 4 2") — sets boot option to
-    # "run" so the file server auto-starts on power-on. This triggers
-    # a full write_dir_and_validate in real ADFS, but we just need
-    # the FSM byte + checksum recalculation.
-    adfs._fsm.set_boot_option(2)
+    # Note: unlike WFSINIT (``PROCoscli("Opt 4 2")`` at line 990), we
+    # do not touch the ADFS boot option. Carving an AFS region out of
+    # the tail is a structural change; forcing the preceding ADFS
+    # partition to auto-boot as a side effect would be user-visible
+    # and surprising. Callers who want that can set it themselves.
 
     disc = adfs._disc
 
@@ -121,7 +120,7 @@ def initialise(adfs: "ADFS", *, spec: InitSpec) -> None:
         view = disc.sector_range(addr, 1)
         view[:] = data
 
-    # ---- Step 3: cylinder bitmaps + allocator ----
+    # ---- Step 2: cylinder bitmaps + allocator ----
     # Build fresh bitmaps (sector 0 allocated, rest free) and wrap
     # them in a BitmapShadow + Allocator. This gives us WFSINIT's
     # FNablk allocation policy (FNDCY best-fit by cylinder, ALBLK
@@ -165,7 +164,7 @@ def initialise(adfs: "ADFS", *, spec: InitSpec) -> None:
     shadow.mark_range_allocated(sec1_cyl, sec1 % spc, 1)
     shadow.mark_range_allocated(sec2_cyl, sec2 % spc, 1)
 
-    # ---- Step 4: allocate all objects via FNablk policy ----
+    # ---- Step 3: allocate all objects via FNablk policy ----
     # WFSINIT's FNablk (lines 1650-1930) allocates the map block as
     # the first free sector on the best cylinder, then allocates the
     # data sectors contiguously from the same cylinder. Our Allocator
@@ -217,7 +216,7 @@ def initialise(adfs: "ADFS", *, spec: InitSpec) -> None:
     # called from FNwrite_PW via PROCsetup line 2320.
     passwords_map_sin, passwords_extents = _fnablk(1)
 
-    # ---- Step 5: build info sector bytes ----
+    # ---- Step 4: build info sector bytes ----
     info = InfoSector(
         disc_name=spec.disc_name,
         cylinders=total_cyls,
@@ -230,7 +229,7 @@ def initialise(adfs: "ADFS", *, spec: InitSpec) -> None:
     )
     info_bytes = info.to_bytes()
 
-    # ---- Step 6: build root directory bytes ----
+    # ---- Step 5: build root directory bytes ----
     # WFSINIT adds user URD entries (PROCenter_dir at line 2290,
     # access &30 = directory + locked) then the Passwords entry
     # last (line 2320, access &00). build_directory_bytes sorts
@@ -260,7 +259,7 @@ def initialise(adfs: "ADFS", *, spec: InitSpec) -> None:
         size_in_bytes=_DEFAULT_ROOT_DIR_SECTORS * _SECTOR_SIZE,
     )
 
-    # ---- Step 7: build per-user URD bytes ----
+    # ---- Step 6: build per-user URD bytes ----
     urd_bytes_list: list[bytes] = []
     for user_name, _urd_map_sin, _urd_data in urd_allocations:
         urd_bytes = build_directory_bytes(
@@ -271,7 +270,7 @@ def initialise(adfs: "ADFS", *, spec: InitSpec) -> None:
         )
         urd_bytes_list.append(urd_bytes)
 
-    # ---- Step 8: build passwords file bytes ----
+    # ---- Step 7: build passwords file bytes ----
     # WFSINIT creates three built-in accounts before user-specified
     # ones (lines 2130-2160):
     #   Syst  — FNenter_name(pass%, 0, "Syst", TRUE) — system privilege
@@ -311,7 +310,7 @@ def initialise(adfs: "ADFS", *, spec: InitSpec) -> None:
     if len(passwords_raw) < passwords_padded_size:
         passwords_raw = passwords_raw.ljust(passwords_padded_size, b"\x00")
 
-    # ---- Step 9: write everything to disc ----
+    # ---- Step 8: write everything to disc ----
     def write_object(map_sin: int, extents: list[Extent], data: bytes, logical_size: int) -> None:
         """Write a map block + data sectors for one object."""
         map_block = MapSector(
@@ -348,7 +347,7 @@ def initialise(adfs: "ADFS", *, spec: InitSpec) -> None:
     # Passwords file map block + data.
     write_object(passwords_map_sin, passwords_extents, passwords_raw, passwords_padded_size)
 
-    # ---- Step 10: emplace libraries ----
+    # ---- Step 9: emplace libraries ----
     if spec.libraries:
         from oaknut.afs.libraries import emplace_library
 

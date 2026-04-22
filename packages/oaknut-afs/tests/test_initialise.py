@@ -169,3 +169,18 @@ class TestInitialise:
         )
         afs = adfs.afs_partition
         assert afs.users.find("alice").boot_option == BootOption.RUN
+
+    @pytest.mark.parametrize("initial_boot_option", [0, 1, 2, 3])
+    def test_initialise_leaves_adfs_boot_option_alone(
+        self, initial_boot_option: int
+    ) -> None:
+        adfs = ADFS.create(ADFS_L, boot_option=initial_boot_option)
+        initialise(
+            adfs,
+            spec=InitSpec(
+                disc_name="NoTouch",
+                size=AFSSizeSpec.cylinders(20),
+                users=[],
+            ),
+        )
+        assert adfs.boot_option == initial_boot_option
