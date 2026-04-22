@@ -845,16 +845,20 @@ def update_entry_fields(
     *,
     load_address: int | None = None,
     exec_address: int | None = None,
+    access: AFSAccess | None = None,
     date: AfsDate | None = None,
     sin: SystemInternalName | None = None,
 ) -> bytes:
-    """Return new directory bytes with the non-name fields of ``name`` updated.
+    """Return new directory bytes with selected fields of ``name`` updated.
 
-    Leaves the ``name`` and ``access`` fields untouched — matching
-    the ROM's RETANB replace path at ``Uade0E.asm:850``, which
-    preserves the access byte when an insert collides with an
-    existing entry. Any subset of ``load_address`` / ``exec_address``
-    / ``date`` / ``sin`` may be ``None`` to leave that field alone.
+    By default this leaves the ``name`` and ``access`` fields
+    untouched — matching the ROM's RETANB replace path at
+    ``Uade0E.asm:850``, which preserves the access byte when an
+    insert collides with an existing entry.  Callers who explicitly
+    want to rewrite the access byte (``AFSPath.chmod`` and friends)
+    can pass ``access=...``.  Any subset of ``load_address`` /
+    ``exec_address`` / ``access`` / ``date`` / ``sin`` may be
+    ``None`` to leave that field alone.
 
     Raises :class:`AFSDirectoryEntryNotFoundError` if ``name``
     does not exist.
@@ -874,6 +878,8 @@ def update_entry_fields(
         buf[slot_offset + _ENT_OFF_EXEC : slot_offset + _ENT_OFF_EXEC + 4] = exec_address.to_bytes(
             4, "little"
         )
+    if access is not None:
+        buf[slot_offset + _ENT_OFF_ACCESS] = access.to_byte()
     if date is not None:
         buf[slot_offset + _ENT_OFF_DATE : slot_offset + _ENT_OFF_DATE + 2] = date.to_bytes()
     if sin is not None:
