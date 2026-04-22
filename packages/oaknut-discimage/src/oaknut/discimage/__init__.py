@@ -9,4 +9,4 @@ generic ``DiskFormat`` dataclass. Filesystem-specific constants
 in its own package, not here.
 """
 
-__version__ = "10.3.0"
+__version__ = "10.4.0"
