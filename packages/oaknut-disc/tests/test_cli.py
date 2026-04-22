@@ -359,6 +359,156 @@ class TestStat:
 
 
 # ---------------------------------------------------------------------------
+# Issue #7 — disc stat must show a disc-level summary followed by one block
+# per filing-system partition, with self-consistent byte/sector figures.
+# ---------------------------------------------------------------------------
+
+
+def _extract_sizes(output: str) -> list[tuple[int, int]]:
+    """Return every ``X bytes (Y sectors)``-shaped pair from ``output``."""
+    import re
+
+    pairs = []
+    pattern = re.compile(r"([\d,]+)\s*bytes\s*\((\d+)\s*sectors?\)")
+    for match in pattern.finditer(output):
+        bytes_value = int(match.group(1).replace(",", ""))
+        sector_value = int(match.group(2))
+        pairs.append((bytes_value, sector_value))
+    return pairs
+
+
+def _extract_size_lines(output: str) -> list[tuple[int, int]]:
+    """Every ``Size:  X bytes (Y sectors)``-shaped line in order.
+
+    Excludes ``Free:`` lines so the callers can count by block
+    (``disc + N partitions``) rather than by raw byte/sector pair.
+    """
+    import re
+
+    pairs = []
+    pattern = re.compile(
+        r"Size:\s*([\d,]+)\s*bytes\s*\((\d+)\s*sectors?\)"
+    )
+    for match in pattern.finditer(output):
+        bytes_value = int(match.group(1).replace(",", ""))
+        sector_value = int(match.group(2))
+        pairs.append((bytes_value, sector_value))
+    return pairs
+
+
+class TestStatPartitionStructure:
+    """Disc-level summary plus one block per partition."""
+
+    def test_dfs_disc_and_single_partition(
+        self, runner: CliRunner, dfs_image_filepath: Path
+    ) -> None:
+        result = runner.invoke(cli, ["stat", str(dfs_image_filepath)])
+        assert result.exit_code == 0, result.output
+        assert "Disc" in result.output
+        assert "Partition 1: DFS" in result.output
+        # Title / boot option live under the partition now, not the disc.
+        assert "TestDFS" in result.output
+        # Byte/sector pairs must be self-consistent (issue #7 regression).
+        for bytes_value, sector_value in _extract_sizes(result.output):
+            assert bytes_value == sector_value * 256, (
+                f"{bytes_value} bytes != {sector_value}*256"
+            )
+
+    def test_adfs_floppy_disc_and_single_partition(
+        self, runner: CliRunner, adfs_image_filepath: Path
+    ) -> None:
+        result = runner.invoke(cli, ["stat", str(adfs_image_filepath)])
+        assert result.exit_code == 0, result.output
+        assert "Disc" in result.output
+        assert "Partition 1: ADFS" in result.output
+        assert "TestADFS" in result.output
+        # One partition — its size must equal the disc size.
+        for bytes_value, sector_value in _extract_sizes(result.output):
+            assert bytes_value == sector_value * 256
+
+    def test_adfs_hard_no_afs_single_partition(
+        self, runner: CliRunner, adfs_hard_no_afs_filepath: Path
+    ) -> None:
+        result = runner.invoke(cli, ["stat", str(adfs_hard_no_afs_filepath)])
+        assert result.exit_code == 0, result.output
+        assert "Partition 1: ADFS" in result.output
+        # Without AFS there is no Partition 2.
+        assert "Partition 2" not in result.output
+        for bytes_value, sector_value in _extract_sizes(result.output):
+            assert bytes_value == sector_value * 256
+
+    def test_adfs_hard_with_afs_two_partitions(
+        self, runner: CliRunner, adfs_hard_with_afs_filepath: Path
+    ) -> None:
+        result = runner.invoke(cli, ["stat", str(adfs_hard_with_afs_filepath)])
+        assert result.exit_code == 0, result.output
+        assert "Partition 1: ADFS" in result.output
+        assert "Partition 2: AFS" in result.output
+        # Disc-level geometry is a 296-cylinder SCSI hard disc.
+        assert "296 cylinders" in result.output
+        assert "Split" in result.output       # ADFS title
+        assert "TwinFS" in result.output      # AFS disc name
+        # Every byte/sector pair must be self-consistent — this is the
+        # specific regression the reporter asked to guard (issue #7).
+        pairs = _extract_sizes(result.output)
+        assert pairs, f"no byte/sector pairs found in:\n{result.output}"
+        for bytes_value, sector_value in pairs:
+            assert bytes_value == sector_value * 256, (
+                f"{bytes_value} bytes != {sector_value}*256 in:\n{result.output}"
+            )
+
+    def test_adfs_hard_with_afs_partitions_sum_to_disc(
+        self, runner: CliRunner, adfs_hard_with_afs_filepath: Path
+    ) -> None:
+        """ADFS partition sectors + AFS partition sectors must equal
+        the disc sector count.  Detects the original symptom — a
+        partition size that bears no relation to the physical disc.
+        """
+        result = runner.invoke(cli, ["stat", str(adfs_hard_with_afs_filepath)])
+        assert result.exit_code == 0, result.output
+        size_lines = _extract_size_lines(result.output)
+        # One Size line per block: disc, then each partition.
+        assert len(size_lines) == 3, (
+            f"expected 3 Size lines (disc + 2 partitions), "
+            f"got {size_lines!r}"
+        )
+        disc_sectors = size_lines[0][1]
+        partition_sectors = size_lines[1][1] + size_lines[2][1]
+        assert partition_sectors == disc_sectors, (
+            f"partitions sum to {partition_sectors} sectors but "
+            f"disc is {disc_sectors} sectors"
+        )
+
+    def test_adfs_hard_with_afs_omits_user_list(
+        self, runner: CliRunner, adfs_hard_with_afs_filepath: Path
+    ) -> None:
+        """The disc summary is a whole-disc overview; an AFS user
+        list belongs in ``disc afs-users``, not here.
+        """
+        result = runner.invoke(cli, ["stat", str(adfs_hard_with_afs_filepath)])
+        assert result.exit_code == 0, result.output
+        assert "holmes" not in result.output
+        assert "Welcome" not in result.output
+
+    def test_afs_prefix_stays_afs_scoped(
+        self, runner: CliRunner, adfs_hard_with_afs_filepath: Path
+    ) -> None:
+        """``disc stat image.dat afs:`` scopes to the AFS partition —
+        the ``afs:`` prefix explicitly asks for the AFS view, so the
+        disc-level + multi-partition layout does not apply.
+        """
+        result = runner.invoke(
+            cli, ["stat", str(adfs_hard_with_afs_filepath), "afs:"]
+        )
+        assert result.exit_code == 0, result.output
+        # AFS-scoped view: disc name and AFS-specific fields, no
+        # Partition N headings.
+        assert "TwinFS" in result.output
+        assert "Partition 1" not in result.output
+        assert "Partition 2" not in result.output
+
+
+# ---------------------------------------------------------------------------
 # Inspection: cat
 # ---------------------------------------------------------------------------
 

@@ -480,64 +480,142 @@ def stat(image: Path, path: str | None) -> None:
 _alias("*INFO", "stat")
 
 
+_SECTOR_SIZE = 256
+
+
 def _stat_disc(image_filepath: Path, fs: FilingSystem) -> None:
-    """Print whole-disc summary as a Rich panel."""
+    """Print whole-disc summary as a Rich panel.
+
+    For a no-prefix invocation the layout is a disc-level header (physical
+    geometry + total size, both derived from the geometry so they stay
+    self-consistent — see issue #7) followed by one ``Partition N: <FS>``
+    block per filing-system partition on the image.
+
+    When the user scopes the view with an ``afs:`` prefix, ``fs`` is
+    :data:`FilingSystem.AFS` and a flat partition-only block is shown
+    instead — the prefix is a deliberate single-partition drill-down.
+    """
     from rich.console import Console
     from rich.panel import Panel
 
     with open_image(image_filepath, fs) as handle:
         lines: list[str] = []
-
-        if fs is FilingSystem.DFS:
-            lines.append(f"Title:       {handle.title}")
-            from oaknut.file import BootOption
-
-            boot = BootOption(handle.boot_option)
-            lines.append(f"Boot option: {boot.name} ({boot.value})")
-            lines.append("Format:      DFS")
-            lines.append(f"Free:        {handle.free_sectors} sectors")
-            file_count = (
-                sum(
-                    1
-                    for _ in handle.root.iterdir()
-                    for _ in [None]  # count all files
-                )
-                if False
-                else len(handle.files)
-            )
-            lines.append(f"Files:       {file_count}")
-        elif fs is FilingSystem.AFS:
-            lines.append(f"Disc name:      {handle.disc_name}")
-            geom = handle.geometry
-            lines.append(f"Start cylinder: {handle.start_cylinder}")
-            lines.append(f"Cylinders:      {geom.cylinders}")
-            lines.append(f"Sectors/cyl:    {geom.sectors_per_cylinder}")
-            lines.append(f"Total sectors:  {geom.total_sectors}")
-            lines.append(f"Free sectors:   {handle.free_sectors}")
-            lines.append("Users:")
-            for u in handle.users.active:
-                flag = "S" if u.is_system else " "
-                lines.append(f"  {flag} {u.full_id}")
+        if fs is FilingSystem.AFS:
+            _append_afs_partition_only(lines, handle)
+        elif fs is FilingSystem.DFS:
+            _append_disc_header_dfs(lines, handle)
+            lines.append("")
+            lines.append("Partition 1: DFS")
+            _append_dfs_partition(lines, handle)
         else:
-            # ADFS
-            lines.append(f"Title:       {handle.title}")
-            from oaknut.file import BootOption
-
-            boot = BootOption(handle.boot_option)
-            lines.append(f"Boot option: {boot.name} ({boot.value})")
-            lines.append("Format:      ADFS")
-            geom = handle.geometry
-            lines.append(
-                f"Geometry:    {geom.cylinders} cylinders, "
-                f"{geom.heads} heads, {geom.sectors_per_track} sectors/track"
-            )
-            lines.append(f"Total size:  {handle.total_size:,} bytes ({geom.total_sectors} sectors)")
-            lines.append(f"Free space:  {handle.free_space:,} bytes")
+            _append_disc_header_adfs(lines, handle)
+            lines.append("")
+            lines.append("Partition 1: ADFS")
+            _append_adfs_partition(lines, handle)
             afs = handle.afs_partition
             if afs is not None:
-                lines.append(f"AFS:         present (disc name: {afs.disc_name})")
+                lines.append("")
+                lines.append("Partition 2: AFS")
+                _append_afs_partition(lines, handle, afs)
 
         Console().print(Panel("\n".join(lines), title=str(image_filepath.name)))
+
+
+def _format_size(sectors: int) -> str:
+    """Consistent ``X bytes (Y sectors)`` rendering."""
+    return f"{sectors * _SECTOR_SIZE:,} bytes ({sectors} sectors)"
+
+
+def _append_disc_header_dfs(lines: list[str], handle) -> None:
+    """Disc-level block for DFS: total sectors only (no C/H/S decomposition)."""
+    total_sectors = handle.info["total_sectors"]
+    lines.append("Disc")
+    lines.append(f"  Size:         {_format_size(total_sectors)}")
+
+
+def _append_disc_header_adfs(lines: list[str], handle) -> None:
+    """Disc-level block for ADFS: geometry + physical disc size.
+
+    Both figures come from ``handle.geometry`` so the byte count and
+    sector count agree with each other and with the image file size
+    on disc (issue #7).
+    """
+    geom = handle.geometry
+    total_sectors = geom.cylinders * geom.heads * geom.sectors_per_track
+    lines.append("Disc")
+    lines.append(
+        f"  Geometry:     {geom.cylinders} cylinders, "
+        f"{geom.heads} heads, {geom.sectors_per_track} sectors/track"
+    )
+    lines.append(f"  Size:         {_format_size(total_sectors)}")
+
+
+def _append_dfs_partition(lines: list[str], handle) -> None:
+    from oaknut.file import BootOption
+
+    info = handle.info
+    lines.append(f"  Title:        {handle.title}")
+    boot = BootOption(handle.boot_option)
+    lines.append(f"  Boot option:  {boot.name} ({boot.value})")
+    lines.append(f"  Size:         {_format_size(info['total_sectors'])}")
+    lines.append(f"  Free:         {_format_size(info['free_sectors'])}")
+    lines.append(f"  Files:        {info['num_files']}")
+
+
+def _append_adfs_partition(lines: list[str], handle) -> None:
+    """ADFS partition block.
+
+    ``handle.total_size`` reflects any AFS-driven ``shrink_to`` that
+    has happened, so the partition's cylinder range and size are
+    correct whether the disc is whole-ADFS or split with AFS.
+    """
+    from oaknut.file import BootOption
+
+    geom = handle.geometry
+    adfs_sectors = handle.total_size // _SECTOR_SIZE
+    adfs_cylinders = adfs_sectors // (geom.heads * geom.sectors_per_track)
+    lines.append(f"  Title:        {handle.title}")
+    boot = BootOption(handle.boot_option)
+    lines.append(f"  Boot option:  {boot.name} ({boot.value})")
+    if adfs_cylinders < geom.cylinders:
+        # Only worth showing the cylinder range when it isn't the
+        # whole disc — otherwise it's just noise.
+        lines.append(
+            f"  Range:        cylinders 0-{adfs_cylinders - 1}"
+        )
+    lines.append(f"  Size:         {_format_size(adfs_sectors)}")
+    free_sectors = handle.free_space // _SECTOR_SIZE
+    lines.append(f"  Free:         {_format_size(free_sectors)}")
+
+
+def _append_afs_partition(lines: list[str], adfs_handle, afs) -> None:
+    """AFS partition block beneath its containing ADFS disc.
+
+    Cylinder range is derived from the info sector's start cylinder
+    and the physical disc geometry.  User list is intentionally
+    omitted — it can be arbitrarily long and a separate concern (see
+    ``disc afs-users``).
+    """
+    geom = adfs_handle.geometry
+    afs_cylinders = geom.cylinders - afs.start_cylinder
+    afs_sectors = afs_cylinders * geom.heads * geom.sectors_per_track
+    lines.append(f"  Disc name:    {afs.disc_name}")
+    lines.append(
+        f"  Range:        cylinders {afs.start_cylinder}-{geom.cylinders - 1}"
+    )
+    lines.append(f"  Size:         {_format_size(afs_sectors)}")
+    lines.append(f"  Free:         {_format_size(afs.free_sectors)}")
+
+
+def _append_afs_partition_only(lines: list[str], handle) -> None:
+    """Flat AFS-scoped view (``disc stat image afs:``)."""
+    geom = handle.geometry
+    lines.append(f"Disc name:      {handle.disc_name}")
+    lines.append(f"Start cylinder: {handle.start_cylinder}")
+    lines.append(f"Cylinders:      {geom.cylinders}")
+    lines.append(f"Sectors/cyl:    {geom.sectors_per_cylinder}")
+    lines.append(f"Total sectors:  {geom.total_sectors}")
+    lines.append(f"Free sectors:   {handle.free_sectors}")
 
 
 @cli.command()

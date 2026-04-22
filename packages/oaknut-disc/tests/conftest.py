@@ -119,6 +119,33 @@ def adfs_no_afs_filepath(tmp_path: Path) -> Path:
 
 
 @pytest.fixture
+def adfs_hard_no_afs_filepath(tmp_path: Path) -> Path:
+    """ADFS hard-disc image (10 MB) without an AFS partition."""
+    filepath = tmp_path / "hard_no_afs.dat"
+    with ADFS.create_file(filepath, capacity_bytes=10_000_000, title="Bigone"):
+        pass
+    return filepath
+
+
+@pytest.fixture
+def adfs_hard_with_afs_filepath(tmp_path: Path) -> Path:
+    """ADFS hard-disc image (10 MB) with an initialised AFS partition."""
+    filepath = tmp_path / "hard_with_afs.dat"
+    with ADFS.create_file(filepath, capacity_bytes=10_000_000, title="Split"):
+        pass
+    with ADFS.from_file(filepath, mode="r+b") as adfs:
+        initialise(
+            adfs,
+            spec=InitSpec(
+                disc_name="TwinFS",
+                size=AFSSizeSpec.cylinders(100),
+                users=[UserSpec("holmes")],
+            ),
+        )
+    return filepath
+
+
+@pytest.fixture
 def afs_image_with_access_bytes(tmp_path: Path) -> Path:
     """AFS image with files whose access bytes span the common cases.
 
