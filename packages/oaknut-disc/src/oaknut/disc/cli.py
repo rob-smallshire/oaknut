@@ -76,6 +76,24 @@ def _alias(acorn_name: str, unix_name: str) -> None:
     _ALIASES[acorn_name] = unix_name
 
 
+def _format_access(access) -> str:
+    """Format an access attribute for display.
+
+    DFS and ADFS use the wire-form ``oaknut.file.Access`` bit layout
+    and are rendered via :func:`oaknut.file.format_access_text`.  AFS
+    stores its access byte in a different bit layout
+    (:class:`oaknut.afs.access.AFSAccess`) — passing that through the
+    wire renderer would silently produce wrong strings (issue #12),
+    so an ``AFSAccess`` is routed through its own ``to_string``.
+    """
+    from oaknut.afs.access import AFSAccess
+    from oaknut.file import format_access_text
+
+    if isinstance(access, AFSAccess):
+        return access.to_string()
+    return format_access_text(access)
+
+
 # ---------------------------------------------------------------------------
 # DFS format detection (extension + file size)
 # ---------------------------------------------------------------------------
@@ -256,7 +274,6 @@ def cli() -> None:
 @click.argument("path", required=False, default=None)
 def ls(image: Path, path: str | None) -> None:
     """List directory contents (Acorn alias: *CAT)."""
-    from oaknut.file import format_access_text
     from rich.console import Console
     from rich.table import Table
 
@@ -311,7 +328,7 @@ def ls(image: Path, path: str | None) -> None:
             locked = getattr(st, "locked", False)
             attr_str = "L" if locked else ""
             if hasattr(st, "access"):
-                attr_str = format_access_text(st.access)
+                attr_str = _format_access(st.access)
             table.add_row(child.name, load_str, exec_str, length_str, attr_str)
 
         if free is not None:
@@ -398,8 +415,6 @@ def _print_children(node, prefix: str) -> None:
 @click.argument("path", required=False, default=None)
 def stat(image: Path, path: str | None) -> None:
     """Disc summary (no path) or file metadata (with path). Alias: *INFO."""
-    from oaknut.file import format_access_text
-
     fs, bare = resolve_path(image, path)
 
     if not bare:
@@ -421,7 +436,7 @@ def stat(image: Path, path: str | None) -> None:
                 click.echo(f"Length:  {st.length:08X}")
             locked = getattr(st, "locked", False)
             if hasattr(st, "access"):
-                click.echo(f"Attr:    {format_access_text(st.access)}")
+                click.echo(f"Attr:    {_format_access(st.access)}")
             elif locked:
                 click.echo("Attr:    L")
             if hasattr(st, "is_directory"):

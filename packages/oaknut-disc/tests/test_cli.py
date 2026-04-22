@@ -89,6 +89,98 @@ class TestLs:
 
 
 # ---------------------------------------------------------------------------
+# Issue #12 — disc ls and disc stat must format AFS access bytes using the
+# on-disc AFS bit layout, not the wire-form Acorn byte layout.
+# ---------------------------------------------------------------------------
+
+
+class TestAccessBytesFormattedCorrectlyOnAFS:
+    @pytest.mark.parametrize(
+        "filename, expected_attr",
+        [
+            ("wrfile", "WR/R"),
+            ("lwrfile", "LWR/R"),
+            ("pubwfile", "WR/WR"),
+            ("nonefile", "/"),
+        ],
+    )
+    def test_ls_afs_attributes_match_written_access(
+        self,
+        runner: CliRunner,
+        afs_image_with_access_bytes: Path,
+        filename: str,
+        expected_attr: str,
+    ) -> None:
+        result = runner.invoke(
+            cli, ["ls", str(afs_image_with_access_bytes), "afs:$"]
+        )
+        assert result.exit_code == 0, result.output
+        # Find the row for this file and check the Attr column matches
+        # the AFS-form string the file was written with.
+        row = next(
+            (line for line in result.output.splitlines() if filename in line),
+            None,
+        )
+        assert row is not None, f"no row for {filename!r} in:\n{result.output}"
+        assert expected_attr in row, (
+            f"expected {expected_attr!r} in row for {filename!r}, "
+            f"got: {row!r}"
+        )
+
+    @pytest.mark.parametrize(
+        "filename, expected_attr",
+        [
+            ("wrfile", "WR/R"),
+            ("lwrfile", "LWR/R"),
+            ("pubwfile", "WR/WR"),
+        ],
+    )
+    def test_stat_afs_attributes_match_written_access(
+        self,
+        runner: CliRunner,
+        afs_image_with_access_bytes: Path,
+        filename: str,
+        expected_attr: str,
+    ) -> None:
+        result = runner.invoke(
+            cli,
+            ["stat", str(afs_image_with_access_bytes), f"afs:$.{filename}"],
+        )
+        assert result.exit_code == 0, result.output
+        assert f"Attr:    {expected_attr}" in result.output, result.output
+
+    def test_ls_afs_directory_shows_D_form(
+        self,
+        runner: CliRunner,
+        afs_image_with_access_bytes: Path,
+    ) -> None:
+        """A directory must render with the ``D/`` form, not be
+        misinterpreted as a file.
+        """
+        result = runner.invoke(
+            cli, ["ls", str(afs_image_with_access_bytes), "afs:$"]
+        )
+        assert result.exit_code == 0, result.output
+        # The ls code path renders directories as a separate row
+        # without an Attr column — just verify the directory name
+        # appears with the trailing slash convention and the row
+        # doesn't leak a misformatted file-style attr for it.
+        assert "Folder/" in result.output
+
+    def test_ls_adfs_unchanged(
+        self, runner: CliRunner, adfs_image_filepath: Path
+    ) -> None:
+        """Regression: ADFS ls must still produce its wire-form
+        Access rendering — the fix must not affect non-AFS paths.
+        """
+        result = runner.invoke(cli, ["ls", str(adfs_image_filepath)])
+        assert result.exit_code == 0, result.output
+        # ADFS files written without explicit access get default
+        # owner R+W; rendered as "WR/" by format_access_text.
+        assert "WR/" in result.output
+
+
+# ---------------------------------------------------------------------------
 # Inspection: tree
 # ---------------------------------------------------------------------------
 

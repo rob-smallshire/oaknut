@@ -116,3 +116,43 @@ def adfs_no_afs_filepath(tmp_path: Path) -> Path:
     with ADFS.create_file(filepath, ADFS_L, title="NoAFS") as _adfs:
         pass
     return filepath
+
+
+@pytest.fixture
+def afs_image_with_access_bytes(tmp_path: Path) -> Path:
+    """AFS image with files whose access bytes span the common cases.
+
+    Each file's ``disc ls`` symbolic column should round-trip back to
+    the value it was written with.  Exercises issue #12.
+    """
+    from oaknut.afs.access import AFSAccess
+
+    filepath = tmp_path / "access_bytes.adl"
+    with ADFS.create_file(filepath, ADFS_L) as _adfs:
+        pass
+    with ADFS.from_file(filepath, mode="r+b") as adfs:
+        initialise(
+            adfs,
+            spec=InitSpec(
+                disc_name="AccessTest",
+                size=AFSSizeSpec.cylinders(20),
+                users=[],
+            ),
+        )
+    with ADFS.from_file(filepath, mode="r+b") as adfs:
+        afs = adfs.afs_partition
+        (afs.root / "wrfile").write_bytes(
+            b"a", access=AFSAccess.from_string("WR/R")
+        )
+        (afs.root / "lwrfile").write_bytes(
+            b"b", access=AFSAccess.from_string("LWR/R")
+        )
+        (afs.root / "pubwfile").write_bytes(
+            b"c", access=AFSAccess.from_string("WR/WR")
+        )
+        (afs.root / "nonefile").write_bytes(
+            b"d", access=AFSAccess.from_string("/")
+        )
+        (afs.root / "Folder").mkdir()
+        afs.flush()
+    return filepath
