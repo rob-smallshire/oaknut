@@ -214,6 +214,38 @@ def adfs_hard_no_afs_filepath(tmp_path: Path) -> Path:
 
 
 @pytest.fixture
+def partitioned_image_with_files(tmp_path: Path) -> Path:
+    """ADFS + AFS hard disc pre-populated with files in both partitions.
+
+    Used by cross-partition commands (e.g. ``find``) that must
+    enumerate every filing system the image carries.
+    """
+    filepath = tmp_path / "mixed.dat"
+    with ADFS.create_file(filepath, capacity_bytes=1_000_000, title="Mixed"):
+        pass
+    with ADFS.from_file(filepath, mode="r+b") as adfs:
+        (adfs.root / "adfsA").write_bytes(b"aa")
+        (adfs.root / "adfsB").write_bytes(b"bb")
+    with ADFS.from_file(filepath, mode="r+b") as adfs:
+        initialise(
+            adfs,
+            spec=InitSpec(
+                disc_name="MixedAFS",
+                size=AFSSizeSpec.cylinders(20),
+                users=[],
+            ),
+        )
+    with ADFS.from_file(filepath, mode="r+b") as adfs:
+        afs = adfs.afs_partition
+        (afs.root / "afsA").write_bytes(b"A")
+        (afs.root / "GAMES").mkdir()
+        (afs.root / "GAMES" / "Elite").write_bytes(b"e")
+        (afs.root / "GAMES" / "Exile").write_bytes(b"x")
+        afs.flush()
+    return filepath
+
+
+@pytest.fixture
 def adfs_hard_with_afs_filepath(tmp_path: Path) -> Path:
     """ADFS hard-disc image (10 MB) with an initialised AFS partition."""
     filepath = tmp_path / "hard_with_afs.dat"

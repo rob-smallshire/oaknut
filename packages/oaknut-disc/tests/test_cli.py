@@ -324,6 +324,133 @@ class TestTree:
 
 
 # ---------------------------------------------------------------------------
+# Issue #14 — disc find must reach the AFS partition and emit full paths.
+# ---------------------------------------------------------------------------
+
+
+class TestFind:
+    def test_find_dfs_bare_paths(
+        self, runner: CliRunner, dfs_image_filepath: Path
+    ) -> None:
+        """Single-partition DFS image: output stays unprefixed for
+        backward compatibility.
+        """
+        result = runner.invoke(cli, ["find", str(dfs_image_filepath), "*"])
+        assert result.exit_code == 0, result.output
+        assert "$.HELLO" in result.output
+        assert "$.DATA" in result.output
+        assert "afs:" not in result.output
+        assert "adfs:" not in result.output
+        assert "dfs:" not in result.output
+
+    def test_find_adfs_only_bare_paths(
+        self, runner: CliRunner, adfs_image_filepath: Path
+    ) -> None:
+        """Single-partition ADFS image: output stays unprefixed."""
+        result = runner.invoke(cli, ["find", str(adfs_image_filepath), "*"])
+        assert result.exit_code == 0, result.output
+        assert "$.Hello" in result.output
+        assert "afs:" not in result.output
+        assert "adfs:" not in result.output
+
+    def test_find_afs_prefix_returns_afs_paths(
+        self,
+        runner: CliRunner,
+        partitioned_image_with_files: Path,
+    ) -> None:
+        """Explicit ``afs:`` prefix scopes find to the AFS partition
+        and returns full paths (currently a regression — AFS paths
+        fall back to leaf names only because AFSPath has no ``.path``
+        attribute).
+        """
+        result = runner.invoke(
+            cli, ["find", str(partitioned_image_with_files), "afs:*"]
+        )
+        assert result.exit_code == 0, result.output
+        assert "afs:$.afsA" in result.output
+        assert "afs:$.GAMES.Elite" in result.output
+        assert "afs:$.GAMES.Exile" in result.output
+        # ADFS partition files must not leak into an afs-scoped search.
+        assert "adfsA" not in result.output
+
+    def test_find_adfs_prefix_returns_adfs_paths(
+        self,
+        runner: CliRunner,
+        partitioned_image_with_files: Path,
+    ) -> None:
+        result = runner.invoke(
+            cli,
+            ["find", str(partitioned_image_with_files), "adfs:*"],
+        )
+        assert result.exit_code == 0, result.output
+        assert "adfs:$.adfsA" in result.output
+        assert "adfs:$.adfsB" in result.output
+        assert "afs:" not in result.output
+
+    def test_find_multi_partition_no_prefix_enumerates_both(
+        self,
+        runner: CliRunner,
+        partitioned_image_with_files: Path,
+    ) -> None:
+        """With no prefix on a multi-partition image, find enumerates
+        every partition and labels each result with its partition.
+        """
+        result = runner.invoke(
+            cli, ["find", str(partitioned_image_with_files), "*"]
+        )
+        assert result.exit_code == 0, result.output
+        assert "adfs:$.adfsA" in result.output
+        assert "adfs:$.adfsB" in result.output
+        assert "afs:$.afsA" in result.output
+        assert "afs:$.GAMES.Elite" in result.output
+
+    def test_find_afs_nested_pattern(
+        self,
+        runner: CliRunner,
+        partitioned_image_with_files: Path,
+    ) -> None:
+        """Nested pattern like ``afs:$.GAMES.*`` must match files
+        under ``$.GAMES``.
+        """
+        result = runner.invoke(
+            cli,
+            [
+                "find",
+                str(partitioned_image_with_files),
+                "afs:$.GAMES.*",
+            ],
+        )
+        assert result.exit_code == 0, result.output
+        assert "afs:$.GAMES.Elite" in result.output
+        assert "afs:$.GAMES.Exile" in result.output
+        # afsA at AFS root must not match $.GAMES.*.
+        assert "afsA" not in result.output
+
+    def test_find_output_is_round_trippable(
+        self,
+        runner: CliRunner,
+        partitioned_image_with_files: Path,
+    ) -> None:
+        """Each line of find output should feed straight back into
+        another command that understands the prefix syntax — the
+        whole point of emitting prefixed paths on partitioned images.
+        """
+        result = runner.invoke(
+            cli, ["find", str(partitioned_image_with_files), "afs:*"]
+        )
+        assert result.exit_code == 0, result.output
+        line = next(
+            ln for ln in result.output.splitlines()
+            if ln.startswith("afs:$.GAMES.Elite")
+        )
+        cat = runner.invoke(
+            cli, ["cat", str(partitioned_image_with_files), line.strip()]
+        )
+        assert cat.exit_code == 0, cat.output
+        assert b"e" in cat.output_bytes
+
+
+# ---------------------------------------------------------------------------
 # Inspection: stat
 # ---------------------------------------------------------------------------
 

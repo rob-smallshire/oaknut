@@ -139,6 +139,16 @@ class AFSPath:
         return self.parts[-1]
 
     @property
+    def path(self) -> str:
+        """The canonical dot-separated path string (``$.A.B``).
+
+        Symmetrical with :attr:`DFSPath.path` and
+        :attr:`ADFSPath.path` so tooling that walks heterogeneous
+        trees can call ``.path`` without type-discriminating.
+        """
+        return str(self)
+
+    @property
     def parent(self) -> AFSPath:
         """The path with the final component removed.
 

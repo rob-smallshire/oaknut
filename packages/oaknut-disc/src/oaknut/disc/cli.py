@@ -272,6 +272,42 @@ def _navigate_afs(afs, bare_path: str):
     return target
 
 
+def _image_has_afs(image_filepath: "Path") -> bool:
+    """Does the image carry an AFS partition alongside its ADFS one?
+
+    Cheap probe: opens the image as ADFS and checks ``afs_partition``.
+    Returns ``False`` for every non-ADFS format.
+    """
+    fs = detect_filing_system(image_filepath)
+    if fs is not FilingSystem.ADFS:
+        return False
+    with _open_adfs(image_filepath) as adfs:
+        return adfs.afs_partition is not None
+
+
+def _iter_search_partitions(
+    image_filepath: "Path",
+    requested_fs: FilingSystem,
+    prefix_present: bool,
+) -> Iterator[FilingSystem]:
+    """Yield each partition a find-style command should search.
+
+    When the caller provided an explicit filing-system prefix
+    (``adfs:``, ``afs:``, ``dfs:``), yield just that.  Otherwise, on
+    a multi-partition image (ADFS + AFS on the same file), yield
+    both partitions so a no-prefix ``disc find`` covers the whole
+    image.  Single-partition images always yield one.
+    """
+    if prefix_present:
+        yield requested_fs
+        return
+    if requested_fs is FilingSystem.ADFS and _image_has_afs(image_filepath):
+        yield FilingSystem.ADFS
+        yield FilingSystem.AFS
+        return
+    yield requested_fs
+
+
 # ---------------------------------------------------------------------------
 # Click group
 # ---------------------------------------------------------------------------
@@ -640,12 +676,30 @@ _alias("*TYPE", "cat")
 @click.argument("image", type=click.Path(exists=True, path_type=Path))
 @click.argument("pattern")
 def find(image: Path, pattern: str) -> None:
-    """Find files matching an Acorn wildcard pattern."""
-    fs, bare = resolve_path(image, pattern)
-    # For find, the "bare" part is the pattern, not a path to navigate to.
-    # We walk the whole image and match against the pattern.
-    with open_image(image, fs) as handle:
-        _find_recursive(handle.root, bare, fs)
+    """Find files matching an Acorn wildcard pattern.
+
+    Accepts the same ``adfs:`` / ``afs:`` / ``dfs:`` prefixes as
+    every other command to scope the search to a single partition.
+    Without a prefix, partitioned hard-disc images (ADFS + AFS) are
+    searched in their entirety and each result is emitted with the
+    partition prefix that would feed back into a follow-up command
+    unchanged.  Single-partition images emit bare paths, unchanged
+    from earlier behaviour.
+    """
+    # ``resolve_path`` treats the pattern argument as a path and
+    # parses any filing-system prefix off the front — that's exactly
+    # what we want here.  parse_prefix is the quickest way to know
+    # whether the user passed an explicit prefix.
+    from .cli_paths import parse_prefix
+
+    prefix_present = parse_prefix(pattern)[0] is not None
+    fs, bare_pattern = resolve_path(image, pattern)
+    emit_prefix = _image_has_afs(image) if not prefix_present else True
+
+    for partition_fs in _iter_search_partitions(image, fs, prefix_present):
+        with open_image(image, partition_fs) as handle:
+            prefix = f"{partition_fs.value}:" if emit_prefix else ""
+            _find_recursive(handle.root, bare_pattern, prefix)
 
 
 def _match_acorn_wildcard(pattern: str, name: str) -> bool:
@@ -660,17 +714,21 @@ def _match_acorn_wildcard(pattern: str, name: str) -> bool:
     return fnmatch.fnmatch(name.upper(), pattern.upper())
 
 
-def _find_recursive(node, pattern: str, fs: FilingSystem) -> None:
-    """Walk a directory tree, printing paths matching *pattern*."""
-    # The pattern may include directory components separated by '.'
-    # For simplicity, match against full Acorn path and leaf name.
+def _find_recursive(node, pattern: str, prefix: str) -> None:
+    """Walk a directory tree, printing paths matching *pattern*.
+
+    ``prefix`` is prepended to each emitted path — empty on a
+    single-partition image, ``adfs:`` / ``afs:`` / ``dfs:`` on a
+    partitioned one — so every line is directly consumable by a
+    follow-up command.
+    """
     for child in node.iterdir():
         name = child.name
-        path_str = getattr(child, "path", name)
+        path_str = child.path
         if _match_acorn_wildcard(pattern, name) or _match_acorn_wildcard(pattern, path_str):
-            click.echo(path_str)
+            click.echo(f"{prefix}{path_str}")
         if child.is_dir():
-            _find_recursive(child, pattern, fs)
+            _find_recursive(child, pattern, prefix)
 
 
 @cli.command()
@@ -1234,7 +1292,7 @@ def _collect_copy_items(
             if match.is_dir():
                 if not recursive:
                     click.echo(
-                        f"skipping directory {match.path if hasattr(match, 'path') else leaf}"
+                        f"skipping directory {match.path}"
                         f" (use -r to copy recursively)",
                         err=True,
                     )
