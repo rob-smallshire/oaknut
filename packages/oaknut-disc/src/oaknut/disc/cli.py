@@ -1722,7 +1722,9 @@ def _render_afs_plan(document: dict, output_format: str) -> None:
     multiple=True,
     help=(
         "User spec as NAME, NAME:S (system), NAME:QUOTA, "
-        "or NAME:S:QUOTA. Quota accepts e.g. 2MiB. Repeat for multiple."
+        "or NAME:S:QUOTA. Quota accepts e.g. 2MiB. Repeat for multiple. "
+        "A NAME matching a built-in (Syst, Boot, Welcome) overrides "
+        "that built-in's quota/password; Syst requires :S."
     ),
 )
 @click.option(

@@ -130,14 +130,6 @@ class TestInitialise:
                 users=[UserSpec("Alice"), UserSpec("alice")],
             )
 
-    @pytest.mark.parametrize("name", ["Syst", "Boot", "Welcome", "syst", "BOOT"])
-    def test_initspec_rejects_builtin_names(self, name: str) -> None:
-        with pytest.raises(AFSUserNameError, match="reserved"):
-            InitSpec(
-                disc_name="Reserved",
-                users=[UserSpec(name)],
-            )
-
     def test_omit_builtins_suppresses_accounts(self) -> None:
         adfs = ADFS.create(ADFS_L)
         initialise(
@@ -291,3 +283,179 @@ class TestInitSpecEagerValidation:
         monkeypatch.setattr(info_sector_mod, "_encode_disc_name", original)
         after = bytes(adfs._disc.sector_range(0, adfs.geometry.total_sectors))
         assert before == after
+
+
+class TestBuiltinOverride:
+    """A ``UserSpec`` whose name matches a built-in (``Syst``, ``Boot``,
+    ``Welcome``) overrides that built-in's default quota / password /
+    privileges / boot option.  The built-in's system-flag cannot be
+    changed and no URD is created (built-ins never have URDs).  See
+    issue #4.
+    """
+
+    def test_override_syst_quota(self) -> None:
+        adfs = ADFS.create(ADFS_L)
+        initialise(
+            adfs,
+            spec=InitSpec(
+                disc_name="OverSyst",
+                size=AFSSizeSpec.cylinders(20),
+                users=[UserSpec("Syst", system=True, quota=4 * 1024 * 1024)],
+            ),
+        )
+        afs = adfs.afs_partition
+        assert afs.users.find("Syst").free_space == 4 * 1024 * 1024
+        assert afs.users.find("Syst").is_system
+        # Boot and Welcome keep the default quota.
+        assert afs.users.find("Boot").free_space == 0x40404
+        assert afs.users.find("Welcome").free_space == 0x40404
+
+    def test_override_boot_quota(self) -> None:
+        adfs = ADFS.create(ADFS_L)
+        initialise(
+            adfs,
+            spec=InitSpec(
+                disc_name="OverBoot",
+                size=AFSSizeSpec.cylinders(20),
+                users=[UserSpec("Boot", quota=0x1000)],
+            ),
+        )
+        afs = adfs.afs_partition
+        assert afs.users.find("Boot").free_space == 0x1000
+        assert not afs.users.find("Boot").is_system
+        assert afs.users.find("Syst").free_space == 0x40404
+
+    def test_override_welcome_quota(self) -> None:
+        adfs = ADFS.create(ADFS_L)
+        initialise(
+            adfs,
+            spec=InitSpec(
+                disc_name="OverWelc",
+                size=AFSSizeSpec.cylinders(20),
+                users=[UserSpec("Welcome", quota=0x2000)],
+            ),
+        )
+        afs = adfs.afs_partition
+        assert afs.users.find("Welcome").free_space == 0x2000
+
+    def test_override_syst_password(self) -> None:
+        adfs = ADFS.create(ADFS_L)
+        initialise(
+            adfs,
+            spec=InitSpec(
+                disc_name="SystPass",
+                size=AFSSizeSpec.cylinders(20),
+                users=[UserSpec("Syst", system=True, password="hunter")],
+            ),
+        )
+        afs = adfs.afs_partition
+        assert afs.users.find("Syst").password == "hunter"
+
+    def test_override_case_insensitive(self) -> None:
+        """Lowercase / mixed-case names still match the built-in."""
+        adfs = ADFS.create(ADFS_L)
+        initialise(
+            adfs,
+            spec=InitSpec(
+                disc_name="CaseOver",
+                size=AFSSizeSpec.cylinders(20),
+                users=[UserSpec("syst", system=True, quota=0x50000)],
+            ),
+        )
+        afs = adfs.afs_partition
+        assert afs.users.find("Syst").free_space == 0x50000
+
+    def test_override_built_in_creates_no_urd(self) -> None:
+        """Overriding a built-in must not create a URD for it."""
+        adfs = ADFS.create(ADFS_L)
+        initialise(
+            adfs,
+            spec=InitSpec(
+                disc_name="NoSystURD",
+                size=AFSSizeSpec.cylinders(20),
+                users=[UserSpec("Syst", system=True, quota=0x50000)],
+            ),
+        )
+        afs = adfs.afs_partition
+        # Root should contain only the Passwords file — no Syst URD.
+        names = sorted(p.name for p in afs.root)
+        assert names == ["Passwords"]
+
+    def test_syst_override_must_be_system(self) -> None:
+        """Syst is a system account; an override without ``system=True``
+        is inconsistent and must be rejected.
+        """
+        with pytest.raises(AFSUserNameError, match="system"):
+            InitSpec(
+                disc_name="Bad",
+                users=[UserSpec("Syst", quota=0x1000)],
+            )
+
+    @pytest.mark.parametrize("name", ["Boot", "Welcome"])
+    def test_non_system_builtin_override_rejects_system_flag(
+        self, name: str
+    ) -> None:
+        """Boot and Welcome are non-system accounts; overriding with
+        ``system=True`` is inconsistent and must be rejected.
+        """
+        with pytest.raises(AFSUserNameError, match="system"):
+            InitSpec(
+                disc_name="Bad",
+                users=[UserSpec(name, system=True, quota=0x1000)],
+            )
+
+    def test_omitted_builtin_becomes_regular_user(self) -> None:
+        """If a built-in is explicitly omitted, its name is free for
+        a regular user (with a URD).
+        """
+        adfs = ADFS.create(ADFS_L)
+        initialise(
+            adfs,
+            spec=InitSpec(
+                disc_name="FreedSyst",
+                size=AFSSizeSpec.cylinders(20),
+                users=[UserSpec("Syst", quota=0x10000)],
+                omit_builtins=frozenset({"Syst"}),
+            ),
+        )
+        afs = adfs.afs_partition
+        syst = afs.users.find("Syst")
+        assert syst.free_space == 0x10000
+        assert not syst.is_system
+        # The freed-up name got a URD as a regular user.
+        names = sorted(p.name for p in afs.root)
+        assert "Syst" in names
+
+    def test_override_ordering_preserved(self) -> None:
+        """Syst must still appear before Boot in the passwords file
+        even when overridden, and user-specified accounts after.
+        """
+        adfs = ADFS.create(ADFS_L)
+        initialise(
+            adfs,
+            spec=InitSpec(
+                disc_name="OrderTest",
+                size=AFSSizeSpec.cylinders(20),
+                users=[
+                    UserSpec("alice"),
+                    UserSpec("Syst", system=True, quota=0x50000),
+                ],
+            ),
+        )
+        afs = adfs.afs_partition
+        names_in_order = [u.name for u in afs.users.active]
+        # Built-ins come first, Syst/Boot/Welcome ordering preserved,
+        # then user-specified accounts.
+        assert names_in_order.index("Syst") < names_in_order.index("Boot")
+        assert names_in_order.index("Welcome") < names_in_order.index("alice")
+
+    def test_duplicate_override_still_rejected(self) -> None:
+        """Two overrides for the same built-in is a duplicate."""
+        with pytest.raises(AFSUserNameError, match="duplicate"):
+            InitSpec(
+                disc_name="Dup",
+                users=[
+                    UserSpec("Syst", system=True, quota=0x10000),
+                    UserSpec("syst", system=True, quota=0x20000),
+                ],
+            )

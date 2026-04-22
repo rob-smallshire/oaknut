@@ -22,9 +22,19 @@ from oaknut.afs.info_sector import _encode_disc_name
 from oaknut.afs.wfsinit.partition import AFSSizeSpec
 from oaknut.file import BootOption
 
-# Names reserved for the built-in accounts that initialise() creates
+# Names of the built-in accounts that initialise() creates
 # automatically (WFSINIT.bas lines 2140-2160 and DATA at line 3930).
 BUILTIN_ACCOUNT_NAMES = frozenset({"Syst", "Boot", "Welcome"})
+
+# System-flag of each built-in: Syst is system-privileged; Boot and
+# Welcome are ordinary accounts.  Callers who want to override a
+# built-in via a UserSpec must match this flag to avoid silent
+# contradictions (see issue #4).
+_BUILTIN_IS_SYSTEM: dict[str, bool] = {
+    "SYST": True,
+    "BOOT": False,
+    "WELCOME": False,
+}
 
 # Mirror of the limits the passwords-file encoder enforces
 # (passwords.py:_LEN_USER_ID / _LEN_PASSWORD).  Kept local so
@@ -93,6 +103,14 @@ class InitSpec:
     encoding caps a single drive at ~512 MB and real-period
     Winchesters were ~20 MB. Callers building discs for modern
     large images can raise this explicitly.
+
+    Including a :class:`UserSpec` in ``users`` whose ``name`` matches
+    a built-in (``Syst``, ``Boot``, or ``Welcome``) overrides that
+    built-in's default quota / password / boot option.  The spec's
+    ``system`` flag must match the built-in's fixed value (``True``
+    for ``Syst``, ``False`` for the others); an override does not
+    create a URD.  To instead reclaim a built-in's name for a fresh
+    regular user (with a URD), list the name in ``omit_builtins``.
     """
 
     disc_name: str
@@ -127,19 +145,28 @@ class InitSpec:
                     f"valid names are {', '.join(sorted(BUILTIN_ACCOUNT_NAMES))}"
                 )
         omitted_upper = {n.upper() for n in self.omit_builtins}
-        # User-specified names must not collide with non-omitted built-ins.
+        # A user spec whose name matches a non-omitted built-in
+        # overrides that built-in's default quota / password / boot
+        # option (issue #4).  The system flag must match, though —
+        # silently switching Syst to non-system (or Boot/Welcome to
+        # system) would be a trap.
         active_builtin_upper = set(builtin_upper) - omitted_upper
         names_seen: set[str] = set()
         for user in self.users:
             upper = user.name.upper()
             if upper in active_builtin_upper:
-                names = ", ".join(sorted(BUILTIN_ACCOUNT_NAMES))
-                raise AFSUserNameError(
-                    f"user name {user.name!r} is reserved "
-                    f"(built-in account); initialise() creates "
-                    f"{names} automatically "
-                    f"(use omit_builtins to suppress)"
-                )
+                expected_system = _BUILTIN_IS_SYSTEM[upper]
+                if user.system != expected_system:
+                    canonical = builtin_upper[upper]
+                    if expected_system:
+                        raise AFSUserNameError(
+                            f"built-in {canonical!r} is a system account; "
+                            f"override must set system=True"
+                        )
+                    raise AFSUserNameError(
+                        f"built-in {canonical!r} is not a system account; "
+                        f"override must not set system=True"
+                    )
             if upper in names_seen:
                 raise AFSUserNameError(f"duplicate user name: {user.name!r}")
             names_seen.add(upper)

@@ -46,7 +46,7 @@ from oaknut.afs.map_sector import Extent, MapSector
 from oaknut.afs.passwords import PASSWORDS_FILENAME, PasswordsFile
 from oaknut.afs.types import AfsDate, SystemInternalName
 from oaknut.afs.wfsinit import partition as _partition
-from oaknut.afs.wfsinit.layout import InitSpec
+from oaknut.afs.wfsinit.layout import BUILTIN_ACCOUNT_NAMES, InitSpec, UserSpec
 
 if TYPE_CHECKING:
     from oaknut.adfs import ADFS
@@ -211,11 +211,28 @@ def initialise(adfs: "ADFS", *, spec: InitSpec) -> None:
     # Root directory: map block + 2 data sectors.
     root_map_sin, root_extents = _fnablk(_DEFAULT_ROOT_DIR_SECTORS)
 
+    # Partition spec.users into "overrides of an active built-in"
+    # and "regular users".  Overrides rebind a built-in's quota /
+    # password / boot option in the passwords file but do not get
+    # a URD — built-ins never do.  If a built-in has been explicitly
+    # omitted, its name is free and a matching spec.users entry
+    # behaves as a regular user (with a URD).  Issue #4.
+    omitted_upper = {n.upper() for n in spec.omit_builtins}
+    active_builtin_upper = {n.upper() for n in BUILTIN_ACCOUNT_NAMES} - omitted_upper
+    builtin_overrides: dict[str, UserSpec] = {}
+    regular_users: list[UserSpec] = []
+    for user in spec.users:
+        upper = user.name.upper()
+        if upper in active_builtin_upper:
+            builtin_overrides[upper] = user
+        else:
+            regular_users.append(user)
+
     # Per-user URDs: map block + 2 data sectors each.
     # WFSINIT allocates these at lines 2270-2280 (FNablk(drsz%),
     # PROCmake_dir) for each interactively-entered user name.
     urd_allocations: list[tuple[str, int, list[Extent]]] = []
-    for user in spec.users:
+    for user in regular_users:
         urd_map_sin, urd_extents = _fnablk(_DEFAULT_ROOT_DIR_SECTORS)
         urd_allocations.append((user.name, urd_map_sin, urd_extents))
 
@@ -284,21 +301,38 @@ def initialise(adfs: "ADFS", *, spec: InitSpec) -> None:
     #   Syst  — FNenter_name(pass%, 0, "Syst", TRUE) — system privilege
     #   Boot  — from DATA at line 3930
     #   Welcome — from DATA at line 3930
-    # All receive the default quota (&40404).
+    # All receive the default quota (&40404) unless the caller
+    # provided a UserSpec targeting the same name (issue #4).
     passwords = PasswordsFile.from_bytes(b"")
     default_quota = spec.default_quota
 
-    # Built-in accounts (skipping any in omit_builtins).
-    omitted_upper = {n.upper() for n in spec.omit_builtins}
-    if "SYST" not in omitted_upper:
-        passwords = passwords.with_added("Syst", quota=default_quota, system=True)
-    if "BOOT" not in omitted_upper:
-        passwords = passwords.with_added("Boot", quota=default_quota)
-    if "WELCOME" not in omitted_upper:
-        passwords = passwords.with_added("Welcome", quota=default_quota)
+    def _add_builtin(canonical: str, *, system: bool) -> "PasswordsFile":
+        override = builtin_overrides.get(canonical.upper())
+        if override is None:
+            return passwords.with_added(
+                canonical, quota=default_quota, system=system,
+            )
+        return passwords.with_added(
+            canonical,
+            password=override.password,
+            quota=override.quota if override.quota is not None else default_quota,
+            system=system,
+            privileges_locked=override.privileged,
+            boot_option=override.boot,
+        )
 
-    # User-specified accounts.
-    for user in spec.users:
+    # Built-in accounts (skipping any in omit_builtins, applying
+    # any caller overrides).
+    if "SYST" not in omitted_upper:
+        passwords = _add_builtin("Syst", system=True)
+    if "BOOT" not in omitted_upper:
+        passwords = _add_builtin("Boot", system=False)
+    if "WELCOME" not in omitted_upper:
+        passwords = _add_builtin("Welcome", system=False)
+
+    # Regular user accounts (anything in spec.users that didn't
+    # override a built-in).
+    for user in regular_users:
         passwords = passwords.with_added(
             user.name,
             password=user.password,
