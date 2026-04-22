@@ -832,6 +832,348 @@ class TestCp:
 
 
 # ---------------------------------------------------------------------------
+# Issue #6 — disc cp globbing and recursive copy.
+# ---------------------------------------------------------------------------
+
+
+class TestCpGlob:
+    """Source paths may carry Acorn wildcards (``*``, ``#``) that
+    expand to zero or more leaves under a literal parent directory.
+    When expanded, the destination must denote a directory.
+    """
+
+    def test_glob_star_within_dfs(
+        self,
+        runner: CliRunner,
+        dfs_image_many_files: Path,
+        dfs_empty_filepath: Path,
+    ) -> None:
+        result = runner.invoke(
+            cli,
+            [
+                "cp",
+                f"{dfs_image_many_files}:$.*",
+                f"{dfs_empty_filepath}:$/",
+            ],
+        )
+        assert result.exit_code == 0, result.output
+        for name in ("Hello", "Help", "Data"):
+            listed = runner.invoke(cli, ["ls", str(dfs_empty_filepath), "$"])
+            assert name.upper() in listed.output, (
+                f"{name} missing from destination:\n{listed.output}"
+            )
+
+    def test_glob_prefix_match_only(
+        self,
+        runner: CliRunner,
+        dfs_image_many_files: Path,
+        dfs_empty_filepath: Path,
+    ) -> None:
+        """``He*`` matches Hello and Help but not Data."""
+        result = runner.invoke(
+            cli,
+            [
+                "cp",
+                f"{dfs_image_many_files}:$.He*",
+                f"{dfs_empty_filepath}:$/",
+            ],
+        )
+        assert result.exit_code == 0, result.output
+        listed = runner.invoke(cli, ["ls", str(dfs_empty_filepath), "$"])
+        assert "HELLO" in listed.output
+        assert "HELP" in listed.output
+        assert "DATA" not in listed.output
+
+    def test_glob_hash_single_char(
+        self,
+        runner: CliRunner,
+        dfs_image_many_files: Path,
+        dfs_empty_filepath: Path,
+    ) -> None:
+        """Acorn ``#`` wildcard matches exactly one character."""
+        # "Hel#" should match Help but not Hello.
+        result = runner.invoke(
+            cli,
+            [
+                "cp",
+                f"{dfs_image_many_files}:$.Hel#",
+                f"{dfs_empty_filepath}:$/",
+            ],
+        )
+        assert result.exit_code == 0, result.output
+        listed = runner.invoke(cli, ["ls", str(dfs_empty_filepath), "$"])
+        assert "HELP" in listed.output
+        assert "HELLO" not in listed.output
+
+    def test_glob_no_matches_errors(
+        self,
+        runner: CliRunner,
+        dfs_image_many_files: Path,
+        dfs_empty_filepath: Path,
+    ) -> None:
+        result = runner.invoke(
+            cli,
+            [
+                "cp",
+                f"{dfs_image_many_files}:$.Xyz*",
+                f"{dfs_empty_filepath}:$/",
+            ],
+        )
+        assert result.exit_code != 0
+        assert "no match" in result.output.lower() or "match" in result.output.lower()
+
+    def test_glob_dst_must_be_directory(
+        self,
+        runner: CliRunner,
+        dfs_image_many_files: Path,
+        dfs_empty_filepath: Path,
+    ) -> None:
+        """When the glob expands to multiple files, the destination
+        cannot be a single leaf path.
+        """
+        result = runner.invoke(
+            cli,
+            [
+                "cp",
+                f"{dfs_image_many_files}:$.*",
+                f"{dfs_empty_filepath}:$.Single",
+            ],
+        )
+        assert result.exit_code != 0
+        assert "directory" in result.output.lower()
+
+    def test_glob_dfs_to_adfs(
+        self,
+        runner: CliRunner,
+        dfs_image_many_files: Path,
+        adfs_empty_filepath: Path,
+    ) -> None:
+        """Glob crosses filing systems — DFS ``G.*`` lands under an
+        ADFS subdirectory.
+        """
+        # Precreate destination directory.
+        runner.invoke(cli, ["mkdir", str(adfs_empty_filepath), "$.GBucket"])
+        result = runner.invoke(
+            cli,
+            [
+                "cp",
+                f"{dfs_image_many_files}:G.*",
+                f"{adfs_empty_filepath}:$.GBucket/",
+            ],
+        )
+        assert result.exit_code == 0, result.output
+        listed = runner.invoke(cli, ["ls", str(adfs_empty_filepath), "$.GBucket"])
+        assert "FOO" in listed.output
+        assert "BAR" in listed.output
+
+    def test_glob_preserves_load_exec(
+        self,
+        runner: CliRunner,
+        dfs_image_many_files: Path,
+        adfs_empty_filepath: Path,
+    ) -> None:
+        """Per-file load/exec addresses must survive glob copy."""
+        result = runner.invoke(
+            cli,
+            [
+                "cp",
+                f"{dfs_image_many_files}:$.Hello",
+                f"{adfs_empty_filepath}:$/",
+            ],
+        )
+        assert result.exit_code == 0, result.output
+        stat = runner.invoke(cli, ["stat", str(adfs_empty_filepath), "$.Hello"])
+        assert "00001900" in stat.output  # load address
+
+
+class TestCpRecursive:
+    """``-r`` / ``--recursive`` copies a source directory and its
+    contents, creating intermediate destination directories as
+    needed.
+    """
+
+    def test_recursive_copies_tree(
+        self,
+        runner: CliRunner,
+        adfs_image_tree: Path,
+        adfs_empty_filepath: Path,
+    ) -> None:
+        result = runner.invoke(
+            cli,
+            [
+                "cp",
+                "-r",
+                f"{adfs_image_tree}:$.Dir",
+                f"{adfs_empty_filepath}:$/",
+            ],
+        )
+        assert result.exit_code == 0, result.output
+        # Dir/Inside and Dir/Sub/Deep arrive under $.Dir on the dst.
+        cat_inside = runner.invoke(
+            cli, ["cat", str(adfs_empty_filepath), "$.Dir.Inside"]
+        )
+        assert cat_inside.exit_code == 0, cat_inside.output
+        assert b"inside-data" in cat_inside.output_bytes
+        cat_deep = runner.invoke(
+            cli, ["cat", str(adfs_empty_filepath), "$.Dir.Sub.Deep"]
+        )
+        assert cat_deep.exit_code == 0, cat_deep.output
+        assert b"deep-data" in cat_deep.output_bytes
+
+    def test_recursive_rejects_directory_without_flag(
+        self,
+        runner: CliRunner,
+        adfs_image_tree: Path,
+        adfs_empty_filepath: Path,
+    ) -> None:
+        """A plain cp on a directory source must error and point at
+        the ``-r`` flag.
+        """
+        result = runner.invoke(
+            cli,
+            [
+                "cp",
+                f"{adfs_image_tree}:$.Dir",
+                f"{adfs_empty_filepath}:$.DirCopy",
+            ],
+        )
+        assert result.exit_code != 0
+        assert "-r" in result.output or "recursive" in result.output.lower()
+
+    def test_recursive_on_file_still_works(
+        self,
+        runner: CliRunner,
+        adfs_image_tree: Path,
+        adfs_empty_filepath: Path,
+    ) -> None:
+        """``-r`` on a file source is a no-op — it still copies the
+        single file.  Matches Unix ``cp -r`` tolerance.
+        """
+        result = runner.invoke(
+            cli,
+            [
+                "cp",
+                "-r",
+                f"{adfs_image_tree}:$.Root1",
+                f"{adfs_empty_filepath}:$.Solo",
+            ],
+        )
+        assert result.exit_code == 0, result.output
+        cat = runner.invoke(cli, ["cat", str(adfs_empty_filepath), "$.Solo"])
+        assert b"root1-data" in cat.output_bytes
+
+    def test_recursive_creates_intermediate_dirs(
+        self,
+        runner: CliRunner,
+        adfs_image_tree: Path,
+        adfs_empty_filepath: Path,
+    ) -> None:
+        """Recursive copy into a destination parent that doesn't
+        exist yet creates it on the way.
+        """
+        result = runner.invoke(
+            cli,
+            [
+                "cp",
+                "-r",
+                f"{adfs_image_tree}:$.Dir",
+                f"{adfs_empty_filepath}:$.New.Nested/",
+            ],
+        )
+        assert result.exit_code == 0, result.output
+        cat = runner.invoke(
+            cli,
+            ["cat", str(adfs_empty_filepath), "$.New.Nested.Dir.Sub.Deep"],
+        )
+        assert cat.exit_code == 0, cat.output
+        assert b"deep-data" in cat.output_bytes
+
+    def test_recursive_adfs_to_afs(
+        self,
+        runner: CliRunner,
+        adfs_image_tree: Path,
+        adfs_hard_with_afs_filepath: Path,
+    ) -> None:
+        """Recursive copy across filing systems."""
+        result = runner.invoke(
+            cli,
+            [
+                "cp",
+                "-r",
+                f"{adfs_image_tree}:$.Dir",
+                f"{adfs_hard_with_afs_filepath}:afs:$/",
+            ],
+        )
+        assert result.exit_code == 0, result.output
+        cat = runner.invoke(
+            cli,
+            ["cat", str(adfs_hard_with_afs_filepath), "afs:$.Dir.Sub.Deep"],
+        )
+        assert cat.exit_code == 0, cat.output
+        assert b"deep-data" in cat.output_bytes
+
+    def test_recursive_into_dfs_rejects_nested(
+        self,
+        runner: CliRunner,
+        adfs_image_tree: Path,
+        dfs_empty_filepath: Path,
+    ) -> None:
+        """DFS has no subdirectories beyond the single-char prefix;
+        copying a truly nested ADFS tree into DFS must error rather
+        than silently flatten.
+        """
+        result = runner.invoke(
+            cli,
+            [
+                "cp",
+                "-r",
+                f"{adfs_image_tree}:$.Dir",
+                f"{dfs_empty_filepath}:$/",
+            ],
+        )
+        assert result.exit_code != 0
+        assert "dfs" in result.output.lower() or "flat" in result.output.lower() \
+            or "subdir" in result.output.lower()
+
+
+class TestCpGlobRecursiveCombined:
+    """Glob and ``-r`` compose — glob picks sources at the top level,
+    each matched directory is recursed into.
+    """
+
+    def test_glob_with_recursive(
+        self,
+        runner: CliRunner,
+        adfs_image_tree: Path,
+        adfs_empty_filepath: Path,
+    ) -> None:
+        runner.invoke(cli, ["mkdir", str(adfs_empty_filepath), "$.Archive"])
+        result = runner.invoke(
+            cli,
+            [
+                "cp",
+                "-r",
+                f"{adfs_image_tree}:$.*",
+                f"{adfs_empty_filepath}:$.Archive/",
+            ],
+        )
+        assert result.exit_code == 0, result.output
+        # File at top level.
+        cat_root = runner.invoke(
+            cli, ["cat", str(adfs_empty_filepath), "$.Archive.Root1"]
+        )
+        assert cat_root.exit_code == 0
+        assert b"root1-data" in cat_root.output_bytes
+        # Directory recursed.
+        cat_deep = runner.invoke(
+            cli,
+            ["cat", str(adfs_empty_filepath), "$.Archive.Dir.Sub.Deep"],
+        )
+        assert cat_deep.exit_code == 0
+        assert b"deep-data" in cat_deep.output_bytes
+
+
+# ---------------------------------------------------------------------------
 # Modification: mkdir
 # ---------------------------------------------------------------------------
 

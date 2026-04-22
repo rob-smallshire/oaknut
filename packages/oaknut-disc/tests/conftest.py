@@ -119,6 +119,63 @@ def adfs_no_afs_filepath(tmp_path: Path) -> Path:
 
 
 @pytest.fixture
+def dfs_image_many_files(tmp_path: Path) -> Path:
+    """DFS image with several files in $ and in directory G.
+
+    Used by cp glob / recursive tests that need multiple source files.
+    """
+    filepath = tmp_path / "many.ssd"
+    with DFS.create_file(filepath, ACORN_DFS_80T_SINGLE_SIDED, title="ManyDFS") as dfs:
+        (dfs.root / "$.Hello").write_bytes(b"hello-data", load_address=0x1900)
+        (dfs.root / "$.Help").write_bytes(b"help-data", load_address=0x2000)
+        (dfs.root / "$.Data").write_bytes(b"data-data", load_address=0x3000)
+        (dfs.root / "G.FOO").write_bytes(b"g-foo", load_address=0x4000)
+        (dfs.root / "G.BAR").write_bytes(b"g-bar", load_address=0x5000)
+    return filepath
+
+
+@pytest.fixture
+def adfs_image_tree(tmp_path: Path) -> Path:
+    """ADFS-L image with a nested directory tree.
+
+    Layout::
+
+        $/
+          Root1          (file)
+          Dir/
+            Inside       (file)
+            Sub/
+              Deep       (file)
+    """
+    filepath = tmp_path / "tree.adl"
+    with ADFS.create_file(filepath, ADFS_L, title="TreeADFS") as adfs:
+        (adfs.root / "Root1").write_bytes(b"root1-data", load_address=0x1000)
+        (adfs.root / "Dir").mkdir()
+        (adfs.root / "Dir" / "Inside").write_bytes(b"inside-data", load_address=0x2000)
+        (adfs.root / "Dir" / "Sub").mkdir()
+        (adfs.root / "Dir" / "Sub" / "Deep").write_bytes(b"deep-data", load_address=0x3000)
+    return filepath
+
+
+@pytest.fixture
+def adfs_empty_filepath(tmp_path: Path) -> Path:
+    """Empty ADFS-L image suitable as a copy destination."""
+    filepath = tmp_path / "empty.adl"
+    with ADFS.create_file(filepath, ADFS_L, title="Empty"):
+        pass
+    return filepath
+
+
+@pytest.fixture
+def dfs_empty_filepath(tmp_path: Path) -> Path:
+    """Empty DFS image suitable as a copy destination."""
+    filepath = tmp_path / "empty.ssd"
+    with DFS.create_file(filepath, ACORN_DFS_80T_SINGLE_SIDED, title="Empty"):
+        pass
+    return filepath
+
+
+@pytest.fixture
 def adfs_hard_no_afs_filepath(tmp_path: Path) -> Path:
     """ADFS hard-disc image (10 MB) without an AFS partition."""
     filepath = tmp_path / "hard_no_afs.dat"

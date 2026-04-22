@@ -1043,8 +1043,16 @@ _alias("*RENAME", "mv")
 @cli.command()
 @click.argument("args", nargs=-1, required=True)
 @click.option("-f", "--force", is_flag=True, help="Overwrite existing destination.")
-def cp(args: tuple[str, ...], force: bool) -> None:
-    """Copy a file within or between disc images (Acorn alias: *COPY).
+@click.option(
+    "-r",
+    "--recursive",
+    is_flag=True,
+    help="Copy directories recursively.",
+)
+def cp(args: tuple[str, ...], force: bool, recursive: bool) -> None:
+    """Copy file(s) or a tree within or between disc images.
+
+    Acorn alias: *COPY.
 
     \b
     Colon syntax (preferred for cross-image):
@@ -1054,9 +1062,15 @@ def cp(args: tuple[str, ...], force: bool) -> None:
     Three-arg form (within one image):
       disc cp IMAGE SRC DST
 
-    Copies across DFS, ADFS, and AFS in any combination. Load and
-    exec addresses are preserved; access attributes are mapped
-    best-effort (DFS only has the locked bit).
+    Source paths may contain Acorn wildcards (``*`` = any sequence,
+    ``#`` = any single character); when a wildcard expands to multiple
+    matches the destination must denote a directory — either trailing
+    ``/`` or an existing directory.  ``-r``/``--recursive`` copies a
+    directory and everything under it, creating intermediate
+    destination directories as needed.  Copies across DFS, ADFS, and
+    AFS in any combination; load/exec addresses are preserved and
+    access attributes are mapped best-effort (DFS only has the locked
+    bit).
     """
     from .cli_paths import parse_image_path
 
@@ -1064,88 +1078,349 @@ def cp(args: tuple[str, ...], force: bool) -> None:
         src_parsed = parse_image_path(args[0])
         dst_parsed = parse_image_path(args[1])
         if src_parsed is not None and dst_parsed is not None:
-            # Both use colon syntax: cross-image (or same image).
-            _cp_cross_image(src_parsed[0], src_parsed[1], dst_parsed[1], dst_parsed[0], force)
+            _cp_dispatch(
+                src_parsed[0], src_parsed[1],
+                dst_parsed[0], dst_parsed[1],
+                force=force, recursive=recursive,
+            )
             return
         if src_parsed is not None or dst_parsed is not None:
             raise click.ClickException(
                 "when using image:path syntax, both source and destination must use it"
             )
-        # Neither has colons — ambiguous with two args.
         raise click.ClickException(
             "cp requires either image:path colon syntax or three arguments (IMAGE SRC DST)"
         )
     elif len(args) == 3:
-        # Classic three-arg form: IMAGE SRC DST (within one image).
         image = Path(args[0])
         if not image.is_file():
             raise click.ClickException(f"image not found: {args[0]}")
-        _cp_within_image(image, args[1], args[2], force)
+        _cp_dispatch(
+            image, args[1], image, args[2],
+            force=force, recursive=recursive,
+        )
     else:
         raise click.ClickException(
             "cp takes 2 arguments (image:path image:path) or 3 (IMAGE SRC DST)"
         )
 
 
-def _cp_within_image(image: Path, src: str, dst: str, force: bool) -> None:
-    """Copy a file within a single disc image."""
-    from oaknut.file import copy_file
-
-    fs, bare_src = resolve_path(image, src)
-    _, bare_dst = parse_prefix(dst)
-
-    with open_image(image, fs, mode="r+b") as handle:
-        source = _navigate(handle, bare_src, fs)
-        if not source.exists():
-            raise click.ClickException(f"path not found: {bare_src}")
-        if source.is_dir():
-            raise click.ClickException("directory copy not yet implemented")
-        dest = _navigate(handle, bare_dst, fs)
-        if dest.exists() and not force:
-            raise click.ClickException(f"'{bare_dst}' already exists (use -f to overwrite)")
-        if dest.exists() and force:
-            dest.unlink()
-        copy_file(source, dest, target_fs=fs.value)
-        if fs is FilingSystem.AFS:
-            handle.flush()
+# ---------------------------------------------------------------------------
+# cp orchestration
+# ---------------------------------------------------------------------------
 
 
-def _cp_cross_image(
-    src_image: Path, src: str, dst: str, dst_image: Path, force: bool,
+_WILDCARD_CHARS = ("*", "?", "#")
+
+
+def _has_wildcard(path: str) -> bool:
+    return any(ch in path for ch in _WILDCARD_CHARS)
+
+
+def _acorn_to_fnmatch(pattern: str) -> str:
+    """Translate Acorn wildcards (``#``) to fnmatch syntax."""
+    return pattern.replace("#", "?")
+
+
+def _match_acorn(pattern: str, name: str) -> bool:
+    import fnmatch
+
+    return fnmatch.fnmatch(name.upper(), _acorn_to_fnmatch(pattern.upper()))
+
+
+def _split_parent_leaf(bare: str) -> tuple[str, str]:
+    """Split a path at its last ``.`` into ``(parent, leaf)``."""
+    if "." in bare:
+        return bare.rsplit(".", 1)
+    return "", bare
+
+
+def _dst_ends_slash(bare: str) -> tuple[str, bool]:
+    """Strip a trailing ``/`` from ``bare`` and report whether one was present."""
+    if bare.endswith("/") and bare != "/":
+        return bare[:-1], True
+    return bare, False
+
+
+def _cp_dispatch(
+    src_image: Path,
+    src_spec: str,
+    dst_image: Path,
+    dst_spec: str,
+    *,
+    force: bool,
+    recursive: bool,
 ) -> None:
-    """Copy a file between two disc images (possibly different formats)."""
-    from oaknut.file.access_mapping import access_from_stat, access_to_write_kwargs
+    """Orchestrate a cp invocation.
 
-    src_fs, src_bare = resolve_path(src_image, src)
-    dst_fs, dst_bare = resolve_path(dst_image, dst)
+    Handles single-file copy (the existing cases), wildcard
+    expansion on the source, recursive directory copy, and the
+    combination of the two.  Source data is buffered in memory
+    during traversal so the source image is only held open while
+    we're reading; the destination is opened fresh afterwards.
+    """
+    src_fs, src_bare = resolve_path(src_image, src_spec)
+    dst_fs, dst_bare_raw = resolve_path(dst_image, dst_spec)
+    dst_bare, dst_slash = _dst_ends_slash(dst_bare_raw)
 
-    # Read source data and metadata while the source image is open.
+    src_glob = _has_wildcard(src_bare)
+
+    # --- Read phase: open source, collect one or more copy items. ---
     with open_image(src_image, src_fs) as src_handle:
-        source = _navigate(src_handle, src_bare, src_fs)
-        if not source.exists():
-            raise click.ClickException(f"path not found: {src_bare}")
-        if source.is_dir():
-            raise click.ClickException("directory copy not yet implemented")
-        data = source.read_bytes()
-        st = source.stat()
-        access = access_from_stat(st)
+        items = _collect_copy_items(
+            src_handle, src_bare, src_fs,
+            dst_bare=dst_bare,
+            dst_slash=dst_slash,
+            dst_image=dst_image,
+            dst_fs=dst_fs,
+            recursive=recursive,
+            src_glob=src_glob,
+        )
 
-    # Write to destination with mapped access attributes.
-    kwargs = {
-        "load_address": getattr(st, "load_address", 0),
-        "exec_address": getattr(st, "exec_address", 0),
-    }
-    kwargs.update(access_to_write_kwargs(access, dst_fs.value))
-
+    # --- Write phase: open destination, apply each item. ---
     with open_image(dst_image, dst_fs, mode="r+b") as dst_handle:
-        dest = _navigate(dst_handle, dst_bare, dst_fs)
-        if dest.exists() and not force:
-            raise click.ClickException(f"'{dst_bare}' already exists (use -f to overwrite)")
-        if dest.exists() and force:
-            dest.unlink()
-        dest.write_bytes(data, **kwargs)
+        for item in items:
+            kind = item["kind"]
+            dst_path = item["dst"]
+            if kind == "mkdir":
+                _ensure_dir_chain(dst_handle, dst_path, dst_fs)
+                continue
+            if kind == "file":
+                _write_copy_item(dst_handle, dst_fs, dst_path, item, force)
         if dst_fs is FilingSystem.AFS:
             dst_handle.flush()
+
+
+def _collect_copy_items(
+    src_handle,
+    src_bare: str,
+    src_fs: FilingSystem,
+    *,
+    dst_bare: str,
+    dst_slash: bool,
+    dst_image: Path,
+    dst_fs: FilingSystem,
+    recursive: bool,
+    src_glob: bool,
+) -> list[dict]:
+    """Walk the source side once, returning a plan of copy items.
+
+    Each item is either ``{"kind": "mkdir", "dst": path}`` or
+    ``{"kind": "file", "dst": path, "data": bytes, "load": int,
+    "exec": int, "access": Access}``.  The plan is linear; the
+    write phase is free to execute items in order.
+    """
+    from oaknut.file.access_mapping import access_from_stat
+
+    items: list[dict] = []
+
+    if src_glob:
+        matches = _expand_glob(src_handle, src_bare, src_fs)
+        if not matches:
+            raise click.ClickException(f"no matches for {src_bare!r}")
+        dst_must_be_dir = len(matches) > 1 or any(m.is_dir() for m in matches)
+        _check_dst_is_dir(
+            dst_image, dst_fs, dst_bare, dst_slash, required=dst_must_be_dir
+        )
+        if dst_fs is FilingSystem.DFS and any(m.is_dir() for m in matches):
+            raise click.ClickException(
+                "cannot copy a directory into a DFS image (DFS is flat — "
+                "only single-character directory prefixes, no nesting)"
+            )
+        if dst_must_be_dir or dst_slash:
+            items.append({"kind": "mkdir", "dst": dst_bare})
+        for match in matches:
+            leaf = match.name
+            sub_dst = _join(dst_bare, leaf)
+            if match.is_dir():
+                if not recursive:
+                    click.echo(
+                        f"skipping directory {match.path if hasattr(match, 'path') else leaf}"
+                        f" (use -r to copy recursively)",
+                        err=True,
+                    )
+                    continue
+                _walk_tree(match, sub_dst, items)
+            else:
+                items.append(_file_item(match, sub_dst, access_from_stat(match.stat())))
+        return items
+
+    # Non-glob: single source.
+    source = _navigate(src_handle, src_bare, src_fs)
+    if not source.exists():
+        raise click.ClickException(f"path not found: {src_bare}")
+
+    if source.is_dir() and dst_fs is FilingSystem.DFS:
+        raise click.ClickException(
+            f"cannot recursively copy directory {src_bare!r} into a DFS image "
+            "(DFS is flat — only single-character directory prefixes, no nesting)"
+        )
+
+    # Figure out whether the destination should be treated as a
+    # target directory (and we copy source "into" it) or as the
+    # full target path.
+    dst_is_dir_like = dst_slash or _path_is_existing_dir(
+        dst_image, dst_fs, dst_bare
+    )
+
+    if source.is_dir():
+        if not recursive:
+            raise click.ClickException(
+                f"'{src_bare}' is a directory (use -r to copy recursively)"
+            )
+        if dst_is_dir_like:
+            rel = _join(dst_bare, source.name)
+            items.append({"kind": "mkdir", "dst": dst_bare})
+        else:
+            rel = dst_bare
+        items.append({"kind": "mkdir", "dst": rel})
+        _walk_tree(source, rel, items)
+        return items
+
+    # Source is a file.
+    if dst_is_dir_like:
+        items.append({"kind": "mkdir", "dst": dst_bare})
+        rel = _join(dst_bare, source.name)
+    else:
+        rel = dst_bare
+    items.append(_file_item(source, rel, access_from_stat(source.stat())))
+    return items
+
+
+def _expand_glob(handle, src_bare: str, fs: FilingSystem) -> list:
+    """Return children of the literal parent matching the leaf pattern.
+
+    Only the leaf component of ``src_bare`` may contain wildcards;
+    the parent directory path is navigated literally.
+    """
+    parent, leaf_pattern = _split_parent_leaf(src_bare)
+    if _has_wildcard(parent):
+        raise click.ClickException(
+            f"wildcards in directory components are not supported: {src_bare!r}"
+        )
+    parent_node = _navigate(handle, parent, fs)
+    if not parent_node.exists() or not parent_node.is_dir():
+        raise click.ClickException(
+            f"parent directory of glob does not exist: {parent or '$'!r}"
+        )
+    return [c for c in parent_node.iterdir() if _match_acorn(leaf_pattern, c.name)]
+
+
+def _walk_tree(dir_node, dst_prefix: str, items: list[dict]) -> None:
+    """Depth-first walk: record each directory with a mkdir item
+    and each file with a file item.
+    """
+    from oaknut.file.access_mapping import access_from_stat
+
+    for child in dir_node.iterdir():
+        rel = _join(dst_prefix, child.name)
+        if child.is_dir():
+            items.append({"kind": "mkdir", "dst": rel})
+            _walk_tree(child, rel, items)
+        else:
+            items.append(_file_item(child, rel, access_from_stat(child.stat())))
+
+
+def _file_item(source, rel_dst: str, access) -> dict:
+    """Build a ``file`` copy item."""
+    return {
+        "kind": "file",
+        "dst": rel_dst,
+        "data": source.read_bytes(),
+        "load": getattr(source.stat(), "load_address", 0),
+        "exec": getattr(source.stat(), "exec_address", 0),
+        "access": access,
+    }
+
+
+def _join(parent: str, leaf: str) -> str:
+    if not parent or parent == "$":
+        return f"$.{leaf}" if parent == "$" else leaf
+    return f"{parent}.{leaf}"
+
+
+def _path_is_existing_dir(image: Path, fs: FilingSystem, bare: str) -> bool:
+    """Is *bare* an existing directory on the destination image?"""
+    with open_image(image, fs) as handle:
+        node = _navigate(handle, bare, fs)
+        return node.exists() and node.is_dir()
+
+
+def _check_dst_is_dir(
+    image: Path, fs: FilingSystem, bare: str, slash: bool, *, required: bool
+) -> None:
+    """Enforce the "destination must be a directory" rule."""
+    if slash:
+        return
+    if _path_is_existing_dir(image, fs, bare):
+        return
+    if required:
+        raise click.ClickException(
+            f"destination {bare!r} must be a directory "
+            "(end with '/' or pre-create it) when the source expands "
+            "to multiple items or contains directories"
+        )
+
+
+def _ensure_dir_chain(dst_handle, bare: str, fs: FilingSystem) -> None:
+    """Create *bare* and any missing parents on the destination.
+
+    DFS is flat — no true subdirectories exist to create.  The call
+    is a no-op there; writes later prompt directory-letter
+    registration automatically.
+    """
+    if fs is FilingSystem.DFS:
+        return
+    if not bare or bare == "$":
+        return
+    # Normalise to a "$."-prefixed absolute path and walk components.
+    trimmed = bare
+    if trimmed.startswith("$."):
+        trimmed = trimmed[2:]
+    elif trimmed == "$":
+        return
+    cursor = "$"
+    for part in trimmed.split("."):
+        if not part:
+            continue
+        cursor = f"{cursor}.{part}"
+        node = _navigate(dst_handle, cursor, fs)
+        if not node.exists():
+            node.mkdir()
+
+
+def _write_copy_item(
+    dst_handle, dst_fs: FilingSystem, dst_path: str, item: dict, force: bool
+) -> None:
+    """Write a file item to its destination path."""
+    from oaknut.file.access_mapping import access_to_write_kwargs
+
+    # Make sure the parent exists for hierarchical destinations.
+    parent, _leaf = _split_parent_leaf(dst_path)
+    if parent and dst_fs is not FilingSystem.DFS:
+        _ensure_dir_chain(dst_handle, parent, dst_fs)
+    elif parent and dst_fs is FilingSystem.DFS:
+        # DFS accepts only single-char directory prefixes.
+        if "." in parent.lstrip("$."):
+            raise click.ClickException(
+                f"cannot create nested directory {parent!r} on a DFS image "
+                "(DFS is flat — single-character directory prefixes only)"
+            )
+
+    dest = _navigate(dst_handle, dst_path, dst_fs)
+    if dest.exists():
+        if not force:
+            raise click.ClickException(
+                f"'{dst_path}' already exists (use -f to overwrite)"
+            )
+        dest.unlink()
+
+    kwargs: dict = {
+        "load_address": item["load"],
+        "exec_address": item["exec"],
+    }
+    kwargs.update(access_to_write_kwargs(item["access"], dst_fs.value))
+    dest.write_bytes(item["data"], **kwargs)
 
 
 _alias("*COPY", "cp")
