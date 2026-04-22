@@ -200,10 +200,12 @@ class TestLsAccessByteFlag:
         )
         assert result.exit_code == 0, result.output
         # WR/R on AFS = PR (0x01) + OR (0x04) + OW (0x08) = 0x0D.
+        # The "0x" prefix makes it unambiguously hex and directly
+        # copy-pasteable into ``disc chmod``.
         row = next(
             line for line in result.output.splitlines() if "alpha" in line
         )
-        assert "0D" in row, f"expected 0D in row, got: {row!r}"
+        assert "0x0D" in row, f"expected 0x0D in row, got: {row!r}"
         assert "WR/R" in row, f"symbolic form must remain, got: {row!r}"
 
     def test_afs_access_byte_distinct_per_file(
@@ -215,12 +217,12 @@ class TestLsAccessByteFlag:
             cli, ["ls", "-H", str(afs_image_with_access_bytes), "afs:$"]
         )
         assert result.exit_code == 0, result.output
-        # Each file's hex byte appears on its own row.
+        # Each file's hex byte appears on its own row, "0x"-prefixed.
         expected = {
-            "alpha": "0D",   # WR/R
-            "bravo": "1D",  # LWR/R
-            "charlie": "0F", # WR/WR
-            "delta": "00", # /
+            "alpha": "0x0D",    # WR/R
+            "bravo": "0x1D",    # LWR/R
+            "charlie": "0x0F",  # WR/WR
+            "delta": "0x00",    # /
         }
         for name, hex_byte in expected.items():
             row = next(
@@ -245,7 +247,7 @@ class TestLsAccessByteFlag:
         row = next(
             line for line in result.output.splitlines() if "Hello" in line
         )
-        assert "13" in row, f"expected 13 in row, got: {row!r}"
+        assert "0x13" in row, f"expected 0x13 in row, got: {row!r}"
         assert "WR/" in row
 
     def test_dfs_access_byte_flag(
@@ -254,8 +256,39 @@ class TestLsAccessByteFlag:
         """DFS files: unlocked (0x00) and locked (0x08) render."""
         result = runner.invoke(cli, ["ls", "-H", str(dfs_image_filepath), "$"])
         assert result.exit_code == 0, result.output
-        # Neither test file is locked — both should show 00.
-        assert "00" in result.output
+        # Neither test file is locked — both should show 0x00.
+        assert "0x00" in result.output
+
+    def test_access_byte_round_trips_to_chmod(
+        self,
+        runner: CliRunner,
+        afs_image_with_access_bytes: Path,
+    ) -> None:
+        """The displayed hex string feeds straight back into chmod.
+
+        Guards against accidentally dropping the ``0x`` prefix (which
+        ``parse_access`` would still accept for most values but at a
+        round trip through the letter-disambiguation branch, e.g.
+        ``"WR"`` would be symbolic not hex).
+        """
+        from oaknut.file import parse_access
+
+        # Parse "0x0D" the way disc chmod parses its argument.
+        # If the ls output format ever changed to a bare "0D", this
+        # would still work — but "WR" (also two valid hex digits)
+        # wouldn't, so insist on the explicit prefix.
+        result = runner.invoke(
+            cli, ["ls", "-H", str(afs_image_with_access_bytes), "afs:$"]
+        )
+        assert result.exit_code == 0, result.output
+        row = next(line for line in result.output.splitlines() if "alpha" in line)
+        # Pull the "0x0D"-shaped token out of the row.
+        tokens = [t for t in row.split("│") if "0x" in t]
+        assert tokens, f"no 0x-prefixed token in row: {row!r}"
+        hex_token = tokens[-1].strip()
+        assert hex_token.startswith("0x")
+        # Round-trip: parse_access must accept the ls output unchanged.
+        assert int(parse_access(hex_token)) == 0x0D
 
     def test_default_ls_has_no_hex_column(
         self, runner: CliRunner, afs_image_with_access_bytes: Path
@@ -267,9 +300,8 @@ class TestLsAccessByteFlag:
             cli, ["ls", str(afs_image_with_access_bytes), "afs:$"]
         )
         assert result.exit_code == 0, result.output
-        # WR/R is 0x0D; the hex "0D" must not leak into the default
-        # ls output.  The existing symbolic WR/R is fine.
-        assert "0D" not in result.output
+        # 0x-prefixed bytes must not leak into the default ls output.
+        assert "0x0D" not in result.output
         assert "WR/R" in result.output
 
 

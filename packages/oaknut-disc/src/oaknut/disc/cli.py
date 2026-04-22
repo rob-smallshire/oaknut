@@ -95,20 +95,22 @@ def _format_access(access) -> str:
 
 
 def _access_byte_hex(stat_obj) -> str:
-    """Two-digit uppercase hex for the raw access byte on a stat result.
+    """Two-digit hex for the raw access byte, with a ``0x`` prefix.
 
-    Used by ``ls --access-byte`` (issue #10).  For DFS the byte is
-    synthesised from the ``locked`` flag (0x08 if locked, else 0x00)
-    because DFS exposes ``stat.locked`` rather than a full access
-    byte.  Returns an empty string when neither is available.
+    Used by ``ls --access-byte`` (issue #10).  The prefix makes the
+    value unambiguously hex and directly copy-pasteable into
+    ``disc chmod path 0x..`` — a bare ``0D`` would also parse but
+    is harder to read at a glance.  For DFS, which exposes
+    ``stat.locked`` rather than a full access byte, the byte is
+    synthesised as 0x08 when locked and 0x00 otherwise.
     """
     from oaknut.file import Access
 
     if hasattr(stat_obj, "access"):
-        return f"{int(stat_obj.access):02X}"
+        return f"0x{int(stat_obj.access):02X}"
     if getattr(stat_obj, "locked", False):
-        return f"{int(Access.L):02X}"
-    return "00"
+        return f"0x{int(Access.L):02X}"
+    return "0x00"
 
 
 # ---------------------------------------------------------------------------
