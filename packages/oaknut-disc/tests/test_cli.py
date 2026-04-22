@@ -1570,6 +1570,229 @@ class TestSetGetExec:
         assert "00008023" in result.output
 
 
+# ---------------------------------------------------------------------------
+# Issue #13 — wildcards, -r, and --dry-run for attribute-mutating commands.
+# ---------------------------------------------------------------------------
+
+
+class TestBulkMutation:
+    """chmod, lock, unlock, set-load, set-exec, rm all accept the
+    Acorn wildcards and -r / --dry-run flags established by cp in
+    10.3.0.  The heavy lifting is shared by a single target-
+    enumeration helper so the flag set is uniform.
+    """
+
+    def test_chmod_glob_applies_to_every_match(
+        self,
+        runner: CliRunner,
+        adfs_image_tree: Path,
+    ) -> None:
+        result = runner.invoke(
+            cli,
+            [
+                "chmod",
+                str(adfs_image_tree),
+                "$.Dir.*",
+                "LR/R",
+            ],
+        )
+        assert result.exit_code == 0, result.output
+        stat_inside = runner.invoke(
+            cli, ["stat", str(adfs_image_tree), "$.Dir.Inside"]
+        )
+        assert "LR/R" in stat_inside.output
+
+    def test_chmod_recursive_descends(
+        self,
+        runner: CliRunner,
+        adfs_image_tree: Path,
+    ) -> None:
+        result = runner.invoke(
+            cli,
+            [
+                "chmod",
+                "-r",
+                str(adfs_image_tree),
+                "$.Dir",
+                "LR/R",
+            ],
+        )
+        assert result.exit_code == 0, result.output
+        # Inside and Sub.Deep should both have the new access.
+        for bare in ("$.Dir.Inside", "$.Dir.Sub.Deep"):
+            st = runner.invoke(cli, ["stat", str(adfs_image_tree), bare])
+            assert "LR/R" in st.output, f"{bare} not chmod'd: {st.output}"
+
+    def test_chmod_dry_run_makes_no_change(
+        self,
+        runner: CliRunner,
+        adfs_image_tree: Path,
+    ) -> None:
+        before = runner.invoke(
+            cli, ["stat", str(adfs_image_tree), "$.Root1"]
+        ).output
+        result = runner.invoke(
+            cli,
+            [
+                "chmod",
+                "--dry-run",
+                str(adfs_image_tree),
+                "$.Root1",
+                "LR/R",
+            ],
+        )
+        assert result.exit_code == 0, result.output
+        assert "would chmod" in result.output.lower() or "$.Root1" in result.output
+        after = runner.invoke(
+            cli, ["stat", str(adfs_image_tree), "$.Root1"]
+        ).output
+        assert before == after
+
+    def test_chmod_glob_no_matches_errors(
+        self,
+        runner: CliRunner,
+        adfs_image_tree: Path,
+    ) -> None:
+        result = runner.invoke(
+            cli,
+            ["chmod", str(adfs_image_tree), "$.Xyz*", "WR/"],
+        )
+        assert result.exit_code != 0
+        assert "no match" in result.output.lower()
+
+    def test_lock_glob(
+        self,
+        runner: CliRunner,
+        adfs_image_tree: Path,
+    ) -> None:
+        result = runner.invoke(
+            cli,
+            ["lock", str(adfs_image_tree), "$.Dir.*"],
+        )
+        assert result.exit_code == 0, result.output
+        st = runner.invoke(
+            cli, ["stat", str(adfs_image_tree), "$.Dir.Inside"]
+        )
+        # Any "L"-bearing attr string indicates the lock took.
+        assert "L" in st.output
+
+    def test_unlock_recursive(
+        self,
+        runner: CliRunner,
+        adfs_image_tree: Path,
+    ) -> None:
+        # Lock recursively first.
+        assert runner.invoke(
+            cli, ["lock", "-r", str(adfs_image_tree), "$.Dir"]
+        ).exit_code == 0
+        # Now unlock recursively.
+        result = runner.invoke(
+            cli, ["unlock", "-r", str(adfs_image_tree), "$.Dir"]
+        )
+        assert result.exit_code == 0, result.output
+        # Deeply nested file should be unlocked.
+        st = runner.invoke(
+            cli, ["stat", str(adfs_image_tree), "$.Dir.Sub.Deep"]
+        )
+        assert "LR/" not in st.output  # No L in the attr
+
+    def test_set_load_glob_applies_to_files_only(
+        self,
+        runner: CliRunner,
+        adfs_image_tree: Path,
+    ) -> None:
+        result = runner.invoke(
+            cli,
+            [
+                "set-load",
+                "-r",
+                str(adfs_image_tree),
+                "$.Dir",
+                "0xCAFE",
+            ],
+        )
+        assert result.exit_code == 0, result.output
+        # Every file descendant should have load_address 0x0000CAFE.
+        for bare in ("$.Dir.Inside", "$.Dir.Sub.Deep"):
+            st = runner.invoke(cli, ["get-load", str(adfs_image_tree), bare])
+            assert "0000CAFE" in st.output, (
+                f"{bare} not set: {st.output!r}"
+            )
+
+    def test_set_exec_glob(
+        self,
+        runner: CliRunner,
+        adfs_image_tree: Path,
+    ) -> None:
+        result = runner.invoke(
+            cli,
+            [
+                "set-exec",
+                str(adfs_image_tree),
+                "$.Dir.*",
+                "0xBEEF",
+            ],
+        )
+        assert result.exit_code == 0, result.output
+        st = runner.invoke(cli, ["get-exec", str(adfs_image_tree), "$.Dir.Inside"])
+        assert "0000BEEF" in st.output
+
+    def test_rm_glob(
+        self,
+        runner: CliRunner,
+        dfs_image_many_files: Path,
+    ) -> None:
+        """``rm '$.He*'`` deletes Hello and Help, leaves Data."""
+        result = runner.invoke(
+            cli, ["rm", str(dfs_image_many_files), "$.He*"]
+        )
+        assert result.exit_code == 0, result.output
+        listing = runner.invoke(cli, ["ls", str(dfs_image_many_files), "$"])
+        assert "HELLO" not in listing.output
+        assert "HELP" not in listing.output
+        assert "DATA" in listing.output
+
+    def test_rm_recursive_glob(
+        self,
+        runner: CliRunner,
+        adfs_image_tree: Path,
+    ) -> None:
+        """``rm -r '$.Dir'`` empties the Dir subtree."""
+        result = runner.invoke(
+            cli, ["rm", "-r", str(adfs_image_tree), "$.Dir"]
+        )
+        assert result.exit_code == 0, result.output
+        tree = runner.invoke(cli, ["tree", str(adfs_image_tree)])
+        assert "Dir" not in tree.output
+        assert "Inside" not in tree.output
+        assert "Deep" not in tree.output
+
+    def test_dry_run_set_load_makes_no_change(
+        self,
+        runner: CliRunner,
+        adfs_image_tree: Path,
+    ) -> None:
+        before = runner.invoke(
+            cli, ["get-load", str(adfs_image_tree), "$.Root1"]
+        ).output
+        result = runner.invoke(
+            cli,
+            [
+                "set-load",
+                "--dry-run",
+                str(adfs_image_tree),
+                "$.Root1",
+                "0xDEAD",
+            ],
+        )
+        assert result.exit_code == 0
+        assert "would" in result.output.lower() or "$.Root1" in result.output
+        after = runner.invoke(
+            cli, ["get-load", str(adfs_image_tree), "$.Root1"]
+        ).output
+        assert before == after
+
+
 class TestMkdir:
     def test_mkdir_adfs(self, runner: CliRunner, adfs_image_filepath: Path) -> None:
         result = runner.invoke(cli, ["mkdir", str(adfs_image_filepath), "$.NewDir"])

@@ -1032,44 +1032,67 @@ def put(
 @click.option("-r", "--recursive", is_flag=True, help="Remove directories recursively.")
 @click.option("--dry-run", is_flag=True, help="Print what would be removed.")
 def rm(image: Path, paths: tuple[str, ...], force: bool, recursive: bool, dry_run: bool) -> None:
-    """Delete file(s) from the image (Acorn alias: *DELETE)."""
+    """Delete file(s) from the image (Acorn alias: *DELETE).
+
+    Each PATH may contain Acorn wildcards (``*``, ``#``); ``-r``
+    descends into directory matches and removes children before the
+    directory itself.
+    """
     fs_type = detect_filing_system(image)
-    first_prefix = None
-    targets: list[tuple[FilingSystem, str]] = []
+    first_prefix: FilingSystem | None = None
+    per_path: list[tuple[FilingSystem, str]] = []
     for p in paths:
         fs, bare = resolve_path(image, p)
         if first_prefix is None:
             first_prefix = fs
-        targets.append((fs, bare))
+        per_path.append((fs, bare))
 
     mode = "rb" if dry_run else "r+b"
-    with open_image(image, first_prefix or fs_type, mode=mode) as handle:
-        for fs, bare in targets:
-            target = _navigate(handle, bare, fs)
-            if not target.exists():
+    fs = first_prefix or fs_type
+    with open_image(image, fs, mode=mode) as handle:
+        for path_fs, bare in per_path:
+            # --force downgrades "no matches" to a no-op.
+            try:
+                targets = list(
+                    _iter_targets(handle, bare, path_fs, recursive=recursive)
+                )
+            except click.ClickException:
                 if force:
                     continue
-                raise click.ClickException(f"path not found: {bare}")
-            if target.is_dir() and not recursive:
-                raise click.ClickException(
-                    f"'{bare}' is a directory (use -r to remove recursively)"
-                )
-            if dry_run:
-                click.echo(f"would remove: {bare}")
-                continue
+                raise
 
-            # Handle locked files with --force.
-            try:
-                target.unlink()
-            except Exception as exc:
-                if force and "locked" in str(exc).lower():
-                    if hasattr(target, "unlock"):
-                        target.unlock()
-                    target.unlink()
-                else:
-                    raise click.ClickException(str(exc))
+            for target in targets:
+                if target.is_dir() and not recursive:
+                    raise click.ClickException(
+                        f"'{target.path}' is a directory "
+                        "(use -r to remove recursively)"
+                    )
+                if dry_run:
+                    click.echo(f"would remove: {target.path}")
+                    continue
+                try:
+                    if target.is_dir():
+                        # ADFS / AFS need an explicit rmdir because
+                        # unlink refuses on directories.  DFS
+                        # "directories" are letter prefixes that
+                        # vanish implicitly once their files are
+                        # gone — no action needed.
+                        if hasattr(target, "rmdir"):
+                            target.rmdir()
+                    else:
+                        target.unlink()
+                except Exception as exc:
+                    if force and "locked" in str(exc).lower():
+                        if hasattr(target, "unlock"):
+                            target.unlock()
+                        if target.is_dir() and hasattr(target, "rmdir"):
+                            target.rmdir()
+                        else:
+                            target.unlink()
+                    else:
+                        raise click.ClickException(str(exc))
 
-        if fs == FilingSystem.AFS and not dry_run:
+        if fs is FilingSystem.AFS and not dry_run:
             handle.flush()
 
 
@@ -1198,6 +1221,70 @@ def _dst_ends_slash(bare: str) -> tuple[str, bool]:
     if bare.endswith("/") and bare != "/":
         return bare[:-1], True
     return bare, False
+
+
+def _expand_path_spec(handle, bare: str, fs: FilingSystem) -> list:
+    """Resolve a path specification to a list of existing path objects.
+
+    Literal paths resolve to a one-element list.  Acorn wildcards
+    (``*``, ``#``, ``?``) on the leaf component expand against the
+    parent directory's children.  No-match is an error.
+    """
+    if _has_wildcard(bare):
+        parent, leaf_pattern = _split_parent_leaf(bare)
+        if _has_wildcard(parent):
+            raise click.ClickException(
+                f"wildcards in directory components are not supported: {bare!r}"
+            )
+        parent_node = _navigate(handle, parent, fs)
+        if not parent_node.exists() or not parent_node.is_dir():
+            raise click.ClickException(
+                f"parent directory of glob does not exist: {parent or '$'!r}"
+            )
+        matches = [c for c in parent_node.iterdir() if _match_acorn(leaf_pattern, c.name)]
+        if not matches:
+            raise click.ClickException(f"no matches for {bare!r}")
+        return matches
+    node = _navigate(handle, bare, fs)
+    if not node.exists():
+        raise click.ClickException(f"path not found: {bare}")
+    return [node]
+
+
+def _iter_targets(
+    handle,
+    bare: str,
+    fs: FilingSystem,
+    *,
+    recursive: bool,
+) -> Iterator:
+    """Enumerate targets for a bulk-mutating command.
+
+    Expands Acorn wildcards on ``bare`` and, when ``recursive`` is
+    true, walks each directory match in post-order (children first,
+    then the directory itself).  When ``recursive`` is false, each
+    match is yielded once — callers decide whether to accept
+    directory matches.
+
+    Post-order is the right traversal order for ``rm -r`` (children
+    must be deleted before their parent) and also works for
+    ``chmod`` / ``lock`` / ``set-*`` where order doesn't matter.
+    """
+    for seed in _expand_path_spec(handle, bare, fs):
+        if seed.is_dir() and recursive:
+            yield from _walk_post_order(seed)
+        else:
+            yield seed
+
+
+def _walk_post_order(node) -> Iterator:
+    """Yield every descendant of ``node``, children before parents."""
+    if node.is_file():
+        yield node
+        return
+    for child in node.iterdir():
+        yield from _walk_post_order(child)
+    yield node
 
 
 def _cp_dispatch(
@@ -1592,30 +1679,44 @@ _alias("*CDIR", "mkdir")
 @click.argument("image", type=click.Path(exists=True, path_type=Path))
 @click.argument("path")
 @click.argument("access")
-def chmod(image: Path, path: str, access: str) -> None:
+@click.option(
+    "-r", "--recursive", is_flag=True, help="Recurse into directory matches."
+)
+@click.option(
+    "--dry-run", is_flag=True, help="Print what would change without modifying the image."
+)
+def chmod(
+    image: Path, path: str, access: str, recursive: bool, dry_run: bool
+) -> None:
     """Set file access permissions (Acorn alias: *ACCESS).
 
     ACCESS is symbolic (e.g. LWR/R, WR/WR) or hex (0x0B, 33).
     DFS only supports the L (locked) bit; other flags are ignored.
+
+    PATH may contain Acorn wildcards (``*``, ``#``) to apply the
+    same access to every matching file.  ``-r`` recurses into any
+    directory match.
     """
     from oaknut.file import Access, parse_access
 
     flags = parse_access(access)
     fs, bare = resolve_path(image, path)
-    with open_image(image, fs, mode="r+b") as handle:
-        target = _navigate(handle, bare, fs)
-        if not target.exists():
-            raise click.ClickException(f"path not found: {bare}")
-        if fs is FilingSystem.DFS:
-            # DFS only has lock/unlock.
-            if flags & Access.L:
-                target.lock()
+    mode = "rb" if dry_run else "r+b"
+    with open_image(image, fs, mode=mode) as handle:
+        for target in _iter_targets(handle, bare, fs, recursive=recursive):
+            if dry_run:
+                click.echo(f"would chmod {target.path} {access}")
+                continue
+            if fs is FilingSystem.DFS:
+                # DFS only has lock/unlock.
+                if flags & Access.L:
+                    target.lock()
+                else:
+                    target.unlock()
             else:
-                target.unlock()
-        else:
-            target.chmod(int(flags))
-            if fs is FilingSystem.AFS:
-                handle.flush()
+                target.chmod(int(flags))
+        if fs is FilingSystem.AFS and not dry_run:
+            handle.flush()
 
 
 _alias("*ACCESS", "chmod")
@@ -1624,30 +1725,46 @@ _alias("*ACCESS", "chmod")
 @cli.command()
 @click.argument("image", type=click.Path(exists=True, path_type=Path))
 @click.argument("path")
-def lock(image: Path, path: str) -> None:
-    """Lock a file."""
+@click.option(
+    "-r", "--recursive", is_flag=True, help="Recurse into directory matches."
+)
+@click.option(
+    "--dry-run", is_flag=True, help="Print what would change without modifying the image."
+)
+def lock(image: Path, path: str, recursive: bool, dry_run: bool) -> None:
+    """Lock a file.  PATH may be a wildcard; ``-r`` recurses."""
     fs, bare = resolve_path(image, path)
-    with open_image(image, fs, mode="r+b") as handle:
-        target = _navigate(handle, bare, fs)
-        if not target.exists():
-            raise click.ClickException(f"path not found: {bare}")
-        target.lock()
-        if fs is FilingSystem.AFS:
+    mode = "rb" if dry_run else "r+b"
+    with open_image(image, fs, mode=mode) as handle:
+        for target in _iter_targets(handle, bare, fs, recursive=recursive):
+            if dry_run:
+                click.echo(f"would lock {target.path}")
+                continue
+            target.lock()
+        if fs is FilingSystem.AFS and not dry_run:
             handle.flush()
 
 
 @cli.command()
 @click.argument("image", type=click.Path(exists=True, path_type=Path))
 @click.argument("path")
-def unlock(image: Path, path: str) -> None:
-    """Unlock a file."""
+@click.option(
+    "-r", "--recursive", is_flag=True, help="Recurse into directory matches."
+)
+@click.option(
+    "--dry-run", is_flag=True, help="Print what would change without modifying the image."
+)
+def unlock(image: Path, path: str, recursive: bool, dry_run: bool) -> None:
+    """Unlock a file.  PATH may be a wildcard; ``-r`` recurses."""
     fs, bare = resolve_path(image, path)
-    with open_image(image, fs, mode="r+b") as handle:
-        target = _navigate(handle, bare, fs)
-        if not target.exists():
-            raise click.ClickException(f"path not found: {bare}")
-        target.unlock()
-        if fs is FilingSystem.AFS:
+    mode = "rb" if dry_run else "r+b"
+    with open_image(image, fs, mode=mode) as handle:
+        for target in _iter_targets(handle, bare, fs, recursive=recursive):
+            if dry_run:
+                click.echo(f"would unlock {target.path}")
+                continue
+            target.unlock()
+        if fs is FilingSystem.AFS and not dry_run:
             handle.flush()
 
 
@@ -1655,16 +1772,33 @@ def unlock(image: Path, path: str) -> None:
 @click.argument("image", type=click.Path(exists=True, path_type=Path))
 @click.argument("path")
 @click.argument("addr")
-def set_load(image: Path, path: str, addr: str) -> None:
-    """Set a file's load address."""
+@click.option(
+    "-r", "--recursive", is_flag=True, help="Recurse into directory matches."
+)
+@click.option(
+    "--dry-run", is_flag=True, help="Print what would change without modifying the image."
+)
+def set_load(
+    image: Path, path: str, addr: str, recursive: bool, dry_run: bool
+) -> None:
+    """Set a file's load address.
+
+    PATH may contain Acorn wildcards; ``-r`` recurses into directory
+    matches (directories themselves are skipped — they have no load
+    address field).
+    """
     address = int(addr, 0)
     fs, bare = resolve_path(image, path)
-    with open_image(image, fs, mode="r+b") as handle:
-        target = _navigate(handle, bare, fs)
-        if not target.exists():
-            raise click.ClickException(f"path not found: {bare}")
-        target.set_load_address(address)
-        if fs is FilingSystem.AFS:
+    mode = "rb" if dry_run else "r+b"
+    with open_image(image, fs, mode=mode) as handle:
+        for target in _iter_targets(handle, bare, fs, recursive=recursive):
+            if target.is_dir():
+                continue  # load address is meaningless for a directory
+            if dry_run:
+                click.echo(f"would set-load {target.path} {address:#010x}")
+                continue
+            target.set_load_address(address)
+        if fs is FilingSystem.AFS and not dry_run:
             handle.flush()
 
 
@@ -1672,16 +1806,33 @@ def set_load(image: Path, path: str, addr: str) -> None:
 @click.argument("image", type=click.Path(exists=True, path_type=Path))
 @click.argument("path")
 @click.argument("addr")
-def set_exec(image: Path, path: str, addr: str) -> None:
-    """Set a file's exec address."""
+@click.option(
+    "-r", "--recursive", is_flag=True, help="Recurse into directory matches."
+)
+@click.option(
+    "--dry-run", is_flag=True, help="Print what would change without modifying the image."
+)
+def set_exec(
+    image: Path, path: str, addr: str, recursive: bool, dry_run: bool
+) -> None:
+    """Set a file's exec address.
+
+    PATH may contain Acorn wildcards; ``-r`` recurses into directory
+    matches (directories themselves are skipped — they have no exec
+    address field).
+    """
     address = int(addr, 0)
     fs, bare = resolve_path(image, path)
-    with open_image(image, fs, mode="r+b") as handle:
-        target = _navigate(handle, bare, fs)
-        if not target.exists():
-            raise click.ClickException(f"path not found: {bare}")
-        target.set_exec_address(address)
-        if fs is FilingSystem.AFS:
+    mode = "rb" if dry_run else "r+b"
+    with open_image(image, fs, mode=mode) as handle:
+        for target in _iter_targets(handle, bare, fs, recursive=recursive):
+            if target.is_dir():
+                continue
+            if dry_run:
+                click.echo(f"would set-exec {target.path} {address:#010x}")
+                continue
+            target.set_exec_address(address)
+        if fs is FilingSystem.AFS and not dry_run:
             handle.flush()
 
 
