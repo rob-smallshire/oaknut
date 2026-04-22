@@ -1112,15 +1112,14 @@ class TestCpRecursive:
         assert cat.exit_code == 0, cat.output
         assert b"deep-data" in cat.output_bytes
 
-    def test_recursive_into_dfs_rejects_nested(
+    def test_recursive_into_dfs_rejects_deeply_nested(
         self,
         runner: CliRunner,
         adfs_image_tree: Path,
         dfs_empty_filepath: Path,
     ) -> None:
-        """DFS has no subdirectories beyond the single-char prefix;
-        copying a truly nested ADFS tree into DFS must error rather
-        than silently flatten.
+        """An ADFS tree that can't be flattened to DFS's one-level
+        directory model must error rather than truncate.
         """
         result = runner.invoke(
             cli,
@@ -1133,7 +1132,7 @@ class TestCpRecursive:
         )
         assert result.exit_code != 0
         assert "dfs" in result.output.lower() or "flat" in result.output.lower() \
-            or "subdir" in result.output.lower()
+            or "nest" in result.output.lower()
 
 
 class TestCpGlobRecursiveCombined:
@@ -1171,6 +1170,193 @@ class TestCpGlobRecursiveCombined:
         )
         assert cat_deep.exit_code == 0
         assert b"deep-data" in cat_deep.output_bytes
+
+
+class TestCpDfsAdfsMapping:
+    """Path mapping between DFS's flat-with-letter-prefix model and
+    ADFS's hierarchical tree.
+
+    Rule: ``D.F`` ↔ ``$.D.F``, with ``$.F`` ↔ ``$.F``.  Copying
+    between filing systems applies the mapping so round-trips are
+    lossless (see Rob's note on issue #6).
+    """
+
+    def test_dfs_dollar_is_transparent_into_adfs(
+        self,
+        runner: CliRunner,
+        dfs_multi_dir_filepath: Path,
+        adfs_empty_filepath: Path,
+    ) -> None:
+        """Files under DFS ``$`` land directly under ADFS ``$`` —
+        there must be no spurious ``$`` subdirectory.
+        """
+        result = runner.invoke(
+            cli,
+            [
+                "cp",
+                "-r",
+                f"{dfs_multi_dir_filepath}:$",
+                f"{adfs_empty_filepath}:$/",
+            ],
+        )
+        assert result.exit_code == 0, result.output
+        listed = runner.invoke(cli, ["ls", str(adfs_empty_filepath), "$"])
+        assert "HELLO" in listed.output
+        assert "DATA" in listed.output
+        # No "$" subdirectory spawned.
+        assert "$/" not in listed.output
+
+    def test_dfs_letter_dir_becomes_adfs_subdir(
+        self,
+        runner: CliRunner,
+        dfs_multi_dir_filepath: Path,
+        adfs_empty_filepath: Path,
+    ) -> None:
+        """Copying DFS ``A`` into ADFS creates an ``A`` subdirectory."""
+        result = runner.invoke(
+            cli,
+            [
+                "cp",
+                "-r",
+                f"{dfs_multi_dir_filepath}:A",
+                f"{adfs_empty_filepath}:$/",
+            ],
+        )
+        assert result.exit_code == 0, result.output
+        listed = runner.invoke(
+            cli, ["ls", str(adfs_empty_filepath), "$.A"]
+        )
+        assert "GAME" in listed.output
+
+    def test_dfs_whole_image_to_adfs(
+        self,
+        runner: CliRunner,
+        dfs_multi_dir_filepath: Path,
+        adfs_empty_filepath: Path,
+    ) -> None:
+        """Recursive copy of the DFS virtual root: ``$`` children go
+        to ADFS root, other letter directories become subdirectories.
+        """
+        result = runner.invoke(
+            cli,
+            [
+                "cp",
+                "-r",
+                f"{dfs_multi_dir_filepath}:",
+                f"{adfs_empty_filepath}:$/",
+            ],
+        )
+        assert result.exit_code == 0, result.output
+        # $.HELLO, $.DATA at root; A/GAME, G/FOO, G/BAR in subdirs.
+        for bare in ("$.HELLO", "$.DATA", "$.A.GAME", "$.G.FOO", "$.G.BAR"):
+            stat = runner.invoke(cli, ["stat", str(adfs_empty_filepath), bare])
+            assert stat.exit_code == 0, (
+                f"{bare} missing on destination: {stat.output!r}"
+            )
+
+    def test_adfs_one_level_tree_flattens_to_dfs(
+        self,
+        runner: CliRunner,
+        dfs_multi_dir_filepath: Path,
+        adfs_empty_filepath: Path,
+        dfs_empty_filepath: Path,
+    ) -> None:
+        """After going DFS → ADFS, coming back: ADFS root files go
+        to DFS ``$``; ADFS single-char subdirs become DFS letter
+        directories.
+        """
+        # Round-trip stage 1: DFS → ADFS.
+        assert runner.invoke(
+            cli,
+            [
+                "cp",
+                "-r",
+                f"{dfs_multi_dir_filepath}:",
+                f"{adfs_empty_filepath}:$/",
+            ],
+        ).exit_code == 0
+
+        # Round-trip stage 2: ADFS → DFS.
+        result = runner.invoke(
+            cli,
+            [
+                "cp",
+                "-r",
+                f"{adfs_empty_filepath}:$",
+                f"{dfs_empty_filepath}:$/",
+            ],
+        )
+        assert result.exit_code == 0, result.output
+        for bare in ("$.HELLO", "$.DATA", "A.GAME", "G.FOO", "G.BAR"):
+            stat = runner.invoke(cli, ["stat", str(dfs_empty_filepath), bare])
+            assert stat.exit_code == 0, (
+                f"{bare} missing on DFS destination: {stat.output!r}"
+            )
+
+    def test_full_roundtrip_preserves_bytes_and_metadata(
+        self,
+        runner: CliRunner,
+        dfs_multi_dir_filepath: Path,
+        adfs_empty_filepath: Path,
+        dfs_empty_filepath: Path,
+    ) -> None:
+        """End-to-end DFS → ADFS → DFS round-trip.  Every source
+        file must reappear with identical bytes, load address, exec
+        address, and locked bit.
+        """
+        from oaknut.dfs import ACORN_DFS_80T_SINGLE_SIDED, DFS
+
+        # Snapshot the source.
+        src_files: dict[str, dict] = {}
+        with DFS.from_file(dfs_multi_dir_filepath, ACORN_DFS_80T_SINGLE_SIDED) as dfs:
+            for entry in dfs.files:
+                p = dfs.path(entry.path)
+                st = p.stat()
+                src_files[entry.path] = {
+                    "bytes": p.read_bytes(),
+                    "load": st.load_address,
+                    "exec": st.exec_address,
+                    "locked": st.locked,
+                }
+
+        # Round-trip.
+        assert runner.invoke(
+            cli,
+            [
+                "cp",
+                "-r",
+                f"{dfs_multi_dir_filepath}:",
+                f"{adfs_empty_filepath}:$/",
+            ],
+        ).exit_code == 0, "DFS→ADFS leg failed"
+        assert runner.invoke(
+            cli,
+            [
+                "cp",
+                "-r",
+                f"{adfs_empty_filepath}:$",
+                f"{dfs_empty_filepath}:$/",
+            ],
+        ).exit_code == 0, "ADFS→DFS leg failed"
+
+        # Compare.
+        with DFS.from_file(dfs_empty_filepath, ACORN_DFS_80T_SINGLE_SIDED) as dfs:
+            dst_files = {entry.path for entry in dfs.files}
+            assert dst_files == set(src_files), (
+                f"file set differs: {dst_files} vs {set(src_files)}"
+            )
+            for path_str, expected in src_files.items():
+                p = dfs.path(path_str)
+                st = p.stat()
+                assert p.read_bytes() == expected["bytes"], path_str
+                assert st.load_address == expected["load"], (
+                    f"{path_str}: load {st.load_address:#x} vs "
+                    f"{expected['load']:#x}"
+                )
+                assert st.exec_address == expected["exec"], path_str
+                assert st.locked == expected["locked"], (
+                    f"{path_str}: locked {st.locked} vs {expected['locked']}"
+                )
 
 
 # ---------------------------------------------------------------------------

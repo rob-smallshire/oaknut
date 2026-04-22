@@ -1214,6 +1214,8 @@ def _collect_copy_items(
 
     items: list[dict] = []
 
+    src_is_dfs = src_fs is FilingSystem.DFS
+
     if src_glob:
         matches = _expand_glob(src_handle, src_bare, src_fs)
         if not matches:
@@ -1222,16 +1224,13 @@ def _collect_copy_items(
         _check_dst_is_dir(
             dst_image, dst_fs, dst_bare, dst_slash, required=dst_must_be_dir
         )
-        if dst_fs is FilingSystem.DFS and any(m.is_dir() for m in matches):
-            raise click.ClickException(
-                "cannot copy a directory into a DFS image (DFS is flat — "
-                "only single-character directory prefixes, no nesting)"
-            )
         if dst_must_be_dir or dst_slash:
             items.append({"kind": "mkdir", "dst": dst_bare})
         for match in matches:
             leaf = match.name
-            sub_dst = _join(dst_bare, leaf)
+            # DFS "$" globbed as a parent? Flatten onto dst_bare.
+            transparent = src_is_dfs and match.is_dir() and leaf == "$"
+            sub_dst = dst_bare if transparent else _join(dst_bare, leaf)
             if match.is_dir():
                 if not recursive:
                     click.echo(
@@ -1240,21 +1239,17 @@ def _collect_copy_items(
                         err=True,
                     )
                     continue
-                _walk_tree(match, sub_dst, items)
+                _walk_tree(match, sub_dst, items, src_is_dfs=src_is_dfs)
             else:
                 items.append(_file_item(match, sub_dst, access_from_stat(match.stat())))
+        if dst_fs is FilingSystem.DFS:
+            _validate_dfs_items(items)
         return items
 
     # Non-glob: single source.
     source = _navigate(src_handle, src_bare, src_fs)
     if not source.exists():
         raise click.ClickException(f"path not found: {src_bare}")
-
-    if source.is_dir() and dst_fs is FilingSystem.DFS:
-        raise click.ClickException(
-            f"cannot recursively copy directory {src_bare!r} into a DFS image "
-            "(DFS is flat — only single-character directory prefixes, no nesting)"
-        )
 
     # Figure out whether the destination should be treated as a
     # target directory (and we copy source "into" it) or as the
@@ -1268,13 +1263,27 @@ def _collect_copy_items(
             raise click.ClickException(
                 f"'{src_bare}' is a directory (use -r to copy recursively)"
             )
-        if dst_is_dir_like:
+        # A source that IS the root (ADFS ``$``, AFS ``$``, or the
+        # DFS virtual root whose children are directory letters) is
+        # transparent on the copy — there's no sensible subdirectory
+        # to wrap it in on the destination; its contents should land
+        # at dst_bare directly.  The DFS ``$`` directory behaves the
+        # same way because it's the DFS default directory and maps
+        # one-for-one onto ADFS ``$`` during round-trip (issue #6).
+        transparent = source.name in ("", "$")
+        if transparent:
+            rel = dst_bare
+            items.append({"kind": "mkdir", "dst": dst_bare})
+        elif dst_is_dir_like:
             rel = _join(dst_bare, source.name)
             items.append({"kind": "mkdir", "dst": dst_bare})
+            items.append({"kind": "mkdir", "dst": rel})
         else:
             rel = dst_bare
-        items.append({"kind": "mkdir", "dst": rel})
-        _walk_tree(source, rel, items)
+            items.append({"kind": "mkdir", "dst": rel})
+        _walk_tree(source, rel, items, src_is_dfs=src_is_dfs)
+        if dst_fs is FilingSystem.DFS:
+            _validate_dfs_items(items)
         return items
 
     # Source is a file.
@@ -1284,6 +1293,8 @@ def _collect_copy_items(
     else:
         rel = dst_bare
     items.append(_file_item(source, rel, access_from_stat(source.stat())))
+    if dst_fs is FilingSystem.DFS:
+        _validate_dfs_items(items)
     return items
 
 
@@ -1306,17 +1317,90 @@ def _expand_glob(handle, src_bare: str, fs: FilingSystem) -> list:
     return [c for c in parent_node.iterdir() if _match_acorn(leaf_pattern, c.name)]
 
 
-def _walk_tree(dir_node, dst_prefix: str, items: list[dict]) -> None:
+def _map_dst_path_for_dfs(path: str) -> str:
+    """Map an ADFS-style absolute path to a DFS path.
+
+    ``$.F`` stays as ``$.F``.  ``$.D.F`` maps to ``D.F`` — the single
+    ADFS subdirectory level flattens onto DFS's single-letter directory
+    prefix.  Anything deeper, or with a multi-character subdirectory
+    name, can't be represented on DFS and raises.
+    """
+    if path == "$":
+        return "$"
+    if path.startswith("$."):
+        rest = path[2:]
+    else:
+        rest = path
+    dot_count = rest.count(".")
+    if dot_count == 0:
+        # "$.F" → rest="F", the file in $ directory; DFS is "$.F".
+        return f"$.{rest}"
+    if dot_count == 1:
+        dir_part, file_part = rest.split(".")
+        if len(dir_part) != 1:
+            raise click.ClickException(
+                f"cannot map {path!r} to DFS: directory name "
+                f"{dir_part!r} is longer than one character"
+            )
+        return f"{dir_part}.{file_part}"
+    raise click.ClickException(
+        f"cannot map {path!r} to DFS: path is nested deeper than "
+        "DFS's single directory-letter model allows"
+    )
+
+
+def _remap_items_for_dfs(items: list[dict]) -> list[dict]:
+    """Rewrite a copy plan for a DFS destination.
+
+    Drops ``mkdir`` items (DFS has no filesystem-level directory
+    objects to create) and rewrites each file's dst path to DFS
+    form via :func:`_map_dst_path_for_dfs`, which raises on any
+    path that can't be represented on DFS.
+    """
+    out: list[dict] = []
+    for item in items:
+        if item["kind"] == "mkdir":
+            # Validate but don't materialise — a mkdir at an
+            # unrepresentable path still indicates the source tree
+            # is too deep for DFS, so let the mapper raise on it.
+            _map_dst_path_for_dfs(item["dst"])
+            continue
+        new = dict(item)
+        new["dst"] = _map_dst_path_for_dfs(item["dst"])
+        out.append(new)
+    return out
+
+
+def _validate_dfs_items(items: list[dict]) -> None:
+    """Mutate ``items`` in place, remapping/dropping for DFS."""
+    items[:] = _remap_items_for_dfs(items)
+
+
+def _walk_tree(
+    dir_node, dst_prefix: str, items: list[dict], *, src_is_dfs: bool = False
+) -> None:
     """Depth-first walk: record each directory with a mkdir item
     and each file with a file item.
+
+    When the source filesystem is DFS, a child directory named
+    ``$`` is treated as transparent — its contents are placed at
+    ``dst_prefix`` rather than under a ``$`` subdirectory — so the
+    DFS default directory collapses onto the destination root
+    during a DFS → ADFS/AFS copy.  DFS's other directory letters
+    (A..Z) become subdirectories on the destination as usual.
     """
     from oaknut.file.access_mapping import access_from_stat
 
     for child in dir_node.iterdir():
+        # DFS "$" directory is transparent on the walk — see rule
+        # for issue #6 DFS↔ADFS round-trip.
+        if src_is_dfs and child.is_dir() and child.name == "$":
+            _walk_tree(child, dst_prefix, items, src_is_dfs=src_is_dfs)
+            continue
         rel = _join(dst_prefix, child.name)
         if child.is_dir():
             items.append({"kind": "mkdir", "dst": rel})
-            _walk_tree(child, rel, items)
+            _walk_tree(child, rel, items, src_is_dfs=src_is_dfs)
         else:
             items.append(_file_item(child, rel, access_from_stat(child.stat())))
 
@@ -1396,16 +1480,13 @@ def _write_copy_item(
     from oaknut.file.access_mapping import access_to_write_kwargs
 
     # Make sure the parent exists for hierarchical destinations.
+    # On DFS there are no real directories to create — the letter
+    # prefix comes into being implicitly when a file claims it — so
+    # we only need the ensure pass on ADFS/AFS.  Paths have already
+    # been validated against DFS's shape by the collect stage.
     parent, _leaf = _split_parent_leaf(dst_path)
     if parent and dst_fs is not FilingSystem.DFS:
         _ensure_dir_chain(dst_handle, parent, dst_fs)
-    elif parent and dst_fs is FilingSystem.DFS:
-        # DFS accepts only single-char directory prefixes.
-        if "." in parent.lstrip("$."):
-            raise click.ClickException(
-                f"cannot create nested directory {parent!r} on a DFS image "
-                "(DFS is flat — single-character directory prefixes only)"
-            )
 
     dest = _navigate(dst_handle, dst_path, dst_fs)
     if dest.exists():

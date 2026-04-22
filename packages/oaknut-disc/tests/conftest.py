@@ -135,6 +135,35 @@ def dfs_image_many_files(tmp_path: Path) -> Path:
 
 
 @pytest.fixture
+def dfs_multi_dir_filepath(tmp_path: Path) -> Path:
+    """DFS image with files in ``$``, ``A``, and ``G``.
+
+    Used for round-trip tests — the full shape of a DFS disc with
+    multiple directory letters.  Addresses and the locked bit are
+    distinct per file so round-trip loss can be detected.
+    """
+    filepath = tmp_path / "multi.ssd"
+    with DFS.create_file(filepath, ACORN_DFS_80T_SINGLE_SIDED, title="Multi") as dfs:
+        (dfs.root / "$.HELLO").write_bytes(
+            b"hi-root", load_address=0x1900, exec_address=0x8023
+        )
+        (dfs.root / "$.DATA").write_bytes(
+            b"data-root", load_address=0xFF00, exec_address=0xFF00
+        )
+        (dfs.root / "A.GAME").write_bytes(
+            b"game-a", load_address=0x1100, exec_address=0x1100
+        )
+        (dfs.root / "G.FOO").write_bytes(
+            b"foo-g", load_address=0x2200, exec_address=0x2200
+        )
+        (dfs.root / "G.BAR").write_bytes(
+            b"bar-g", load_address=0x3300, exec_address=0x3300
+        )
+        dfs.path("$.DATA").lock()
+    return filepath
+
+
+@pytest.fixture
 def adfs_image_tree(tmp_path: Path) -> Path:
     """ADFS-L image with a nested directory tree.
 
