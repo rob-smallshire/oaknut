@@ -98,10 +98,10 @@ class TestAccessBytesFormattedCorrectlyOnAFS:
     @pytest.mark.parametrize(
         "filename, expected_attr",
         [
-            ("wrfile", "WR/R"),
-            ("lwrfile", "LWR/R"),
-            ("pubwfile", "WR/WR"),
-            ("nonefile", "/"),
+            ("alpha", "WR/R"),
+            ("bravo", "LWR/R"),
+            ("charlie", "WR/WR"),
+            ("delta", "/"),
         ],
     )
     def test_ls_afs_attributes_match_written_access(
@@ -130,9 +130,9 @@ class TestAccessBytesFormattedCorrectlyOnAFS:
     @pytest.mark.parametrize(
         "filename, expected_attr",
         [
-            ("wrfile", "WR/R"),
-            ("lwrfile", "LWR/R"),
-            ("pubwfile", "WR/WR"),
+            ("alpha", "WR/R"),
+            ("bravo", "LWR/R"),
+            ("charlie", "WR/WR"),
         ],
     )
     def test_stat_afs_attributes_match_written_access(
@@ -178,6 +178,99 @@ class TestAccessBytesFormattedCorrectlyOnAFS:
         # ADFS files written without explicit access get default
         # owner R+W; rendered as "WR/" by format_access_text.
         assert "WR/" in result.output
+
+
+# ---------------------------------------------------------------------------
+# Issue #10 — disc ls --access-byte / -H shows the raw access byte as two
+# hex digits alongside the symbolic column.
+# ---------------------------------------------------------------------------
+
+
+class TestLsAccessByteFlag:
+    @pytest.mark.parametrize("flag", ["--access-byte", "-H"])
+    def test_afs_access_byte_flag_shows_hex(
+        self,
+        runner: CliRunner,
+        afs_image_with_access_bytes: Path,
+        flag: str,
+    ) -> None:
+        """``--access-byte`` / ``-H`` adds a hex column for AFS files."""
+        result = runner.invoke(
+            cli, ["ls", flag, str(afs_image_with_access_bytes), "afs:$"]
+        )
+        assert result.exit_code == 0, result.output
+        # WR/R on AFS = PR (0x01) + OR (0x04) + OW (0x08) = 0x0D.
+        row = next(
+            line for line in result.output.splitlines() if "alpha" in line
+        )
+        assert "0D" in row, f"expected 0D in row, got: {row!r}"
+        assert "WR/R" in row, f"symbolic form must remain, got: {row!r}"
+
+    def test_afs_access_byte_distinct_per_file(
+        self,
+        runner: CliRunner,
+        afs_image_with_access_bytes: Path,
+    ) -> None:
+        result = runner.invoke(
+            cli, ["ls", "-H", str(afs_image_with_access_bytes), "afs:$"]
+        )
+        assert result.exit_code == 0, result.output
+        # Each file's hex byte appears on its own row.
+        expected = {
+            "alpha": "0D",   # WR/R
+            "bravo": "1D",  # LWR/R
+            "charlie": "0F", # WR/WR
+            "delta": "00", # /
+        }
+        for name, hex_byte in expected.items():
+            row = next(
+                (line for line in result.output.splitlines() if name in line),
+                None,
+            )
+            assert row is not None, f"no row for {name!r}"
+            assert hex_byte in row, (
+                f"expected {hex_byte!r} in row for {name!r}, got: {row!r}"
+            )
+
+    def test_adfs_access_byte_flag(
+        self, runner: CliRunner, adfs_image_filepath: Path
+    ) -> None:
+        """Flag also works on ADFS files."""
+        result = runner.invoke(
+            cli, ["ls", "-H", str(adfs_image_filepath)]
+        )
+        assert result.exit_code == 0, result.output
+        # ADFS default write_bytes access is WR/R = owner R+W + public R
+        # = wire byte R(0x01) | W(0x02) | PR(0x10) = 0x13.
+        row = next(
+            line for line in result.output.splitlines() if "Hello" in line
+        )
+        assert "13" in row, f"expected 13 in row, got: {row!r}"
+        assert "WR/" in row
+
+    def test_dfs_access_byte_flag(
+        self, runner: CliRunner, dfs_image_filepath: Path
+    ) -> None:
+        """DFS files: unlocked (0x00) and locked (0x08) render."""
+        result = runner.invoke(cli, ["ls", "-H", str(dfs_image_filepath), "$"])
+        assert result.exit_code == 0, result.output
+        # Neither test file is locked — both should show 00.
+        assert "00" in result.output
+
+    def test_default_ls_has_no_hex_column(
+        self, runner: CliRunner, afs_image_with_access_bytes: Path
+    ) -> None:
+        """Without the flag the hex column is not added — a
+        regression guard so the default ls output stays compact.
+        """
+        result = runner.invoke(
+            cli, ["ls", str(afs_image_with_access_bytes), "afs:$"]
+        )
+        assert result.exit_code == 0, result.output
+        # WR/R is 0x0D; the hex "0D" must not leak into the default
+        # ls output.  The existing symbolic WR/R is fine.
+        assert "0D" not in result.output
+        assert "WR/R" in result.output
 
 
 # ---------------------------------------------------------------------------

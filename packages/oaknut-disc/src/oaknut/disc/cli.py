@@ -94,6 +94,23 @@ def _format_access(access) -> str:
     return format_access_text(access)
 
 
+def _access_byte_hex(stat_obj) -> str:
+    """Two-digit uppercase hex for the raw access byte on a stat result.
+
+    Used by ``ls --access-byte`` (issue #10).  For DFS the byte is
+    synthesised from the ``locked`` flag (0x08 if locked, else 0x00)
+    because DFS exposes ``stat.locked`` rather than a full access
+    byte.  Returns an empty string when neither is available.
+    """
+    from oaknut.file import Access
+
+    if hasattr(stat_obj, "access"):
+        return f"{int(stat_obj.access):02X}"
+    if getattr(stat_obj, "locked", False):
+        return f"{int(Access.L):02X}"
+    return "00"
+
+
 # ---------------------------------------------------------------------------
 # DFS format detection (extension + file size)
 # ---------------------------------------------------------------------------
@@ -272,7 +289,14 @@ def cli() -> None:
 @cli.command()
 @click.argument("image", type=click.Path(exists=True, path_type=Path))
 @click.argument("path", required=False, default=None)
-def ls(image: Path, path: str | None) -> None:
+@click.option(
+    "-H",
+    "--access-byte",
+    "show_access_byte",
+    is_flag=True,
+    help="Show the raw access byte as two hex digits alongside the symbolic form.",
+)
+def ls(image: Path, path: str | None, show_access_byte: bool) -> None:
     """List directory contents (Acorn alias: *CAT)."""
     from rich.console import Console
     from rich.table import Table
@@ -316,10 +340,15 @@ def ls(image: Path, path: str | None) -> None:
         table.add_column("Exec", justify="right", style="green", no_wrap=True)
         table.add_column("Length", justify="right", no_wrap=True)
         table.add_column("Attr", justify="right", style="yellow", no_wrap=True)
+        if show_access_byte:
+            table.add_column("Hex", justify="right", style="yellow", no_wrap=True)
 
         for child in entries:
             if child.is_dir():
-                table.add_row(f"{child.name}/", "", "", "", "")
+                row = [f"{child.name}/", "", "", "", ""]
+                if show_access_byte:
+                    row.append("")
+                table.add_row(*row)
                 continue
             st = child.stat()
             load_str = f"{st.load_address:08X}" if hasattr(st, "load_address") else ""
@@ -329,7 +358,10 @@ def ls(image: Path, path: str | None) -> None:
             attr_str = "L" if locked else ""
             if hasattr(st, "access"):
                 attr_str = _format_access(st.access)
-            table.add_row(child.name, load_str, exec_str, length_str, attr_str)
+            row = [child.name, load_str, exec_str, length_str, attr_str]
+            if show_access_byte:
+                row.append(_access_byte_hex(st))
+            table.add_row(*row)
 
         if free is not None:
             if fs is FilingSystem.ADFS:

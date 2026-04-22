@@ -141,16 +141,16 @@ def afs_image_with_access_bytes(tmp_path: Path) -> Path:
         )
     with ADFS.from_file(filepath, mode="r+b") as adfs:
         afs = adfs.afs_partition
-        (afs.root / "wrfile").write_bytes(
+        (afs.root / "alpha").write_bytes(
             b"a", access=AFSAccess.from_string("WR/R")
         )
-        (afs.root / "lwrfile").write_bytes(
+        (afs.root / "bravo").write_bytes(
             b"b", access=AFSAccess.from_string("LWR/R")
         )
-        (afs.root / "pubwfile").write_bytes(
+        (afs.root / "charlie").write_bytes(
             b"c", access=AFSAccess.from_string("WR/WR")
         )
-        (afs.root / "nonefile").write_bytes(
+        (afs.root / "delta").write_bytes(
             b"d", access=AFSAccess.from_string("/")
         )
         (afs.root / "Folder").mkdir()
