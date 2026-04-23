@@ -2285,10 +2285,6 @@ def _import_host_dir(handle, target_dir, host_dir: Path, meta_formats, verbose, 
 # ---------------------------------------------------------------------------
 
 
-#: Valid values for --as across commands. Extend as new renderers land.
-_OUTPUT_FORMATS = ("text", "json")
-
-
 @cli.command(name="afs-plan")
 @click.argument("image", type=click.Path(exists=True, path_type=Path))
 @click.option(
@@ -2299,18 +2295,12 @@ _OUTPUT_FORMATS = ("text", "json")
     "--compact", is_flag=True, default=False,
     help="Plan with ADFS compaction to maximise AFS space.",
 )
-@click.option(
-    "--as", "output_format",
-    type=click.Choice(_OUTPUT_FORMATS),
-    default="text",
-    help="Output format (default: text).",
-)
+@report_output
 def afs_plan(
     image: Path,
     cylinders: int | None,
     compact: bool,
-    output_format: str,
-) -> None:
+):
     """Show what afs-init would do, without modifying the image.
 
     By default, plans using the existing tail free extent (matching
@@ -2321,7 +2311,7 @@ def afs_plan(
     resulting partition layout.
 
     Use ``--as json`` to emit a machine-readable document instead
-    of the human-readable text report.
+    of the human-readable display report.
     """
     from oaknut.adfs import ADFS
     from oaknut.afs.wfsinit import AFSSizeSpec
@@ -2359,8 +2349,7 @@ def afs_plan(
                 existing["disc_name"] = afs.disc_name
                 existing["start_cylinder"] = afs.start_cylinder
             document["existing_afs"] = existing
-            _render_afs_plan(document, output_format)
-            return
+            return _build_afs_plan_reports(document)
 
         document["existing_afs"] = {"present": False}
 
@@ -2396,59 +2385,92 @@ def afs_plan(
                 f" --cylinders {p.afs_cylinders}{compact_flag}"
             )
 
-        _render_afs_plan(document, output_format)
+        return _build_afs_plan_reports(document)
 
 
-def _render_afs_plan(document: dict, output_format: str) -> None:
-    """Render an afs-plan document in the requested format."""
-    if output_format == "json":
-        import json
-        click.echo(json.dumps(document, indent=2))
-        return
+def _build_afs_plan_reports(document: dict):
+    """Build a Reports collection from the afs-plan document dict.
 
-    # Default: human-readable text.
+    One report per document section: ``geometry``, ``adfs_state``,
+    optionally ``existing_afs`` (only when an AFS partition is
+    already installed) or ``plan`` (only when computed).  The
+    transposed single-row table shape turns each section into a
+    key-value block in display mode and ``field\\tvalue`` lines in
+    TSV.
+    """
+    from asyoulikeit.tabular_data import Report, Reports
+
+    sections: dict = {}
     geom = document["geometry"]
+    sections["geometry"] = Report(
+        data=_kv_table(
+            "Disc geometry",
+            [
+                (
+                    "shape",
+                    "Shape",
+                    f"{geom['cylinders']} cylinders, "
+                    f"{geom['heads']} heads, "
+                    f"{geom['sectors_per_track']} sectors/track",
+                ),
+                (
+                    "total",
+                    "Total",
+                    f"{geom['total_sectors']} sectors "
+                    f"({geom['total_bytes']:,} bytes)",
+                ),
+            ],
+        )
+    )
+
     adfs_state = document["adfs"]
-    click.echo("Disc geometry")
-    click.echo(
-        f"  {geom['cylinders']} cylinders, {geom['heads']} heads, "
-        f"{geom['sectors_per_track']} sectors/track"
+    sections["adfs_state"] = Report(
+        data=_kv_table(
+            "ADFS occupancy",
+            [
+                ("used_sectors", "Used sectors", str(adfs_state["used_sectors"])),
+                ("free_sectors", "Free sectors", str(adfs_state["free_sectors"])),
+                ("free_bytes", "Free bytes", f"{adfs_state['free_bytes']:,}"),
+            ],
+        )
     )
-    click.echo(
-        f"  {geom['total_sectors']} total sectors ({geom['cylinders']} cylinders)"
-    )
-    click.echo(
-        f"  {adfs_state['used_sectors']} used sectors, "
-        f"{adfs_state['free_sectors']} free sectors "
-        f"({adfs_state['free_bytes']:,} bytes)"
-    )
-    click.echo()
 
     existing = document["existing_afs"]
     if existing["present"]:
-        click.echo("This disc already has an AFS partition.")
+        pairs = [("present", "Present", "yes")]
         if "disc_name" in existing:
-            click.echo(
-                f"  AFS disc name: {existing['disc_name']}, "
-                f"start cylinder: {existing['start_cylinder']}"
+            pairs.append(("disc_name", "Disc name", existing["disc_name"]))
+            pairs.append(
+                ("start_cylinder", "Start cylinder", str(existing["start_cylinder"]))
             )
-        return
+        sections["existing_afs"] = Report(
+            data=_kv_table("Existing AFS partition", pairs)
+        )
+        return Reports(sections)
 
     p = document["plan"]
-    click.echo("Proposed AFS partition")
-    click.echo(
-        f"  AFS region:     {p['afs_cylinders']} cylinders "
-        f"({p['total_afs_sectors']} sectors, {p['total_afs_bytes']:,} bytes)"
-    )
-    click.echo(f"  Start cylinder: {p['start_cylinder']}")
-    click.echo(f"  ADFS retained:  {p['new_adfs_cylinders']} cylinders")
-    click.echo(
-        f"  Compaction:     {'required' if p['will_compact'] else 'not required'}"
-    )
-
+    plan_pairs = [
+        (
+            "afs_region",
+            "AFS region",
+            f"{p['afs_cylinders']} cylinders "
+            f"({p['total_afs_sectors']} sectors, "
+            f"{p['total_afs_bytes']:,} bytes)",
+        ),
+        ("start_cylinder", "Start cylinder", str(p["start_cylinder"])),
+        ("new_adfs_cylinders", "ADFS retained", f"{p['new_adfs_cylinders']} cylinders"),
+        (
+            "will_compact",
+            "Compaction",
+            "required" if p["will_compact"] else "not required",
+        ),
+    ]
     if "suggested_command" in document:
-        click.echo()
-        click.echo(f"To proceed: {document['suggested_command']}")
+        plan_pairs.append(
+            ("suggested_command", "Suggested command", document["suggested_command"])
+        )
+    sections["plan"] = Report(data=_kv_table("Proposed AFS partition", plan_pairs))
+    return Reports(sections)
 
 
 @cli.command(name="afs-init")

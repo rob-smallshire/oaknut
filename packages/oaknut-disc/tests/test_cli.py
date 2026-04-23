@@ -2117,7 +2117,11 @@ class TestImport:
 
 class TestAfsPlan:
     def test_afs_plan_max(self, runner: CliRunner, adfs_no_afs_filepath: Path) -> None:
-        result = runner.invoke(cli, ["afs-plan", str(adfs_no_afs_filepath)])
+        # Display mode pins the report titles so the layout is
+        # asserted as-is; TSV omits titles by design.
+        result = runner.invoke(
+            cli, ["afs-plan", "--as", "display", str(adfs_no_afs_filepath)]
+        )
         assert result.exit_code == 0
         assert "Disc geometry" in result.output
         assert "cylinders" in result.output
@@ -2136,9 +2140,14 @@ class TestAfsPlan:
     def test_afs_plan_already_partitioned(
         self, runner: CliRunner, afs_image_filepath: Path,
     ) -> None:
-        result = runner.invoke(cli, ["afs-plan", str(afs_image_filepath)])
+        # The existing-partition case now surfaces as a dedicated
+        # "Existing AFS partition" report rather than a free-text
+        # message; pin --as display to see the title.
+        result = runner.invoke(
+            cli, ["afs-plan", "--as", "display", str(afs_image_filepath)]
+        )
         assert result.exit_code == 0
-        assert "already has an AFS partition" in result.output
+        assert "Existing AFS partition" in result.output
 
     def test_afs_plan_too_large(
         self, runner: CliRunner, adfs_no_afs_filepath: Path,
@@ -2158,14 +2167,19 @@ class TestAfsPlan:
         )
         assert result.exit_code == 0
         doc = json.loads(result.output)
-        assert "geometry" in doc
-        assert "adfs" in doc
-        assert doc["existing_afs"]["present"] is False
-        assert "plan" in doc
-        assert doc["plan"]["afs_cylinders"] > 0
-        assert doc["plan"]["start_cylinder"] >= 0
-        assert doc["plan"]["will_compact"] is False
-        assert "suggested_command" in doc
+        tables = doc["tables"]
+        # One report per section: disc geometry, adfs occupancy, plan.
+        # (existing_afs is omitted when no partition is installed.)
+        assert "geometry" in tables
+        assert "adfs_state" in tables
+        assert "plan" in tables
+        assert "existing_afs" not in tables
+        # Plan contents are in the single row of its transposed table.
+        plan_row = tables["plan"]["rows"][0]
+        assert plan_row["afs_region"]
+        assert plan_row["start_cylinder"]
+        assert plan_row["will_compact"] == "not required"
+        assert plan_row["suggested_command"].startswith("disc afs-init")
 
     def test_afs_plan_as_json_already_partitioned(
         self, runner: CliRunner, afs_image_filepath: Path,
@@ -2177,8 +2191,12 @@ class TestAfsPlan:
         )
         assert result.exit_code == 0
         doc = json.loads(result.output)
-        assert doc["existing_afs"]["present"] is True
-        assert "plan" not in doc
+        tables = doc["tables"]
+        # When a partition already exists, the existing_afs report
+        # shows up and the plan report is suppressed.
+        assert "existing_afs" in tables
+        assert "plan" not in tables
+        assert tables["existing_afs"]["rows"][0]["present"] == "yes"
 
     def test_afs_plan_rejects_unknown_format(
         self, runner: CliRunner, adfs_no_afs_filepath: Path,
