@@ -441,68 +441,62 @@ _alias("*CAT", "ls")
 @cli.command()
 @click.argument("image", type=click.Path(exists=True, path_type=Path))
 @click.argument("path", required=False, default=None)
-def tree(image: Path, path: str | None) -> None:
+@report_output
+def tree(image: Path, path: str | None):
     """Display recursive directory tree."""
+    from asyoulikeit.tabular_data import Report, Reports
+    from asyoulikeit.tree_data import TreeContent
+
+    tc = TreeContent(title=image.name)
+    tc.add_column("name", "Name", header=True)
+
     if path is not None:
         # Explicit path (possibly with FS prefix) — show that subtree only.
         fs, bare = resolve_path(image, path)
         with open_image(image, fs) as handle:
-            root = _navigate(handle, bare, fs)
-            if not root.exists() and not root.is_dir():
+            root_node = _navigate(handle, bare, fs)
+            if not root_node.exists() and not root_node.is_dir():
                 raise click.ClickException(f"path not found: {bare or '$'}")
-            click.echo(root.name)
-            _print_children(root, "")
+            root = tc.add_root(name=root_node.name)
+            _attach_children(root_node, root)
     else:
-        # No path — show all partitions with image filename as root.
-        _tree_whole_image(image)
+        _build_tree_whole_image(image, tc)
+
+    return Reports(tree=Report(data=tc))
 
 
-def _tree_whole_image(image_filepath: Path) -> None:
-    """Print a tree of all partitions on the image."""
+def _build_tree_whole_image(image_filepath: Path, tc) -> None:
+    """Populate *tc* with one root per image, labelled partitions beneath."""
     detected = detect_filing_system(image_filepath)
+    image_root = tc.add_root(name=image_filepath.name)
 
     if detected is FilingSystem.DFS:
         with _open_dfs(image_filepath) as handle:
-            # DFS root has $ as a child directory.
-            click.echo(image_filepath.name)
-            _print_children(handle.root, "")
+            _attach_children(handle.root, image_root)
         return
 
     with _open_adfs(image_filepath) as adfs:
         afs = adfs.afs_partition
         if afs is None:
-            # Single ADFS — root ($) is the sole child of the image.
-            click.echo(image_filepath.name)
-            _print_node(adfs.root, "", True)
+            _attach_node(adfs.root, image_root)
         else:
-            # Dual partition — ADFS and AFS each contain a $ root.
-            click.echo(image_filepath.name)
-            _print_labelled_partition("ADFS", adfs.root, "", False)
-            _print_labelled_partition("AFS", afs.root, "", True)
+            adfs_label = image_root.add_child(name="ADFS")
+            _attach_node(adfs.root, adfs_label)
+            afs_label = image_root.add_child(name="AFS")
+            _attach_node(afs.root, afs_label)
 
 
-def _print_labelled_partition(label: str, root, prefix: str, is_last: bool) -> None:
-    """Print a partition label with its $ root underneath."""
-    connector = "└── " if is_last else "├── "
-    extension = "    " if is_last else "│   "
-    click.echo(f"{prefix}{connector}{label}")
-    _print_node(root, prefix + extension, True)
+def _attach_node(fs_node, parent_tree_node) -> None:
+    """Attach ``fs_node`` as a child of ``parent_tree_node`` and recurse."""
+    child = parent_tree_node.add_child(name=fs_node.name)
+    if fs_node.is_dir():
+        _attach_children(fs_node, child)
 
 
-def _print_node(node, prefix: str, is_last: bool) -> None:
-    """Print a node as a tree child, then recurse into its children."""
-    connector = "└── " if is_last else "├── "
-    click.echo(f"{prefix}{connector}{node.name}")
-    if node.is_dir():
-        extension = prefix + ("    " if is_last else "│   ")
-        _print_children(node, extension)
-
-
-def _print_children(node, prefix: str) -> None:
-    """Print all children of a directory node."""
-    children = list(node.iterdir())
-    for i, child in enumerate(children):
-        _print_node(child, prefix, i == len(children) - 1)
+def _attach_children(dir_node, parent_tree_node) -> None:
+    """Attach every child of ``dir_node`` under ``parent_tree_node``."""
+    for child in dir_node.iterdir():
+        _attach_node(child, parent_tree_node)
 
 
 @cli.command()

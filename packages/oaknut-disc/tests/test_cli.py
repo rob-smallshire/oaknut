@@ -336,6 +336,57 @@ class TestTree:
         assert "Games" in result.output
         assert "Elite" in result.output
 
+    def test_tree_json_preserves_hierarchy(
+        self, runner: CliRunner, adfs_image_tree: Path
+    ) -> None:
+        """--as json emits a nested document mirroring the tree."""
+        import json as _json
+
+        result = runner.invoke(
+            cli, ["tree", "--as", "json", str(adfs_image_tree)]
+        )
+        assert result.exit_code == 0, result.output
+        doc = _json.loads(result.output)
+        payload = next(iter(doc["tables"].values()))
+        roots = payload["roots"]
+        assert len(roots) == 1
+        names = _collect_names(roots[0])
+        # The tree fixture has $ -> Root1, $ -> Dir -> Inside, $ -> Dir -> Sub -> Deep.
+        assert "Root1" in names
+        assert "Dir" in names
+        assert "Sub" in names
+        assert "Deep" in names
+
+    def test_tree_multi_partition_json(
+        self,
+        runner: CliRunner,
+        partitioned_image_with_files: Path,
+    ) -> None:
+        import json as _json
+
+        result = runner.invoke(
+            cli,
+            ["tree", "--as", "json", str(partitioned_image_with_files)],
+        )
+        assert result.exit_code == 0, result.output
+        doc = _json.loads(result.output)
+        payload = next(iter(doc["tables"].values()))
+        # One root (the image filename) with ADFS and AFS labelled
+        # partitions beneath it.
+        assert len(payload["roots"]) == 1
+        image_root = payload["roots"][0]
+        partition_labels = [c["values"]["name"] for c in image_root["children"]]
+        assert "ADFS" in partition_labels
+        assert "AFS" in partition_labels
+
+
+def _collect_names(node: dict) -> list[str]:
+    """Flatten a tree-JSON node to a list of every descendant's name."""
+    out = [node["values"]["name"]]
+    for child in node.get("children", []):
+        out.extend(_collect_names(child))
+    return out
+
 
 # ---------------------------------------------------------------------------
 # Issue #14 — disc find must reach the AFS partition and emit full paths.
