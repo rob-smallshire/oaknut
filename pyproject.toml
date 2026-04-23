@@ -71,10 +71,6 @@ oaknut-adfs  = { workspace = true }
 oaknut-afs   = { workspace = true }
 oaknut-zip   = { workspace = true }
 oaknut-disc  = { workspace = true }
-# During development, resolve asyoulikeit to the local checkout at
-# /Users/rjs/Code/sixty-north/asyoulikeit; switch to the published
-# PyPI release once the integration has stabilised.
-asyoulikeit = { path = "../sixty-north/asyoulikeit", editable = true }
 
 [tool.uv]
 default-groups = ["test", "lint", "dev"]
