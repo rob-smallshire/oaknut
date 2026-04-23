@@ -156,7 +156,13 @@ class TestAccessBytesFormattedCorrectlyOnAFS:
             ["stat", str(afs_image_with_access_bytes), f"afs:$.{filename}"],
         )
         assert result.exit_code == 0, result.output
-        assert f"Attr:    {expected_attr}" in result.output, result.output
+        # Default piped output is TSV ("Attr\tWR/R"); display mode uses
+        # a bordered table.  Match either by looking for Attr on a line
+        # followed by the expected symbolic string.
+        attr_line = next(
+            ln for ln in result.output.splitlines() if "Attr" in ln
+        )
+        assert expected_attr in attr_line, attr_line
 
     def test_ls_afs_directory_shows_D_form(
         self,
@@ -651,16 +657,19 @@ def _extract_sizes(output: str) -> list[tuple[int, int]]:
 
 
 def _extract_size_lines(output: str) -> list[tuple[int, int]]:
-    """Every ``Size:  X bytes (Y sectors)``-shaped line in order.
+    """Every ``Size X bytes (Y sectors)``-shaped line in order.
 
-    Excludes ``Free:`` lines so the callers can count by block
-    (``disc + N partitions``) rather than by raw byte/sector pair.
+    Tolerant of both the old ``Size:  ...`` display form and the new
+    ``Size\\t...`` TSV form that asyoulikeit emits.  Excludes ``Free``
+    lines so callers can count by block (``disc + N partitions``)
+    rather than by raw byte/sector pair.
     """
     import re
 
     pairs = []
     pattern = re.compile(
-        r"Size:\s*([\d,]+)\s*bytes\s*\((\d+)\s*sectors?\)"
+        r"^\s*Size\b[:\t\s]+([\d,]+)\s*bytes\s*\((\d+)\s*sectors?\)",
+        re.MULTILINE,
     )
     for match in pattern.finditer(output):
         bytes_value = int(match.group(1).replace(",", ""))
@@ -675,7 +684,12 @@ class TestStatPartitionStructure:
     def test_dfs_disc_and_single_partition(
         self, runner: CliRunner, dfs_image_filepath: Path
     ) -> None:
-        result = runner.invoke(cli, ["stat", str(dfs_image_filepath)])
+        # Display mode pins the human-readable layout so the section
+        # titles (Disc, Partition 1: DFS) appear as literal text.  TSV
+        # omits titles by design.
+        result = runner.invoke(
+            cli, ["stat", "--as", "display", str(dfs_image_filepath)]
+        )
         assert result.exit_code == 0, result.output
         assert "Disc" in result.output
         assert "Partition 1: DFS" in result.output
@@ -690,7 +704,9 @@ class TestStatPartitionStructure:
     def test_adfs_floppy_disc_and_single_partition(
         self, runner: CliRunner, adfs_image_filepath: Path
     ) -> None:
-        result = runner.invoke(cli, ["stat", str(adfs_image_filepath)])
+        result = runner.invoke(
+            cli, ["stat", "--as", "display", str(adfs_image_filepath)]
+        )
         assert result.exit_code == 0, result.output
         assert "Disc" in result.output
         assert "Partition 1: ADFS" in result.output
@@ -702,7 +718,9 @@ class TestStatPartitionStructure:
     def test_adfs_hard_no_afs_single_partition(
         self, runner: CliRunner, adfs_hard_no_afs_filepath: Path
     ) -> None:
-        result = runner.invoke(cli, ["stat", str(adfs_hard_no_afs_filepath)])
+        result = runner.invoke(
+            cli, ["stat", "--as", "display", str(adfs_hard_no_afs_filepath)]
+        )
         assert result.exit_code == 0, result.output
         assert "Partition 1: ADFS" in result.output
         # Without AFS there is no Partition 2.
@@ -713,7 +731,10 @@ class TestStatPartitionStructure:
     def test_adfs_hard_with_afs_two_partitions(
         self, runner: CliRunner, adfs_hard_with_afs_filepath: Path
     ) -> None:
-        result = runner.invoke(cli, ["stat", str(adfs_hard_with_afs_filepath)])
+        result = runner.invoke(
+            cli,
+            ["stat", "--as", "display", str(adfs_hard_with_afs_filepath)],
+        )
         assert result.exit_code == 0, result.output
         assert "Partition 1: ADFS" in result.output
         assert "Partition 2: AFS" in result.output

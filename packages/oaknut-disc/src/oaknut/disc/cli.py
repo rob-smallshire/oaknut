@@ -502,34 +502,45 @@ def _attach_children(dir_node, parent_tree_node) -> None:
 @cli.command()
 @click.argument("image", type=click.Path(exists=True, path_type=Path))
 @click.argument("path", required=False, default=None)
-def stat(image: Path, path: str | None) -> None:
+@report_output
+def stat(image: Path, path: str | None):
     """Disc summary (no path) or file metadata (with path). Alias: *INFO."""
+    from asyoulikeit.tabular_data import Report, Reports, TableContent
+
     fs, bare = resolve_path(image, path)
 
     if not bare:
-        # Whole-disc summary.
-        _stat_disc(image, fs)
-    else:
-        # Single file/directory metadata.
-        with open_image(image, fs) as handle:
-            target = _navigate(handle, bare, fs)
-            if not target.exists():
-                raise click.ClickException(f"path not found: {bare}")
-            st = target.stat()
-            click.echo(f"Name:    {target.name}")
-            if hasattr(st, "load_address"):
-                click.echo(f"Load:    {st.load_address:08X}")
-            if hasattr(st, "exec_address"):
-                click.echo(f"Exec:    {st.exec_address:08X}")
-            if hasattr(st, "length"):
-                click.echo(f"Length:  {st.length:08X}")
-            locked = getattr(st, "locked", False)
-            if hasattr(st, "access"):
-                click.echo(f"Attr:    {_format_access(st.access)}")
-            elif locked:
-                click.echo("Attr:    L")
-            if hasattr(st, "is_directory"):
-                click.echo(f"Dir:     {st.is_directory}")
+        return _stat_disc(image, fs)
+
+    with open_image(image, fs) as handle:
+        target = _navigate(handle, bare, fs)
+        if not target.exists():
+            raise click.ClickException(f"path not found: {bare}")
+        st = target.stat()
+
+        tc = TableContent(title=f"{target.name}", present_transposed=True)
+        tc.add_column("name", "Name", header=True)
+        row: dict = {"name": target.name}
+        if hasattr(st, "load_address"):
+            tc.add_column("load", "Load")
+            row["load"] = f"{st.load_address:08X}"
+        if hasattr(st, "exec_address"):
+            tc.add_column("exec", "Exec")
+            row["exec"] = f"{st.exec_address:08X}"
+        if hasattr(st, "length"):
+            tc.add_column("length", "Length")
+            row["length"] = f"{st.length:08X}"
+        if hasattr(st, "access"):
+            tc.add_column("attr", "Attr")
+            row["attr"] = _format_access(st.access)
+        elif getattr(st, "locked", False):
+            tc.add_column("attr", "Attr")
+            row["attr"] = "L"
+        if hasattr(st, "is_directory"):
+            tc.add_column("dir", "Dir")
+            row["dir"] = "yes" if st.is_directory else "no"
+        tc.add_row(**row)
+        return Reports(file=Report(data=tc))
 
 
 _alias("*INFO", "stat")
@@ -538,42 +549,36 @@ _alias("*INFO", "stat")
 _SECTOR_SIZE = 256
 
 
-def _stat_disc(image_filepath: Path, fs: FilingSystem) -> None:
-    """Print whole-disc summary as a Rich panel.
+def _stat_disc(image_filepath: Path, fs: FilingSystem):
+    """Build the whole-disc summary as a Reports collection.
 
-    For a no-prefix invocation the layout is a disc-level header (physical
-    geometry + total size, both derived from the geometry so they stay
-    self-consistent — see issue #7) followed by one ``Partition N: <FS>``
-    block per filing-system partition on the image.
+    The layout is a disc-level block (physical geometry + total size,
+    both derived from the geometry so they stay self-consistent — see
+    issue #7) followed by one ``partition_N`` block per filing-system
+    partition on the image.
 
     When the user scopes the view with an ``afs:`` prefix, ``fs`` is
-    :data:`FilingSystem.AFS` and a flat partition-only block is shown
-    instead — the prefix is a deliberate single-partition drill-down.
+    :data:`FilingSystem.AFS` and a flat single-partition report is
+    returned instead — the prefix is a deliberate drill-down.
     """
-    from rich.console import Console
-    from rich.panel import Panel
+    from asyoulikeit.tabular_data import Report, Reports
 
+    sections: dict = {}
     with open_image(image_filepath, fs) as handle:
-        lines: list[str] = []
         if fs is FilingSystem.AFS:
-            _append_afs_partition_only(lines, handle)
+            sections["partition"] = Report(data=_afs_partition_only_tc(handle))
         elif fs is FilingSystem.DFS:
-            _append_disc_header_dfs(lines, handle)
-            lines.append("")
-            lines.append("Partition 1: DFS")
-            _append_dfs_partition(lines, handle)
+            sections["disc"] = Report(data=_disc_header_dfs_tc(handle))
+            sections["partition_1"] = Report(data=_dfs_partition_tc(handle))
         else:
-            _append_disc_header_adfs(lines, handle)
-            lines.append("")
-            lines.append("Partition 1: ADFS")
-            _append_adfs_partition(lines, handle)
+            sections["disc"] = Report(data=_disc_header_adfs_tc(handle))
+            sections["partition_1"] = Report(data=_adfs_partition_tc(handle))
             afs = handle.afs_partition
             if afs is not None:
-                lines.append("")
-                lines.append("Partition 2: AFS")
-                _append_afs_partition(lines, handle, afs)
-
-        Console().print(Panel("\n".join(lines), title=str(image_filepath.name)))
+                sections["partition_2"] = Report(
+                    data=_afs_partition_tc(handle, afs)
+                )
+    return Reports(sections)
 
 
 def _format_size(sectors: int) -> str:
@@ -581,96 +586,120 @@ def _format_size(sectors: int) -> str:
     return f"{sectors * _SECTOR_SIZE:,} bytes ({sectors} sectors)"
 
 
-def _append_disc_header_dfs(lines: list[str], handle) -> None:
-    """Disc-level block for DFS: total sectors only (no C/H/S decomposition)."""
-    total_sectors = handle.info["total_sectors"]
-    lines.append("Disc")
-    lines.append(f"  Size:         {_format_size(total_sectors)}")
+def _kv_table(title: str, pairs: list[tuple[str, str, str]]):
+    """Build a transposed single-row table from (key, label, value) tuples.
 
-
-def _append_disc_header_adfs(lines: list[str], handle) -> None:
-    """Disc-level block for ADFS: geometry + physical disc size.
-
-    Both figures come from ``handle.geometry`` so the byte count and
-    sector count agree with each other and with the image file size
-    on disc (issue #7).
+    Each tuple becomes a column whose sole row holds the rendered value.
+    Transposed presentation turns the one-row table into a key-value
+    report in the display formatter.
     """
+    from asyoulikeit.tabular_data import TableContent
+
+    tc = TableContent(title=title, present_transposed=True)
+    row: dict = {}
+    for i, (key, label, value) in enumerate(pairs):
+        tc.add_column(key, label, header=(i == 0))
+        row[key] = value
+    tc.add_row(**row)
+    return tc
+
+
+def _disc_header_dfs_tc(handle):
+    total_sectors = handle.info["total_sectors"]
+    return _kv_table(
+        "Disc",
+        [("size", "Size", _format_size(total_sectors))],
+    )
+
+
+def _disc_header_adfs_tc(handle):
     geom = handle.geometry
     total_sectors = geom.cylinders * geom.heads * geom.sectors_per_track
-    lines.append("Disc")
-    lines.append(
-        f"  Geometry:     {geom.cylinders} cylinders, "
-        f"{geom.heads} heads, {geom.sectors_per_track} sectors/track"
+    return _kv_table(
+        "Disc",
+        [
+            (
+                "geometry",
+                "Geometry",
+                f"{geom.cylinders} cylinders, {geom.heads} heads, "
+                f"{geom.sectors_per_track} sectors/track",
+            ),
+            ("size", "Size", _format_size(total_sectors)),
+        ],
     )
-    lines.append(f"  Size:         {_format_size(total_sectors)}")
 
 
-def _append_dfs_partition(lines: list[str], handle) -> None:
+def _dfs_partition_tc(handle):
     from oaknut.file import BootOption
 
     info = handle.info
-    lines.append(f"  Title:        {handle.title}")
     boot = BootOption(handle.boot_option)
-    lines.append(f"  Boot option:  {boot.name} ({boot.value})")
-    lines.append(f"  Size:         {_format_size(info['total_sectors'])}")
-    lines.append(f"  Free:         {_format_size(info['free_sectors'])}")
-    lines.append(f"  Files:        {info['num_files']}")
+    return _kv_table(
+        "Partition 1: DFS",
+        [
+            ("title", "Title", handle.title or ""),
+            ("boot_option", "Boot option", f"{boot.name} ({boot.value})"),
+            ("size", "Size", _format_size(info["total_sectors"])),
+            ("free", "Free", _format_size(info["free_sectors"])),
+            ("files", "Files", str(info["num_files"])),
+        ],
+    )
 
 
-def _append_adfs_partition(lines: list[str], handle) -> None:
-    """ADFS partition block.
-
-    ``handle.total_size`` reflects any AFS-driven ``shrink_to`` that
-    has happened, so the partition's cylinder range and size are
-    correct whether the disc is whole-ADFS or split with AFS.
-    """
+def _adfs_partition_tc(handle):
     from oaknut.file import BootOption
 
     geom = handle.geometry
     adfs_sectors = handle.total_size // _SECTOR_SIZE
     adfs_cylinders = adfs_sectors // (geom.heads * geom.sectors_per_track)
-    lines.append(f"  Title:        {handle.title}")
     boot = BootOption(handle.boot_option)
-    lines.append(f"  Boot option:  {boot.name} ({boot.value})")
+    pairs: list[tuple[str, str, str]] = [
+        ("title", "Title", handle.title or ""),
+        ("boot_option", "Boot option", f"{boot.name} ({boot.value})"),
+    ]
     if adfs_cylinders < geom.cylinders:
-        # Only worth showing the cylinder range when it isn't the
-        # whole disc — otherwise it's just noise.
-        lines.append(
-            f"  Range:        cylinders 0-{adfs_cylinders - 1}"
+        pairs.append(
+            ("range", "Range", f"cylinders 0-{adfs_cylinders - 1}")
         )
-    lines.append(f"  Size:         {_format_size(adfs_sectors)}")
+    pairs.append(("size", "Size", _format_size(adfs_sectors)))
     free_sectors = handle.free_space // _SECTOR_SIZE
-    lines.append(f"  Free:         {_format_size(free_sectors)}")
+    pairs.append(("free", "Free", _format_size(free_sectors)))
+    return _kv_table("Partition 1: ADFS", pairs)
 
 
-def _append_afs_partition(lines: list[str], adfs_handle, afs) -> None:
-    """AFS partition block beneath its containing ADFS disc.
-
-    Cylinder range is derived from the info sector's start cylinder
-    and the physical disc geometry.  User list is intentionally
-    omitted — it can be arbitrarily long and a separate concern (see
-    ``disc afs-users``).
-    """
+def _afs_partition_tc(adfs_handle, afs):
     geom = adfs_handle.geometry
     afs_cylinders = geom.cylinders - afs.start_cylinder
     afs_sectors = afs_cylinders * geom.heads * geom.sectors_per_track
-    lines.append(f"  Disc name:    {afs.disc_name}")
-    lines.append(
-        f"  Range:        cylinders {afs.start_cylinder}-{geom.cylinders - 1}"
+    return _kv_table(
+        "Partition 2: AFS",
+        [
+            ("disc_name", "Disc name", afs.disc_name),
+            (
+                "range",
+                "Range",
+                f"cylinders {afs.start_cylinder}-{geom.cylinders - 1}",
+            ),
+            ("size", "Size", _format_size(afs_sectors)),
+            ("free", "Free", _format_size(afs.free_sectors)),
+        ],
     )
-    lines.append(f"  Size:         {_format_size(afs_sectors)}")
-    lines.append(f"  Free:         {_format_size(afs.free_sectors)}")
 
 
-def _append_afs_partition_only(lines: list[str], handle) -> None:
-    """Flat AFS-scoped view (``disc stat image afs:``)."""
+def _afs_partition_only_tc(handle):
+    """Flat AFS-scoped view for ``disc stat image afs:``."""
     geom = handle.geometry
-    lines.append(f"Disc name:      {handle.disc_name}")
-    lines.append(f"Start cylinder: {handle.start_cylinder}")
-    lines.append(f"Cylinders:      {geom.cylinders}")
-    lines.append(f"Sectors/cyl:    {geom.sectors_per_cylinder}")
-    lines.append(f"Total sectors:  {geom.total_sectors}")
-    lines.append(f"Free sectors:   {handle.free_sectors}")
+    return _kv_table(
+        "AFS",
+        [
+            ("disc_name", "Disc name", handle.disc_name),
+            ("start_cylinder", "Start cylinder", str(handle.start_cylinder)),
+            ("cylinders", "Cylinders", str(geom.cylinders)),
+            ("sectors_per_cylinder", "Sectors/cyl", str(geom.sectors_per_cylinder)),
+            ("total_sectors", "Total sectors", str(geom.total_sectors)),
+            ("free_sectors", "Free sectors", str(handle.free_sectors)),
+        ],
+    )
 
 
 @cli.command()
