@@ -447,7 +447,10 @@ def tree(image: Path, path: str | None):
     from asyoulikeit.tabular_data import Report, Reports
     from asyoulikeit.tree_data import TreeContent
 
-    tc = TreeContent(title=image.name)
+    # The root node carries the image name visibly now that asyoulikeit
+    # 0.5.1 drops the Rich-table chrome around single-column trees —
+    # setting a TreeContent title would duplicate it.
+    tc = TreeContent()
     tc.add_column("name", "Name", header=True)
 
     if path is not None:
