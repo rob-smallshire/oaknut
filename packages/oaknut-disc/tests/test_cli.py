@@ -353,7 +353,7 @@ class TestTree:
         )
         assert result.exit_code == 0, result.output
         doc = _json.loads(result.output)
-        payload = next(iter(doc["tables"].values()))
+        payload = next(iter(doc["reports"].values()))
         roots = payload["roots"]
         assert len(roots) == 1
         names = _collect_names(roots[0])
@@ -376,7 +376,7 @@ class TestTree:
         )
         assert result.exit_code == 0, result.output
         doc = _json.loads(result.output)
-        payload = next(iter(doc["tables"].values()))
+        payload = next(iter(doc["reports"].values()))
         # One root (the image filename) with ADFS and AFS labelled
         # partitions beneath it.
         assert len(payload["roots"]) == 1
@@ -555,9 +555,9 @@ class TestFindAsFormats:
         )
         assert result.exit_code == 0, result.output
         doc = _json.loads(result.output)
-        # asyoulikeit JSON top level: {"tables": {name: {..., rows: [...]}}}
-        assert "tables" in doc
-        report_name, payload = next(iter(doc["tables"].items()))
+        # asyoulikeit JSON top level: {"reports": {name: {..., rows: [...]}}}
+        assert "reports" in doc
+        report_name, payload = next(iter(doc["reports"].items()))
         paths = [row["path"] for row in payload["rows"]]
         assert "$.HELLO" in paths
         assert "$.DATA" in paths
@@ -2167,15 +2167,15 @@ class TestAfsPlan:
         )
         assert result.exit_code == 0
         doc = json.loads(result.output)
-        tables = doc["tables"]
+        reports = doc["reports"]
         # One report per section: disc geometry, adfs occupancy, plan.
         # (existing_afs is omitted when no partition is installed.)
-        assert "geometry" in tables
-        assert "adfs_state" in tables
-        assert "plan" in tables
-        assert "existing_afs" not in tables
+        assert "geometry" in reports
+        assert "adfs_state" in reports
+        assert "plan" in reports
+        assert "existing_afs" not in reports
         # Plan contents are in the single row of its transposed table.
-        plan_row = tables["plan"]["rows"][0]
+        plan_row = reports["plan"]["rows"][0]
         assert plan_row["afs_region"]
         assert plan_row["start_cylinder"]
         assert plan_row["will_compact"] == "not required"
@@ -2191,12 +2191,12 @@ class TestAfsPlan:
         )
         assert result.exit_code == 0
         doc = json.loads(result.output)
-        tables = doc["tables"]
+        reports = doc["reports"]
         # When a partition already exists, the existing_afs report
         # shows up and the plan report is suppressed.
-        assert "existing_afs" in tables
-        assert "plan" not in tables
-        assert tables["existing_afs"]["rows"][0]["present"] == "yes"
+        assert "existing_afs" in reports
+        assert "plan" not in reports
+        assert reports["existing_afs"]["rows"][0]["present"] == "yes"
 
     def test_afs_plan_rejects_unknown_format(
         self, runner: CliRunner, adfs_no_afs_filepath: Path,
@@ -2243,7 +2243,7 @@ class TestAfsUsers:
         )
         assert result.exit_code == 0, result.output
         doc = _json.loads(result.output)
-        payload = next(iter(doc["tables"].values()))
+        payload = next(iter(doc["reports"].values()))
         users = [row["user"] for row in payload["rows"]]
         assert "Syst" in users
         assert "Boot" in users
