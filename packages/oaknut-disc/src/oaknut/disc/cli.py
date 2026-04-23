@@ -2548,12 +2548,24 @@ def _parse_user_specs(raw_specs: tuple[str, ...]) -> list:
 
 @cli.command(name="afs-users")
 @click.argument("image", type=click.Path(exists=True, path_type=Path))
-def afs_users(image: Path) -> None:
+@report_output
+def afs_users(image: Path):
     """List AFS users with quota and flags."""
+    from asyoulikeit.tabular_data import Report, Reports, TableContent
+
+    table = TableContent(title="users")
+    table.add_column("user", "User", header=True)
+    table.add_column("system", "System")
+    table.add_column("quota", "Quota")
+
     with _open_afs(image) as afs:
         for u in afs.users.active:
-            flag = "S" if u.is_system else " "
-            click.echo(f"{flag} {u.full_id:20s} quota={u.free_space:#010x}")
+            table.add_row(
+                user=u.full_id,
+                system="yes" if u.is_system else "",
+                quota=f"{u.free_space:#010x}",
+            )
+    return Reports(users=Report(data=table))
 
 
 @cli.command(name="afs-useradd")

@@ -2128,6 +2128,45 @@ class TestAfsUsers:
         assert result.exit_code == 0
         assert "Syst" in result.output
 
+    def test_afs_users_json_roundtrip(
+        self, runner: CliRunner, afs_image_filepath: Path
+    ) -> None:
+        """--as json emits a parseable document listing every user."""
+        import json as _json
+
+        result = runner.invoke(
+            cli, ["afs-users", "--as", "json", str(afs_image_filepath)]
+        )
+        assert result.exit_code == 0, result.output
+        doc = _json.loads(result.output)
+        payload = next(iter(doc["tables"].values()))
+        users = [row["user"] for row in payload["rows"]]
+        assert "Syst" in users
+        assert "Boot" in users
+        assert "Welcome" in users
+        # Syst is the one with the system flag set.
+        syst_row = next(r for r in payload["rows"] if r["user"] == "Syst")
+        assert syst_row["system"] == "yes"
+
+    def test_afs_users_tsv_columns(
+        self, runner: CliRunner, afs_image_filepath: Path
+    ) -> None:
+        result = runner.invoke(
+            cli, ["afs-users", "--as", "tsv", str(afs_image_filepath)]
+        )
+        assert result.exit_code == 0, result.output
+        lines = [ln for ln in result.output.splitlines() if ln]
+        # First non-data line is the "# User..." header.
+        assert lines[0].startswith("#")
+        # Each data line has tab-separated user/system/quota.
+        data = [ln for ln in lines if not ln.startswith("#")]
+        syst_line = next(ln for ln in data if ln.startswith("Syst"))
+        cells = syst_line.split("\t")
+        assert len(cells) == 3
+        assert cells[0] == "Syst"
+        assert cells[1] == "yes"
+        assert cells[2].startswith("0x")
+
 
 class TestAfsUserDel:
     def test_afs_userdel(self, runner: CliRunner, afs_image_with_spare_slot: Path) -> None:
