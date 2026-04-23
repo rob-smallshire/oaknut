@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Iterator
 
 import click
+from asyoulikeit.cli import report_output
 
 from . import __version__
 from .cli_paths import FilingSystem, detect_filing_system, parse_prefix, resolve_path
@@ -675,7 +676,8 @@ _alias("*TYPE", "cat")
 @cli.command()
 @click.argument("image", type=click.Path(exists=True, path_type=Path))
 @click.argument("pattern")
-def find(image: Path, pattern: str) -> None:
+@report_output
+def find(image: Path, pattern: str):
     """Find files matching an Acorn wildcard pattern.
 
     Accepts the same ``adfs:`` / ``afs:`` / ``dfs:`` prefixes as
@@ -686,20 +688,25 @@ def find(image: Path, pattern: str) -> None:
     unchanged.  Single-partition images emit bare paths, unchanged
     from earlier behaviour.
     """
-    # ``resolve_path`` treats the pattern argument as a path and
-    # parses any filing-system prefix off the front — that's exactly
-    # what we want here.  parse_prefix is the quickest way to know
-    # whether the user passed an explicit prefix.
+    from asyoulikeit.tabular_data import Report, Reports, TableContent
+
     from .cli_paths import parse_prefix
 
     prefix_present = parse_prefix(pattern)[0] is not None
     fs, bare_pattern = resolve_path(image, pattern)
     emit_prefix = _image_has_afs(image) if not prefix_present else True
 
+    rows: list[dict] = []
     for partition_fs in _iter_search_partitions(image, fs, prefix_present):
         with open_image(image, partition_fs) as handle:
             prefix = f"{partition_fs.value}:" if emit_prefix else ""
-            _find_recursive(handle.root, bare_pattern, prefix)
+            _find_recursive(handle.root, bare_pattern, prefix, rows)
+
+    table = TableContent(title="matches")
+    table.add_column("path", "Path", header=True)
+    for row in rows:
+        table.add_row(**row)
+    return Reports(matches=Report(data=table))
 
 
 def _match_acorn_wildcard(pattern: str, name: str) -> bool:
@@ -714,21 +721,21 @@ def _match_acorn_wildcard(pattern: str, name: str) -> bool:
     return fnmatch.fnmatch(name.upper(), pattern.upper())
 
 
-def _find_recursive(node, pattern: str, prefix: str) -> None:
-    """Walk a directory tree, printing paths matching *pattern*.
+def _find_recursive(node, pattern: str, prefix: str, rows: list[dict]) -> None:
+    """Walk a directory tree, collecting paths matching *pattern*.
 
     ``prefix`` is prepended to each emitted path — empty on a
     single-partition image, ``adfs:`` / ``afs:`` / ``dfs:`` on a
-    partitioned one — so every line is directly consumable by a
+    partitioned one — so every row is directly consumable by a
     follow-up command.
     """
     for child in node.iterdir():
         name = child.name
         path_str = child.path
         if _match_acorn_wildcard(pattern, name) or _match_acorn_wildcard(pattern, path_str):
-            click.echo(f"{prefix}{path_str}")
+            rows.append({"path": f"{prefix}{path_str}"})
         if child.is_dir():
-            _find_recursive(child, pattern, prefix)
+            _find_recursive(child, pattern, prefix, rows)
 
 
 @cli.command()

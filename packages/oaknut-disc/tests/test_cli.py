@@ -439,6 +439,8 @@ class TestFind:
             cli, ["find", str(partitioned_image_with_files), "afs:*"]
         )
         assert result.exit_code == 0, result.output
+        # Skip header and comment lines; pick the first data line that
+        # starts with the partition prefix.
         line = next(
             ln for ln in result.output.splitlines()
             if ln.startswith("afs:$.GAMES.Elite")
@@ -448,6 +450,85 @@ class TestFind:
         )
         assert cat.exit_code == 0, cat.output
         assert b"e" in cat.output_bytes
+
+
+# ---------------------------------------------------------------------------
+# Issue #8 — --as display|tsv|json via asyoulikeit.
+# ---------------------------------------------------------------------------
+
+
+class TestFindAsFormats:
+    """disc find emits a TableContent; --as selects the renderer."""
+
+    def test_find_tsv_header_and_rows(
+        self, runner: CliRunner, dfs_image_filepath: Path
+    ) -> None:
+        result = runner.invoke(
+            cli, ["find", "--as", "tsv", str(dfs_image_filepath), "*"]
+        )
+        assert result.exit_code == 0, result.output
+        lines = [ln for ln in result.output.splitlines() if ln]
+        # TSV header is prefixed with "# " per asyoulikeit convention.
+        assert lines[0].startswith("#"), f"header row missing: {lines[0]!r}"
+        data_rows = [ln for ln in lines if not ln.startswith("#")]
+        assert "$.HELLO" in data_rows
+        assert "$.DATA" in data_rows
+
+    def test_find_json_parses(
+        self, runner: CliRunner, dfs_image_filepath: Path
+    ) -> None:
+        import json as _json
+
+        result = runner.invoke(
+            cli, ["find", "--as", "json", str(dfs_image_filepath), "*"]
+        )
+        assert result.exit_code == 0, result.output
+        doc = _json.loads(result.output)
+        # asyoulikeit JSON top level: {"tables": {name: {..., rows: [...]}}}
+        assert "tables" in doc
+        report_name, payload = next(iter(doc["tables"].items()))
+        paths = [row["path"] for row in payload["rows"]]
+        assert "$.HELLO" in paths
+        assert "$.DATA" in paths
+
+    def test_find_display_is_rich_table(
+        self, runner: CliRunner, dfs_image_filepath: Path
+    ) -> None:
+        """display mode produces a bordered Rich table."""
+        result = runner.invoke(
+            cli, ["find", "--as", "display", str(dfs_image_filepath), "*"]
+        )
+        assert result.exit_code == 0, result.output
+        # Rich tables draw box-drawing chars.  Any presence of "│" or "┃"
+        # confirms the display renderer ran.
+        assert any(ch in result.output for ch in ("│", "┃"))
+        assert "$.HELLO" in result.output
+
+    def test_find_multi_partition_tsv_prefix(
+        self,
+        runner: CliRunner,
+        partitioned_image_with_files: Path,
+    ) -> None:
+        """TSV rows carry the partition prefix on a multi-partition
+        image so they round-trip into other commands unchanged.
+        """
+        result = runner.invoke(
+            cli,
+            [
+                "find",
+                "--as",
+                "tsv",
+                str(partitioned_image_with_files),
+                "*",
+            ],
+        )
+        assert result.exit_code == 0, result.output
+        data = [
+            ln for ln in result.output.splitlines()
+            if ln and not ln.startswith("#")
+        ]
+        assert "adfs:$.adfsA" in data
+        assert "afs:$.GAMES.Elite" in data
 
 
 # ---------------------------------------------------------------------------
