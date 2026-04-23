@@ -48,7 +48,12 @@ class TestCLIBasics:
 
 class TestLs:
     def test_ls_dfs_root(self, runner: CliRunner, dfs_image_filepath: Path) -> None:
-        result = runner.invoke(cli, ["ls", str(dfs_image_filepath)])
+        # --as display pins the Rich renderer so the format-label in the
+        # table title ("DFS") is part of the output.  Default piped
+        # output is TSV, which omits titles.
+        result = runner.invoke(
+            cli, ["ls", "--as", "display", str(dfs_image_filepath)]
+        )
         assert result.exit_code == 0
         # Root shows the $ directory, not the files directly.
         assert "$" in result.output
@@ -61,7 +66,9 @@ class TestLs:
         assert "DATA" in result.output
 
     def test_ls_adfs_root(self, runner: CliRunner, adfs_image_filepath: Path) -> None:
-        result = runner.invoke(cli, ["ls", str(adfs_image_filepath)])
+        result = runner.invoke(
+            cli, ["ls", "--as", "display", str(adfs_image_filepath)]
+        )
         assert result.exit_code == 0
         assert "Hello" in result.output
         assert "Games" in result.output
@@ -73,7 +80,9 @@ class TestLs:
         assert "Elite" in result.output
 
     def test_ls_afs_prefix(self, runner: CliRunner, afs_image_filepath: Path) -> None:
-        result = runner.invoke(cli, ["ls", str(afs_image_filepath), "afs:"])
+        result = runner.invoke(
+            cli, ["ls", "--as", "display", str(afs_image_filepath), "afs:"]
+        )
         assert result.exit_code == 0
         assert "AFS" in result.output
 
@@ -282,8 +291,13 @@ class TestLsAccessByteFlag:
         )
         assert result.exit_code == 0, result.output
         row = next(line for line in result.output.splitlines() if "alpha" in line)
-        # Pull the "0x0D"-shaped token out of the row.
-        tokens = [t for t in row.split("│") if "0x" in t]
+        # The row has cells separated by tabs in the default TSV
+        # output (CliRunner has no TTY).  Either tab or Rich-border
+        # splits pick out the 0x-prefixed cell.
+        separators = "\t│"
+        import re as _re
+
+        tokens = [t for t in _re.split(f"[{separators}]", row) if "0x" in t]
         assert tokens, f"no 0x-prefixed token in row: {row!r}"
         hex_token = tokens[-1].strip()
         assert hex_token.startswith("0x")

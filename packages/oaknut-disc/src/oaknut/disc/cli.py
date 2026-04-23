@@ -335,10 +335,10 @@ def cli() -> None:
     is_flag=True,
     help="Show the raw access byte as two hex digits alongside the symbolic form.",
 )
-def ls(image: Path, path: str | None, show_access_byte: bool) -> None:
+@report_output
+def ls(image: Path, path: str | None, show_access_byte: bool):
     """List directory contents (Acorn alias: *CAT)."""
-    from rich.console import Console
-    from rich.table import Table
+    from asyoulikeit.tabular_data import Importance, Report, Reports, TableContent
 
     fs, bare = resolve_path(image, path)
     with open_image(image, fs) as handle:
@@ -348,24 +348,30 @@ def ls(image: Path, path: str | None, show_access_byte: bool) -> None:
             raise click.ClickException(f"path not found: {bare or '$'}")
 
         if target.is_file():
-            # Single file — just print its name.
+            # Single file — just echo the bare name, same as before.
+            # Skipping the Reports envelope keeps `disc ls img $.file`
+            # shell-pipe-friendly without a header line to grep away.
             click.echo(target.name)
-            return
+            return None
 
         entries = list(target.iterdir())
 
-        # Build title line.
+        # Build the display title and the "free space" description
+        # from filing-system-specific handle attributes.
         if fs is FilingSystem.DFS:
             title_str = getattr(handle, "title", "") or ""
             free = getattr(handle, "free_sectors", None)
+            free_unit = "sectors"
             fmt_name = "DFS"
         elif fs is FilingSystem.AFS:
             title_str = getattr(handle, "disc_name", "") or ""
             free = getattr(handle, "free_sectors", None)
+            free_unit = "sectors"
             fmt_name = "AFS"
         else:
             title_str = getattr(handle, "title", "") or ""
             free = getattr(handle, "free_space", None)
+            free_unit = "bytes"
             fmt_name = "ADFS"
 
         table_title = f"{image.name}"
@@ -373,21 +379,39 @@ def ls(image: Path, path: str | None, show_access_byte: bool) -> None:
             table_title += f" — {title_str}"
         table_title += f" [{fmt_name}]"
 
-        table = Table(title=table_title)
-        table.add_column("Name", style="cyan", no_wrap=True)
-        table.add_column("Load", justify="right", style="green", no_wrap=True)
-        table.add_column("Exec", justify="right", style="green", no_wrap=True)
-        table.add_column("Length", justify="right", no_wrap=True)
-        table.add_column("Attr", justify="right", style="yellow", no_wrap=True)
+        if free is not None:
+            description = f"Free: {free:,} {free_unit}"
+        else:
+            description = None
+
+        table = TableContent(title=table_title, description=description)
+        table.add_column("name", "Name", header=True)
+        # Load and exec are Acorn-specific addresses that matter in
+        # display-focused use and are available via get-load/get-exec
+        # on demand; drop them from TSV by default so the piped-output
+        # view stays concise.  --detailed restores them.
+        table.add_column("load", "Load", importance=Importance.DETAIL)
+        table.add_column("exec", "Exec", importance=Importance.DETAIL)
+        table.add_column("length", "Length")
+        table.add_column("attr", "Attr")
         if show_access_byte:
-            table.add_column("Hex", justify="right", style="yellow", no_wrap=True)
+            # The user explicitly asked for the raw byte — treat it
+            # as essential so TSV shows it alongside Attr without
+            # requiring --detailed too.
+            table.add_column("hex", "Hex")
 
         for child in entries:
             if child.is_dir():
-                row = [f"{child.name}/", "", "", "", ""]
+                row = {
+                    "name": f"{child.name}/",
+                    "load": "",
+                    "exec": "",
+                    "length": "",
+                    "attr": "",
+                }
                 if show_access_byte:
-                    row.append("")
-                table.add_row(*row)
+                    row["hex"] = ""
+                table.add_row(**row)
                 continue
             st = child.stat()
             load_str = f"{st.load_address:08X}" if hasattr(st, "load_address") else ""
@@ -397,18 +421,18 @@ def ls(image: Path, path: str | None, show_access_byte: bool) -> None:
             attr_str = "L" if locked else ""
             if hasattr(st, "access"):
                 attr_str = _format_access(st.access)
-            row = [child.name, load_str, exec_str, length_str, attr_str]
+            row = {
+                "name": child.name,
+                "load": load_str,
+                "exec": exec_str,
+                "length": length_str,
+                "attr": attr_str,
+            }
             if show_access_byte:
-                row.append(_access_byte_hex(st))
-            table.add_row(*row)
+                row["hex"] = _access_byte_hex(st)
+            table.add_row(**row)
 
-        if free is not None:
-            if fs is FilingSystem.ADFS:
-                table.caption = f"Free: {free:,} bytes"
-            else:
-                table.caption = f"Free: {free} sectors"
-
-        Console().print(table)
+    return Reports(entries=Report(data=table))
 
 
 _alias("*CAT", "ls")
