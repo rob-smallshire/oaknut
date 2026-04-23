@@ -39,7 +39,7 @@ from oaknut.file.host_bridge import (
 
 Version = namedtuple("Version", ["major", "minor", "patch"])
 
-__version__ = "10.4.0"
+__version__ = "10.5.0"
 __version_info__ = Version(*(__version__.split(".")))
 
 __all__ = [
