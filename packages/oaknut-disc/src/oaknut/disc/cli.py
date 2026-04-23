@@ -1893,43 +1893,68 @@ def set_exec(
 @cli.command(name="get-load")
 @click.argument("image", type=click.Path(exists=True, path_type=Path))
 @click.argument("path")
-def get_load(image: Path, path: str) -> None:
+@report_output
+def get_load(image: Path, path: str):
     """Print a file's load address."""
+    from asyoulikeit.scalar_data import ScalarContent
+    from asyoulikeit.tabular_data import Report, Reports
+
     fs, bare = resolve_path(image, path)
     with open_image(image, fs) as handle:
         target = _navigate(handle, bare, fs)
         if not target.exists():
             raise click.ClickException(f"path not found: {bare}")
         st = target.stat()
-        click.echo(f"{st.load_address:08X}")
+    return Reports(
+        load=Report(
+            data=ScalarContent(value=f"{st.load_address:08X}", title="Load"),
+        ),
+    )
 
 
 @cli.command(name="get-exec")
 @click.argument("image", type=click.Path(exists=True, path_type=Path))
 @click.argument("path")
-def get_exec(image: Path, path: str) -> None:
+@report_output
+def get_exec(image: Path, path: str):
     """Print a file's exec address."""
+    from asyoulikeit.scalar_data import ScalarContent
+    from asyoulikeit.tabular_data import Report, Reports
+
     fs, bare = resolve_path(image, path)
     with open_image(image, fs) as handle:
         target = _navigate(handle, bare, fs)
         if not target.exists():
             raise click.ClickException(f"path not found: {bare}")
         st = target.stat()
-        click.echo(f"{st.exec_address:08X}")
+    return Reports(
+        exec=Report(
+            data=ScalarContent(value=f"{st.exec_address:08X}", title="Exec"),
+        ),
+    )
 
 
 @cli.command()
 @click.argument("image", type=click.Path(exists=True, path_type=Path))
 @click.argument("new_title", required=False, default=None)
-def title(image: Path, new_title: str | None) -> None:
+@report_output
+def title(image: Path, new_title: str | None):
     """Read or set disc title (Acorn alias: *TITLE)."""
+    from asyoulikeit.scalar_data import ScalarContent
+    from asyoulikeit.tabular_data import Report, Reports
+
     fs = detect_filing_system(image)
     if new_title is None:
         with open_image(image, fs) as handle:
-            click.echo(handle.title)
-    else:
-        with open_image(image, fs, mode="r+b") as handle:
-            handle.title = new_title
+            current = handle.title
+        return Reports(
+            title=Report(
+                data=ScalarContent(value=current, title="Title"),
+            ),
+        )
+    with open_image(image, fs, mode="r+b") as handle:
+        handle.title = new_title
+    return None
 
 
 _alias("*TITLE", "title")
@@ -1973,7 +1998,8 @@ class BootOptionParam(click.ParamType):
 @cli.command()
 @click.argument("image", type=click.Path(exists=True, path_type=Path))
 @click.argument("boot_option", required=False, default=None, type=BootOptionParam())
-def opt(image: Path, boot_option: int | None) -> None:
+@report_output
+def opt(image: Path, boot_option: int | None):
     """Read or set boot option (Acorn alias: *OPT4).
 
     Omit BOOT_OPTION to report the current setting.
@@ -1985,16 +2011,25 @@ def opt(image: Path, boot_option: int | None) -> None:
       2 / RUN   *RUN $.!BOOT
       3 / EXEC  *EXEC $.!BOOT
     """
+    from asyoulikeit.scalar_data import ScalarContent
+    from asyoulikeit.tabular_data import Report, Reports
     from oaknut.file import BootOption
 
     fs = detect_filing_system(image)
     if boot_option is None:
         with open_image(image, fs) as handle:
             bo = BootOption(handle.boot_option)
-            click.echo(f"{bo.value} ({bo.name})")
-    else:
-        with open_image(image, fs, mode="r+b") as handle:
-            handle.boot_option = boot_option
+        return Reports(
+            boot_option=Report(
+                data=ScalarContent(
+                    value=f"{bo.value} ({bo.name})",
+                    title="Boot option",
+                ),
+            ),
+        )
+    with open_image(image, fs, mode="r+b") as handle:
+        handle.boot_option = boot_option
+    return None
 
 
 _alias("*OPT4", "opt")
