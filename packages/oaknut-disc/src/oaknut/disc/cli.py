@@ -528,7 +528,11 @@ def _attach_children(dir_node, parent_tree_node) -> None:
     reports={
         "disc": "Physical geometry and total size.",
         "partition_1": "First partition (DFS, or ADFS on a partitioned hard disc).",
-        "partition_2": "Second partition (AFS, present only on ADFS+AFS hard discs; also the report name when an afs:-prefixed path scopes the view to the AFS half).",
+        "partition_2": (
+            "Second partition (AFS, present only on ADFS+AFS hard discs; "
+            "also the report name when an afs:-prefixed path scopes the "
+            "view to the AFS half)."
+        ),
         "file": "Per-file metadata when the path denotes a file.",
     }
 )
@@ -2034,7 +2038,10 @@ class BootOptionParam(click.ParamType):
 @click.argument("boot_option", required=False, default=None, type=BootOptionParam())
 @report_output(
     reports={
-        "boot_option": "Current boot option (0/OFF, 1/LOAD, 2/RUN, 3/EXEC) when no value is supplied."
+        "boot_option": (
+            "Current boot option (0/OFF, 1/LOAD, 2/RUN, 3/EXEC) when "
+            "no value is supplied."
+        )
     }
 )
 def opt(image: Path, boot_option: int | None):

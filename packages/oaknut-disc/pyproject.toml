@@ -28,7 +28,7 @@ dependencies = [
     "oaknut-afs>=10.0",
     "click>=8.1.7",
     "rich>=13.0",
-    "asyoulikeit>=1.0.0",
+    "asyoulikeit>=1.1.0",
 ]
 
 [project.scripts]
