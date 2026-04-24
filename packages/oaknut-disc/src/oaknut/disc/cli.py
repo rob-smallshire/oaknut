@@ -13,7 +13,13 @@ from pathlib import Path
 from typing import Iterator
 
 import click
-from asyoulikeit.cli import report_output
+from asyoulikeit.cli import (
+    describe_formatter_command,
+    describe_report_command,
+    list_formatters_command,
+    list_reports_command,
+    report_output,
+)
 
 from . import __version__
 from .cli_paths import FilingSystem, detect_filing_system, parse_prefix, resolve_path
@@ -320,6 +326,17 @@ def cli() -> None:
     """Work with Acorn DFS, ADFS, and AFS disc images."""
 
 
+# "format" is overloaded in this CLI — disc formats (ssd, dsd, adfs-hard, ...)
+# are distinct from output formats (display, tsv, json) — so the formatter-
+# introspection commands take unambiguous long names.
+cli.add_command(list_formatters_command(), name="list-report-formats")
+cli.add_command(describe_formatter_command(), name="describe-report-format")
+
+# Companion pair: discover the reports each @report_output command produces.
+cli.add_command(list_reports_command(), name="list-reports")
+cli.add_command(describe_report_command(), name="describe-report")
+
+
 # ---------------------------------------------------------------------------
 # Inspection commands
 # ---------------------------------------------------------------------------
@@ -335,7 +352,9 @@ def cli() -> None:
     is_flag=True,
     help="Show the raw access byte as two hex digits alongside the symbolic form.",
 )
-@report_output
+@report_output(
+    reports={"entries": "Directory entries with load/exec/length/attributes."}
+)
 def ls(image: Path, path: str | None, show_access_byte: bool):
     """List directory contents (Acorn alias: *CAT)."""
     from asyoulikeit.tabular_data import Importance, Report, Reports, TableContent
@@ -441,7 +460,7 @@ _alias("*CAT", "ls")
 @cli.command()
 @click.argument("image", type=click.Path(exists=True, path_type=Path))
 @click.argument("path", required=False, default=None)
-@report_output
+@report_output(reports={"tree": "Hierarchical directory listing."})
 def tree(image: Path, path: str | None):
     """Display recursive directory tree."""
     from asyoulikeit.tabular_data import Report, Reports
@@ -505,7 +524,14 @@ def _attach_children(dir_node, parent_tree_node) -> None:
 @cli.command()
 @click.argument("image", type=click.Path(exists=True, path_type=Path))
 @click.argument("path", required=False, default=None)
-@report_output
+@report_output(
+    reports={
+        "disc": "Physical geometry and total size.",
+        "partition_1": "First partition (DFS, or ADFS on a partitioned hard disc).",
+        "partition_2": "Second partition (AFS, present only on ADFS+AFS hard discs; also the report name when an afs:-prefixed path scopes the view to the AFS half).",
+        "file": "Per-file metadata when the path denotes a file.",
+    }
+)
 def stat(image: Path, path: str | None):
     """Disc summary (no path) or file metadata (with path). Alias: *INFO."""
     from asyoulikeit.tabular_data import Report, Reports, TableContent
@@ -569,7 +595,10 @@ def _stat_disc(image_filepath: Path, fs: FilingSystem):
     sections: dict = {}
     with open_image(image_filepath, fs) as handle:
         if fs is FilingSystem.AFS:
-            sections["partition"] = Report(data=_afs_partition_only_tc(handle))
+            # AFS only ever lives in partition 2 of an ADFS+AFS disc — name
+            # this view "partition_2" so the same name always refers to the
+            # same physical partition across stat invocations.
+            sections["partition_2"] = Report(data=_afs_partition_only_tc(handle))
         elif fs is FilingSystem.DFS:
             sections["disc"] = Report(data=_disc_header_dfs_tc(handle))
             sections["partition_1"] = Report(data=_dfs_partition_tc(handle))
@@ -726,7 +755,7 @@ _alias("*TYPE", "cat")
 @cli.command()
 @click.argument("image", type=click.Path(exists=True, path_type=Path))
 @click.argument("pattern")
-@report_output
+@report_output(reports={"matches": "Paths matching the wildcard pattern."})
 def find(image: Path, pattern: str):
     """Find files matching an Acorn wildcard pattern.
 
@@ -1896,7 +1925,7 @@ def set_exec(
 @cli.command(name="get-load")
 @click.argument("image", type=click.Path(exists=True, path_type=Path))
 @click.argument("path")
-@report_output
+@report_output(reports={"load": "File load address as 8 hex digits."})
 def get_load(image: Path, path: str):
     """Print a file's load address."""
     from asyoulikeit.scalar_data import ScalarContent
@@ -1918,7 +1947,7 @@ def get_load(image: Path, path: str):
 @cli.command(name="get-exec")
 @click.argument("image", type=click.Path(exists=True, path_type=Path))
 @click.argument("path")
-@report_output
+@report_output(reports={"exec": "File exec address as 8 hex digits."})
 def get_exec(image: Path, path: str):
     """Print a file's exec address."""
     from asyoulikeit.scalar_data import ScalarContent
@@ -1940,7 +1969,9 @@ def get_exec(image: Path, path: str):
 @cli.command()
 @click.argument("image", type=click.Path(exists=True, path_type=Path))
 @click.argument("new_title", required=False, default=None)
-@report_output
+@report_output(
+    reports={"title": "Current disc title (when no new title is supplied)."}
+)
 def title(image: Path, new_title: str | None):
     """Read or set disc title (Acorn alias: *TITLE)."""
     from asyoulikeit.scalar_data import ScalarContent
@@ -2001,7 +2032,11 @@ class BootOptionParam(click.ParamType):
 @cli.command()
 @click.argument("image", type=click.Path(exists=True, path_type=Path))
 @click.argument("boot_option", required=False, default=None, type=BootOptionParam())
-@report_output
+@report_output(
+    reports={
+        "boot_option": "Current boot option (0/OFF, 1/LOAD, 2/RUN, 3/EXEC) when no value is supplied."
+    }
+)
 def opt(image: Path, boot_option: int | None):
     """Read or set boot option (Acorn alias: *OPT4).
 
@@ -2333,7 +2368,14 @@ def _import_host_dir(handle, target_dir, host_dir: Path, meta_formats, verbose, 
     "--compact", is_flag=True, default=False,
     help="Plan with ADFS compaction to maximise AFS space.",
 )
-@report_output
+@report_output(
+    reports={
+        "geometry": "Disc geometry.",
+        "adfs_state": "ADFS occupancy.",
+        "existing_afs": "Existing AFS partition (only when one is already installed).",
+        "plan": "Proposed new AFS partition (only when computable).",
+    }
+)
 def afs_plan(
     image: Path,
     cylinders: int | None,
@@ -2655,7 +2697,7 @@ def _parse_user_specs(raw_specs: tuple[str, ...]) -> list:
 
 @cli.command(name="afs-users")
 @click.argument("image", type=click.Path(exists=True, path_type=Path))
-@report_output
+@report_output(reports={"users": "Users with system flag and quota."})
 def afs_users(image: Path):
     """List AFS users with quota and flags."""
     from asyoulikeit.tabular_data import Report, Reports, TableContent
