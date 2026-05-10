@@ -6,6 +6,7 @@ disc images created by the library fixtures.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import pytest
@@ -834,9 +835,195 @@ class TestCat:
         assert "not found" in result.output
 
     def test_type_alias(self, runner: CliRunner, dfs_image_filepath: Path) -> None:
+        # *TYPE now maps to ``disc type`` (the text-aware command); the
+        # bytes still appear because Hello has no line endings to translate.
         result = runner.invoke(cli, ["*type", str(dfs_image_filepath), "$.Hello"])
         assert result.exit_code == 0
         assert b"Hello world" in result.output_bytes
+
+
+# ---------------------------------------------------------------------------
+# Display: type (text dump with line-ending translation)
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def adfs_with_acorn_text(tmp_path: Path) -> Path:
+    """ADFS-L image carrying an Acorn-style text file with CR line endings.
+
+    Mirrors the shape of a typical ``!BOOT``: lines terminated by ``\\r``
+    only, with a trailing ``\\r`` after the last line.  Plus a couple
+    of mixed-ending fixtures so we can exercise the regex normalisation.
+    """
+    from oaknut.adfs import ADFS, ADFS_L
+
+    filepath = tmp_path / "text.adl"
+    with ADFS.create_file(filepath, ADFS_L, title="TXT") as adfs:
+        (adfs.root / "BOOT").write_bytes(
+            b"*DIR $\r*LIB $.LIBRARY\rCHAIN\"!MENU\"\r"
+        )
+        (adfs.root / "MIXED").write_bytes(
+            b"acorn-line\rdos-line\r\nunix-line\nfinal\r"
+        )
+        (adfs.root / "EMPTY").write_bytes(b"")
+        (adfs.root / "Games").mkdir()
+    return filepath
+
+
+class TestType:
+    """``disc type`` writes a file to stdout with line-ending translation.
+
+    The default ``--line-endings host`` resolves to ``\\n`` on macOS/Linux,
+    so the raw Acorn ``\\r`` terminators don't get the file overwritten
+    by carriage returns on a Unix terminal.
+    """
+
+    def test_default_translates_cr_to_lf_on_unix(
+        self, runner: CliRunner, adfs_with_acorn_text: Path
+    ) -> None:
+        result = runner.invoke(cli, ["type", str(adfs_with_acorn_text), "$.BOOT"])
+        assert result.exit_code == 0, result.output
+        # Original bytes use \r only — every \r should have become \n
+        # under the Unix host default; no \r should survive.
+        assert b"\r" not in result.output_bytes
+        assert result.output_bytes == (
+            b"*DIR $\n*LIB $.LIBRARY\nCHAIN\"!MENU\"\n"
+        )
+
+    def test_lf_forces_lf(self, runner: CliRunner, adfs_with_acorn_text: Path) -> None:
+        result = runner.invoke(
+            cli,
+            ["type", "--line-endings", "lf", str(adfs_with_acorn_text), "$.MIXED"],
+        )
+        assert result.exit_code == 0
+        # Mixed input: \r, \r\n, \n -> all become \n.
+        assert result.output_bytes == b"acorn-line\ndos-line\nunix-line\nfinal\n"
+
+    def test_crlf_forces_crlf(
+        self, runner: CliRunner, adfs_with_acorn_text: Path
+    ) -> None:
+        result = runner.invoke(
+            cli,
+            ["type", "--line-endings", "crlf", str(adfs_with_acorn_text), "$.MIXED"],
+        )
+        assert result.exit_code == 0
+        # Crucially: \r\n in the input must NOT be doubled to \r\r\n.
+        assert result.output_bytes == (
+            b"acorn-line\r\ndos-line\r\nunix-line\r\nfinal\r\n"
+        )
+
+    def test_cr_forces_cr(self, runner: CliRunner, adfs_with_acorn_text: Path) -> None:
+        result = runner.invoke(
+            cli,
+            ["type", "--line-endings", "cr", str(adfs_with_acorn_text), "$.MIXED"],
+        )
+        assert result.exit_code == 0
+        assert result.output_bytes == b"acorn-line\rdos-line\runix-line\rfinal\r"
+
+    def test_keep_emits_raw_bytes(
+        self, runner: CliRunner, adfs_with_acorn_text: Path
+    ) -> None:
+        result = runner.invoke(
+            cli,
+            ["type", "--line-endings", "keep", str(adfs_with_acorn_text), "$.MIXED"],
+        )
+        assert result.exit_code == 0
+        # Identical to the on-disc bytes — equivalent to ``disc cat``.
+        assert result.output_bytes == (
+            b"acorn-line\rdos-line\r\nunix-line\nfinal\r"
+        )
+
+    def test_short_option(self, runner: CliRunner, adfs_with_acorn_text: Path) -> None:
+        result = runner.invoke(
+            cli, ["type", "-l", "lf", str(adfs_with_acorn_text), "$.BOOT"]
+        )
+        assert result.exit_code == 0
+        assert result.output_bytes == (
+            b"*DIR $\n*LIB $.LIBRARY\nCHAIN\"!MENU\"\n"
+        )
+
+    def test_empty_file(self, runner: CliRunner, adfs_with_acorn_text: Path) -> None:
+        result = runner.invoke(cli, ["type", str(adfs_with_acorn_text), "$.EMPTY"])
+        assert result.exit_code == 0
+        assert result.output_bytes == b""
+
+    def test_directory_errors(
+        self, runner: CliRunner, adfs_with_acorn_text: Path
+    ) -> None:
+        result = runner.invoke(cli, ["type", str(adfs_with_acorn_text), "$.Games"])
+        assert result.exit_code != 0
+        assert "directory" in result.output
+
+    def test_path_not_found(
+        self, runner: CliRunner, adfs_with_acorn_text: Path
+    ) -> None:
+        result = runner.invoke(cli, ["type", str(adfs_with_acorn_text), "$.MISSING"])
+        assert result.exit_code != 0
+        assert "not found" in result.output
+
+    def test_invalid_line_endings_choice(
+        self, runner: CliRunner, adfs_with_acorn_text: Path
+    ) -> None:
+        result = runner.invoke(
+            cli,
+            ["type", "-l", "yolo", str(adfs_with_acorn_text), "$.BOOT"],
+        )
+        assert result.exit_code != 0
+        # Click shows the valid choices in the error.
+        assert "host" in result.output
+
+    def test_star_alias_routes_to_type(
+        self, runner: CliRunner, adfs_with_acorn_text: Path
+    ) -> None:
+        """*TYPE now invokes the text-aware command rather than raw cat,
+        so Acorn line endings get translated by default."""
+        result = runner.invoke(cli, ["*TYPE", str(adfs_with_acorn_text), "$.BOOT"])
+        assert result.exit_code == 0
+        assert b"\r" not in result.output_bytes
+        assert b"\n" in result.output_bytes
+
+
+class TestTranslateLineEndings:
+    """Pure unit tests for the line-ending normalisation helper."""
+
+    def test_cr_to_lf(self) -> None:
+        from oaknut.disc.cli import _translate_line_endings
+
+        assert _translate_line_endings(b"a\rb\rc\r", "lf") == b"a\nb\nc\n"
+
+    def test_crlf_collapsed_not_doubled(self) -> None:
+        """``\\r\\n`` in the input must match as one token, not two."""
+        from oaknut.disc.cli import _translate_line_endings
+
+        # If the regex matched \r and \n separately, we'd see \n\n here.
+        assert _translate_line_endings(b"a\r\nb", "lf") == b"a\nb"
+
+    def test_lf_to_crlf(self) -> None:
+        from oaknut.disc.cli import _translate_line_endings
+
+        assert _translate_line_endings(b"a\nb\n", "crlf") == b"a\r\nb\r\n"
+
+    def test_keep_is_identity(self) -> None:
+        from oaknut.disc.cli import _translate_line_endings
+
+        raw = b"a\rb\r\nc\nd"
+        assert _translate_line_endings(raw, "keep") is raw or _translate_line_endings(raw, "keep") == raw
+
+    def test_host_resolves_to_os_default(self) -> None:
+        """``host`` mode picks LF on POSIX, CRLF on Windows."""
+        from oaknut.disc.cli import _translate_line_endings
+
+        result = _translate_line_endings(b"a\rb", "host")
+        if os.name == "nt":
+            assert result == b"a\r\nb"
+        else:
+            assert result == b"a\nb"
+
+    def test_empty_bytes(self) -> None:
+        from oaknut.disc.cli import _translate_line_endings
+
+        for mode in ("host", "lf", "crlf", "cr", "keep"):
+            assert _translate_line_endings(b"", mode) == b""
 
 
 # ---------------------------------------------------------------------------

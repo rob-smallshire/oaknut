@@ -7,6 +7,8 @@ for the design rationale.
 
 from __future__ import annotations
 
+import os
+import re
 import sys
 from contextlib import contextmanager
 from pathlib import Path
@@ -742,7 +744,12 @@ def _afs_partition_only_tc(handle):
 @click.argument("image", type=click.Path(exists=True, path_type=Path))
 @click.argument("path")
 def cat(image: Path, path: str) -> None:
-    """Dump file contents to stdout (Acorn alias: *TYPE)."""
+    """Dump file contents to stdout as raw bytes.
+
+    Use :command:`disc type` for Acorn text files — this command
+    writes bytes verbatim, so files using Acorn ``\\r`` line endings
+    will render unreadably on a Unix terminal.
+    """
     fs, bare = resolve_path(image, path)
     with open_image(image, fs) as handle:
         target = _navigate(handle, bare, fs)
@@ -753,7 +760,71 @@ def cat(image: Path, path: str) -> None:
         sys.stdout.buffer.write(target.read_bytes())
 
 
-_alias("*TYPE", "cat")
+# ---------------------------------------------------------------------------
+# type — display a text file with line-ending translation
+# ---------------------------------------------------------------------------
+
+_LINE_ENDING_PATTERN = re.compile(rb"\r\n|\r|\n")
+_LINE_ENDING_TARGETS: dict[str, bytes] = {
+    "lf": b"\n",
+    "crlf": b"\r\n",
+    "cr": b"\r",
+}
+
+
+def _translate_line_endings(data: bytes, mode: str) -> bytes:
+    """Rewrite any of ``\\r\\n``, ``\\r``, ``\\n`` in *data* to the *mode* target.
+
+    ``mode`` is ``"host"``, ``"lf"``, ``"crlf"``, ``"cr"``, or
+    ``"keep"``.  ``"host"`` resolves to ``\\r\\n`` on Windows and
+    ``\\n`` elsewhere.  ``"keep"`` returns the data unchanged.
+    """
+    if mode == "keep":
+        return data
+    if mode == "host":
+        target = b"\r\n" if os.name == "nt" else b"\n"
+    else:
+        target = _LINE_ENDING_TARGETS[mode]
+    return _LINE_ENDING_PATTERN.sub(target, data)
+
+
+@cli.command(name="type")
+@click.argument("image", type=click.Path(exists=True, path_type=Path))
+@click.argument("path")
+@click.option(
+    "--line-endings",
+    "-l",
+    type=click.Choice(["host", "lf", "crlf", "cr", "keep"], case_sensitive=False),
+    default="host",
+    show_default=True,
+    help=(
+        "Translate line endings to: host = LF on macOS/Linux, CRLF on Windows; "
+        "lf/crlf/cr = force a specific style; keep = no translation."
+    ),
+)
+def type_(image: Path, path: str, line_endings: str) -> None:
+    """Display a text file with line endings translated for the host.
+
+    Acorn text files terminate lines with ``\\r`` (carriage return).
+    Dumped raw to a Unix terminal each line overwrites the previous,
+    so the file appears blank.  This command translates ``\\r``,
+    ``\\n`` and ``\\r\\n`` to the host's native line ending by
+    default; override with ``--line-endings``.
+
+    Acorn alias: *TYPE.
+    """
+    fs, bare = resolve_path(image, path)
+    with open_image(image, fs) as handle:
+        target = _navigate(handle, bare, fs)
+        if not target.exists():
+            raise click.ClickException(f"path not found: {bare}")
+        if target.is_dir():
+            raise click.ClickException(f"'{bare}' is a directory")
+        data = _translate_line_endings(target.read_bytes(), line_endings.lower())
+        sys.stdout.buffer.write(data)
+
+
+_alias("*TYPE", "type")
 
 
 @cli.command()
