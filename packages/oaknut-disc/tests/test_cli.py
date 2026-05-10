@@ -2613,3 +2613,55 @@ class TestGenerateDsc:
         result = runner.invoke(cli, ["generate-dsc", str(bad)])
         assert result.exit_code != 0
         assert "ADFS Old Map" in result.output
+
+    def test_tree_traverses_directories_past_cylinder_boundary(
+        self,
+        runner: CliRunner,
+        tmp_path: Path,
+    ) -> None:
+        """Regression: ``disc tree`` after ``generate-dsc`` on a
+        cfbackup-style image once raised
+        ``ValueError: Sector range [...] exceeds disc bounds`` when
+        descending into directories whose sectors fell beyond the
+        last full cylinder.  The fix flattens the hard-disc surface
+        spec so every sector in the file is addressable, regardless
+        of how the geometry would group them.
+        """
+        from oaknut.adfs import ADFS
+
+        # Build a Data Centre 4×64 disc and put a directory at a
+        # sector that falls past a 33-SPT cylinder boundary if anyone
+        # ever recomputes geometry via the parsed (default) SPT.
+        src = tmp_path / "src.dat"
+        with ADFS.create_file(
+            src,
+            cylinders=20,
+            heads=4,
+            sectors_per_track=64,
+            title="DC",
+        ) as adfs:
+            (adfs.root / "Deep").mkdir()
+            # Add enough files to push the directory's allocation
+            # well into the disc.
+            for i in range(40):
+                (adfs.root / "Deep" / f"F{i:02d}").write_bytes(b"X" * 4096)
+
+        cf_dat = tmp_path / "cf.dat"
+        _make_cfbackup_style_dat(src, cf_dat)
+
+        # Sanity: the truncated file should hold the full Deep tree.
+        # generate-dsc + tree should walk it cleanly.
+        result_gen = runner.invoke(cli, ["generate-dsc", str(cf_dat)])
+        assert result_gen.exit_code == 0, result_gen.output
+
+        result_tree = runner.invoke(cli, ["tree", str(cf_dat)])
+        assert result_tree.exit_code == 0, result_tree.output
+        # Every Deep child must show in the tree output.
+        for i in range(40):
+            assert f"F{i:02d}" in result_tree.output, result_tree.output
+
+        # And listing the deep directory directly must succeed.
+        result_ls = runner.invoke(cli, ["ls", str(cf_dat), "$.Deep"])
+        assert result_ls.exit_code == 0, result_ls.output
+        for i in range(40):
+            assert f"F{i:02d}" in result_ls.output

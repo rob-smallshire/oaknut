@@ -80,27 +80,54 @@ class TestHardDiscFormat:
         assert fmt.total_sectors == 306 * 4 * 33
         assert fmt.label == "HardDisc"
 
-    def test_format_uses_cylinder_geometry(self):
-        """Cylinders reflect heads × sectors_per_track grouped together."""
+    def test_format_addressable_extent_matches_file(self):
+        """Addressable surface covers every sector in the file.
+
+        ADFS uses linear LBA, so the surface must address all
+        ``dat_size_bytes / 256`` sectors regardless of how the geometry
+        groups them into cylinders.
+        """
         from oaknut.adfs.adfs import ADFSGeometry
 
         geom = ADFSGeometry(cylinders=10, heads=2)
         dat_size = 10 * 2 * 33 * 256
         fmt = _hard_disc_format(geom, dat_size)
         spec = fmt.surface_specs[0]
-        assert spec.num_tracks == 10
-        assert spec.sectors_per_track == 2 * 33  # heads × spt
         assert spec.bytes_per_sector == 256
+        assert spec.num_tracks * spec.sectors_per_track == dat_size // 256
 
-    def test_format_truncated_dat(self):
-        """A .dat smaller than full geometry uses fewer cylinders."""
+    def test_format_addressable_extent_when_geometry_doesnt_divide(self):
+        """Truncated/partial files (e.g. cfbackup .dat with no .dsc tail)
+        keep their full sector range addressable even when the file size
+        isn't a whole number of cylinders for the supplied geometry."""
         from oaknut.adfs.adfs import ADFSGeometry
 
-        geom = ADFSGeometry(cylinders=306, heads=4)
-        # Only 10 complete cylinders of data
-        dat_size = 10 * 4 * 33 * 256
+        # 10,520 sectors is not a multiple of 4 × 64 = 256.  The file
+        # nonetheless contains 10,520 valid sectors and they must all
+        # be reachable.  Regression for the cf1gb_v102.dat truncation
+        # bug — the old cylinder-shaped surface dropped 92 trailing
+        # sectors and made directories living there unreadable.
+        geom = ADFSGeometry(cylinders=7935, heads=4, sectors_per_track=64)
+        dat_size = 10520 * 256
         fmt = _hard_disc_format(geom, dat_size)
-        assert fmt.surface_specs[0].num_tracks == 10
+        spec = fmt.surface_specs[0]
+        assert spec.num_tracks * spec.sectors_per_track == 10520
+        assert fmt.total_sectors == 10520
+
+    def test_format_addressable_when_dsc_loses_spt(self):
+        """``_parse_dsc`` always returns the default SPT (33) since the
+        22-byte sidecar doesn't carry an SPT field.  The surface must
+        still match the file even when the parsed geometry's SPT is
+        wrong relative to what the file was created with."""
+        from oaknut.adfs.adfs import ADFSGeometry
+
+        # Simulate the parsed geometry: cylinders/heads from the file,
+        # SPT defaulted to 33 by ADFSGeometry's default.
+        parsed_geom = ADFSGeometry(cylinders=7935, heads=4)
+        assert parsed_geom.sectors_per_track == 33
+        dat_size = 10520 * 256
+        fmt = _hard_disc_format(parsed_geom, dat_size)
+        assert fmt.surface_specs[0].num_tracks * fmt.surface_specs[0].sectors_per_track == 10520
 
     def test_format_not_multiple_of_sector_raises(self):
         from oaknut.adfs.adfs import ADFSGeometry

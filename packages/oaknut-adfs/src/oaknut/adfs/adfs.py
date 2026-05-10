@@ -191,10 +191,18 @@ def _hard_disc_format(geometry: ADFSGeometry, dat_size_bytes: int) -> ADFSFormat
 
     ADFS addresses hard discs using linear SCSI LBA — sector N is at
     byte offset N×256 in the .dat file.  The CHS geometry from the .dsc
-    file describes the physical drive but is not used for ADFS sector
-    addressing.  We model the image as a single flat surface matching
-    ADFS's linear view.  The geometry is recorded in the format for
-    metadata but doesn't affect addressing.
+    file describes the physical drive but is **not** used for ADFS
+    sector addressing: the 22-byte ``.dsc`` carries cylinders + heads
+    only and ``_parse_dsc`` therefore always reports SPT=33 regardless
+    of the actual geometry, so any addressing scheme that depended on
+    SPT would silently truncate the addressable surface for non-SCSI
+    interfaces (e.g. the RetroClinic Data Centre's IDE 4×64 layout).
+
+    We model the image as a single flat surface matching ADFS's linear
+    view — same shape as :meth:`ADFS.from_buffer` synthesises when no
+    ``.dsc`` is present.  The geometry is recorded on the returned
+    :class:`ADFSGeometry` for metadata (e.g. ``ADFS.geometry``) but
+    does not affect the addressable extent.
     """
     if dat_size_bytes % _ADFS_BYTES_PER_SECTOR != 0:
         raise ADFSError(
@@ -203,22 +211,14 @@ def _hard_disc_format(geometry: ADFSGeometry, dat_size_bytes: int) -> ADFSFormat
         )
 
     total_sectors = dat_size_bytes // _ADFS_BYTES_PER_SECTOR
-
-    # Model as cylinders of (heads × sectors_per_track) sectors each,
-    # laid out sequentially — a single surface with the full linear
-    # sector space.
-    sectors_per_cylinder = geometry.heads * geometry.sectors_per_track
-    num_cylinders = total_sectors // sectors_per_cylinder
-    if num_cylinders == 0:
-        num_cylinders = 1
-        sectors_per_cylinder = total_sectors
+    del geometry  # intentionally unused — the file size is the source of truth
 
     spec = SurfaceSpec(
-        num_tracks=num_cylinders,
-        sectors_per_track=sectors_per_cylinder,
+        num_tracks=1,
+        sectors_per_track=total_sectors,
         bytes_per_sector=_ADFS_BYTES_PER_SECTOR,
         track_zero_offset_bytes=0,
-        track_stride_bytes=sectors_per_cylinder * _ADFS_BYTES_PER_SECTOR,
+        track_stride_bytes=dat_size_bytes,
     )
 
     return ADFSFormat(
