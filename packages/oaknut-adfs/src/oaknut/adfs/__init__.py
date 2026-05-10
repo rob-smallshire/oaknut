@@ -17,6 +17,7 @@ from oaknut.adfs.adfs import (
     ADFSPath,
     ADFSStat,
     geometry_for_capacity,
+    write_dsc,
 )
 from oaknut.adfs.directory import Access
 
@@ -31,4 +32,5 @@ __all__ = [
     "ADFSStat",
     "Access",
     "geometry_for_capacity",
+    "write_dsc",
 ]

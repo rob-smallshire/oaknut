@@ -2406,3 +2406,210 @@ class TestExpand:
         result = runner.invoke(cli, ["expand", str(truncated_filepath)])
         assert result.exit_code == 0
         assert truncated_filepath.stat().st_size == 409600
+
+
+# ---------------------------------------------------------------------------
+# generate-dsc
+# ---------------------------------------------------------------------------
+
+
+def _make_cfbackup_style_dat(src_dat: Path, dst_dat: Path) -> None:
+    """Reproduce the cfbackup ``.dat`` shape: truncate to first-free × 256
+    and discard the ``.dsc`` sidecar.
+
+    The source must be an ADFS hard-disc ``.dat`` produced by ``ADFS.create_file``
+    with at least one allocated file (so first_free > the FSM region).
+    """
+    data = src_dat.read_bytes()
+    first_free_sector = data[0] | (data[1] << 8) | (data[2] << 16)
+    dst_dat.write_bytes(data[: first_free_sector * 256])
+
+
+class TestGenerateDsc:
+    """``disc generate-dsc`` synthesises a 22-byte .dsc geometry sidecar
+    so cfbackup-style images (no .dsc) can be opened by the rest of the
+    CLI via ``ADFS.from_file``.
+    """
+
+    def test_writes_dsc_and_unblocks_ls(
+        self,
+        runner: CliRunner,
+        tmp_path: Path,
+        adfs_hard_no_afs_filepath: Path,
+    ) -> None:
+        # Reshape the 10 MB hard-disc fixture into the cfbackup form:
+        # truncate to first-free × 256 and remove the .dsc.
+        src = adfs_hard_no_afs_filepath
+        cf_dat = tmp_path / "cf_test.dat"
+        _make_cfbackup_style_dat(src, cf_dat)
+
+        # Sanity: no .dsc, ls fails.
+        cf_dsc = cf_dat.with_suffix(".dsc")
+        assert not cf_dsc.exists()
+        ls_before = runner.invoke(cli, ["ls", str(cf_dat)])
+        assert ls_before.exit_code != 0
+
+        # Generate the .dsc.  The fixture is built with the SCSI default
+        # geometry (heads=4, spt=33), so reuse that to ensure the FSM
+        # total divides cleanly into cylinders.
+        heads, spt = 4, 33
+
+        result = runner.invoke(
+            cli,
+            [
+                "generate-dsc",
+                str(cf_dat),
+                "--heads",
+                str(heads),
+                "--sectors-per-track",
+                str(spt),
+            ],
+        )
+        assert result.exit_code == 0, result.output
+        assert cf_dsc.exists()
+        assert cf_dsc.stat().st_size == 22
+
+        # Now ls works.
+        ls_after = runner.invoke(cli, ["ls", str(cf_dat)])
+        assert ls_after.exit_code == 0, ls_after.output
+
+    def test_default_geometry_for_data_centre_image(
+        self,
+        runner: CliRunner,
+        tmp_path: Path,
+    ) -> None:
+        """The default 4×64 geometry succeeds when the FSM total divides
+        cleanly into 256-sector cylinders — the common cfbackup case."""
+        from oaknut.adfs import ADFS
+
+        # Build a 20-cylinder Data Centre disc: 4 × 64 × 20 × 256 = 1,310,720 bytes.
+        src = tmp_path / "src.dat"
+        with ADFS.create_file(
+            src,
+            cylinders=20,
+            heads=4,
+            sectors_per_track=64,
+            title="DC",
+        ):
+            pass
+
+        cf_dat = tmp_path / "cf.dat"
+        _make_cfbackup_style_dat(src, cf_dat)
+
+        result = runner.invoke(cli, ["generate-dsc", str(cf_dat)])
+        assert result.exit_code == 0, result.output
+        assert (cf_dat.with_suffix(".dsc")).exists()
+        # The note about truncation should appear on stderr.
+        assert "truncated" in result.output or "truncated" in (result.stderr or "")
+
+    def test_refuses_to_overwrite_without_force(
+        self,
+        runner: CliRunner,
+        tmp_path: Path,
+        adfs_hard_no_afs_filepath: Path,
+    ) -> None:
+        cf_dat = tmp_path / "cf.dat"
+        _make_cfbackup_style_dat(adfs_hard_no_afs_filepath, cf_dat)
+        # Plant a .dsc so the second generate-dsc must overwrite.
+        cf_dsc = cf_dat.with_suffix(".dsc")
+        cf_dsc.write_bytes(b"\x00" * 22)
+        result = runner.invoke(
+            cli,
+            ["generate-dsc", str(cf_dat), "--heads", "4", "--sectors-per-track", "33"],
+        )
+        assert result.exit_code != 0
+        assert "refusing to overwrite" in result.output
+
+    def test_force_overwrites(
+        self,
+        runner: CliRunner,
+        tmp_path: Path,
+        adfs_hard_no_afs_filepath: Path,
+    ) -> None:
+        cf_dat = tmp_path / "cf.dat"
+        _make_cfbackup_style_dat(adfs_hard_no_afs_filepath, cf_dat)
+        cf_dsc = cf_dat.with_suffix(".dsc")
+        cf_dsc.write_bytes(b"\x00" * 22)
+        result = runner.invoke(
+            cli,
+            [
+                "generate-dsc",
+                str(cf_dat),
+                "--heads",
+                "4",
+                "--sectors-per-track",
+                "33",
+                "--force",
+            ],
+        )
+        assert result.exit_code == 0, result.output
+        # Sidecar replaced — first byte 0x08 (speed class) is now non-zero.
+        assert cf_dsc.read_bytes()[3] == 0x08
+
+    def test_rejects_non_dat_extension(
+        self,
+        runner: CliRunner,
+        tmp_path: Path,
+    ) -> None:
+        bogus = tmp_path / "wrong.bin"
+        bogus.write_bytes(b"\x00" * 1024)
+        result = runner.invoke(cli, ["generate-dsc", str(bogus)])
+        assert result.exit_code != 0
+        assert ".dat" in result.output
+
+    def test_rejects_unaligned_size(
+        self,
+        runner: CliRunner,
+        tmp_path: Path,
+    ) -> None:
+        bad = tmp_path / "odd.dat"
+        bad.write_bytes(b"\x00" * 1023)
+        result = runner.invoke(cli, ["generate-dsc", str(bad)])
+        assert result.exit_code != 0
+        assert "256" in result.output
+
+    def test_rejects_geometry_that_doesnt_divide(
+        self,
+        runner: CliRunner,
+        tmp_path: Path,
+        adfs_hard_no_afs_filepath: Path,
+    ) -> None:
+        cf_dat = tmp_path / "cf.dat"
+        _make_cfbackup_style_dat(adfs_hard_no_afs_filepath, cf_dat)
+        # Pick a coprime SPT that won't divide the FSM total.
+        from oaknut.adfs import ADFS
+
+        with ADFS.from_file(adfs_hard_no_afs_filepath) as adfs:
+            total = adfs._fsm.total_sectors
+        # Find an SPT that doesn't divide total cleanly with heads=4.
+        bad_spt = None
+        for candidate in (3, 5, 7, 11, 13, 17, 19, 23, 29, 31):
+            if (total % (4 * candidate)) != 0 and candidate <= 255:
+                bad_spt = candidate
+                break
+        if bad_spt is None:
+            pytest.skip("couldn't find an SPT that fails to divide the fixture's total")
+        result = runner.invoke(
+            cli,
+            [
+                "generate-dsc",
+                str(cf_dat),
+                "--heads",
+                "4",
+                "--sectors-per-track",
+                str(bad_spt),
+            ],
+        )
+        assert result.exit_code != 0
+        assert "not a multiple" in result.output
+
+    def test_rejects_bad_old_map(
+        self,
+        runner: CliRunner,
+        tmp_path: Path,
+    ) -> None:
+        bad = tmp_path / "junk.dat"
+        bad.write_bytes(b"\x00" * 4096)  # checksums won't validate
+        result = runner.invoke(cli, ["generate-dsc", str(bad)])
+        assert result.exit_code != 0
+        assert "ADFS Old Map" in result.output

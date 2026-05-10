@@ -42,6 +42,29 @@ class TestParseDSC:
             _parse_dsc(bad_dsc)
 
 
+class TestWriteDsc:
+    """``write_dsc`` is the public counterpart of ``_parse_dsc``.
+
+    Used by ``disc generate-dsc`` when no sidecar was shipped with the
+    ``.dat`` (e.g. the RetroClinic Data Centre cfbackup images).
+    """
+
+    def test_round_trip(self, tmp_path):
+        from oaknut.adfs import ADFSGeometry, write_dsc
+        from oaknut.adfs.adfs import _parse_dsc
+
+        dsc_filepath = tmp_path / "out.dsc"
+        original = ADFSGeometry(cylinders=7935, heads=4, sectors_per_track=64)
+        write_dsc(dsc_filepath, original)
+
+        assert dsc_filepath.stat().st_size == 22
+        parsed = _parse_dsc(dsc_filepath)
+        assert parsed.cylinders == 7935
+        assert parsed.heads == 4
+        # _parse_dsc returns whatever SPT it has on the geometry default;
+        # the field isn't stored in the 22-byte format, so we don't assert it.
+
+
 # --- Hard disc format factory tests ---
 
 

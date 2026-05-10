@@ -263,6 +263,15 @@ def geometry_for_capacity(
     )
 
 
+def write_dsc(filepath: Union[str, PathLike], geometry: ADFSGeometry) -> None:
+    """Write a 22-byte ``.dsc`` sidecar file with SCSI disc geometry.
+
+    The sidecar carries cylinders/heads/sectors-per-track for a hard
+    disc image so :func:`ADFS.from_file` can address sectors via CHS.
+    """
+    _write_dsc(filepath, geometry)
+
+
 def _write_dsc(filepath: Union[str, PathLike], geometry: ADFSGeometry) -> None:
     """Write a 22-byte .dsc sidecar file with SCSI disc geometry."""
     data = bytearray(_DSC_SIZE)
