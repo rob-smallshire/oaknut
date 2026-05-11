@@ -26,7 +26,6 @@ from asyoulikeit.cli import (
 from . import __version__
 from .cli_paths import FilingSystem, detect_filing_system, parse_prefix, resolve_path
 from .errors import (
-    EXIT_LOCKED,
     EXIT_PATH_NOT_FOUND,
     FSClickException,
     handles_fs_errors,
