@@ -87,6 +87,8 @@ _CLASS_PATH_EXIT_CODES: tuple[tuple[str, int], ...] = (
     ("oaknut.afs.exceptions.AFSRepartitionError", EXIT_REPARTITION),
     ("oaknut.afs.exceptions.AFSMergeConflictError", EXIT_MERGE_CONFLICT),
     ("oaknut.afs.exceptions.AFSHostImportError", EXIT_HOST_IO),
+    ("oaknut.afs.exceptions.AFSUserNotFoundError", EXIT_PATH_NOT_FOUND),
+    ("oaknut.afs.exceptions.AFSUserExistsError", EXIT_ALREADY_EXISTS),
 )
 
 

@@ -2523,6 +2523,7 @@ def _import_host_dir(handle, target_dir, host_dir: Path, meta_formats, verbose, 
         "plan": "Proposed new AFS partition (only when computable).",
     }
 )
+@handles_fs_errors
 def afs_plan(
     image: Path,
     cylinders: int | None,
@@ -2742,6 +2743,7 @@ def _build_afs_plan_reports(document: dict):
         "or a path to an ADFS .adl image. Repeat for multiple."
     ),
 )
+@handles_fs_errors
 def afs_init(
     image: Path,
     disc_name: str,
@@ -2845,6 +2847,7 @@ def _parse_user_specs(raw_specs: tuple[str, ...]) -> list:
 @cli.command(name="afs-users")
 @click.argument("image", type=click.Path(exists=True, path_type=Path))
 @report_output(reports={"users": "Users with system flag and quota."})
+@handles_fs_errors
 def afs_users(image: Path):
     """List AFS users with quota and flags."""
     from asyoulikeit.tabular_data import Report, Reports, TableContent
@@ -2870,6 +2873,7 @@ def afs_users(image: Path):
 @click.option("--system", is_flag=True, help="System user flag.")
 @click.option("--quota", type=int, default=None, help="Quota in bytes.")
 @click.option("--password", default="", help="Initial password.")
+@handles_fs_errors
 def afs_useradd(
     image: Path,
     name: str,
@@ -2893,6 +2897,7 @@ def afs_useradd(
 @cli.command(name="afs-userdel")
 @click.argument("image", type=click.Path(exists=True, path_type=Path))
 @click.argument("name")
+@handles_fs_errors
 def afs_userdel(image: Path, name: str) -> None:
     """Remove a user from the AFS passwords file."""
     with open_image_for_afs_write(image) as (adfs, afs):
@@ -2911,6 +2916,7 @@ def afs_userdel(image: Path, name: str) -> None:
     help="Source AFS image to merge from.",
 )
 @click.option("--target-path", default=None, help="Target AFS path for merge root.")
+@handles_fs_errors
 def afs_merge(image: Path, source: Path, target_path: str | None) -> None:
     """Merge a source AFS tree into the target image."""
     from oaknut.adfs import ADFS

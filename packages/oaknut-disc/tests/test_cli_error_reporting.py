@@ -585,6 +585,79 @@ class TestCreateErrors:
         assert result.exit_code != 0
 
 
+class TestAfsInitErrors:
+    def test_invalid_disc_name(
+        self, runner: CliRunner, adfs_hard_no_afs_filepath: Path
+    ) -> None:
+        # Disc names must be printable ASCII, 1..16 chars.
+        result = runner.invoke(
+            cli,
+            [
+                "afs-init",
+                str(adfs_hard_no_afs_filepath),
+                "--disc-name",
+                "This Name Is Far Too Long For AFS",
+                "--cylinders",
+                "20",
+            ],
+        )
+        assert result.exception is None or isinstance(
+            result.exception, SystemExit
+        ), result.exception
+        assert result.exit_code != 0
+
+    def test_already_partitioned(
+        self,
+        runner: CliRunner,
+        adfs_hard_with_afs_filepath: Path,
+    ) -> None:
+        # Initialising twice on the same image should fail with a clean
+        # repartition-class error.
+        result = runner.invoke(
+            cli,
+            [
+                "afs-init",
+                str(adfs_hard_with_afs_filepath),
+                "--disc-name",
+                "TwiceFS",
+                "--cylinders",
+                "20",
+            ],
+        )
+        assert result.exception is None or isinstance(
+            result.exception, SystemExit
+        ), result.exception
+        assert result.exit_code != 0
+
+
+class TestAfsUserCommandErrors:
+    def test_userdel_unknown_user(
+        self, runner: CliRunner, afs_image_filepath: Path
+    ) -> None:
+        result = runner.invoke(
+            cli, ["afs-userdel", str(afs_image_filepath), "nosuch"]
+        )
+        assert result.exception is None or isinstance(
+            result.exception, SystemExit
+        ), result.exception
+        assert result.exit_code != 0
+
+    def test_useradd_no_afs(
+        self,
+        runner: CliRunner,
+        adfs_no_afs_filepath: Path,
+    ) -> None:
+        # ADFS image with no AFS partition; useradd should fail with a
+        # clean diagnostic, not a traceback.
+        result = runner.invoke(
+            cli, ["afs-useradd", str(adfs_no_afs_filepath), "alice"]
+        )
+        assert result.exception is None or isinstance(
+            result.exception, SystemExit
+        ), result.exception
+        assert result.exit_code != 0
+
+
 class TestExportErrors:
     """Bulk export is largely read-only and most failure modes are host-side.
 
