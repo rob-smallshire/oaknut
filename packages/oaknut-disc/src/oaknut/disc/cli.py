@@ -2238,6 +2238,7 @@ _alias("*OPT4", "opt")
     default=None,
     help="Capacity (hard disc). Accepts e.g. 10MB, 40MiB, 1024kB, or plain bytes.",
 )
+@handles_fs_errors
 def create(host_path: Path, fmt: str, disc_title: str, capacity: str | None) -> None:
     """Create a new empty disc image."""
     if fmt == "ssd":
@@ -2283,6 +2284,7 @@ def create(host_path: Path, fmt: str, disc_title: str, capacity: str | None) -> 
 
 @cli.command()
 @click.argument("image", type=click.Path(exists=True, path_type=Path))
+@handles_fs_errors
 def compact(image: Path) -> None:
     """Defragment a disc image, consolidating free space."""
     fs = detect_filing_system(image)
@@ -2303,6 +2305,7 @@ def compact(image: Path) -> None:
     default=None,
     help="Target disc format. Inferred from file extension if omitted.",
 )
+@handles_fs_errors
 def expand(image: Path, fmt: str | None) -> None:
     """Expand a truncated disc image to its canonical format size.
 
@@ -2969,6 +2972,7 @@ _DEFAULT_SPT = 64
     is_flag=True,
     help="Overwrite an existing .dsc next to the image.",
 )
+@handles_fs_errors
 def generate_dsc(image: Path, heads: int, spt: int, force: bool) -> None:
     """Write a ``.dsc`` geometry sidecar for an ADFS hard-disc ``.dat``.
 

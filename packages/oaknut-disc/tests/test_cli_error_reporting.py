@@ -551,6 +551,40 @@ class TestTreeErrors:
         assert result.exit_code != 0
 
 
+class TestCreateErrors:
+    def test_adfs_hard_without_capacity(
+        self, runner: CliRunner, tmp_path: Path
+    ) -> None:
+        result = runner.invoke(
+            cli,
+            ["create", "--format", "adfs-hard", str(tmp_path / "new.dat")],
+        )
+        assert result.exception is None or isinstance(
+            result.exception, SystemExit
+        ), result.exception
+        assert result.exit_code != 0
+        assert "capacity" in result.output.lower()
+
+    def test_adfs_hard_invalid_capacity(
+        self, runner: CliRunner, tmp_path: Path
+    ) -> None:
+        result = runner.invoke(
+            cli,
+            [
+                "create",
+                "--format",
+                "adfs-hard",
+                "--capacity",
+                "not-a-size",
+                str(tmp_path / "new.dat"),
+            ],
+        )
+        assert result.exception is None or isinstance(
+            result.exception, SystemExit
+        ), result.exception
+        assert result.exit_code != 0
+
+
 class TestExportErrors:
     """Bulk export is largely read-only and most failure modes are host-side.
 
