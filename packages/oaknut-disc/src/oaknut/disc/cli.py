@@ -1881,6 +1881,7 @@ _alias("*CDIR", "mkdir")
 @click.option(
     "--dry-run", is_flag=True, help="Print what would change without modifying the image."
 )
+@handles_fs_errors
 def chmod(
     image: Path, path: str, access: str, recursive: bool, dry_run: bool
 ) -> None:
@@ -1927,6 +1928,7 @@ _alias("*ACCESS", "chmod")
 @click.option(
     "--dry-run", is_flag=True, help="Print what would change without modifying the image."
 )
+@handles_fs_errors
 def lock(image: Path, path: str, recursive: bool, dry_run: bool) -> None:
     """Lock a file.  PATH may be a wildcard; ``-r`` recurses."""
     fs, bare = resolve_path(image, path)
@@ -1950,6 +1952,7 @@ def lock(image: Path, path: str, recursive: bool, dry_run: bool) -> None:
 @click.option(
     "--dry-run", is_flag=True, help="Print what would change without modifying the image."
 )
+@handles_fs_errors
 def unlock(image: Path, path: str, recursive: bool, dry_run: bool) -> None:
     """Unlock a file.  PATH may be a wildcard; ``-r`` recurses."""
     fs, bare = resolve_path(image, path)
@@ -1974,6 +1977,7 @@ def unlock(image: Path, path: str, recursive: bool, dry_run: bool) -> None:
 @click.option(
     "--dry-run", is_flag=True, help="Print what would change without modifying the image."
 )
+@handles_fs_errors
 def set_load(
     image: Path, path: str, addr: str, recursive: bool, dry_run: bool
 ) -> None:
@@ -2008,6 +2012,7 @@ def set_load(
 @click.option(
     "--dry-run", is_flag=True, help="Print what would change without modifying the image."
 )
+@handles_fs_errors
 def set_exec(
     image: Path, path: str, addr: str, recursive: bool, dry_run: bool
 ) -> None:
@@ -2036,6 +2041,7 @@ def set_exec(
 @click.argument("image", type=click.Path(exists=True, path_type=Path))
 @click.argument("path")
 @report_output(reports={"load": "File load address as 8 hex digits."})
+@handles_fs_errors
 def get_load(image: Path, path: str):
     """Print a file's load address."""
     from asyoulikeit.scalar_data import ScalarContent
@@ -2045,7 +2051,9 @@ def get_load(image: Path, path: str):
     with open_image(image, fs) as handle:
         target = _navigate(handle, bare, fs)
         if not target.exists():
-            raise click.ClickException(f"path not found: {bare}")
+            raise FSClickException(
+                f"path not found: {bare}", EXIT_PATH_NOT_FOUND
+            )
         st = target.stat()
     return Reports(
         load=Report(
@@ -2058,6 +2066,7 @@ def get_load(image: Path, path: str):
 @click.argument("image", type=click.Path(exists=True, path_type=Path))
 @click.argument("path")
 @report_output(reports={"exec": "File exec address as 8 hex digits."})
+@handles_fs_errors
 def get_exec(image: Path, path: str):
     """Print a file's exec address."""
     from asyoulikeit.scalar_data import ScalarContent
@@ -2067,7 +2076,9 @@ def get_exec(image: Path, path: str):
     with open_image(image, fs) as handle:
         target = _navigate(handle, bare, fs)
         if not target.exists():
-            raise click.ClickException(f"path not found: {bare}")
+            raise FSClickException(
+                f"path not found: {bare}", EXIT_PATH_NOT_FOUND
+            )
         st = target.stat()
     return Reports(
         exec=Report(

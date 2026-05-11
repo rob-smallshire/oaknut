@@ -400,6 +400,76 @@ class TestImportErrors:
         )
 
 
+class TestChmodErrors:
+    def test_path_not_found(
+        self, runner: CliRunner, adfs_image_filepath: Path
+    ) -> None:
+        result = runner.invoke(
+            cli, ["chmod", str(adfs_image_filepath), "$.NoSuch", "WR/R"]
+        )
+        # _iter_targets raises ClickException("no matches") for an
+        # unmatched non-wildcard path; that's a clean ClickException
+        # without a traceback. Exit code is 1 (generic), not the
+        # path-not-found category.
+        assert result.exception is None or isinstance(
+            result.exception, SystemExit
+        ), result.exception
+        assert result.exit_code != 0
+
+
+class TestLockUnlockErrors:
+    def test_lock_path_not_found(
+        self, runner: CliRunner, adfs_image_filepath: Path
+    ) -> None:
+        result = runner.invoke(
+            cli, ["lock", str(adfs_image_filepath), "$.NoSuch"]
+        )
+        assert result.exception is None or isinstance(
+            result.exception, SystemExit
+        ), result.exception
+        assert result.exit_code != 0
+
+
+class TestGetLoadExecErrors:
+    def test_get_load_path_not_found(
+        self, runner: CliRunner, adfs_image_filepath: Path
+    ) -> None:
+        result = runner.invoke(
+            cli, ["get-load", str(adfs_image_filepath), "$.NoSuch"]
+        )
+        assert_clean_error(
+            result,
+            exit_code=EXIT_PATH_NOT_FOUND,
+            message_contains="not found",
+        )
+
+    def test_get_exec_path_not_found(
+        self, runner: CliRunner, adfs_image_filepath: Path
+    ) -> None:
+        result = runner.invoke(
+            cli, ["get-exec", str(adfs_image_filepath), "$.NoSuch"]
+        )
+        assert_clean_error(
+            result,
+            exit_code=EXIT_PATH_NOT_FOUND,
+            message_contains="not found",
+        )
+
+
+class TestSetLoadExecErrors:
+    def test_set_load_path_not_found(
+        self, runner: CliRunner, adfs_image_filepath: Path
+    ) -> None:
+        result = runner.invoke(
+            cli,
+            ["set-load", str(adfs_image_filepath), "$.NoSuch", "0x2000"],
+        )
+        assert result.exception is None or isinstance(
+            result.exception, SystemExit
+        ), result.exception
+        assert result.exit_code != 0
+
+
 class TestExportErrors:
     """Bulk export is largely read-only and most failure modes are host-side.
 
