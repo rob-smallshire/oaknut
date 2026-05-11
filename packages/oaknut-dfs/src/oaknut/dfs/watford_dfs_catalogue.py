@@ -3,6 +3,7 @@
 from typing import Optional
 
 from oaknut.dfs.catalogue import Catalogue, DiskInfo, FileEntry, ParsedFilename
+from oaknut.dfs.exceptions import CatalogFullError
 from oaknut.discimage.surface import Surface
 
 
@@ -303,7 +304,7 @@ class WatfordDFSCatalogue(Catalogue):
             locked: Whether file is locked
 
         Raises:
-            ValueError: If disk is full (62 files maximum)
+            CatalogFullError: If disk is full (62 files maximum)
         """
         # Validate inputs
         self.validate_filename(filename)
@@ -317,7 +318,7 @@ class WatfordDFSCatalogue(Catalogue):
         disk_info = self.get_disk_info()
 
         if disk_info.num_files >= self.MAX_FILES:
-            raise ValueError(f"Catalog full (max {self.MAX_FILES} files)")
+            raise CatalogFullError(f"Catalog full (max {self.MAX_FILES} files)")
 
         # Determine which section to add to
         if disk_info.num_files < 31:

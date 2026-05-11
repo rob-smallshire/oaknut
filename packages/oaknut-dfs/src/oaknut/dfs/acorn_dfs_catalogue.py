@@ -1,6 +1,7 @@
 """Acorn DFS catalog implementation."""
 
 from oaknut.dfs.catalogue import Catalogue, DiskInfo, FileEntry, ParsedFilename
+from oaknut.dfs.exceptions import CatalogFullError
 from oaknut.discimage.surface import Surface
 
 
@@ -359,7 +360,7 @@ class AcornDFSCatalogue(Catalogue):
         disk_info = self.get_disk_info()
 
         if disk_info.num_files >= self.MAX_FILES:
-            raise ValueError(f"Catalog full (max {self.MAX_FILES} files)")
+            raise CatalogFullError(f"Catalog full (max {self.MAX_FILES} files)")
 
         # Get catalog sectors individually
         sector0 = self._surface.sector_range(0, 1)

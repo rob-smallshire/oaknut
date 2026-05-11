@@ -352,7 +352,9 @@ class TestAcornDFSCatalogueAddFileEntry:
         catalogue = AcornDFSCatalogue(surface)
 
         # Try to add file - should fail (use valid 7-char filename)
-        with pytest.raises(ValueError, match="Catalog full"):
+        from oaknut.dfs.exceptions import CatalogFullError
+
+        with pytest.raises(CatalogFullError, match="Catalog full"):
             catalogue.add_file_entry(
                 filename="FILE32",
                 directory="$",
