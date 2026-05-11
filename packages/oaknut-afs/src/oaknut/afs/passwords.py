@@ -42,6 +42,11 @@ from __future__ import annotations
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 
+from oaknut.afs.exceptions import (
+    AFSQuotaError,
+    AFSUserExistsError,
+    AFSUserNotFoundError,
+)
 from oaknut.file import BootOption
 
 # ---------------------------------------------------------------------------
@@ -229,7 +234,9 @@ class PasswordsFile(Sequence[UserRecord]):
                 continue
             if record.full_id.upper() == target or record.name.upper() == target:
                 return record
-        raise KeyError(f"no user named {name!r} in passwords file")
+        raise AFSUserNotFoundError(
+            f"no user named {name!r} in passwords file"
+        )
 
     # ------------------------------------------------------------------
     # Mutation — phase 14 (AUTMAN / USRMAN equivalents)
@@ -261,10 +268,10 @@ class PasswordsFile(Sequence[UserRecord]):
         """
         try:
             self.find(name)
-        except KeyError:
+        except AFSUserNotFoundError:
             pass
         else:
-            raise KeyError(f"user {name!r} already exists")
+            raise AFSUserExistsError(f"user {name!r} already exists")
 
         if "." in name:
             group, _, bare = name.partition(".")
@@ -316,7 +323,7 @@ class PasswordsFile(Sequence[UserRecord]):
                 )
                 records[index] = tombstone
                 return self._replace_records(tuple(records))
-        raise KeyError(f"user {name!r} not found")  # pragma: no cover
+        raise AFSUserNotFoundError(f"user {name!r} not found")  # pragma: no cover
 
     def with_replaced(self, name: str, new_record: UserRecord) -> PasswordsFile:
         target = self.find(name)
@@ -325,11 +332,11 @@ class PasswordsFile(Sequence[UserRecord]):
             if record is target:
                 records[index] = new_record
                 return self._replace_records(tuple(records))
-        raise KeyError(f"user {name!r} not found")  # pragma: no cover
+        raise AFSUserNotFoundError(f"user {name!r} not found")  # pragma: no cover
 
     def with_quota(self, name: str, quota: int) -> PasswordsFile:
         if quota < 0 or quota > 0xFFFFFFFF:
-            raise ValueError(f"quota {quota} outside 0..0xFFFFFFFF")
+            raise AFSQuotaError(f"quota {quota} outside 0..0xFFFFFFFF")
         target = self.find(name)
         return self.with_replaced(
             name,

@@ -232,3 +232,24 @@ class AFSMergeConflictError(AFSError):
 
 class AFSHostImportError(AFSError):
     """``import_host_tree`` failed to read or translate a host-side file."""
+
+
+# ---------------------------------------------------------------------------
+# Passwords-file / user-management errors. Domain conditions raised by
+# PasswordsFile mutators on user-input failures (previously KeyError).
+# ---------------------------------------------------------------------------
+
+
+class AFSUserNotFoundError(AFSError):
+    """No active record with the requested user ID exists.
+
+    Raised by passwords-file lookups and by ``with_removed`` / ``with_replaced``
+    / ``with_quota`` when the caller names a user the file does not contain.
+    """
+
+
+class AFSUserExistsError(AFSError):
+    """A passwords-file mutation would collide with an existing active user.
+
+    Raised by ``with_added`` when the requested name is already present.
+    """

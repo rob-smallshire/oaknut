@@ -108,9 +108,11 @@ class TestPasswordsFileParse:
         assert passwords.find("alice").name == "AliCe"
 
     def test_find_rejects_tombstone(self) -> None:
+        from oaknut.afs.exceptions import AFSUserNotFoundError
+
         data = _entry("alice", status=0)  # !INUSE
         passwords = PasswordsFile.from_bytes(data)
-        with pytest.raises(KeyError):
+        with pytest.raises(AFSUserNotFoundError):
             passwords.find("alice")
 
     def test_trailing_fragment_ignored(self) -> None:

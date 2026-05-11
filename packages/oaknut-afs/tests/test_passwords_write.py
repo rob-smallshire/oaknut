@@ -26,8 +26,10 @@ class TestAddUser:
         assert pf.find("Syst").free_space == 0x40404
 
     def test_add_duplicate_rejected(self) -> None:
+        from oaknut.afs.exceptions import AFSUserExistsError
+
         pf = _base().with_added("alice")
-        with pytest.raises(KeyError, match="already"):
+        with pytest.raises(AFSUserExistsError, match="already"):
             pf.with_added("alice")
 
     def test_add_group_user(self) -> None:
@@ -44,14 +46,18 @@ class TestAddUser:
 
 class TestRemoveUser:
     def test_remove(self) -> None:
+        from oaknut.afs.exceptions import AFSUserNotFoundError
+
         pf = _base().with_added("alice").with_added("bob")
         pf = pf.with_removed("alice")
-        with pytest.raises(KeyError):
+        with pytest.raises(AFSUserNotFoundError):
             pf.find("alice")
         assert pf.find("bob")
 
     def test_remove_missing(self) -> None:
-        with pytest.raises(KeyError):
+        from oaknut.afs.exceptions import AFSUserNotFoundError
+
+        with pytest.raises(AFSUserNotFoundError):
             _base().with_removed("ghost")
 
     def test_tombstone_reused_on_add(self) -> None:
@@ -70,10 +76,12 @@ class TestQuotaAdmin:
         assert pf.find("alice").free_space == 500
 
     def test_quota_out_of_range(self) -> None:
+        from oaknut.afs.exceptions import AFSQuotaError
+
         pf = _base().with_added("alice")
-        with pytest.raises(ValueError):
+        with pytest.raises(AFSQuotaError):
             pf.with_quota("alice", -1)
-        with pytest.raises(ValueError):
+        with pytest.raises(AFSQuotaError):
             pf.with_quota("alice", 1 << 33)
 
 

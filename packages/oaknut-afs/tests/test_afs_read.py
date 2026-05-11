@@ -149,10 +149,12 @@ class TestPasswordsFile:
         assert not afs.users.find("guest").is_system
 
     def test_find_by_name_missing(self) -> None:
+        from oaknut.afs.exceptions import AFSUserNotFoundError
+
         afs = build_synthetic_adfs_with_afs(
             users=[SyntheticUser("Syst", system=True)]
         ).afs_partition
-        with pytest.raises(KeyError):
+        with pytest.raises(AFSUserNotFoundError):
             afs.users.find("nobody")
 
     def test_free_space_from_quota(self) -> None:
