@@ -1,6 +1,6 @@
 """oaknut-zip - Work with ZIP files containing Acorn computer metadata."""
 
-__version__ = "10.6.0"
+__version__ = "10.7.0"
 
 from .api import (
     archive_info,
