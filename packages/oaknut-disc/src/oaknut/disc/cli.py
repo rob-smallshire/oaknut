@@ -1283,18 +1283,26 @@ def put(
 
 
 @cli.command()
-@click.argument("image", type=click.Path(exists=True, path_type=Path))
-@click.argument("paths", nargs=-1, required=True)
+@click.argument("image_spec")
+@click.argument("paths", nargs=-1)
 @click.option("-f", "--force", is_flag=True, help="Ignore missing, override locks.")
 @click.option("-r", "--recursive", is_flag=True, help="Remove directories recursively.")
 @click.option("--dry-run", is_flag=True, help="Print what would be removed.")
 @handles_fs_errors
-def rm(image: Path, paths: tuple[str, ...], force: bool, recursive: bool, dry_run: bool) -> None:
+def rm(
+    image_spec: str,
+    paths: tuple[str, ...],
+    force: bool,
+    recursive: bool,
+    dry_run: bool,
+) -> None:
     """Delete file(s) from the image (Acorn alias: *DELETE).
 
-    Each PATH may contain Acorn wildcards (``*``, ``#``); ``-r``
-    descends into directory matches and removes children before the
-    directory itself.
+    Accepts ``IMAGE PATH...`` (split form) or ``IMAGE:PATH [PATH...]``
+    (fused form -- the fused path is the first to delete and extra
+    paths may follow). Each PATH may contain Acorn wildcards (``*``,
+    ``#``); ``-r`` descends into directory matches and removes children
+    before the directory itself.
     """
     from oaknut.adfs.exceptions import ADFSFileLockedError
     from oaknut.afs.exceptions import AFSFileLockedError
@@ -1306,10 +1314,15 @@ def rm(image: Path, paths: tuple[str, ...], force: bool, recursive: bool, dry_ru
         DFSFileLocked,
     )
 
+    image, first_path = parse_image_arg(image_spec, None)
+    all_paths: tuple[str, ...] = (first_path, *paths) if first_path else paths
+    if not all_paths:
+        raise click.UsageError("at least one PATH is required")
+
     fs_type = detect_filing_system(image)
     first_prefix: FilingSystem | None = None
     per_path: list[tuple[FilingSystem, str]] = []
-    for p in paths:
+    for p in all_paths:
         fs, bare = resolve_path(image, p)
         if first_prefix is None:
             first_prefix = fs
@@ -1368,15 +1381,52 @@ _alias("*DELETE", "rm")
 
 
 @cli.command()
-@click.argument("image", type=click.Path(exists=True, path_type=Path))
-@click.argument("src")
-@click.argument("dst")
+@click.argument("args", nargs=-1, required=True)
 @click.option("-f", "--force", is_flag=True, help="Overwrite existing destination.")
 @handles_fs_errors
-def mv(image: Path, src: str, dst: str, force: bool) -> None:
-    """Rename or move a file within the image (Acorn alias: *RENAME)."""
-    fs, bare_src = resolve_path(image, src)
-    _, bare_dst = parse_prefix(dst)
+def mv(args: tuple[str, ...], force: bool) -> None:
+    """Rename or move a file within the image (Acorn alias: *RENAME).
+
+    \b
+    Two equivalent shapes:
+      disc mv IMAGE SRC DST                 # split form (same image)
+      disc mv IMAGE:SRC IMAGE:DST           # fused form (same image)
+
+    mv is single-image: the library renames a directory entry in place
+    and cannot move across filesystems, so both fused tokens must name
+    the same image file.
+    """
+    from .cli_paths import _split_at_image_colon
+
+    if len(args) == 3:
+        # Split form: IMAGE SRC DST
+        image, bare_src = parse_image_arg(args[0], args[1])
+        bare_dst = args[2]
+        # bare_dst may carry its own fs prefix (e.g. afs:$.X) -- that's
+        # handled by parse_prefix below, the same way the legacy 3-arg
+        # form did.
+    elif len(args) == 2:
+        # Fused form: IMAGE:SRC IMAGE:DST. Both must be fused, and
+        # must name the same image file.
+        if _split_at_image_colon(args[0]) is None or _split_at_image_colon(args[1]) is None:
+            raise click.UsageError(
+                "two-argument mv requires both SRC and DST in image:path form"
+            )
+        src_image, bare_src = parse_image_arg(args[0], None)
+        dst_image, bare_dst = parse_image_arg(args[1], None)
+        if src_image.resolve() != dst_image.resolve():
+            raise click.UsageError(
+                f"mv source and destination must name the same image; "
+                f"got {src_image} and {dst_image}"
+            )
+        image = src_image
+    else:
+        raise click.UsageError(
+            "mv takes 2 args (image:src image:dst) or 3 (IMAGE SRC DST)"
+        )
+
+    fs, bare_src = resolve_path(image, bare_src)
+    _, bare_dst = parse_prefix(bare_dst)
 
     with open_image(image, fs, mode="r+b") as handle:
         source = _navigate(handle, bare_src, fs)
@@ -1411,12 +1461,10 @@ def cp(args: tuple[str, ...], force: bool, recursive: bool) -> None:
     Acorn alias: *COPY.
 
     \b
-    Colon syntax (preferred for cross-image):
-      disc cp source.ssd:$.HELLO target.dat:$.HELLO
-
-    \b
-    Three-arg form (within one image):
-      disc cp IMAGE SRC DST
+    Three equivalent shapes:
+      disc cp SRC.dat:$.A DST.dat:$.B       # fused (cross-image OK)
+      disc cp IMAGE SRC DST                 # split, same image
+      disc cp SRC.dat $.A DST.dat $.B       # split, cross-image
 
     Source paths may contain Acorn wildcards (``*`` = any sequence,
     ``#`` = any single character); when a wildcard expands to multiple
@@ -1428,36 +1476,44 @@ def cp(args: tuple[str, ...], force: bool, recursive: bool) -> None:
     access attributes are mapped best-effort (DFS only has the locked
     bit).
     """
-    from .cli_paths import parse_image_path
+    from .cli_paths import _split_at_image_colon
 
     if len(args) == 2:
-        src_parsed = parse_image_path(args[0])
-        dst_parsed = parse_image_path(args[1])
-        if src_parsed is not None and dst_parsed is not None:
-            _cp_dispatch(
-                src_parsed[0], src_parsed[1],
-                dst_parsed[0], dst_parsed[1],
-                force=force, recursive=recursive,
+        # Both arguments must be in fused image:path form. Cross-image
+        # is the normal case here.
+        if _split_at_image_colon(args[0]) is None or _split_at_image_colon(args[1]) is None:
+            raise click.UsageError(
+                "two-argument cp requires both SRC and DST in image:path form; "
+                "use three arguments (IMAGE SRC DST) for same-image cp or "
+                "four arguments (SRC_IMAGE SRC DST_IMAGE DST) for split-form cross-image"
             )
-            return
-        if src_parsed is not None or dst_parsed is not None:
-            raise click.ClickException(
-                "when using image:path syntax, both source and destination must use it"
-            )
-        raise click.ClickException(
-            "cp requires either image:path colon syntax or three arguments (IMAGE SRC DST)"
+        src_image, src_path = parse_image_arg(args[0], None)
+        dst_image, dst_path = parse_image_arg(args[1], None)
+        _cp_dispatch(
+            src_image, src_path, dst_image, dst_path,
+            force=force, recursive=recursive,
         )
     elif len(args) == 3:
-        image = Path(args[0])
-        if not image.is_file():
-            raise click.ClickException(f"image not found: {args[0]}")
+        # Same-image split form: IMAGE SRC DST. Reuses the image for
+        # both source and destination.
+        image, src_path = parse_image_arg(args[0], args[1])
+        dst_path = args[2]
         _cp_dispatch(
-            image, args[1], image, args[2],
+            image, src_path, image, dst_path,
+            force=force, recursive=recursive,
+        )
+    elif len(args) == 4:
+        # Cross-image split form: SRC_IMAGE SRC DST_IMAGE DST.
+        src_image, src_path = parse_image_arg(args[0], args[1])
+        dst_image, dst_path = parse_image_arg(args[2], args[3])
+        _cp_dispatch(
+            src_image, src_path, dst_image, dst_path,
             force=force, recursive=recursive,
         )
     else:
-        raise click.ClickException(
-            "cp takes 2 arguments (image:path image:path) or 3 (IMAGE SRC DST)"
+        raise click.UsageError(
+            "cp takes 2 arguments (image:src image:dst), "
+            "3 (IMAGE SRC DST), or 4 (SRC_IMAGE SRC DST_IMAGE DST)"
         )
 
 
