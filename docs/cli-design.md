@@ -243,7 +243,48 @@ Follow oaknut-zip's default: commands that emit Rich output (`ls`, `tree`, `info
 
 ### Error handling
 
-All user-facing errors: `click.ClickException("…")`. Raised cleanly with no traceback on exit. Rare internal bugs: propagate naturally. No custom `sys.exit(N)` scattered through command bodies.
+The contract has two halves:
+
+1. **Domain failures produce a clean one-line diagnostic on stderr and a non-zero exit code.** A directory full, a disc full, a locked file, an invalid filename, a malformed image — none of these should ever surface as a Python traceback. They are expected runtime conditions the user (or their shell script) is meant to react to.
+
+2. **Programming errors produce a traceback.** `KeyError`, `TypeError`, `AttributeError`, `ValueError` and other builtin exceptions signal that *the code is broken* — the wrong argument shape, an internal invariant violation, a key the developer thought always existed. The CLI must not catch and prettify these; the traceback is the bug report.
+
+The split is enforced by:
+
+- **Library layer:** Every expected runtime failure raises a subclass of `oaknut.file.exceptions.FSError` (`DFSError`, `ADFSError`, `AFSError`, and their per-category descendants). If a library function naturally wants to raise `ValueError`/`KeyError`/`FileNotFoundError` for user-supplied input, that raise is wrong — convert it to an `FSError` subclass at the input boundary so every caller (CLI, library client, tests) can match on category.
+
+- **CLI layer:** Each `@cli.command` callback is decorated with `@handles_fs_errors` from `oaknut.disc.errors`. The decorator catches `FSError`, looks up a stable per-category exit code by walking the MRO, and re-raises as `FSClickException` (a `click.ClickException` with a settable `exit_code`). Anything else propagates unchanged.
+
+Scripts MAY branch on the following exit codes. They are stable across the lifetime of the CLI:
+
+| Code | Category | Mapped from |
+|---|---|---|
+| 1   | Generic CLI error | Plain `ClickException`, unmapped `FSError` subclasses |
+| 2   | Usage error | Click's `UsageError` (bad flags, missing arguments) |
+| 10  | Path not found | `ADFSPathError`, `AFSPathError`, `AFSDirectoryEntryNotFoundError`, `AFSUserNotFoundError`, "path not found" pre-checks |
+| 11  | Already exists | `ADFSEntryExistsError`, DFS `FileExistsError`, `AFSDirectoryEntryExistsError`, `AFSUserExistsError` |
+| 12  | Directory full | `ADFSDirectoryFullError`, `CatalogFullError`, `AFSDirectoryFullError` |
+| 13  | Disc / quota full | `ADFSDiscFullError`, DFS `DiskFullError`, `AFSInsufficientSpaceError`, `AFSQuotaExceededError` |
+| 14  | Locked | `ADFSFileLockedError`, DFS `FileLocked`, `AFSFileLockedError` |
+| 15  | Access denied | `AFSAccessDeniedError` |
+| 16  | Directory not empty | `ADFSDirectoryNotEmptyError`, `AFSDirectoryNotEmptyError` |
+| 20  | Format / structural error | `InvalidFormatError`, `ADFSDirectoryError`, `ADFSMapError`, `AFSFormatError` and subclasses |
+| 21  | Invalid name / value | `AFSInitSpecError` and subclasses (disc name, user name, password, quota) |
+| 22  | Host I/O | `AFSHostImportError` |
+| 30  | Repartition refused | `AFSRepartitionError` and subclasses |
+| 31  | Merge conflict | `AFSMergeConflictError` |
+
+The numeric table lives in `oaknut.disc.errors` as the single source of truth; new exception classes get a code by adding one entry to `_CLASS_PATH_EXIT_CODES`. Subclasses without their own entry inherit their parent's code automatically via the MRO walk in `exit_code_for`.
+
+### Testing the contract
+
+Every command must have at least one test that exercises a realistic failure mode and asserts the result is *clean* (no traceback) with the *right* exit code. The shared helper `assert_clean_error` in `packages/oaknut-disc/tests/test_cli_error_reporting.py` enforces three invariants on every failure result:
+
+1. `result.exception` is `None` or `SystemExit` — anything else means an exception leaked out of the command and would have produced a traceback under a real shell. (Click's `CliRunner` captures uncaught exceptions on `result.exception` rather than writing a traceback to `result.output`, so the "no Traceback" string check that works in subprocess tests is misleading here.)
+2. `result.exit_code` matches the expected category.
+3. The rendered message contains an expected substring (case-insensitive).
+
+When a new test surfaces a leaked `ValueError`/`KeyError`/etc., the fix belongs in the library — convert the raise to an `FSError` subclass — not in the CLI catch list.
 
 ### Flag conventions
 
