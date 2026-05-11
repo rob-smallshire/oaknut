@@ -363,6 +363,7 @@ cli.add_command(describe_report_command(), name="describe-report")
 @report_output(
     reports={"entries": "Directory entries with load/exec/length/attributes."}
 )
+@handles_fs_errors
 def ls(image: Path, path: str | None, show_access_byte: bool):
     """List directory contents (Acorn alias: *CAT)."""
     from asyoulikeit.tabular_data import Importance, Report, Reports, TableContent
@@ -469,6 +470,7 @@ _alias("*CAT", "ls")
 @click.argument("image", type=click.Path(exists=True, path_type=Path))
 @click.argument("path", required=False, default=None)
 @report_output(reports={"tree": "Hierarchical directory listing."})
+@handles_fs_errors
 def tree(image: Path, path: str | None):
     """Display recursive directory tree."""
     from asyoulikeit.tabular_data import Report, Reports
@@ -544,6 +546,7 @@ def _attach_children(dir_node, parent_tree_node) -> None:
         "file": "Per-file metadata when the path denotes a file.",
     }
 )
+@handles_fs_errors
 def stat(image: Path, path: str | None):
     """Disc summary (no path) or file metadata (with path). Alias: *INFO."""
     from asyoulikeit.tabular_data import Report, Reports, TableContent
@@ -749,6 +752,7 @@ def _afs_partition_only_tc(handle):
 @cli.command()
 @click.argument("image", type=click.Path(exists=True, path_type=Path))
 @click.argument("path")
+@handles_fs_errors
 def cat(image: Path, path: str) -> None:
     """Dump file contents to stdout as raw bytes.
 
@@ -760,9 +764,13 @@ def cat(image: Path, path: str) -> None:
     with open_image(image, fs) as handle:
         target = _navigate(handle, bare, fs)
         if not target.exists():
-            raise click.ClickException(f"path not found: {bare}")
+            raise FSClickException(
+                f"path not found: {bare}", EXIT_PATH_NOT_FOUND
+            )
         if target.is_dir():
-            raise click.ClickException(f"'{bare}' is a directory")
+            raise FSClickException(
+                f"'{bare}' is a directory", EXIT_PATH_NOT_FOUND
+            )
         sys.stdout.buffer.write(target.read_bytes())
 
 
@@ -808,6 +816,7 @@ def _translate_line_endings(data: bytes, mode: str) -> bytes:
         "lf/crlf/cr = force a specific style; keep = no translation."
     ),
 )
+@handles_fs_errors
 def type_(image: Path, path: str, line_endings: str) -> None:
     """Display a text file with line endings translated for the host.
 
@@ -823,9 +832,13 @@ def type_(image: Path, path: str, line_endings: str) -> None:
     with open_image(image, fs) as handle:
         target = _navigate(handle, bare, fs)
         if not target.exists():
-            raise click.ClickException(f"path not found: {bare}")
+            raise FSClickException(
+                f"path not found: {bare}", EXIT_PATH_NOT_FOUND
+            )
         if target.is_dir():
-            raise click.ClickException(f"'{bare}' is a directory")
+            raise FSClickException(
+                f"'{bare}' is a directory", EXIT_PATH_NOT_FOUND
+            )
         data = _translate_line_endings(target.read_bytes(), line_endings.lower())
         sys.stdout.buffer.write(data)
 
@@ -837,6 +850,7 @@ _alias("*TYPE", "type")
 @click.argument("image", type=click.Path(exists=True, path_type=Path))
 @click.argument("pattern")
 @report_output(reports={"matches": "Paths matching the wildcard pattern."})
+@handles_fs_errors
 def find(image: Path, pattern: str):
     """Find files matching an Acorn wildcard pattern.
 
@@ -901,6 +915,7 @@ def _find_recursive(node, pattern: str, prefix: str, rows: list[dict]) -> None:
 @cli.command()
 @click.argument("image", type=click.Path(exists=True, path_type=Path))
 @click.argument("path", required=False, default=None)
+@handles_fs_errors
 def freemap(image: Path, path: str | None) -> None:
     """Show free-space map with ASCII fragmentation bar."""
     fs, bare = resolve_path(image, path)
@@ -1019,6 +1034,7 @@ def _freemap_afs(handle) -> None:
 
 @cli.command()
 @click.argument("image", type=click.Path(exists=True, path_type=Path))
+@handles_fs_errors
 def validate(image: Path) -> None:
     """Validate disc image structure."""
     fs = detect_filing_system(image)
@@ -2093,6 +2109,7 @@ def get_exec(image: Path, path: str):
 @report_output(
     reports={"title": "Current disc title (when no new title is supplied)."}
 )
+@handles_fs_errors
 def title(image: Path, new_title: str | None):
     """Read or set disc title (Acorn alias: *TITLE)."""
     from asyoulikeit.scalar_data import ScalarContent
@@ -2161,6 +2178,7 @@ class BootOptionParam(click.ParamType):
         )
     }
 )
+@handles_fs_errors
 def opt(image: Path, boot_option: int | None):
     """Read or set boot option (Acorn alias: *OPT4).
 

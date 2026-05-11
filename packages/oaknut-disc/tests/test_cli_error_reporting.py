@@ -470,6 +470,87 @@ class TestSetLoadExecErrors:
         assert result.exit_code != 0
 
 
+class TestCatErrors:
+    def test_path_not_found(
+        self, runner: CliRunner, adfs_image_filepath: Path
+    ) -> None:
+        result = runner.invoke(
+            cli, ["cat", str(adfs_image_filepath), "$.NoSuch"]
+        )
+        assert_clean_error(
+            result,
+            exit_code=EXIT_PATH_NOT_FOUND,
+            message_contains="not found",
+        )
+
+    def test_path_is_directory(
+        self, runner: CliRunner, adfs_image_filepath: Path
+    ) -> None:
+        result = runner.invoke(
+            cli, ["cat", str(adfs_image_filepath), "$.Games"]
+        )
+        assert_clean_error(
+            result,
+            exit_code=EXIT_PATH_NOT_FOUND,
+            message_contains="directory",
+        )
+
+
+class TestTypeErrors:
+    def test_path_not_found(
+        self, runner: CliRunner, adfs_image_filepath: Path
+    ) -> None:
+        result = runner.invoke(
+            cli, ["type", str(adfs_image_filepath), "$.NoSuch"]
+        )
+        assert_clean_error(
+            result,
+            exit_code=EXIT_PATH_NOT_FOUND,
+            message_contains="not found",
+        )
+
+
+class TestStatErrors:
+    def test_path_not_found(
+        self, runner: CliRunner, adfs_image_filepath: Path
+    ) -> None:
+        result = runner.invoke(
+            cli, ["stat", str(adfs_image_filepath), "$.NoSuch"]
+        )
+        # stat uses its own pre-check ClickException (exit 1); confirm
+        # there's no leaked traceback.
+        assert result.exception is None or isinstance(
+            result.exception, SystemExit
+        ), result.exception
+        assert result.exit_code != 0
+
+
+class TestLsErrors:
+    def test_path_not_found(
+        self, runner: CliRunner, adfs_image_filepath: Path
+    ) -> None:
+        result = runner.invoke(
+            cli, ["ls", str(adfs_image_filepath), "$.NoSuch"]
+        )
+        assert result.exception is None or isinstance(
+            result.exception, SystemExit
+        ), result.exception
+        assert result.exit_code != 0
+
+
+class TestTreeErrors:
+    def test_path_not_found(
+        self, runner: CliRunner, adfs_image_filepath: Path
+    ) -> None:
+        result = runner.invoke(
+            cli, ["tree", str(adfs_image_filepath), "$.NoSuch"]
+        )
+        assert result.exception is None or isinstance(
+            result.exception, SystemExit
+        ), result.exception
+        assert result.exit_code != 0
+
+
 class TestExportErrors:
     """Bulk export is largely read-only and most failure modes are host-side.
 
