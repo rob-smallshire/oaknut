@@ -25,6 +25,7 @@ from asyoulikeit.cli import (
 
 from . import __version__
 from .cli_paths import FilingSystem, detect_filing_system, parse_prefix, resolve_path
+from .errors import handles_fs_errors
 
 # ---------------------------------------------------------------------------
 # Alias-aware Click group
@@ -1817,18 +1818,23 @@ _alias("*COPY", "cp")
 @click.argument("image", type=click.Path(exists=True, path_type=Path))
 @click.argument("path")
 @click.option("-p", is_flag=True, help="No error if directory already exists.")
+@handles_fs_errors
 def mkdir(image: Path, path: str, p: bool) -> None:
     """Create a directory (ADFS/AFS only). Alias: *CDIR."""
+    from oaknut.adfs.exceptions import ADFSEntryExistsError
+    from oaknut.afs.exceptions import AFSDirectoryEntryExistsError
+
     fs, bare = resolve_path(image, path)
     if fs is FilingSystem.DFS:
         raise click.ClickException("mkdir is not supported for DFS images")
     with open_image(image, fs, mode="r+b") as handle:
         target = _navigate(handle, bare, fs)
-        if target.exists():
+        try:
+            target.mkdir()
+        except (ADFSEntryExistsError, AFSDirectoryEntryExistsError):
             if p:
                 return
-            raise click.ClickException(f"'{bare}' already exists")
-        target.mkdir()
+            raise
         if fs is FilingSystem.AFS:
             handle.flush()
 

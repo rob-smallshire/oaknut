@@ -59,6 +59,21 @@ def adfs_image_filepath(tmp_path: Path) -> Path:
 
 
 @pytest.fixture
+def adfs_image_full_root(tmp_path: Path) -> Path:
+    """ADFS-L image whose root directory holds the maximum 47 entries.
+
+    Any further attempt to add an entry to ``$`` must raise
+    :class:`ADFSDirectoryFullError`. The 48th name (``F47``) is
+    deliberately *not* present so callers can attempt to create it.
+    """
+    filepath = tmp_path / "full_root.adl"
+    with ADFS.create_file(filepath, ADFS_L, title="FullRoot") as adfs:
+        for index in range(47):
+            (adfs.root / f"F{index:02d}").write_bytes(b"x")
+    return filepath
+
+
+@pytest.fixture
 def afs_image_filepath(tmp_path: Path) -> Path:
     """Create an ADFS-L image with an initialised AFS partition."""
     filepath = tmp_path / "scsi0.adl"

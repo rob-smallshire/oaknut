@@ -26,7 +26,6 @@ import functools
 from typing import Callable, TypeVar
 
 import click
-
 from oaknut.file.exceptions import FSError
 
 # ---------------------------------------------------------------------------
@@ -69,6 +68,8 @@ _CLASS_PATH_EXIT_CODES: tuple[tuple[str, int], ...] = (
     ("oaknut.adfs.exceptions.ADFSDirectoryError", EXIT_FORMAT_ERROR),
     ("oaknut.adfs.exceptions.ADFSDiscFullError", EXIT_DISC_FULL),
     ("oaknut.adfs.exceptions.ADFSMapError", EXIT_FORMAT_ERROR),
+    ("oaknut.adfs.exceptions.ADFSEntryExistsError", EXIT_ALREADY_EXISTS),
+    ("oaknut.adfs.exceptions.ADFSDirectoryNotEmptyError", EXIT_NOT_EMPTY),
     ("oaknut.adfs.exceptions.ADFSPathError", EXIT_PATH_NOT_FOUND),
     ("oaknut.adfs.exceptions.ADFSFileLockedError", EXIT_LOCKED),
     # --- AFS ---
