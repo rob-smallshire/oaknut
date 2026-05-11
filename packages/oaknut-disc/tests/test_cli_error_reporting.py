@@ -289,3 +289,135 @@ class TestCpErrors:
             exit_code=EXIT_DIRECTORY_FULL,
             message_contains=("full",),
         )
+
+
+# ---------------------------------------------------------------------------
+# get / put
+# ---------------------------------------------------------------------------
+
+
+class TestGetErrors:
+    def test_path_not_found(
+        self,
+        runner: CliRunner,
+        adfs_image_filepath: Path,
+        tmp_path: Path,
+    ) -> None:
+        result = runner.invoke(
+            cli,
+            [
+                "get",
+                str(adfs_image_filepath),
+                "$.NoSuch",
+                str(tmp_path / "out"),
+            ],
+        )
+        assert_clean_error(
+            result,
+            exit_code=EXIT_PATH_NOT_FOUND,
+            message_contains="not found",
+        )
+
+    def test_path_is_directory(
+        self,
+        runner: CliRunner,
+        adfs_image_filepath: Path,
+        tmp_path: Path,
+    ) -> None:
+        result = runner.invoke(
+            cli,
+            [
+                "get",
+                str(adfs_image_filepath),
+                "$.Games",
+                str(tmp_path / "out"),
+            ],
+        )
+        assert_clean_error(
+            result,
+            exit_code=EXIT_PATH_NOT_FOUND,
+            message_contains="directory",
+        )
+
+
+class TestPutErrors:
+    def test_destination_directory_full(
+        self,
+        runner: CliRunner,
+        adfs_image_full_root: Path,
+        tmp_path: Path,
+    ) -> None:
+        host_filepath = tmp_path / "extra"
+        host_filepath.write_bytes(b"more data")
+        result = runner.invoke(
+            cli,
+            [
+                "put",
+                str(adfs_image_full_root),
+                "$.OneMore",
+                str(host_filepath),
+            ],
+        )
+        assert_clean_error(
+            result,
+            exit_code=EXIT_DIRECTORY_FULL,
+            message_contains=("directory full",),
+        )
+
+
+# ---------------------------------------------------------------------------
+# import / export
+# ---------------------------------------------------------------------------
+
+
+class TestImportErrors:
+    def test_import_fills_directory(
+        self,
+        runner: CliRunner,
+        adfs_image_full_root: Path,
+        tmp_path: Path,
+    ) -> None:
+        # A host directory holding one extra file; the target already
+        # has 47 entries, so the very first imported file must trip the
+        # directory-full check.
+        src_dirpath = tmp_path / "src"
+        src_dirpath.mkdir()
+        (src_dirpath / "Extra").write_bytes(b"x")
+        result = runner.invoke(
+            cli,
+            [
+                "import",
+                "--meta-format",
+                "none",
+                str(adfs_image_full_root),
+                str(src_dirpath),
+            ],
+        )
+        assert_clean_error(
+            result,
+            exit_code=EXIT_DIRECTORY_FULL,
+            message_contains=("directory full",),
+        )
+
+
+class TestExportErrors:
+    """Bulk export is largely read-only and most failure modes are host-side.
+
+    The realistic on-image failure mode is a malformed image, which is
+    covered by validate's failure tests. Here we just confirm export
+    succeeds on a good image and produces no traceback when the source
+    has a directory that happens to be empty.
+    """
+
+    def test_export_empty_image_succeeds(
+        self,
+        runner: CliRunner,
+        adfs_empty_filepath: Path,
+        tmp_path: Path,
+    ) -> None:
+        out_dirpath = tmp_path / "out"
+        result = runner.invoke(
+            cli, ["export", str(adfs_empty_filepath), str(out_dirpath)]
+        )
+        assert result.exit_code == 0, result.output
+        assert out_dirpath.exists()

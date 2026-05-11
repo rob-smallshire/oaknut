@@ -1065,6 +1065,7 @@ def validate(image: Path) -> None:
     help="Metadata sidecar format.",
 )
 @click.option("--owner", type=int, default=0, help="Econet owner ID for PiEB formats.")
+@handles_fs_errors
 def get(image: Path, path: str, host_path: Path | None, meta_format: str, owner: int) -> None:
     """Export a file from the image."""
     from oaknut.file import AcornMeta, MetaFormat, export_with_metadata
@@ -1073,9 +1074,13 @@ def get(image: Path, path: str, host_path: Path | None, meta_format: str, owner:
     with open_image(image, fs) as handle:
         target = _navigate(handle, bare, fs)
         if not target.exists():
-            raise click.ClickException(f"path not found: {bare}")
+            raise FSClickException(
+                f"path not found: {bare}", EXIT_PATH_NOT_FOUND
+            )
         if target.is_dir():
-            raise click.ClickException(f"'{bare}' is a directory")
+            raise FSClickException(
+                f"'{bare}' is a directory", EXIT_PATH_NOT_FOUND
+            )
 
         data = target.read_bytes()
 
@@ -1136,6 +1141,7 @@ def get(image: Path, path: str, host_path: Path | None, meta_format: str, owner:
     default=None,
     help="Metadata format to read from host file.",
 )
+@handles_fs_errors
 def put(
     image: Path,
     path: str,
@@ -2336,6 +2342,7 @@ def expand(image: Path, fmt: str | None) -> None:
 )
 @click.option("--owner", type=int, default=0, help="Econet owner ID for PiEB formats.")
 @click.option("-v", "--verbose", is_flag=True, help="Show extraction progress.")
+@handles_fs_errors
 def export_cmd(image: Path, host_dir: Path, meta_format: str, owner: int, verbose: bool) -> None:
     """Bulk-export entire image to a host directory."""
     from oaknut.file import MetaFormat
@@ -2412,6 +2419,7 @@ def _export_recursive(
     help="Metadata format to read from host files.",
 )
 @click.option("-v", "--verbose", is_flag=True, help="Show import progress.")
+@handles_fs_errors
 def import_cmd(
     image: Path, host_dir: Path, meta_format: str | None, verbose: bool,
 ) -> None:
