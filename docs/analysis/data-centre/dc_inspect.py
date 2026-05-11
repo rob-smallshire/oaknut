@@ -65,7 +65,7 @@ def inspect(filepath: Path) -> None:
 
     # Directory walk
     adfs = ADFS.from_buffer(memoryview(data))
-    print(f"  Root entries:")
+    print("  Root entries:")
     for entry in adfs.root.iterdir():
         stat = entry.stat()
         kind = "DIR " if stat.is_directory else "FILE"
