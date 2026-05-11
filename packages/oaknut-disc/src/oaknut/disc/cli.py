@@ -28,6 +28,7 @@ from .cli_paths import (
     FilingSystem,
     detect_filing_system,
     parse_image_arg,
+    parse_image_arg_with_trailing,
     parse_prefix,
     resolve_path,
 )
@@ -1101,9 +1102,9 @@ def validate(image: Path) -> None:
 
 
 @cli.command()
-@click.argument("image", type=click.Path(exists=True, path_type=Path))
-@click.argument("path")
-@click.argument("host_path", required=False, default=None, type=click.Path(path_type=Path))
+@click.argument("image_spec")
+@click.argument("path_or_host", required=False, default=None)
+@click.argument("host_path", required=False, default=None)
 @click.option(
     "--meta-format",
     type=click.Choice(
@@ -1123,10 +1124,26 @@ def validate(image: Path) -> None:
 )
 @click.option("--owner", type=int, default=0, help="Econet owner ID for PiEB formats.")
 @handles_fs_errors
-def get(image: Path, path: str, host_path: Path | None, meta_format: str, owner: int) -> None:
-    """Export a file from the image."""
+def get(
+    image_spec: str,
+    path_or_host: str | None,
+    host_path: str | None,
+    meta_format: str,
+    owner: int,
+) -> None:
+    """Export a file from the image.
+
+    Accepts ``IMAGE PATH [HOST_PATH]`` (split form) or
+    ``IMAGE:PATH [HOST_PATH]`` (fused form).
+    """
     from oaknut.file import AcornMeta, MetaFormat, export_with_metadata
 
+    image, path, trailing = parse_image_arg_with_trailing(
+        image_spec, path_or_host, host_path
+    )
+    if not path:
+        raise click.UsageError("PATH is required")
+    host_path = Path(trailing) if trailing is not None else None
     fs, bare = resolve_path(image, path)
     with open_image(image, fs) as handle:
         target = _navigate(handle, bare, fs)
@@ -1176,9 +1193,9 @@ def get(image: Path, path: str, host_path: Path | None, meta_format: str, owner:
 
 
 @cli.command()
-@click.argument("image", type=click.Path(exists=True, path_type=Path))
-@click.argument("path")
-@click.argument("host_path", required=False, default=None, type=click.Path(path_type=Path))
+@click.argument("image_spec")
+@click.argument("path_or_host", required=False, default=None)
+@click.argument("host_path", required=False, default=None)
 @click.option("--load", "load_addr", type=str, default=None, help="Load address (hex).")
 @click.option("--exec", "exec_addr", type=str, default=None, help="Exec address (hex).")
 @click.option(
@@ -1200,14 +1217,24 @@ def get(image: Path, path: str, host_path: Path | None, meta_format: str, owner:
 )
 @handles_fs_errors
 def put(
-    image: Path,
-    path: str,
-    host_path: Path | None,
+    image_spec: str,
+    path_or_host: str | None,
+    host_path: str | None,
     load_addr: str | None,
     exec_addr: str | None,
     meta_format: str | None,
 ) -> None:
-    """Import a file into the image."""
+    """Import a file into the image.
+
+    Accepts ``IMAGE PATH [HOST_PATH]`` (split form) or
+    ``IMAGE:PATH [HOST_PATH]`` (fused form).
+    """
+    image, path, trailing = parse_image_arg_with_trailing(
+        image_spec, path_or_host, host_path
+    )
+    if not path:
+        raise click.UsageError("PATH is required")
+    host_path = Path(trailing) if trailing is not None else None
     fs, bare = resolve_path(image, path)
 
     # Default addresses: 0xFFFF matches the convention for text/data
@@ -1901,15 +1928,22 @@ _alias("*COPY", "cp")
 
 
 @cli.command()
-@click.argument("image", type=click.Path(exists=True, path_type=Path))
-@click.argument("path")
+@click.argument("image_spec")
+@click.argument("path", required=False, default=None)
 @click.option("-p", is_flag=True, help="No error if directory already exists.")
 @handles_fs_errors
-def mkdir(image: Path, path: str, p: bool) -> None:
-    """Create a directory (ADFS/AFS only). Alias: *CDIR."""
+def mkdir(image_spec: str, path: str | None, p: bool) -> None:
+    """Create a directory (ADFS/AFS only). Alias: *CDIR.
+
+    IMAGE_SPEC may be ``image`` (use PATH for the in-image path) or
+    ``image:path`` (fused form).
+    """
     from oaknut.adfs.exceptions import ADFSEntryExistsError
     from oaknut.afs.exceptions import AFSDirectoryEntryExistsError
 
+    image, path = parse_image_arg(image_spec, path)
+    if not path:
+        raise click.UsageError("PATH is required")
     fs, bare = resolve_path(image, path)
     if fs is FilingSystem.DFS:
         raise click.ClickException("mkdir is not supported for DFS images")
@@ -1929,9 +1963,9 @@ _alias("*CDIR", "mkdir")
 
 
 @cli.command()
-@click.argument("image", type=click.Path(exists=True, path_type=Path))
-@click.argument("path")
-@click.argument("access")
+@click.argument("image_spec")
+@click.argument("path_or_access", required=False, default=None)
+@click.argument("access", required=False, default=None)
 @click.option(
     "-r", "--recursive", is_flag=True, help="Recurse into directory matches."
 )
@@ -1940,9 +1974,16 @@ _alias("*CDIR", "mkdir")
 )
 @handles_fs_errors
 def chmod(
-    image: Path, path: str, access: str, recursive: bool, dry_run: bool
+    image_spec: str,
+    path_or_access: str | None,
+    access: str | None,
+    recursive: bool,
+    dry_run: bool,
 ) -> None:
     """Set file access permissions (Acorn alias: *ACCESS).
+
+    Accepts ``IMAGE PATH ACCESS`` (split form) or ``IMAGE:PATH ACCESS``
+    (fused form).
 
     ACCESS is symbolic (e.g. LWR/R, WR/WR) or hex (0x0B, 33).
     DFS only supports the L (locked) bit; other flags are ignored.
@@ -1951,6 +1992,13 @@ def chmod(
     same access to every matching file.  ``-r`` recurses into any
     directory match.
     """
+    image, path, access = parse_image_arg_with_trailing(
+        image_spec, path_or_access, access
+    )
+    if not path:
+        raise click.UsageError("PATH is required")
+    if access is None:
+        raise click.UsageError("ACCESS is required")
     from oaknut.file import Access, parse_access
 
     flags = parse_access(access)
@@ -1977,8 +2025,8 @@ _alias("*ACCESS", "chmod")
 
 
 @cli.command()
-@click.argument("image", type=click.Path(exists=True, path_type=Path))
-@click.argument("path")
+@click.argument("image_spec")
+@click.argument("path", required=False, default=None)
 @click.option(
     "-r", "--recursive", is_flag=True, help="Recurse into directory matches."
 )
@@ -1986,8 +2034,15 @@ _alias("*ACCESS", "chmod")
     "--dry-run", is_flag=True, help="Print what would change without modifying the image."
 )
 @handles_fs_errors
-def lock(image: Path, path: str, recursive: bool, dry_run: bool) -> None:
-    """Lock a file.  PATH may be a wildcard; ``-r`` recurses."""
+def lock(image_spec: str, path: str | None, recursive: bool, dry_run: bool) -> None:
+    """Lock a file.
+
+    Accepts ``IMAGE PATH`` (split form) or ``IMAGE:PATH`` (fused).
+    PATH may be a wildcard; ``-r`` recurses.
+    """
+    image, path = parse_image_arg(image_spec, path)
+    if not path:
+        raise click.UsageError("PATH is required")
     fs, bare = resolve_path(image, path)
     mode = "rb" if dry_run else "r+b"
     with open_image(image, fs, mode=mode) as handle:
@@ -2001,8 +2056,8 @@ def lock(image: Path, path: str, recursive: bool, dry_run: bool) -> None:
 
 
 @cli.command()
-@click.argument("image", type=click.Path(exists=True, path_type=Path))
-@click.argument("path")
+@click.argument("image_spec")
+@click.argument("path", required=False, default=None)
 @click.option(
     "-r", "--recursive", is_flag=True, help="Recurse into directory matches."
 )
@@ -2010,8 +2065,15 @@ def lock(image: Path, path: str, recursive: bool, dry_run: bool) -> None:
     "--dry-run", is_flag=True, help="Print what would change without modifying the image."
 )
 @handles_fs_errors
-def unlock(image: Path, path: str, recursive: bool, dry_run: bool) -> None:
-    """Unlock a file.  PATH may be a wildcard; ``-r`` recurses."""
+def unlock(image_spec: str, path: str | None, recursive: bool, dry_run: bool) -> None:
+    """Unlock a file.
+
+    Accepts ``IMAGE PATH`` (split form) or ``IMAGE:PATH`` (fused).
+    PATH may be a wildcard; ``-r`` recurses.
+    """
+    image, path = parse_image_arg(image_spec, path)
+    if not path:
+        raise click.UsageError("PATH is required")
     fs, bare = resolve_path(image, path)
     mode = "rb" if dry_run else "r+b"
     with open_image(image, fs, mode=mode) as handle:
@@ -2025,9 +2087,9 @@ def unlock(image: Path, path: str, recursive: bool, dry_run: bool) -> None:
 
 
 @cli.command(name="set-load")
-@click.argument("image", type=click.Path(exists=True, path_type=Path))
-@click.argument("path")
-@click.argument("addr")
+@click.argument("image_spec")
+@click.argument("path_or_addr", required=False, default=None)
+@click.argument("addr", required=False, default=None)
 @click.option(
     "-r", "--recursive", is_flag=True, help="Recurse into directory matches."
 )
@@ -2036,14 +2098,28 @@ def unlock(image: Path, path: str, recursive: bool, dry_run: bool) -> None:
 )
 @handles_fs_errors
 def set_load(
-    image: Path, path: str, addr: str, recursive: bool, dry_run: bool
+    image_spec: str,
+    path_or_addr: str | None,
+    addr: str | None,
+    recursive: bool,
+    dry_run: bool,
 ) -> None:
     """Set a file's load address.
+
+    Accepts ``IMAGE PATH ADDR`` (split form) or ``IMAGE:PATH ADDR``
+    (fused form).
 
     PATH may contain Acorn wildcards; ``-r`` recurses into directory
     matches (directories themselves are skipped — they have no load
     address field).
     """
+    image, path, addr = parse_image_arg_with_trailing(
+        image_spec, path_or_addr, addr
+    )
+    if not path:
+        raise click.UsageError("PATH is required")
+    if addr is None:
+        raise click.UsageError("ADDR is required")
     address = int(addr, 0)
     fs, bare = resolve_path(image, path)
     mode = "rb" if dry_run else "r+b"
@@ -2060,9 +2136,9 @@ def set_load(
 
 
 @cli.command(name="set-exec")
-@click.argument("image", type=click.Path(exists=True, path_type=Path))
-@click.argument("path")
-@click.argument("addr")
+@click.argument("image_spec")
+@click.argument("path_or_addr", required=False, default=None)
+@click.argument("addr", required=False, default=None)
 @click.option(
     "-r", "--recursive", is_flag=True, help="Recurse into directory matches."
 )
@@ -2071,14 +2147,28 @@ def set_load(
 )
 @handles_fs_errors
 def set_exec(
-    image: Path, path: str, addr: str, recursive: bool, dry_run: bool
+    image_spec: str,
+    path_or_addr: str | None,
+    addr: str | None,
+    recursive: bool,
+    dry_run: bool,
 ) -> None:
     """Set a file's exec address.
+
+    Accepts ``IMAGE PATH ADDR`` (split form) or ``IMAGE:PATH ADDR``
+    (fused form).
 
     PATH may contain Acorn wildcards; ``-r`` recurses into directory
     matches (directories themselves are skipped — they have no exec
     address field).
     """
+    image, path, addr = parse_image_arg_with_trailing(
+        image_spec, path_or_addr, addr
+    )
+    if not path:
+        raise click.UsageError("PATH is required")
+    if addr is None:
+        raise click.UsageError("ADDR is required")
     address = int(addr, 0)
     fs, bare = resolve_path(image, path)
     mode = "rb" if dry_run else "r+b"
@@ -2095,15 +2185,21 @@ def set_exec(
 
 
 @cli.command(name="get-load")
-@click.argument("image", type=click.Path(exists=True, path_type=Path))
-@click.argument("path")
+@click.argument("image_spec")
+@click.argument("path", required=False, default=None)
 @report_output(reports={"load": "File load address as 8 hex digits."})
 @handles_fs_errors
-def get_load(image: Path, path: str):
-    """Print a file's load address."""
+def get_load(image_spec: str, path: str | None):
+    """Print a file's load address.
+
+    Accepts ``IMAGE PATH`` (split form) or ``IMAGE:PATH`` (fused form).
+    """
     from asyoulikeit.scalar_data import ScalarContent
     from asyoulikeit.tabular_data import Report, Reports
 
+    image, path = parse_image_arg(image_spec, path)
+    if not path:
+        raise click.UsageError("PATH is required")
     fs, bare = resolve_path(image, path)
     with open_image(image, fs) as handle:
         target = _navigate(handle, bare, fs)
@@ -2120,15 +2216,21 @@ def get_load(image: Path, path: str):
 
 
 @cli.command(name="get-exec")
-@click.argument("image", type=click.Path(exists=True, path_type=Path))
-@click.argument("path")
+@click.argument("image_spec")
+@click.argument("path", required=False, default=None)
 @report_output(reports={"exec": "File exec address as 8 hex digits."})
 @handles_fs_errors
-def get_exec(image: Path, path: str):
-    """Print a file's exec address."""
+def get_exec(image_spec: str, path: str | None):
+    """Print a file's exec address.
+
+    Accepts ``IMAGE PATH`` (split form) or ``IMAGE:PATH`` (fused form).
+    """
     from asyoulikeit.scalar_data import ScalarContent
     from asyoulikeit.tabular_data import Report, Reports
 
+    image, path = parse_image_arg(image_spec, path)
+    if not path:
+        raise click.UsageError("PATH is required")
     fs, bare = resolve_path(image, path)
     with open_image(image, fs) as handle:
         target = _navigate(handle, bare, fs)

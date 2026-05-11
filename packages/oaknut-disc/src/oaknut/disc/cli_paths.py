@@ -254,3 +254,51 @@ def parse_image_arg(
     if not image_filepath.is_file():
         raise click.UsageError(f"image not found: {image_spec}")
     return image_filepath, path or ""
+
+
+def parse_image_arg_with_trailing(
+    image_spec: str,
+    arg2: str | None,
+    arg3: str | None,
+) -> tuple[Path, str, str | None]:
+    """Like :func:`parse_image_arg` but for commands with a fixed-arity tail.
+
+    Many commands take a trailing positional *after* the in-image path
+    (``chmod IMAGE PATH ACCESS``, ``set-load IMAGE PATH ADDR``, ``get
+    IMAGE PATH [HOST_PATH]``, ``put IMAGE PATH [HOST_PATH]``). With the
+    fused IMAGE_SPEC shape those collapse to two positionals
+    (``IMAGE:PATH ACCESS``), so we can't just hand the first two args
+    to :func:`parse_image_arg` -- the trailing slot would steal what
+    was meant to be PATH.
+
+    This helper takes three positionals in declaration order
+    (image_spec, arg2, arg3) and returns ``(image, in_image_path,
+    trailing)``. The trailing slot is whichever of ``arg2``/``arg3``
+    isn't part of the image-path pair. Callers decide whether
+    ``trailing is None`` is acceptable (optional positional) or a
+    UsageError (required positional).
+
+    Shapes::
+
+        IMAGE PATH TRAIL    -> (image, path, trail)         # split
+        IMAGE PATH          -> (image, path, None)          # split, no trail
+        IMAGE:PATH TRAIL    -> (image, path, trail)         # fused
+        IMAGE:PATH          -> (image, path, None)          # fused, no trail
+        IMAGE:PATH PATH X   -> UsageError                   # rejected
+    """
+    split = _split_at_image_colon(image_spec)
+    if split is not None:
+        # Fused form: image_spec carries image:path. arg2 is the
+        # trailing value (or None); arg3 must be unbound.
+        image_filepath, in_image_path = parse_image_arg(image_spec, None)
+        if arg3 is not None:
+            raise click.UsageError(
+                f"too many arguments when IMAGE_SPEC uses image:path "
+                f"syntax; got {arg2!r} and {arg3!r}"
+            )
+        return image_filepath, in_image_path, arg2
+
+    # Split form: image_spec is the image, arg2 is the path, arg3 is
+    # the trailing value.
+    image_filepath, in_image_path = parse_image_arg(image_spec, arg2)
+    return image_filepath, in_image_path, arg3
