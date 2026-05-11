@@ -133,6 +133,38 @@ def resolve_path(
     return requested, bare
 
 
+def _split_at_image_colon(text: str) -> tuple[str, str] | None:
+    """Find the image/in-image split point at the first non-Windows colon.
+
+    Returns ``(image_part, in_image_part)`` as raw strings, or ``None``
+    if no eligible colon is present. Unlike :func:`parse_image_path`,
+    this does not check whether ``image_part`` exists on disk — that is
+    left to the caller, which usually has a better error message to
+    give if the LHS is missing.
+
+    Windows drive letters (``X:\\``) at the start of *text* are
+    skipped so the drive colon is not treated as a split point.
+    """
+    if ":" not in text:
+        return None
+
+    # Skip a Windows drive letter: single ASCII letter followed by :\ or :/.
+    start = 0
+    if (
+        len(text) >= 3
+        and text[1] == ":"
+        and text[2] in ("\\", "/")
+        and text[0].isalpha()
+    ):
+        start = 2
+
+    idx = text.find(":", start)
+    if idx < 0:
+        return None
+
+    return text[:idx], text[idx + 1 :]
+
+
 def parse_image_path(text: str) -> tuple[Path, str] | None:
     """Try to parse ``image:in-image-path`` colon syntax.
 
@@ -149,28 +181,76 @@ def parse_image_path(text: str) -> tuple[Path, str] | None:
     followed by ``:\\``), the first colon is not treated as a split
     point.
     """
-    if ":" not in text:
+    split = _split_at_image_colon(text)
+    if split is None:
         return None
-
-    # Skip a Windows drive letter: single ASCII letter followed by :\
-    start = 0
-    if (
-        len(text) >= 3
-        and text[1] == ":"
-        and text[2] in ("\\", "/")
-        and text[0].isalpha()
-    ):
-        start = 2
-
-    idx = text.find(":", start)
-    if idx < 0:
-        return None
-
-    image_part = text[:idx]
-    in_image_part = text[idx + 1 :]
-
+    image_part, in_image_part = split
     image_filepath = Path(image_part)
     if not image_filepath.is_file():
         return None
-
     return image_filepath, in_image_part
+
+
+def parse_image_arg(
+    image_spec: str, path: str | None = None
+) -> tuple[Path, str]:
+    """Resolve an ``IMAGE_SPEC [PATH]`` positional pair into ``(image, in_image_path)``.
+
+    Accepts two equivalent shapes uniformly across every command:
+
+    - **Fused:** ``image_spec`` contains ``image:in-image-path``. The
+      colon splits at the first non-Windows-drive colon. The in-image
+      portion may itself start with a filing-system prefix
+      (``adfs:``/``afs:``/``dfs:``) — that prefix is preserved on the
+      returned in-image string so :func:`resolve_path` can act on it.
+      When the fused form is used, *path* must be ``None``; otherwise a
+      :class:`click.UsageError` is raised so the user notices the
+      contradiction rather than silently dropping one of the inputs.
+
+    - **Split:** ``image_spec`` is just the image file path. The
+      optional *path* is the in-image path (empty string when omitted).
+
+    A colon in *image_spec* is a hard signal of fused intent. If the
+    portion to its left does not exist as a file, the error message
+    quotes only that portion, not the whole string, so the user can
+    see immediately what was looked up.
+
+    Examples::
+
+        >>> # Plain image (split form, no path)
+        >>> parse_image_arg("hd.dat")              # doctest: +SKIP
+        (PosixPath('hd.dat'), '')
+
+        >>> # Split form with explicit path
+        >>> parse_image_arg("hd.dat", "$.Games")    # doctest: +SKIP
+        (PosixPath('hd.dat'), '$.Games')
+
+        >>> # Fused form
+        >>> parse_image_arg("hd.dat:$.Games")       # doctest: +SKIP
+        (PosixPath('hd.dat'), '$.Games')
+
+        >>> # Fused form with filing-system prefix
+        >>> parse_image_arg("hd.dat:afs:$.Library") # doctest: +SKIP
+        (PosixPath('hd.dat'), 'afs:$.Library')
+
+    Returns ``(image_filepath, in_image_path)`` — *in_image_path* is
+    always a string (empty when the user did not supply one).
+    """
+    split = _split_at_image_colon(image_spec)
+    if split is not None:
+        image_part, in_image_part = split
+        image_filepath = Path(image_part)
+        if not image_filepath.is_file():
+            raise click.UsageError(f"image not found: {image_part}")
+        if path is not None:
+            raise click.UsageError(
+                "PATH must not be given when IMAGE_SPEC uses image:path syntax; "
+                f"got IMAGE_SPEC={image_spec!r} and PATH={path!r}"
+            )
+        return image_filepath, in_image_part
+
+    # No colon → image_spec is the bare image path.
+    image_filepath = Path(image_spec)
+    if not image_filepath.is_file():
+        raise click.UsageError(f"image not found: {image_spec}")
+    return image_filepath, path or ""
