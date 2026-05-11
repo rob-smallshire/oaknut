@@ -878,16 +878,18 @@ class TestType:
     by carriage returns on a Unix terminal.
     """
 
-    def test_default_translates_cr_to_lf_on_unix(
+    def test_default_translates_cr_to_host_eol(
         self, runner: CliRunner, adfs_with_acorn_text: Path
     ) -> None:
         result = runner.invoke(cli, ["type", str(adfs_with_acorn_text), "$.BOOT"])
         assert result.exit_code == 0, result.output
-        # Original bytes use \r only — every \r should have become \n
-        # under the Unix host default; no \r should survive.
-        assert b"\r" not in result.output_bytes
+        # Every Acorn \r becomes the host's line separator: \n on
+        # macOS/Linux, \r\n on Windows. Build the expected payload
+        # from os.linesep so the test rides whatever platform CI is
+        # running on.
+        eol = os.linesep.encode()
         assert result.output_bytes == (
-            b"*DIR $\n*LIB $.LIBRARY\nCHAIN\"!MENU\"\n"
+            b"*DIR $" + eol + b"*LIB $.LIBRARY" + eol + b'CHAIN"!MENU"' + eol
         )
 
     def test_lf_forces_lf(self, runner: CliRunner, adfs_with_acorn_text: Path) -> None:
@@ -979,8 +981,10 @@ class TestType:
         so Acorn line endings get translated by default."""
         result = runner.invoke(cli, ["*TYPE", str(adfs_with_acorn_text), "$.BOOT"])
         assert result.exit_code == 0
-        assert b"\r" not in result.output_bytes
-        assert b"\n" in result.output_bytes
+        # Translation happened iff the host EOL sequence appears in
+        # the output. The exact form (LF vs CRLF) is host-dependent
+        # and exhaustively covered by the explicit --line-endings tests.
+        assert os.linesep.encode() in result.output_bytes
 
 
 class TestTranslateLineEndings:
