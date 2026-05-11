@@ -24,7 +24,13 @@ from asyoulikeit.cli import (
 )
 
 from . import __version__
-from .cli_paths import FilingSystem, detect_filing_system, parse_prefix, resolve_path
+from .cli_paths import (
+    FilingSystem,
+    detect_filing_system,
+    parse_image_arg,
+    parse_prefix,
+    resolve_path,
+)
 from .errors import (
     EXIT_PATH_NOT_FOUND,
     FSClickException,
@@ -350,7 +356,7 @@ cli.add_command(describe_report_command(), name="describe-report")
 
 
 @cli.command()
-@click.argument("image", type=click.Path(exists=True, path_type=Path))
+@click.argument("image_spec")
 @click.argument("path", required=False, default=None)
 @click.option(
     "-H",
@@ -363,11 +369,16 @@ cli.add_command(describe_report_command(), name="describe-report")
     reports={"entries": "Directory entries with load/exec/length/attributes."}
 )
 @handles_fs_errors
-def ls(image: Path, path: str | None, show_access_byte: bool):
-    """List directory contents (Acorn alias: *CAT)."""
+def ls(image_spec: str, path: str | None, show_access_byte: bool):
+    """List directory contents (Acorn alias: *CAT).
+
+    IMAGE_SPEC may be ``image`` (use the optional PATH argument for the
+    in-image path) or ``image:path`` (fused form).
+    """
     from asyoulikeit.tabular_data import Importance, Report, Reports, TableContent
 
-    fs, bare = resolve_path(image, path)
+    image, in_image_path = parse_image_arg(image_spec, path)
+    fs, bare = resolve_path(image, in_image_path)
     with open_image(image, fs) as handle:
         target = _navigate(handle, bare, fs)
 
@@ -466,14 +477,19 @@ _alias("*CAT", "ls")
 
 
 @cli.command()
-@click.argument("image", type=click.Path(exists=True, path_type=Path))
+@click.argument("image_spec")
 @click.argument("path", required=False, default=None)
 @report_output(reports={"tree": "Hierarchical directory listing."})
 @handles_fs_errors
-def tree(image: Path, path: str | None):
-    """Display recursive directory tree."""
+def tree(image_spec: str, path: str | None):
+    """Display recursive directory tree.
+
+    IMAGE_SPEC may be ``image`` or ``image:path`` (fused form).
+    """
     from asyoulikeit.tabular_data import Report, Reports
     from asyoulikeit.tree_data import TreeContent
+
+    image, path = parse_image_arg(image_spec, path)
 
     # The root node carries the image name visibly now that asyoulikeit
     # 0.5.1 drops the Rich-table chrome around single-column trees —
@@ -481,7 +497,7 @@ def tree(image: Path, path: str | None):
     tc = TreeContent()
     tc.add_column("name", "Name", header=True)
 
-    if path is not None:
+    if path:
         # Explicit path (possibly with FS prefix) — show that subtree only.
         fs, bare = resolve_path(image, path)
         with open_image(image, fs) as handle:
@@ -531,7 +547,7 @@ def _attach_children(dir_node, parent_tree_node) -> None:
 
 
 @cli.command()
-@click.argument("image", type=click.Path(exists=True, path_type=Path))
+@click.argument("image_spec")
 @click.argument("path", required=False, default=None)
 @report_output(
     reports={
@@ -546,10 +562,14 @@ def _attach_children(dir_node, parent_tree_node) -> None:
     }
 )
 @handles_fs_errors
-def stat(image: Path, path: str | None):
-    """Disc summary (no path) or file metadata (with path). Alias: *INFO."""
+def stat(image_spec: str, path: str | None):
+    """Disc summary (no path) or file metadata (with path). Alias: *INFO.
+
+    IMAGE_SPEC may be ``image`` or ``image:path`` (fused form).
+    """
     from asyoulikeit.tabular_data import Report, Reports, TableContent
 
+    image, path = parse_image_arg(image_spec, path)
     fs, bare = resolve_path(image, path)
 
     if not bare:
@@ -749,16 +769,22 @@ def _afs_partition_only_tc(handle):
 
 
 @cli.command()
-@click.argument("image", type=click.Path(exists=True, path_type=Path))
-@click.argument("path")
+@click.argument("image_spec")
+@click.argument("path", required=False, default=None)
 @handles_fs_errors
-def cat(image: Path, path: str) -> None:
+def cat(image_spec: str, path: str | None) -> None:
     """Dump file contents to stdout as raw bytes.
+
+    IMAGE_SPEC may be ``image`` (use PATH for the in-image path) or
+    ``image:path`` (fused form).
 
     Use :command:`disc type` for Acorn text files — this command
     writes bytes verbatim, so files using Acorn ``\\r`` line endings
     will render unreadably on a Unix terminal.
     """
+    image, path = parse_image_arg(image_spec, path)
+    if not path:
+        raise click.UsageError("PATH is required")
     fs, bare = resolve_path(image, path)
     with open_image(image, fs) as handle:
         target = _navigate(handle, bare, fs)
@@ -802,8 +828,8 @@ def _translate_line_endings(data: bytes, mode: str) -> bytes:
 
 
 @cli.command(name="type")
-@click.argument("image", type=click.Path(exists=True, path_type=Path))
-@click.argument("path")
+@click.argument("image_spec")
+@click.argument("path", required=False, default=None)
 @click.option(
     "--line-endings",
     "-l",
@@ -816,8 +842,11 @@ def _translate_line_endings(data: bytes, mode: str) -> bytes:
     ),
 )
 @handles_fs_errors
-def type_(image: Path, path: str, line_endings: str) -> None:
+def type_(image_spec: str, path: str | None, line_endings: str) -> None:
     """Display a text file with line endings translated for the host.
+
+    IMAGE_SPEC may be ``image`` (use PATH for the in-image path) or
+    ``image:path`` (fused form).
 
     Acorn text files terminate lines with ``\\r`` (carriage return).
     Dumped raw to a Unix terminal each line overwrites the previous,
@@ -827,6 +856,9 @@ def type_(image: Path, path: str, line_endings: str) -> None:
 
     Acorn alias: *TYPE.
     """
+    image, path = parse_image_arg(image_spec, path)
+    if not path:
+        raise click.UsageError("PATH is required")
     fs, bare = resolve_path(image, path)
     with open_image(image, fs) as handle:
         target = _navigate(handle, bare, fs)
@@ -846,12 +878,15 @@ _alias("*TYPE", "type")
 
 
 @cli.command()
-@click.argument("image", type=click.Path(exists=True, path_type=Path))
-@click.argument("pattern")
+@click.argument("image_spec")
+@click.argument("pattern", required=False, default=None)
 @report_output(reports={"matches": "Paths matching the wildcard pattern."})
 @handles_fs_errors
-def find(image: Path, pattern: str):
+def find(image_spec: str, pattern: str | None):
     """Find files matching an Acorn wildcard pattern.
+
+    IMAGE_SPEC may be ``image`` (use PATTERN for the wildcard) or
+    ``image:pattern`` (fused form).
 
     Accepts the same ``adfs:`` / ``afs:`` / ``dfs:`` prefixes as
     every other command to scope the search to a single partition.
@@ -865,6 +900,9 @@ def find(image: Path, pattern: str):
 
     from .cli_paths import parse_prefix
 
+    image, pattern = parse_image_arg(image_spec, pattern)
+    if not pattern:
+        raise click.UsageError("PATTERN is required")
     prefix_present = parse_prefix(pattern)[0] is not None
     fs, bare_pattern = resolve_path(image, pattern)
     emit_prefix = _image_has_afs(image) if not prefix_present else True
@@ -912,11 +950,15 @@ def _find_recursive(node, pattern: str, prefix: str, rows: list[dict]) -> None:
 
 
 @cli.command()
-@click.argument("image", type=click.Path(exists=True, path_type=Path))
+@click.argument("image_spec")
 @click.argument("path", required=False, default=None)
 @handles_fs_errors
-def freemap(image: Path, path: str | None) -> None:
-    """Show free-space map with ASCII fragmentation bar."""
+def freemap(image_spec: str, path: str | None) -> None:
+    """Show free-space map with ASCII fragmentation bar.
+
+    IMAGE_SPEC may be ``image`` or ``image:path`` (fused form).
+    """
+    image, path = parse_image_arg(image_spec, path)
     fs, bare = resolve_path(image, path)
 
     with open_image(image, fs) as handle:
