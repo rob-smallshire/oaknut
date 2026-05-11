@@ -14,7 +14,16 @@ Hierarchy::
         ├── ADFSMapError
         │   └── ADFSDiscFullError
         ├── ADFSPathError
+        │   ├── ADFSEntryExistsError
+        │   └── ADFSDirectoryNotEmptyError
         └── ADFSFileLockedError
+
+``ADFSEntryExistsError`` and ``ADFSDirectoryNotEmptyError`` are
+subclasses of ``ADFSPathError`` for backwards compatibility -- callers
+that previously caught ``ADFSPathError`` for "already exists" or "not
+empty" continue to do so, while new code (notably the ``disc`` CLI's
+exit-code mapping) can match the more specific subclass to distinguish
+these distinct categories from "not found".
 """
 
 from oaknut.file.exceptions import FSError
@@ -71,6 +80,29 @@ class ADFSPathError(ADFSError):
 
     Raised for invalid paths, paths that do not exist,
     or path components with forbidden characters.
+    """
+
+    pass
+
+
+class ADFSEntryExistsError(ADFSPathError):
+    """A directory entry with the requested name already exists.
+
+    Raised by :meth:`ADFS._mkdir` and :meth:`ADFS._rename` when the
+    destination name collides with an existing entry. Subclass of
+    :class:`ADFSPathError` for backwards compatibility -- callers that
+    previously matched on the broader class continue to work.
+    """
+
+    pass
+
+
+class ADFSDirectoryNotEmptyError(ADFSPathError):
+    """Cannot remove a directory that still has entries.
+
+    Raised by :meth:`ADFS._rmdir` when the target directory has at
+    least one entry. Subclass of :class:`ADFSPathError` for backwards
+    compatibility.
     """
 
     pass

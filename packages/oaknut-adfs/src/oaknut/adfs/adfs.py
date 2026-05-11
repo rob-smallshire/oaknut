@@ -33,6 +33,8 @@ from oaknut.adfs.directory import (
 )
 from oaknut.adfs.exceptions import (
     ADFSDirectoryFullError,
+    ADFSDirectoryNotEmptyError,
+    ADFSEntryExistsError,
     ADFSError,
     ADFSFileLockedError,
     ADFSPathError,
@@ -1918,7 +1920,7 @@ class ADFS:
         # Check for name collision
         existing = parent_dir.find(dirname)
         if existing is not None:
-            raise ADFSPathError(f"'{dirname}' already exists")
+            raise ADFSEntryExistsError(f"'{dirname}' already exists")
 
         # Check directory capacity
         if len(parent_dir.entries) >= self._dir_format.max_entries:
@@ -1992,7 +1994,7 @@ class ADFS:
         # Check the directory is empty
         subdir = self._read_directory_at(existing.indirect_disc_address)
         if subdir.entries:
-            raise ADFSPathError(f"'{dirname}' is not empty")
+            raise ADFSDirectoryNotEmptyError(f"'{dirname}' is not empty")
 
         # Free the directory's sectors
         dir_sectors = self._dir_format.size_in_sectors
@@ -2030,7 +2032,7 @@ class ADFS:
 
         # Check target doesn't already exist
         if dst_dir.find(new_name) is not None:
-            raise ADFSPathError(f"'{new_name}' already exists")
+            raise ADFSEntryExistsError(f"'{new_name}' already exists")
 
         # Build the entry with the new name
         renamed = _ADFSDirectoryEntry(
