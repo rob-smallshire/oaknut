@@ -28,6 +28,8 @@ from oaknut.disc.cli import cli
 from oaknut.disc.errors import (
     EXIT_ALREADY_EXISTS,
     EXIT_DIRECTORY_FULL,
+    EXIT_LOCKED,
+    EXIT_NOT_EMPTY,
     EXIT_PATH_NOT_FOUND,
 )
 
@@ -137,3 +139,153 @@ class TestMkdirErrors:
         ), result.exception
         assert result.exit_code == 1
         assert "not supported for DFS" in result.output
+
+
+# ---------------------------------------------------------------------------
+# mv
+# ---------------------------------------------------------------------------
+
+
+class TestMvErrors:
+    def test_source_not_found(
+        self, runner: CliRunner, adfs_image_filepath: Path
+    ) -> None:
+        result = runner.invoke(
+            cli,
+            ["mv", str(adfs_image_filepath), "$.NoSuch", "$.Renamed"],
+        )
+        assert_clean_error(
+            result,
+            exit_code=EXIT_PATH_NOT_FOUND,
+            message_contains="not found",
+        )
+
+    def test_destination_already_exists(
+        self, runner: CliRunner, adfs_image_filepath: Path
+    ) -> None:
+        # Hello and Games both exist in the root; renaming Hello -> Games
+        # collides.
+        result = runner.invoke(
+            cli,
+            ["mv", str(adfs_image_filepath), "$.Hello", "$.Games"],
+        )
+        assert_clean_error(
+            result,
+            exit_code=EXIT_ALREADY_EXISTS,
+            message_contains="already exists",
+        )
+
+
+# ---------------------------------------------------------------------------
+# rm
+# ---------------------------------------------------------------------------
+
+
+class TestRmErrors:
+    def test_locked_file_without_force(
+        self, runner: CliRunner, adfs_image_locked_file: Path
+    ) -> None:
+        result = runner.invoke(
+            cli, ["rm", str(adfs_image_locked_file), "$.Locked"]
+        )
+        assert_clean_error(
+            result,
+            exit_code=EXIT_LOCKED,
+            message_contains="locked",
+        )
+
+    def test_locked_file_with_force_succeeds(
+        self, runner: CliRunner, adfs_image_locked_file: Path
+    ) -> None:
+        result = runner.invoke(
+            cli, ["rm", "-f", str(adfs_image_locked_file), "$.Locked"]
+        )
+        assert result.exit_code == 0, result.output
+
+    def test_nonempty_dir_without_recursive(
+        self,
+        runner: CliRunner,
+        adfs_image_with_subdir_with_entries: Path,
+    ) -> None:
+        # Without -r, attempting to delete a directory should fail with
+        # a clear "is a directory" message and exit 1 (usage error, not
+        # an FSError category).
+        result = runner.invoke(
+            cli,
+            ["rm", str(adfs_image_with_subdir_with_entries), "$.Games"],
+        )
+        assert result.exception is None or isinstance(
+            result.exception, SystemExit
+        )
+        assert result.exit_code == 1
+        assert "directory" in result.output.lower()
+
+
+# ---------------------------------------------------------------------------
+# cp
+# ---------------------------------------------------------------------------
+
+
+class TestCpErrors:
+    def test_destination_directory_full(
+        self,
+        runner: CliRunner,
+        adfs_image_filepath: Path,
+        adfs_image_full_root: Path,
+    ) -> None:
+        # Copy a single file from a normal image into a target whose
+        # root directory is already at the 47-entry maximum.
+        result = runner.invoke(
+            cli,
+            [
+                "cp",
+                f"{adfs_image_filepath}:$.Hello",
+                f"{adfs_image_full_root}:$.Hello",
+            ],
+        )
+        assert_clean_error(
+            result,
+            exit_code=EXIT_DIRECTORY_FULL,
+            message_contains=("directory full",),
+        )
+
+    def test_source_not_found(
+        self,
+        runner: CliRunner,
+        adfs_image_filepath: Path,
+        adfs_empty_filepath: Path,
+    ) -> None:
+        result = runner.invoke(
+            cli,
+            [
+                "cp",
+                f"{adfs_image_filepath}:$.Nope",
+                f"{adfs_empty_filepath}:$.Nope",
+            ],
+        )
+        # "no matches" / "path not found" — should be a clean error
+        # without a traceback.
+        assert result.exception is None or isinstance(
+            result.exception, SystemExit
+        ), result.exception
+        assert result.exit_code != 0
+
+    def test_dfs_catalogue_full(
+        self,
+        runner: CliRunner,
+        adfs_image_filepath: Path,
+        dfs_image_full_catalogue: Path,
+    ) -> None:
+        result = runner.invoke(
+            cli,
+            [
+                "cp",
+                f"{adfs_image_filepath}:$.Hello",
+                f"{dfs_image_full_catalogue}:$.Hello",
+            ],
+        )
+        assert_clean_error(
+            result,
+            exit_code=EXIT_DIRECTORY_FULL,
+            message_contains=("full",),
+        )

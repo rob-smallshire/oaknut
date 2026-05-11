@@ -25,7 +25,12 @@ from asyoulikeit.cli import (
 
 from . import __version__
 from .cli_paths import FilingSystem, detect_filing_system, parse_prefix, resolve_path
-from .errors import handles_fs_errors
+from .errors import (
+    EXIT_LOCKED,
+    EXIT_PATH_NOT_FOUND,
+    FSClickException,
+    handles_fs_errors,
+)
 
 # ---------------------------------------------------------------------------
 # Alias-aware Click group
@@ -1193,6 +1198,7 @@ def put(
 @click.option("-f", "--force", is_flag=True, help="Ignore missing, override locks.")
 @click.option("-r", "--recursive", is_flag=True, help="Remove directories recursively.")
 @click.option("--dry-run", is_flag=True, help="Print what would be removed.")
+@handles_fs_errors
 def rm(image: Path, paths: tuple[str, ...], force: bool, recursive: bool, dry_run: bool) -> None:
     """Delete file(s) from the image (Acorn alias: *DELETE).
 
@@ -1200,6 +1206,16 @@ def rm(image: Path, paths: tuple[str, ...], force: bool, recursive: bool, dry_ru
     descends into directory matches and removes children before the
     directory itself.
     """
+    from oaknut.adfs.exceptions import ADFSFileLockedError
+    from oaknut.afs.exceptions import AFSFileLockedError
+    from oaknut.dfs.exceptions import FileLocked as DFSFileLocked
+
+    locked_errors: tuple[type[Exception], ...] = (
+        ADFSFileLockedError,
+        AFSFileLockedError,
+        DFSFileLocked,
+    )
+
     fs_type = detect_filing_system(image)
     first_prefix: FilingSystem | None = None
     per_path: list[tuple[FilingSystem, str]] = []
@@ -1243,16 +1259,16 @@ def rm(image: Path, paths: tuple[str, ...], force: bool, recursive: bool, dry_ru
                             target.rmdir()
                     else:
                         target.unlink()
-                except Exception as exc:
-                    if force and "locked" in str(exc).lower():
-                        if hasattr(target, "unlock"):
-                            target.unlock()
-                        if target.is_dir() and hasattr(target, "rmdir"):
-                            target.rmdir()
-                        else:
-                            target.unlink()
+                except locked_errors:
+                    if not force:
+                        raise
+                    # --force overrides locks: drop the lock and retry.
+                    if hasattr(target, "unlock"):
+                        target.unlock()
+                    if target.is_dir() and hasattr(target, "rmdir"):
+                        target.rmdir()
                     else:
-                        raise click.ClickException(str(exc))
+                        target.unlink()
 
         if fs is FilingSystem.AFS and not dry_run:
             handle.flush()
@@ -1266,6 +1282,7 @@ _alias("*DELETE", "rm")
 @click.argument("src")
 @click.argument("dst")
 @click.option("-f", "--force", is_flag=True, help="Overwrite existing destination.")
+@handles_fs_errors
 def mv(image: Path, src: str, dst: str, force: bool) -> None:
     """Rename or move a file within the image (Acorn alias: *RENAME)."""
     fs, bare_src = resolve_path(image, src)
@@ -1273,8 +1290,13 @@ def mv(image: Path, src: str, dst: str, force: bool) -> None:
 
     with open_image(image, fs, mode="r+b") as handle:
         source = _navigate(handle, bare_src, fs)
+        # Pre-check existence so the "path not found" diagnostic
+        # carries the user's original input rather than whatever the
+        # library uses internally (which may be a leaf component).
         if not source.exists():
-            raise click.ClickException(f"path not found: {bare_src}")
+            raise FSClickException(
+                f"path not found: {bare_src}", EXIT_PATH_NOT_FOUND
+            )
         source.rename(bare_dst)
         if fs is FilingSystem.AFS:
             handle.flush()
@@ -1292,6 +1314,7 @@ _alias("*RENAME", "mv")
     is_flag=True,
     help="Copy directories recursively.",
 )
+@handles_fs_errors
 def cp(args: tuple[str, ...], force: bool, recursive: bool) -> None:
     """Copy file(s) or a tree within or between disc images.
 

@@ -59,6 +59,45 @@ def adfs_image_filepath(tmp_path: Path) -> Path:
 
 
 @pytest.fixture
+def adfs_image_locked_file(tmp_path: Path) -> Path:
+    """ADFS-L image with a single locked file ``$.Locked``.
+
+    Any unlock-less rm / mv / overwrite of ``Locked`` raises
+    :class:`ADFSFileLockedError`.
+    """
+    filepath = tmp_path / "locked.adl"
+    with ADFS.create_file(filepath, ADFS_L, title="Locked") as adfs:
+        (adfs.root / "Locked").write_bytes(b"keep me")
+        (adfs.root / "Locked").lock()
+    return filepath
+
+
+@pytest.fixture
+def adfs_image_with_subdir_with_entries(tmp_path: Path) -> Path:
+    """ADFS-L image with ``$.Games`` containing one file (non-empty)."""
+    filepath = tmp_path / "nonempty_dir.adl"
+    with ADFS.create_file(filepath, ADFS_L, title="NonEmpty") as adfs:
+        (adfs.root / "Games").mkdir()
+        (adfs.root / "Games" / "Elite").write_bytes(b"data")
+    return filepath
+
+
+@pytest.fixture
+def dfs_image_full_catalogue(tmp_path: Path) -> Path:
+    """DFS .ssd image holding the maximum 31 catalogue entries.
+
+    Any further attempt to add a file raises ``CatalogFullError``.
+    """
+    filepath = tmp_path / "full.ssd"
+    with DFS.create_file(
+        filepath, ACORN_DFS_80T_SINGLE_SIDED, title="FullCat"
+    ) as dfs:
+        for index in range(31):
+            (dfs.root / f"$.F{index:02d}").write_bytes(b"x")
+    return filepath
+
+
+@pytest.fixture
 def adfs_image_full_root(tmp_path: Path) -> Path:
     """ADFS-L image whose root directory holds the maximum 47 entries.
 
