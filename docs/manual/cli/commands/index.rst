@@ -18,14 +18,22 @@ Inspection
 .. oaknut-command:: oaknut.disc.cli:ls
    :prog: disc ls
 
+   .. cli-example:: cmd_ls
+
 .. oaknut-command:: oaknut.disc.cli:tree
    :prog: disc tree
+
+   .. cli-example:: cmd_tree
 
 .. oaknut-command:: oaknut.disc.cli:stat
    :prog: disc stat
 
+   .. cli-example:: cmd_stat
+
 .. oaknut-command:: oaknut.disc.cli:find
    :prog: disc find
+
+   .. cli-example:: cmd_find
 
 .. oaknut-command:: oaknut.disc.cli:freemap
    :prog: disc freemap
@@ -35,11 +43,17 @@ Inspection
 .. oaknut-command:: oaknut.disc.cli:validate
    :prog: disc validate
 
+   .. cli-example:: cmd_validate
+
 .. oaknut-command:: oaknut.disc.cli:cat
    :prog: disc cat
 
+   .. cli-example:: cmd_cat
+
 .. oaknut-command:: oaknut.disc.cli:type
    :prog: disc type
+
+   .. cli-example:: cmd_type
 
 
 File transfer (host ↔ image)
