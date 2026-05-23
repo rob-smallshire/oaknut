@@ -12,7 +12,7 @@ extensions = [
 ]
 
 # Theme
-html_theme = "furo"
+html_theme = "sphinx_clarity_theme"
 html_title = "oaknut"
 
 # Autodoc
