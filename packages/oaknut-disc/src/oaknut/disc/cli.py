@@ -1214,9 +1214,9 @@ def get(
         # Build metadata.
         st = target.stat()
         meta = AcornMeta(
-            load_addr=getattr(st, "load_address", None),
-            exec_addr=getattr(st, "exec_address", None),
-            attr=int(st.access)
+            load_address=getattr(st, "load_address", None),
+            exec_address=getattr(st, "exec_address", None),
+            access=int(st.access)
             if hasattr(st, "access")
             else (0x08 if getattr(st, "locked", False) else 0),
         )
@@ -1243,8 +1243,8 @@ def get(
 @cli.command()
 @click.argument("file_spec")
 @click.argument("host_path", required=False, default=None)
-@click.option("--load", "load_addr", type=str, default=None, help="Load address (hex).")
-@click.option("--exec", "exec_addr", type=str, default=None, help="Exec address (hex).")
+@click.option("--load", "load_address", type=str, default=None, help="Load address (hex).")
+@click.option("--exec", "exec_address", type=str, default=None, help="Exec address (hex).")
 @click.option(
     "--meta-format",
     type=click.Choice(
@@ -1265,8 +1265,8 @@ def get(
 def put(
     file_spec: str,
     host_path: str | None,
-    load_addr: str | None,
-    exec_addr: str | None,
+    load_address: str | None,
+    exec_address: str | None,
     meta_format: str | None,
 ) -> None:
     """Import a file into the image.
@@ -1286,8 +1286,8 @@ def put(
     # Read data.
     if host_path is not None and str(host_path) == "-":
         data = sys.stdin.buffer.read()
-        resolved_load = int(load_addr, 0) if load_addr else _DEFAULT_ADDR
-        resolved_exec = int(exec_addr, 0) if exec_addr else _DEFAULT_ADDR
+        resolved_load = int(load_address, 0) if load_address else _DEFAULT_ADDR
+        resolved_exec = int(exec_address, 0) if exec_address else _DEFAULT_ADDR
     elif host_path is not None:
         # Try to import with metadata.
         from oaknut.file import DEFAULT_IMPORT_META_FORMATS, MetaFormat, import_with_metadata
@@ -1302,8 +1302,8 @@ def put(
             meta_formats=meta_formats,
         )
         data = host_path.read_bytes()
-        resolved_load = int(load_addr, 0) if load_addr else (meta.load_addr or 0)
-        resolved_exec = int(exec_addr, 0) if exec_addr else (meta.exec_addr or 0)
+        resolved_load = int(load_address, 0) if load_address else (meta.load_address or 0)
+        resolved_exec = int(exec_address, 0) if exec_address else (meta.exec_address or 0)
     else:
         raise click.ClickException("HOST_PATH is required (or use - for stdin)")
 
@@ -2515,9 +2515,9 @@ def _export_recursive(
             data = child.read_bytes()
             st = child.stat()
             meta = AcornMeta(
-                load_addr=getattr(st, "load_address", None),
-                exec_addr=getattr(st, "exec_address", None),
-                attr=int(st.access)
+                load_address=getattr(st, "load_address", None),
+                exec_address=getattr(st, "exec_address", None),
+                access=int(st.access)
                 if hasattr(st, "access")
                 else (0x08 if getattr(st, "locked", False) else 0),
             )

@@ -72,13 +72,13 @@ TESTDIR_RO_ZIP_FILEPATH = FIXTURES_DIRPATH / "testdir-ro.zip"
 
 
 def build_sparkfs_extra(
-    load_addr: int,
-    exec_addr: int,
+    load_address: int,
+    exec_address: int,
     attr: int = 0x03,
     reserved: int = 0,
 ) -> bytes:
     """Build a SparkFS/ARC0 extra field block."""
-    arc0_data = b"ARC0" + struct.pack("<IIII", load_addr, exec_addr, attr, reserved)
+    arc0_data = b"ARC0" + struct.pack("<IIII", load_address, exec_address, attr, reserved)
     return struct.pack("<HH", 0x4341, len(arc0_data)) + arc0_data
 
 
@@ -112,7 +112,7 @@ def make_zip_file(
 
 class TestAcornMeta:
     def test_has_metadata_when_load_addr_set(self):
-        meta = AcornMeta(load_addr=0x1900, exec_addr=0x801F)
+        meta = AcornMeta(load_address=0x1900, exec_address=0x801F)
         assert meta.has_metadata is True
 
     def test_has_metadata_false_when_none(self):
@@ -120,11 +120,11 @@ class TestAcornMeta:
         assert meta.has_metadata is False
 
     def test_filetype_stamped_when_fff_prefix(self):
-        meta = AcornMeta(load_addr=0xFFFFF000)
+        meta = AcornMeta(load_address=0xFFFFF000)
         assert meta.is_filetype_stamped is True
 
     def test_filetype_stamped_false_for_plain_address(self):
-        meta = AcornMeta(load_addr=0x00001900)
+        meta = AcornMeta(load_address=0x00001900)
         assert meta.is_filetype_stamped is False
 
     def test_filetype_stamped_false_when_none(self):
@@ -133,38 +133,38 @@ class TestAcornMeta:
 
     def test_infer_filetype_from_load_addr(self):
         # RISC OS BASIC = type FFB
-        meta = AcornMeta(load_addr=0xFFFFB00)
+        meta = AcornMeta(load_address=0xFFFFB00)
         assert meta.infer_filetype() is None  # not fff prefix
 
-        meta = AcornMeta(load_addr=0xFFFFB00)
+        meta = AcornMeta(load_address=0xFFFFB00)
         assert meta.is_filetype_stamped is False
 
     def test_infer_filetype_basic(self):
-        # load_addr = 0xFFFFFB00 -> filetype FFB (BASIC)
-        meta = AcornMeta(load_addr=0xFFFFFB00)
+        # load_address = 0xFFFFFB00 -> filetype FFB (BASIC)
+        meta = AcornMeta(load_address=0xFFFFFB00)
         assert meta.infer_filetype() == 0xFFB
 
     def test_infer_filetype_text(self):
-        # load_addr = 0xFFFFFF52 -> filetype FFF (Text)
-        meta = AcornMeta(load_addr=0xFFFFFF52)
+        # load_address = 0xFFFFFF52 -> filetype FFF (Text)
+        meta = AcornMeta(load_address=0xFFFFFF52)
         assert meta.infer_filetype() == 0xFFF
 
     def test_infer_filetype_fdd(self):
-        # load_addr = 0xFFFFDD00 -> filetype FDD (BASIC stored)
-        meta = AcornMeta(load_addr=0xFFFFDD00)
+        # load_address = 0xFFFFDD00 -> filetype FDD (BASIC stored)
+        meta = AcornMeta(load_address=0xFFFFDD00)
         assert meta.infer_filetype() == 0xFDD
 
     def test_infer_filetype_f0e(self):
         # Utility command, type F0E
-        meta = AcornMeta(load_addr=0xFFFF0E10)
+        meta = AcornMeta(load_address=0xFFFF0E10)
         assert meta.infer_filetype() == 0xF0E
 
     def test_infer_filetype_f09(self):
-        meta = AcornMeta(load_addr=0xFFFF0900)
+        meta = AcornMeta(load_address=0xFFFF0900)
         assert meta.infer_filetype() == 0xF09
 
     def test_infer_filetype_falls_back_to_explicit(self):
-        meta = AcornMeta(load_addr=0x00001900, filetype=0xFFB)
+        meta = AcornMeta(load_address=0x00001900, filetype=0xFFB)
         assert meta.infer_filetype() == 0xFFB
 
     def test_infer_filetype_none_when_no_data(self):
@@ -182,18 +182,18 @@ class TestParseSparkfsExtra:
         extra = build_sparkfs_extra(0xFFFF0E10, 0xFFFF0E10, 0x03)
         meta = parse_sparkfs_extra(extra)
         assert meta is not None
-        assert meta.load_addr == 0xFFFF0E10
-        assert meta.exec_addr == 0xFFFF0E10
-        assert meta.attr == 0x03
+        assert meta.load_address == 0xFFFF0E10
+        assert meta.exec_address == 0xFFFF0E10
+        assert meta.access == 0x03
         assert meta.filetype == 0xF0E
 
     def test_different_load_and_exec(self):
         extra = build_sparkfs_extra(0xFFFF0900, 0xFFFF091A, 0x17)
         meta = parse_sparkfs_extra(extra)
         assert meta is not None
-        assert meta.load_addr == 0xFFFF0900
-        assert meta.exec_addr == 0xFFFF091A
-        assert meta.attr == 0x17
+        assert meta.load_address == 0xFFFF0900
+        assert meta.exec_address == 0xFFFF091A
+        assert meta.access == 0x17
 
     def test_text_file(self):
         extra = build_sparkfs_extra(0xFFFFFF52, 0x2FEEAFD0, 0x0B)
@@ -205,8 +205,8 @@ class TestParseSparkfsExtra:
         extra = build_sparkfs_extra(0x00001900, 0x0000801F, 0x03)
         meta = parse_sparkfs_extra(extra)
         assert meta is not None
-        assert meta.load_addr == 0x00001900
-        assert meta.exec_addr == 0x0000801F
+        assert meta.load_address == 0x00001900
+        assert meta.exec_address == 0x0000801F
         assert meta.is_filetype_stamped is False
         assert meta.filetype is None
 
@@ -236,7 +236,7 @@ class TestParseSparkfsExtra:
         combined = unix_extra + sparkfs_extra
         meta = parse_sparkfs_extra(combined)
         assert meta is not None
-        assert meta.load_addr == 0xFFFF0E23
+        assert meta.load_address == 0xFFFF0E23
 
     def test_sparkfs_field_with_larger_data_size(self):
         # data_size > 20 should still work
@@ -245,22 +245,22 @@ class TestParseSparkfsExtra:
         extra = struct.pack("<HH", 0x4341, len(arc0_data)) + arc0_data
         meta = parse_sparkfs_extra(extra)
         assert meta is not None
-        assert meta.load_addr == 0xFFFF0E10
+        assert meta.load_address == 0xFFFF0E10
 
     def test_zero_addresses(self):
         extra = build_sparkfs_extra(0x00000000, 0x00000000, 0x00)
         meta = parse_sparkfs_extra(extra)
         assert meta is not None
-        assert meta.load_addr == 0
-        assert meta.exec_addr == 0
+        assert meta.load_address == 0
+        assert meta.exec_address == 0
 
     def test_max_addresses(self):
         extra = build_sparkfs_extra(0xFFFFFFFF, 0xFFFFFFFF, 0xFF)
         meta = parse_sparkfs_extra(extra)
         assert meta is not None
-        assert meta.load_addr == 0xFFFFFFFF
-        assert meta.exec_addr == 0xFFFFFFFF
-        assert meta.attr == 0xFF
+        assert meta.load_address == 0xFFFFFFFF
+        assert meta.exec_address == 0xFFFFFFFF
+        assert meta.access == 0xFF
 
 
 # =========================================================================
@@ -290,14 +290,14 @@ class TestParseEncodedFilename:
         clean, meta = parse_encoded_filename("PROG,ffff0e10,0000801f")
         assert clean == "PROG"
         assert meta is not None
-        assert meta.load_addr == 0xFFFF0E10
-        assert meta.exec_addr == 0x0000801F
+        assert meta.load_address == 0xFFFF0E10
+        assert meta.exec_address == 0x0000801F
 
     def test_load_exec_uppercase(self):
         clean, meta = parse_encoded_filename("PROG,FFFF0E10,0000801F")
         assert clean == "PROG"
-        assert meta.load_addr == 0xFFFF0E10
-        assert meta.exec_addr == 0x0000801F
+        assert meta.load_address == 0xFFFF0E10
+        assert meta.exec_address == 0x0000801F
 
     def test_plain_filename_no_comma(self):
         clean, meta = parse_encoded_filename("README")
@@ -332,13 +332,13 @@ class TestParseEncodedFilename:
     def test_path_with_load_exec(self):
         clean, meta = parse_encoded_filename("path/to/PROG,ffff0e10,0000801f")
         assert clean == "path/to/PROG"
-        assert meta.load_addr == 0xFFFF0E10
+        assert meta.load_address == 0xFFFF0E10
 
     def test_filetype_synthesises_load_addr(self):
         _, meta = parse_encoded_filename("FILE,f0e")
         # 0xFFF00000 | (0xF0E << 8) = 0xFFFF0E00
-        assert meta.load_addr == 0xFFFF0E00
-        assert meta.exec_addr == 0
+        assert meta.load_address == 0xFFFF0E00
+        assert meta.exec_address == 0
         assert meta.is_filetype_stamped is True
         assert meta.infer_filetype() == 0xF0E
 
@@ -354,31 +354,31 @@ class TestParseEncodedFilename:
         clean, meta = parse_encoded_filename("PROG,1900-801F")
         assert clean == "PROG"
         assert meta is not None
-        assert meta.load_addr == 0x1900
-        assert meta.exec_addr == 0x801F
+        assert meta.load_address == 0x1900
+        assert meta.exec_address == 0x801F
 
     def test_mos_dash_form_full_width(self):
         clean, meta = parse_encoded_filename("FILE,FFFF0E10-FFFF0E10")
         assert clean == "FILE"
-        assert meta.load_addr == 0xFFFF0E10
-        assert meta.exec_addr == 0xFFFF0E10
+        assert meta.load_address == 0xFFFF0E10
+        assert meta.exec_address == 0xFFFF0E10
         assert meta.infer_filetype() == 0xF0E
 
     def test_mos_dash_form_short(self):
         clean, meta = parse_encoded_filename("DATA,0-0")
         assert clean == "DATA"
-        assert meta.load_addr == 0
-        assert meta.exec_addr == 0
+        assert meta.load_address == 0
+        assert meta.exec_address == 0
 
     def test_mos_dash_form_with_path(self):
         clean, meta = parse_encoded_filename("dir/FILE,1900-801F")
         assert clean == "dir/FILE"
-        assert meta.load_addr == 0x1900
+        assert meta.load_address == 0x1900
 
     def test_mos_dash_form_lowercase(self):
         clean, meta = parse_encoded_filename("file,ffff0e10-ffff0e10")
         assert clean == "file"
-        assert meta.load_addr == 0xFFFF0E10
+        assert meta.load_address == 0xFFFF0E10
 
     def test_mos_dash_no_comma(self):
         """Dash without comma prefix is not a MOS encoding."""
@@ -398,33 +398,33 @@ class TestParseInfLine:
         assert result is not None
         source, meta = result
         assert source == "inf-trad"
-        assert meta.load_addr == 0xFFFFDD00
-        assert meta.exec_addr == 0xFFFFDD00
-        assert meta.attr == 0x03
+        assert meta.load_address == 0xFFFFDD00
+        assert meta.exec_address == 0xFFFFDD00
+        assert meta.access == 0x03
 
     def test_trad_inf_without_access(self):
         result = parse_inf_line("README      FFFFF004 FFFFF004 00000100")
         assert result is not None
         source, meta = result
         assert source == "inf-trad"
-        assert meta.load_addr == 0xFFFFF004
-        assert meta.attr is None
+        assert meta.load_address == 0xFFFFF004
+        assert meta.access is None
 
     def test_pieb_inf(self):
         result = parse_inf_line("0 fffff93a c7524201 33")
         assert result is not None
         source, meta = result
         assert source == "inf-pieb"
-        assert meta.load_addr == 0xFFFFF93A
-        assert meta.exec_addr == 0xC7524201
-        assert meta.attr == 0x33
+        assert meta.load_address == 0xFFFFF93A
+        assert meta.exec_address == 0xC7524201
+        assert meta.access == 0x33
 
     def test_pieb_inf_zero_owner(self):
         result = parse_inf_line("0 ffffdd00 ffffdd00 3")
         assert result is not None
         source, meta = result
         assert source == "inf-pieb"
-        assert meta.load_addr == 0xFFFFDD00
+        assert meta.load_address == 0xFFFFDD00
 
     def test_trad_inf_hex_filename(self):
         # A filename like "FF" is valid hex but should be detected as traditional
@@ -433,7 +433,7 @@ class TestParseInfLine:
         assert result is not None
         source, meta = result
         assert source == "inf-trad"
-        assert meta.load_addr == 0xFFFFDD00
+        assert meta.load_address == 0xFFFFDD00
 
     def test_too_few_fields(self):
         assert parse_inf_line("only three fields") is None
@@ -482,7 +482,7 @@ class TestBuildInfIndex:
         assert "FILE" in index
         source, meta = index["FILE"]
         assert source == "inf-pieb"
-        assert meta.load_addr == 0xFFFFDD00
+        assert meta.load_address == 0xFFFFDD00
         assert "FILE.inf" in consumed
 
     def test_trad_inf_detected(self, tmp_path):
@@ -495,8 +495,8 @@ class TestBuildInfIndex:
         assert "PROG" in index
         source, meta = index["PROG"]
         assert source == "inf-trad"
-        assert meta.load_addr == 0xFFFF0E10
-        assert meta.attr == 0x03
+        assert meta.load_address == 0xFFFF0E10
+        assert meta.access == 0x03
 
     def test_orphan_inf_not_consumed(self, tmp_path):
         """An .inf with no corresponding data file is not consumed."""
@@ -545,30 +545,30 @@ class TestResolveMetadataWithInf:
     def test_inf_used_when_no_sparkfs(self):
         info = self._make_info("FILE")
         inf_index = {
-            "FILE": ("inf-pieb", AcornMeta(load_addr=0xFFFFDD00, exec_addr=0xFFFFDD00, attr=3))
+            "FILE": ("inf-pieb", AcornMeta(load_address=0xFFFFDD00, exec_address=0xFFFFDD00, access=3))
         }
         source, clean, meta = resolve_metadata(info, inf_index=inf_index)
         assert source == "inf-pieb"
-        assert meta.load_addr == 0xFFFFDD00
+        assert meta.load_address == 0xFFFFDD00
 
     def test_sparkfs_beats_inf(self):
         extra = build_sparkfs_extra(0xFFFF0E10, 0xFFFF0E10, 0x03)
         info = self._make_info("FILE", extra=extra)
         inf_index = {
-            "FILE": ("inf-pieb", AcornMeta(load_addr=0xFFFFDD00, exec_addr=0xFFFFDD00, attr=3))
+            "FILE": ("inf-pieb", AcornMeta(load_address=0xFFFFDD00, exec_address=0xFFFFDD00, access=3))
         }
         source, clean, meta = resolve_metadata(info, inf_index=inf_index)
         assert source == "sparkfs"
-        assert meta.load_addr == 0xFFFF0E10
+        assert meta.load_address == 0xFFFF0E10
 
     def test_inf_beats_filename_encoding(self):
         info = self._make_info("FILE,ffb")
         inf_index = {
-            "FILE,ffb": ("inf-trad", AcornMeta(load_addr=0xFFFF0E10, exec_addr=0xFFFF0E10, attr=3))
+            "FILE,ffb": ("inf-trad", AcornMeta(load_address=0xFFFF0E10, exec_address=0xFFFF0E10, access=3))
         }
         source, clean, meta = resolve_metadata(info, inf_index=inf_index)
         assert source == "inf-trad"
-        assert meta.load_addr == 0xFFFF0E10
+        assert meta.load_address == 0xFFFF0E10
 
 
 # =========================================================================
@@ -592,7 +592,7 @@ class TestResolveMetadata:
         assert source == "sparkfs"
         # Encoded suffix still stripped from filename
         assert clean == "FILE"
-        assert meta.load_addr == 0xFFFF0E10
+        assert meta.load_address == 0xFFFF0E10
 
     def test_filename_when_no_sparkfs(self):
         info = self._make_info("FILE,ffb")
@@ -621,7 +621,7 @@ class TestResolveMetadata:
         source, clean, meta = resolve_metadata(info, decode_filenames=False)
         assert source == "sparkfs"
         assert clean == "FILE,ffb"  # Encoded suffix preserved
-        assert meta.load_addr == 0xFFFF0E10
+        assert meta.load_address == 0xFFFF0E10
 
 
 # =========================================================================
@@ -762,8 +762,8 @@ class TestNetUtilsZip:
             for info in zf.infolist():
                 meta = parse_sparkfs_extra(info.extra)
                 exp = expected[info.filename]
-                assert meta.load_addr == exp[0], f"{info.filename} load"
-                assert meta.exec_addr == exp[1], f"{info.filename} exec"
+                assert meta.load_address == exp[0], f"{info.filename} load"
+                assert meta.exec_address == exp[1], f"{info.filename} exec"
                 assert meta.infer_filetype() == exp[2], f"{info.filename} type"
                 assert info.file_size == exp[3], f"{info.filename} size"
 
@@ -1700,16 +1700,16 @@ class TestSwehBundledInf:
 
 class TestBuildFilenameSuffix:
     def test_filetype_stamped(self):
-        meta = AcornMeta(load_addr=0xFFFFDD00, exec_addr=0xFFFFDD00, filetype=0xFDD)
+        meta = AcornMeta(load_address=0xFFFFDD00, exec_address=0xFFFFDD00, filetype=0xFDD)
         assert build_filename_suffix(meta) == ",fdd"
 
     def test_literal_addresses(self):
-        meta = AcornMeta(load_addr=0x00001900, exec_addr=0x0000801F)
+        meta = AcornMeta(load_address=0x00001900, exec_address=0x0000801F)
         assert build_filename_suffix(meta) == ",00001900,0000801f"
 
     def test_filetype_ffb(self):
-        meta = AcornMeta(load_addr=0xFFFFB00, exec_addr=0, filetype=0xFFB)
-        meta.load_addr = 0xFFFFFB00
+        meta = AcornMeta(load_address=0xFFFFB00, exec_address=0, filetype=0xFFB)
+        meta.load_address = 0xFFFFFB00
         assert build_filename_suffix(meta) == ",ffb"
 
 
@@ -1800,19 +1800,19 @@ class TestCliFilenameFormat:
 
 class TestBuildMosFilenameSuffix:
     def test_short_addresses(self):
-        meta = AcornMeta(load_addr=0x1900, exec_addr=0x801F)
+        meta = AcornMeta(load_address=0x1900, exec_address=0x801F)
         assert build_mos_filename_suffix(meta) == ",1900-801f"
 
     def test_full_width_addresses(self):
-        meta = AcornMeta(load_addr=0xFFFF0E10, exec_addr=0xFFFF0E10)
+        meta = AcornMeta(load_address=0xFFFF0E10, exec_address=0xFFFF0E10)
         assert build_mos_filename_suffix(meta) == ",ffff0e10-ffff0e10"
 
     def test_zero_addresses(self):
-        meta = AcornMeta(load_addr=0, exec_addr=0)
+        meta = AcornMeta(load_address=0, exec_address=0)
         assert build_mos_filename_suffix(meta) == ",0-0"
 
     def test_filetype_stamped(self):
-        meta = AcornMeta(load_addr=0xFFFFDD00, exec_addr=0xFFFFDD00)
+        meta = AcornMeta(load_address=0xFFFFDD00, exec_address=0xFFFFDD00)
         assert build_mos_filename_suffix(meta) == ",ffffdd00-ffffdd00"
 
 
@@ -1942,11 +1942,11 @@ class TestEdgeCases:
     def test_load_exec_all_zeros(self):
         clean, meta = parse_encoded_filename("FILE,00000000,00000000")
         assert clean == "FILE"
-        assert meta.load_addr == 0
-        assert meta.exec_addr == 0
+        assert meta.load_address == 0
+        assert meta.exec_address == 0
 
     def test_load_exec_all_f(self):
         clean, meta = parse_encoded_filename("FILE,ffffffff,ffffffff")
         assert clean == "FILE"
-        assert meta.load_addr == 0xFFFFFFFF
-        assert meta.exec_addr == 0xFFFFFFFF
+        assert meta.load_address == 0xFFFFFFFF
+        assert meta.exec_address == 0xFFFFFFFF

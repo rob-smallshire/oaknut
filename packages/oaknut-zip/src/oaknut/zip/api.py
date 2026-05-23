@@ -131,9 +131,9 @@ def extract_member(
     if meta_format == MetaFormat.XATTR_PIEB:
         write_econet_xattrs(
             output_filepath,
-            load_addr=meta.load_addr,
-            exec_addr=meta.exec_addr,
-            attr=meta.attr,
+            load_address=meta.load_address,
+            exec_address=meta.exec_address,
+            attr=meta.access,
             owner=owner,
         )
         if verbose:
@@ -142,9 +142,9 @@ def extract_member(
     elif meta_format == MetaFormat.XATTR_ACORN:
         write_acorn_xattrs(
             output_filepath,
-            load_addr=meta.load_addr,
-            exec_addr=meta.exec_addr,
-            attr=meta.attr,
+            load_address=meta.load_address,
+            exec_address=meta.exec_address,
+            attr=meta.access,
         )
         if verbose:
             rel = output_filepath.relative_to(output_dirpath)
@@ -166,16 +166,16 @@ def extract_member(
         if meta_format == MetaFormat.INF_TRAD:
             inf_line = format_trad_inf_line(
                 filename=leaf_name,
-                load_addr=meta.load_addr,
-                exec_addr=meta.exec_addr,
+                load_address=meta.load_address,
+                exec_address=meta.exec_address,
                 length=len(data),
-                attr=meta.attr,
+                attr=meta.access,
             )
         else:
             inf_line = format_pieb_inf_line(
-                load_addr=meta.load_addr,
-                exec_addr=meta.exec_addr,
-                attr=meta.attr,
+                load_address=meta.load_address,
+                exec_address=meta.exec_address,
+                attr=meta.access,
                 owner=owner,
             )
 
@@ -258,7 +258,7 @@ def list_archive(
     Returns:
         A list of dicts, one per entry (excluding consumed ``.inf``
         sidecars), with keys: ``filename``, ``is_dir``, ``file_size``,
-        ``load_addr``, ``exec_addr``, ``attr``, ``filetype``, ``source``.
+        ``load_address``, ``exec_address``, ``attr``, ``filetype``, ``source``.
 
     Raises:
         click.ClickException: If the file is not a valid ZIP.
@@ -288,9 +288,9 @@ def list_archive(
                 if inf_entry is not None:
                     source_label, meta = inf_entry
                     entry[SOURCE_KEY] = source_label
-                    entry[LOAD_ADDR_KEY] = meta.load_addr
-                    entry[EXEC_ADDR_KEY] = meta.exec_addr
-                    entry[ATTR_KEY] = meta.attr
+                    entry[LOAD_ADDR_KEY] = meta.load_address
+                    entry[EXEC_ADDR_KEY] = meta.exec_address
+                    entry[ATTR_KEY] = meta.access
                     entry[FILETYPE_KEY] = meta.infer_filetype()
                 entries.append(entry)
                 continue
@@ -308,9 +308,9 @@ def list_archive(
                 SOURCE_KEY: metadata_source or "",
             }
             if meta and meta.has_metadata:
-                entry[LOAD_ADDR_KEY] = meta.load_addr
-                entry[EXEC_ADDR_KEY] = meta.exec_addr
-                entry[ATTR_KEY] = meta.attr
+                entry[LOAD_ADDR_KEY] = meta.load_address
+                entry[EXEC_ADDR_KEY] = meta.exec_address
+                entry[ATTR_KEY] = meta.access
                 entry[FILETYPE_KEY] = meta.infer_filetype()
 
             entries.append(entry)

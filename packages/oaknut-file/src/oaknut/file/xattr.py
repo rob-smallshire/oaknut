@@ -71,8 +71,8 @@ def _get_xattr(filepath: Path, name: str) -> str | None:
 
 def write_acorn_xattrs(
     filepath: Union[str, Path],
-    load_addr: int,
-    exec_addr: int,
+    load_address: int,
+    exec_address: int,
     attr: int | None = None,
 ) -> None:
     """Write Acorn file metadata as extended attributes.
@@ -81,8 +81,8 @@ def write_acorn_xattrs(
     ``user.acorn.attr`` as uppercase hex strings.
     """
     attrs = {
-        _ACORN_LOAD: f"{load_addr:08X}",
-        _ACORN_EXEC: f"{exec_addr:08X}",
+        _ACORN_LOAD: f"{load_address:08X}",
+        _ACORN_EXEC: f"{exec_address:08X}",
     }
     if attr is not None:
         attrs[_ACORN_ATTR] = f"{attr:02X}"
@@ -103,9 +103,9 @@ def read_acorn_xattrs(filepath: Union[str, Path]) -> AcornMeta | None:
         exec_val = _get_xattr(filepath, _ACORN_EXEC)
         attr_val = _get_xattr(filepath, _ACORN_ATTR)
         return AcornMeta(
-            load_addr=int(load, 16),
-            exec_addr=int(exec_val, 16) if exec_val is not None else None,
-            attr=int(attr_val, 16) if attr_val is not None else None,
+            load_address=int(load, 16),
+            exec_address=int(exec_val, 16) if exec_val is not None else None,
+            access=int(attr_val, 16) if attr_val is not None else None,
         )
 
     # Fall back to Econet namespace
@@ -114,8 +114,8 @@ def read_acorn_xattrs(filepath: Union[str, Path]) -> AcornMeta | None:
 
 def write_econet_xattrs(
     filepath: Union[str, Path],
-    load_addr: int,
-    exec_addr: int,
+    load_address: int,
+    exec_address: int,
     attr: int | None = None,
     owner: int = 0,
 ) -> None:
@@ -128,8 +128,8 @@ def write_econet_xattrs(
     perm = attr if attr is not None else 0x17
     attrs = {
         _ECONET_OWNER: f"{owner:04X}",
-        _ECONET_LOAD: f"{load_addr:08X}",
-        _ECONET_EXEC: f"{exec_addr:08X}",
+        _ECONET_LOAD: f"{load_address:08X}",
+        _ECONET_EXEC: f"{exec_address:08X}",
         _ECONET_PERM: f"{perm:02X}",
     }
     _set_xattrs(Path(filepath), attrs)
@@ -150,7 +150,7 @@ def read_econet_xattrs(filepath: Union[str, Path]) -> AcornMeta | None:
     perm_val = _get_xattr(filepath, _ECONET_PERM)
 
     return AcornMeta(
-        load_addr=int(load, 16),
-        exec_addr=int(exec_val, 16) if exec_val is not None else None,
-        attr=int(perm_val, 16) if perm_val is not None else None,
+        load_address=int(load, 16),
+        exec_address=int(exec_val, 16) if exec_val is not None else None,
+        access=int(perm_val, 16) if perm_val is not None else None,
     )

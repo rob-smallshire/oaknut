@@ -80,7 +80,7 @@ def _sidecar_filepath(data_filepath: Path) -> Path:
 
 
 def _attr_of(meta: AcornMeta) -> int | None:
-    return meta.attr
+    return meta.access
 
 
 # --- Export ---------------------------------------------------------------
@@ -120,8 +120,8 @@ def export_with_metadata(
     target_filepath = Path(target_filepath)
     target_filepath.parent.mkdir(parents=True, exist_ok=True)
 
-    load_addr = meta.load_addr or 0
-    exec_addr = meta.exec_addr or 0
+    load_address = meta.load_address or 0
+    exec_address = meta.exec_address or 0
     attr = _attr_of(meta)
 
     if meta_format is None:
@@ -132,8 +132,8 @@ def export_with_metadata(
         target_filepath.write_bytes(data)
         line = format_trad_inf_line(
             filename=filename if filename is not None else target_filepath.name,
-            load_addr=load_addr,
-            exec_addr=exec_addr,
+            load_address=load_address,
+            exec_address=exec_address,
             length=len(data),
             attr=attr,
         )
@@ -143,8 +143,8 @@ def export_with_metadata(
     if meta_format == MetaFormat.INF_PIEB:
         target_filepath.write_bytes(data)
         line = format_pieb_inf_line(
-            load_addr=load_addr,
-            exec_addr=exec_addr,
+            load_address=load_address,
+            exec_address=exec_address,
             attr=attr,
             owner=owner,
         )
@@ -156,8 +156,8 @@ def export_with_metadata(
         try:
             write_acorn_xattrs(
                 target_filepath,
-                load_addr=load_addr,
-                exec_addr=exec_addr,
+                load_address=load_address,
+                exec_address=exec_address,
                 attr=attr,
             )
         except (OSError, ImportError):
@@ -170,8 +170,8 @@ def export_with_metadata(
         try:
             write_econet_xattrs(
                 target_filepath,
-                load_addr=load_addr,
-                exec_addr=exec_addr,
+                load_address=load_address,
+                exec_address=exec_address,
                 attr=attr,
                 owner=owner,
             )

@@ -399,9 +399,9 @@ class DFSPath:
         if entry.locked:
             attr |= int(Access.L)
         meta = AcornMeta(
-            load_addr=entry.load_address,
-            exec_addr=entry.exec_address,
-            attr=attr,
+            load_address=entry.load_address,
+            exec_address=entry.exec_address,
+            access=attr,
         )
         return export_with_metadata(
             data,
@@ -436,9 +436,9 @@ class DFSPath:
         data = source.read_bytes()
         _, _, meta = import_with_metadata(source, meta_formats=meta_formats)
 
-        load_address = meta.load_addr or 0
-        exec_address = meta.exec_addr or 0
-        locked = bool((meta.attr or 0) & int(Access.L))
+        load_address = meta.load_address or 0
+        exec_address = meta.exec_address or 0
+        locked = bool((meta.access or 0) & int(Access.L))
 
         self.write_bytes(
             data,

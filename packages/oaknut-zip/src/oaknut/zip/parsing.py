@@ -61,11 +61,11 @@ def parse_sparkfs_extra(extra: bytes) -> AcornMeta | None:
             chunk = extra[offset : offset + SPARKFS_DATA_LENGTH]
             sig = chunk[0:4]
             if sig == SPARKFS_SIGNATURE:
-                load_addr, exec_addr, attr, _reserved = struct.unpack_from("<IIII", chunk, 4)
+                load_address, exec_address, attr, _reserved = struct.unpack_from("<IIII", chunk, 4)
                 meta = AcornMeta(
-                    load_addr=load_addr,
-                    exec_addr=exec_addr,
-                    attr=attr & 0xFF,
+                    load_address=load_address,
+                    exec_address=exec_address,
+                    access=attr & 0xFF,
                 )
                 meta.filetype = meta.infer_filetype()
                 return meta

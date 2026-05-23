@@ -24,14 +24,14 @@ class TestParseEncodedFilename:
     def test_riscos_load_exec(self):
         clean, meta = parse_encoded_filename("PROG,ffff0e10,0000801f")
         assert clean == "PROG"
-        assert meta.load_addr == 0xFFFF0E10
-        assert meta.exec_addr == 0x0000801F
+        assert meta.load_address == 0xFFFF0E10
+        assert meta.exec_address == 0x0000801F
 
     def test_mos_load_exec(self):
         clean, meta = parse_encoded_filename("PROG,1900-801f")
         assert clean == "PROG"
-        assert meta.load_addr == 0x1900
-        assert meta.exec_addr == 0x801F
+        assert meta.load_address == 0x1900
+        assert meta.exec_address == 0x801F
 
     def test_no_encoding(self):
         clean, meta = parse_encoded_filename("HELLO")
@@ -52,46 +52,46 @@ class TestParseEncodedFilename:
 
 class TestBuildFilenameSuffix:
     def test_filetype_stamped(self):
-        meta = AcornMeta(load_addr=0xFFFFFB00, exec_addr=0)
+        meta = AcornMeta(load_address=0xFFFFFB00, exec_address=0)
         suffix = build_filename_suffix(meta)
         assert suffix == ",ffb"
 
     def test_literal_load_exec(self):
-        meta = AcornMeta(load_addr=0x1900, exec_addr=0x8023)
+        meta = AcornMeta(load_address=0x1900, exec_address=0x8023)
         suffix = build_filename_suffix(meta)
         assert suffix == ",00001900,00008023"
 
 
 class TestBuildMosFilenameSuffix:
     def test_basic(self):
-        meta = AcornMeta(load_addr=0x1900, exec_addr=0x8023)
+        meta = AcornMeta(load_address=0x1900, exec_address=0x8023)
         suffix = build_mos_filename_suffix(meta)
         assert suffix == ",1900-8023"
 
     def test_no_zero_padding(self):
-        meta = AcornMeta(load_addr=0xFF, exec_addr=0x0)
+        meta = AcornMeta(load_address=0xFF, exec_address=0x0)
         suffix = build_mos_filename_suffix(meta)
         assert suffix == ",ff-0"
 
 
 class TestFilenameEncodingRoundTrip:
     def test_filetype_round_trip(self):
-        meta = AcornMeta(load_addr=0xFFFFFB00, exec_addr=0)
+        meta = AcornMeta(load_address=0xFFFFFB00, exec_address=0)
         suffix = build_filename_suffix(meta)
         clean, parsed = parse_encoded_filename(f"FILE{suffix}")
         assert clean == "FILE"
         assert parsed.infer_filetype() == 0xFFB
 
     def test_load_exec_round_trip(self):
-        meta = AcornMeta(load_addr=0x1900, exec_addr=0x8023)
+        meta = AcornMeta(load_address=0x1900, exec_address=0x8023)
         suffix = build_filename_suffix(meta)
         clean, parsed = parse_encoded_filename(f"FILE{suffix}")
-        assert parsed.load_addr == 0x1900
-        assert parsed.exec_addr == 0x8023
+        assert parsed.load_address == 0x1900
+        assert parsed.exec_address == 0x8023
 
     def test_mos_round_trip(self):
-        meta = AcornMeta(load_addr=0x1900, exec_addr=0x8023)
+        meta = AcornMeta(load_address=0x1900, exec_address=0x8023)
         suffix = build_mos_filename_suffix(meta)
         clean, parsed = parse_encoded_filename(f"FILE{suffix}")
-        assert parsed.load_addr == 0x1900
-        assert parsed.exec_addr == 0x8023
+        assert parsed.load_address == 0x1900
+        assert parsed.exec_address == 0x8023

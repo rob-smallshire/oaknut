@@ -53,16 +53,16 @@ def xattr_tmp_path(tmp_path: Path) -> Path:
 
 
 SAMPLE_META = AcornMeta(
-    load_addr=0x00001900,
-    exec_addr=0x00008023,
-    attr=int(Access.R | Access.W | Access.L),
+    load_address=0x00001900,
+    exec_address=0x00008023,
+    access=int(Access.R | Access.W | Access.L),
 )
 
 
 FILETYPE_META = AcornMeta(
-    load_addr=0xFFFFFD00,  # RISC OS filetype-stamped (filetype 0xFFD)
-    exec_addr=0x00000000,
-    attr=int(Access.R | Access.W),
+    load_address=0xFFFFFD00,  # RISC OS filetype-stamped (filetype 0xFFD)
+    exec_address=0x00000000,
+    access=int(Access.R | Access.W),
 )
 
 
@@ -94,9 +94,9 @@ def test_inf_round_trip(tmp_path: Path, fmt: MetaFormat):
     clean, source, meta = import_with_metadata(written, meta_formats=(fmt,))
     assert clean == written
     assert source in ("inf-trad", "inf-pieb")
-    assert meta.load_addr == SAMPLE_META.load_addr
-    assert meta.exec_addr == SAMPLE_META.exec_addr
-    assert meta.attr == SAMPLE_META.attr
+    assert meta.load_address == SAMPLE_META.load_address
+    assert meta.exec_address == SAMPLE_META.exec_address
+    assert meta.access == SAMPLE_META.access
 
 
 def test_inf_sidecar_name_is_fixed(tmp_path: Path):
@@ -118,7 +118,7 @@ def test_inf_pieb_on_import_accepts_trad_sidecar(tmp_path: Path):
         meta_formats=(MetaFormat.INF_PIEB,),
     )
     assert source == "inf-trad"
-    assert meta.load_addr == SAMPLE_META.load_addr
+    assert meta.load_address == SAMPLE_META.load_address
 
 
 # --- Xattr round-trip -------------------------------------------------------
@@ -138,9 +138,9 @@ def test_xattr_round_trip(xattr_tmp_path: Path, fmt: MetaFormat):
     clean, source, meta = import_with_metadata(target, meta_formats=(fmt,))
     assert clean == target
     assert source == fmt.value
-    assert meta.load_addr == SAMPLE_META.load_addr
-    assert meta.exec_addr == SAMPLE_META.exec_addr
-    assert meta.attr == SAMPLE_META.attr
+    assert meta.load_address == SAMPLE_META.load_address
+    assert meta.exec_address == SAMPLE_META.exec_address
+    assert meta.access == SAMPLE_META.access
 
 
 # --- Filename-encoded round-trip --------------------------------------------
@@ -168,8 +168,8 @@ def test_filename_round_trip(tmp_path: Path, fmt: MetaFormat):
     clean, source, meta = import_with_metadata(written, meta_formats=(fmt,))
     assert clean == tmp_path / "PROG"  # suffix stripped
     assert source == "filename"
-    assert meta.load_addr == SAMPLE_META.load_addr
-    assert meta.exec_addr == SAMPLE_META.exec_addr
+    assert meta.load_address == SAMPLE_META.load_address
+    assert meta.exec_address == SAMPLE_META.exec_address
 
 
 def test_filename_riscos_filetype_stamped(tmp_path: Path):
@@ -230,9 +230,9 @@ def test_import_empty_cascade_returns_no_metadata(tmp_path: Path):
     clean, source, meta = import_with_metadata(target, meta_formats=())
     assert clean == target
     assert source is None
-    assert meta.load_addr is None
-    assert meta.exec_addr is None
-    assert meta.attr is None
+    assert meta.load_address is None
+    assert meta.exec_address is None
+    assert meta.access is None
 
 
 def test_import_no_metadata_present(tmp_path: Path):
@@ -250,4 +250,4 @@ def test_import_default_cascade_finds_inf(tmp_path: Path):
     export_with_metadata(b"d", target, SAMPLE_META, meta_format=MetaFormat.INF_TRAD)
     _, source, meta = import_with_metadata(target)
     assert source == "inf-trad"
-    assert meta.load_addr == SAMPLE_META.load_addr
+    assert meta.load_address == SAMPLE_META.load_address

@@ -40,31 +40,31 @@ def collect_examples() -> dict[str, str]:
     # Traditional INF line
     trad_line = format_trad_inf_line(
         filename="HELLO",
-        load_addr=0x1900,
-        exec_addr=0x8023,
+        load_address=0x1900,
+        exec_address=0x8023,
         length=0x100,
         attr=int(Access.R | Access.W),
     )
 
     # PiEconetBridge INF line
     pieb_line = format_pieb_inf_line(
-        load_addr=0xFFFFDD00,
-        exec_addr=0xFFFFDD00,
+        load_address=0xFFFFDD00,
+        exec_address=0xFFFFDD00,
         attr=int(Access.R | Access.W | Access.L | Access.PR),
     )
 
     # Parse INF (auto-detect format)
     _, trad_meta = parse_inf_line(trad_line)
     trad_parsed = (
-        f"load_addr=0x{trad_meta.load_addr:X}, "
-        f"exec_addr=0x{trad_meta.exec_addr:X}, "
+        f"load_address=0x{trad_meta.load_address:X}, "
+        f"exec_address=0x{trad_meta.exec_address:X}, "
         f"attr=0x{trad_meta.attr:02X}"
     )
 
     _, pieb_meta = parse_inf_line(pieb_line)
     pieb_parsed = (
-        f"load_addr=0x{pieb_meta.load_addr:X}, "
-        f"exec_addr=0x{pieb_meta.exec_addr:X}, "
+        f"load_address=0x{pieb_meta.load_address:X}, "
+        f"exec_address=0x{pieb_meta.exec_address:X}, "
         f"attr=0x{pieb_meta.attr:02X}, "
         f"filetype=0x{pieb_meta.filetype:03X}"
     )
@@ -75,11 +75,11 @@ def collect_examples() -> dict[str, str]:
 
     clean2, fn_meta2 = parse_encoded_filename("PROG,1900-801f")
     mos_parsed = (
-        f"({clean2!r}, load_addr=0x{fn_meta2.load_addr:X}, exec_addr=0x{fn_meta2.exec_addr:X})"
+        f"({clean2!r}, load_address=0x{fn_meta2.load_address:X}, exec_address=0x{fn_meta2.exec_address:X})"
     )
 
     # Filetype detection from a load address
-    riscos_meta = AcornMeta(load_addr=0xFFFF0E10)
+    riscos_meta = AcornMeta(load_address=0xFFFF0E10)
     filetype_demo = (
         f"is_filetype_stamped={riscos_meta.is_filetype_stamped}, "
         f"infer_filetype()=0x{riscos_meta.infer_filetype():03X}"

@@ -816,9 +816,9 @@ class ADFSPath:
         _, entry = self._resolve()
         data = self.read_bytes()
         meta = AcornMeta(
-            load_addr=entry.load_address,
-            exec_addr=entry.exec_address,
-            attr=int(_entry_to_stat(entry).access),
+            load_address=entry.load_address,
+            exec_address=entry.exec_address,
+            access=int(_entry_to_stat(entry).access),
         )
         return export_with_metadata(
             data,
@@ -854,10 +854,10 @@ class ADFSPath:
         data = source.read_bytes()
         _, _, meta = import_with_metadata(source, meta_formats=meta_formats)
 
-        load_address = meta.load_addr or 0
-        exec_address = meta.exec_addr or 0
-        attr = meta.attr
-        locked = bool((attr or 0) & int(Access.L))
+        load_address = meta.load_address or 0
+        exec_address = meta.exec_address or 0
+        access = meta.access
+        locked = bool((access or 0) & int(Access.L))
 
         self.write_bytes(
             data,
@@ -871,8 +871,8 @@ class ADFSPath:
         # apply them via chmod so they actually land in the directory
         # entry. write_bytes has set a default R|W for the owner via
         # the internal _write_file path, so a no-op chmod is harmless.
-        if attr is not None:
-            self.chmod(attr)
+        if access is not None:
+            self.chmod(access)
 
     # --- Protocols ---
 

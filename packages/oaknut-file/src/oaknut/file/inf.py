@@ -57,10 +57,10 @@ def parse_inf_line(line: str) -> tuple[str, AcornMeta] | None:
             return _parse_trad_inf(parts)
 
         # PiEconetBridge: owner load exec perm
-        load_addr = int(parts[1], 16)
-        exec_addr = int(parts[2], 16)
+        load_address = int(parts[1], 16)
+        exec_address = int(parts[2], 16)
         attr = int(parts[3], 16)
-        meta = AcornMeta(load_addr=load_addr, exec_addr=exec_addr, attr=attr)
+        meta = AcornMeta(load_address=load_address, exec_address=exec_address, access=attr)
         meta.filetype = meta.infer_filetype()
         return SOURCE_INF_PIEB, meta
     except (ValueError, IndexError):
@@ -69,8 +69,8 @@ def parse_inf_line(line: str) -> tuple[str, AcornMeta] | None:
 
 def _parse_trad_inf(parts: list[str]) -> tuple[str, AcornMeta] | None:
     """Parse a traditional INF line that has already been split."""
-    load_addr = int(parts[1], 16)
-    exec_addr = int(parts[2], 16)
+    load_address = int(parts[1], 16)
+    exec_address = int(parts[2], 16)
     # parts[3] is length, informational only
     attr = None
 
@@ -81,15 +81,15 @@ def _parse_trad_inf(parts: list[str]) -> tuple[str, AcornMeta] | None:
         else:
             attr = int(token, 16)
 
-    meta = AcornMeta(load_addr=load_addr, exec_addr=exec_addr, attr=attr)
+    meta = AcornMeta(load_address=load_address, exec_address=exec_address, access=attr)
     meta.filetype = meta.infer_filetype()
     return SOURCE_INF_TRAD, meta
 
 
 def format_trad_inf_line(
     filename: str,
-    load_addr: int,
-    exec_addr: int,
+    load_address: int,
+    exec_address: int,
     length: int,
     attr: int | None = None,
 ) -> str:
@@ -97,15 +97,15 @@ def format_trad_inf_line(
 
     Returns a string like ``"HELLO    00001900 00008023 00000100 03"``.
     """
-    line = f"{filename:<11s} {load_addr:08X} {exec_addr:08X} {length:08X}"
+    line = f"{filename:<11s} {load_address:08X} {exec_address:08X} {length:08X}"
     if attr is not None:
         line += f" {attr:02X}"
     return line
 
 
 def format_pieb_inf_line(
-    load_addr: int,
-    exec_addr: int,
+    load_address: int,
+    exec_address: int,
     attr: int | None = None,
     owner: int = 0,
 ) -> str:
@@ -114,7 +114,7 @@ def format_pieb_inf_line(
     Returns a string like ``"0 ffffdd00 ffffdd00 17"``.
     """
     perm = attr if attr is not None else 0x17
-    return f"{owner:x} {load_addr:x} {exec_addr:x} {perm:x}"
+    return f"{owner:x} {load_address:x} {exec_address:x} {perm:x}"
 
 
 def read_inf_file(filepath: Path) -> tuple[str, AcornMeta] | None:

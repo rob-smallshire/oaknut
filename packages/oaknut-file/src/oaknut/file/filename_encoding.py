@@ -29,26 +29,26 @@ def parse_encoded_filename(filename: str) -> tuple[str, AcornMeta | None]:
     # Try RISC OS load/exec first (most specific: 8+8 digits)
     m = SUFFIX_LOADEXEC_RE.match(filename)
     if m:
-        load_addr = int(m.group(2), 16)
-        exec_addr = int(m.group(3), 16)
-        return m.group(1), AcornMeta(load_addr=load_addr, exec_addr=exec_addr)
+        load_address = int(m.group(2), 16)
+        exec_address = int(m.group(3), 16)
+        return m.group(1), AcornMeta(load_address=load_address, exec_address=exec_address)
 
     # Try MOS load/exec (variable-width with hyphen)
     m = SUFFIX_MOS_LOADEXEC_RE.match(filename)
     if m:
-        load_addr = int(m.group(2), 16)
-        exec_addr = int(m.group(3), 16)
-        return m.group(1), AcornMeta(load_addr=load_addr, exec_addr=exec_addr)
+        load_address = int(m.group(2), 16)
+        exec_address = int(m.group(3), 16)
+        return m.group(1), AcornMeta(load_address=load_address, exec_address=exec_address)
 
     # Try filetype (3-digit hex)
     m = SUFFIX_FILETYPE_RE.match(filename)
     if m:
         filetype = int(m.group(2), 16)
         # Synthesise a RISC OS load address from the filetype
-        load_addr = 0xFFF00000 | (filetype << 8)
+        load_address = 0xFFF00000 | (filetype << 8)
         return m.group(1), AcornMeta(
-            load_addr=load_addr,
-            exec_addr=0,
+            load_address=load_address,
+            exec_address=0,
             filetype=filetype,
         )
 
@@ -64,7 +64,7 @@ def build_filename_suffix(meta: AcornMeta) -> str:
     if meta.is_filetype_stamped:
         ft = meta.infer_filetype()
         return f",{ft:03x}"
-    return f",{meta.load_addr:08x},{meta.exec_addr:08x}"
+    return f",{meta.load_address:08x},{meta.exec_address:08x}"
 
 
 def build_mos_filename_suffix(meta: AcornMeta) -> str:
@@ -72,4 +72,4 @@ def build_mos_filename_suffix(meta: AcornMeta) -> str:
 
     Returns ``,load-exec`` with variable-width lowercase hex.
     """
-    return f",{meta.load_addr:x}-{meta.exec_addr:x}"
+    return f",{meta.load_address:x}-{meta.exec_address:x}"

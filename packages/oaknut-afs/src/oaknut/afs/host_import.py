@@ -53,16 +53,16 @@ def _sanitise_name(host_name: str) -> str:
 def _meta_to_access(meta: AcornMeta) -> AFSAccess:
     """Convert an :class:`AcornMeta` to an AFS access byte.
 
-    ``AcornMeta.attr`` is the raw DFS/ADFS attribute byte as read
+    ``AcornMeta.access`` is the raw DFS/ADFS attribute byte as read
     from the host sidecar or xattr. Falls back to ``WR/`` (owner
     R+W) when no attribute info is present.
     """
-    if meta.attr is None:
+    if meta.access is None:
         return AFSAccess.from_string("WR/")
     # oaknut.file.Access is the DFS/ADFS Access IntFlag.
     from oaknut.file import Access as FileAccess
 
-    attr = FileAccess(meta.attr)
+    attr = FileAccess(meta.access)
     result = AFSAccess(0)
     if attr & FileAccess.L:
         result |= AFSAccess.LOCKED
@@ -131,8 +131,8 @@ def import_host_tree(
         # File: resolve metadata + content.
         clean_path, _label, meta = import_with_metadata(entry)
         data = clean_path.read_bytes()
-        load = meta.load_addr if meta.load_addr is not None else 0
-        exec_ = meta.exec_addr if meta.exec_addr is not None else 0
+        load = meta.load_address if meta.load_address is not None else 0
+        exec_ = meta.exec_address if meta.exec_address is not None else 0
         access = _meta_to_access(meta)
         child_path.write_bytes(
             data,

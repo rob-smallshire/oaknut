@@ -15,28 +15,28 @@ class TestParseInfLineTraditional:
     def test_basic_line(self):
         source, meta = parse_inf_line("HELLO    00001900 00008023 00000100")
         assert source == "inf-trad"
-        assert meta.load_addr == 0x1900
-        assert meta.exec_addr == 0x8023
+        assert meta.load_address == 0x1900
+        assert meta.exec_address == 0x8023
 
     def test_with_access(self):
         source, meta = parse_inf_line("HELLO    00001900 00008023 00000100 03")
-        assert meta.attr == 0x03
+        assert meta.access == 0x03
 
     def test_with_locked_letter(self):
         """Handle the 'L' marker used by some ADFS exporters."""
         source, meta = parse_inf_line("SECRET   00001900 00008023 00000100 L")
-        assert meta.attr is not None
-        assert meta.attr & 0x08  # L bit set
+        assert meta.access is not None
+        assert meta.access & 0x08  # L bit set
 
     def test_with_locked_word(self):
         """Handle the 'Locked' marker used by some DFS exporters."""
         source, meta = parse_inf_line("$.HELLO 00001900 00008023 00000100 Locked")
-        assert meta.attr is not None
-        assert meta.attr & 0x08  # L bit set
+        assert meta.access is not None
+        assert meta.access & 0x08  # L bit set
 
     def test_large_addresses(self):
         source, meta = parse_inf_line("FILE     FFFF0E10 FFFF0E10 00000200")
-        assert meta.load_addr == 0xFFFF0E10
+        assert meta.load_address == 0xFFFF0E10
 
     def test_returns_filename(self):
         source, meta = parse_inf_line("MyFile   00001900 00008023 00000100")
@@ -49,13 +49,13 @@ class TestParseInfLinePiEconetBridge:
     def test_basic_pieb_line(self):
         source, meta = parse_inf_line("0 ffffdd00 ffffdd00 17")
         assert source == "inf-pieb"
-        assert meta.load_addr == 0xFFFFDD00
-        assert meta.attr == 0x17
+        assert meta.load_address == 0xFFFFDD00
+        assert meta.access == 0x17
 
     def test_pieb_with_owner(self):
         source, meta = parse_inf_line("5 1900 8023 03")
-        assert meta.load_addr == 0x1900
-        assert meta.exec_addr == 0x8023
+        assert meta.load_address == 0x1900
+        assert meta.exec_address == 0x8023
 
 
 class TestParseInfLineEdgeCases:
@@ -108,9 +108,9 @@ class TestInfRoundTrip:
     def test_trad_round_trip(self):
         line = format_trad_inf_line("HELLO", 0x1900, 0x8023, 0x100, attr=0x03)
         source, meta = parse_inf_line(line)
-        assert meta.load_addr == 0x1900
-        assert meta.exec_addr == 0x8023
-        assert meta.attr == 0x03
+        assert meta.load_address == 0x1900
+        assert meta.exec_address == 0x8023
+        assert meta.access == 0x03
 
 
 class TestReadWriteInfFile:
@@ -122,7 +122,7 @@ class TestReadWriteInfFile:
         result = read_inf_file(filepath)
         assert result is not None
         source, meta = result
-        assert meta.load_addr == 0x1900
+        assert meta.load_address == 0x1900
 
     def test_read_nonexistent_returns_none(self, tmp_path):
         result = read_inf_file(tmp_path / "missing.inf")
