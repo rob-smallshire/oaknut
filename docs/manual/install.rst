@@ -9,11 +9,11 @@ package that names the filing system you actually need to work with
 — DFS floppies, ADFS hard discs, AFS server discs, ZIP archives —
 and install just that.
 
-oaknut supports Python 3.11 and newer.
-
 
 Prerequisites
 -------------
+
+The oaknut packages require Python 3.11 or newer.
 
 This guide leads with `uv <https://docs.astral.sh/uv/>`__ because
 that's how the project is developed and what every internal command
