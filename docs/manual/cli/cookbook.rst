@@ -88,12 +88,10 @@ Three lines of shell — a ``for`` loop wrapping a single
 .. cli-example:: bulk_archive_ssds
    :section: sources
 
-Each SSD is named ``DiscNNN-Title.ssd`` — the disc-number prefix
-gives a stable, sortable identifier and the trailing title says
-what the disc contains. The loop in the next step picks the
-prefix as the subdirectory name on the archive disc; the title
-stays visible in the source filename if anyone wants to look it up
-later.
+Each SSD is named ``DiscNNN-Title.ssd`` — a disc-number prefix
+followed by the game title. The loop in the next step pulls the
+title's first word out of each filename and uses it as the
+subdirectory name on the archive disc.
 
 **2. Loop the SSDs, copying each into its own subdirectory.**
 
@@ -102,10 +100,12 @@ later.
 
 The interesting moves:
 
-- ``$(basename "$ssd" .ssd | cut -d- -f1)`` extracts ``Disc001`` /
-  ``Disc002`` / ``Disc003`` from each source filename — short
-  enough to fit ADFS's 10-character filename limit, ordered enough
-  to sort the archive sensibly.
+- The ``sed -E 's/.*-([A-Z][a-z]+).*/\1/'`` expression captures the
+  first PascalCase word after the hyphen, yielding ``Planetoid`` /
+  ``Arcadians`` / ``Zalaga``. Longer titles like
+  ``PlanetoidAKADefender`` get truncated at the first uppercase
+  letter, which fits comfortably inside ADFS's 10-character
+  filename limit.
 - ``disc cp -r SOURCE:$ TARGET:$.NAME`` recursively copies every
   file under the DFS root (``$``) into ``$.NAME`` on the archive
   disc. The destination directory is **created automatically** —
@@ -120,10 +120,10 @@ so the 18-file copy across three SSDs produces no stdout chatter.
 .. cli-example:: bulk_archive_ssds
    :section: verify
 
-The top level of the archive holds three sibling directories — one
-per SSD. Walking the whole thing with ``disc tree`` then exposes
-each SSD's catalogue (the ``$.HELLO`` / ``$.GAME`` files etc. that
-lived on each original DFS floppy) under the matching directory.
+The top level of the archive holds three sibling directories named
+for the games — one per SSD. Walking the whole thing with
+``disc tree`` then exposes each SSD's catalogue under the matching
+directory.
 
 
 Creating a Level 3 File Server disc

@@ -37,18 +37,18 @@ with in_tmp_dir():
     show("ls *.ssd")
 
     section("loop")
-    # `cut -d- -f1` takes the disc-number prefix ("Disc001",
-    # "Disc002", "Disc003") as the directory name — short, ordered,
-    # and well within ADFS's 10-character filename limit. The full
-    # game titles stay visible in the source filenames the previous
-    # section listed.
+    # The sed expression `-([A-Z][a-z]+)` captures the first
+    # PascalCase word after the hyphen — "Planetoid", "Arcadians",
+    # "Zalaga" — giving a readable directory name within ADFS's
+    # 10-character filename limit. Longer suffixes (e.g.
+    # "PlanetoidAKADefender") are truncated to their leading word.
     #
     # `disc cp -r` auto-creates the destination directory if it does
     # not exist, matching Unix `cp -r SRC DEST` — no explicit
     # `disc mkdir` is needed.
     show(
         'for ssd in *.ssd; do\n'
-        '  name="$(basename "$ssd" .ssd | cut -d- -f1)"\n'
+        '  name="$(basename "$ssd" .ssd | sed -E \'s/.*-([A-Z][a-z]+).*/\\1/\')"\n'
         '  disc cp -r "$ssd:\\$" "archive.dat:\\$.$name"\n'
         'done'
     )
