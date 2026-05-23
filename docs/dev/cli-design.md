@@ -57,7 +57,8 @@ The CLI lives in a new `oaknut-disc` package inside the monorepo. The monorepo m
 
 | Package | Scope |
 |---|---|
-| `oaknut-file` | Shared metadata, `host_bridge`, `Access`, `BootOption`, `FSError` base |
+| `oaknut-exception` | `OaknutException` / `DataError` / `ConfigurationError` / `InternalError` hierarchy + `handled_errors` boundary helper |
+| `oaknut-file` | Shared metadata, `host_bridge`, `Access`, `BootOption`, `FSError` base (a `DataError`) |
 | `oaknut-discimage` | `Surface`, `SectorsView`, `UnifiedDisc` |
 | `oaknut-basic` | BBC BASIC tokeniser/detokeniser |
 | `oaknut-dfs` | DFS / Watford DDFS / Opus DDOS |
@@ -286,32 +287,30 @@ The contract has two halves:
 
 2. **Programming errors produce a traceback.** `KeyError`, `TypeError`, `AttributeError`, `ValueError` and other builtin exceptions signal that *the code is broken* — the wrong argument shape, an internal invariant violation, a key the developer thought always existed. The CLI must not catch and prettify these; the traceback is the bug report.
 
-The split is enforced by:
+The split is enforced by `oaknut-exception`:
 
-- **Library layer:** Every expected runtime failure raises a subclass of `oaknut.file.exceptions.FSError` (`DFSError`, `ADFSError`, `AFSError`, and their per-category descendants). If a library function naturally wants to raise `ValueError`/`KeyError`/`FileNotFoundError` for user-supplied input, that raise is wrong — convert it to an `FSError` subclass at the input boundary so every caller (CLI, library client, tests) can match on category.
+- **Library layer:** Every expected runtime failure raises a subclass of `oaknut.file.exceptions.FSError`, which itself inherits from `oaknut.exception.DataError`. Each subclass carries its own `_exit_code` class attribute (a `sysexits.h` value from the `ExitCode` enum), so `exc.exit_code` is the truth — no separate mapping table. For one-off cases where a subclass doesn't fit, the constructor accepts an `exit_code=` keyword override: `raise FSError("path not found: $.X", exit_code=ExitCode.OS_FILE)`. If a library function naturally wants to raise `ValueError`/`KeyError`/`FileNotFoundError` for user-supplied input, that raise is wrong — convert it to a `DataError` subclass at the input boundary so every caller (CLI, library client, tests) can match on category.
 
-- **CLI layer:** Each `@cli.command` callback is decorated with `@handles_fs_errors` from `oaknut.disc.errors`. The decorator catches `FSError`, looks up a stable per-category exit code by walking the MRO, and re-raises as `FSClickException` (a `click.ClickException` with a settable `exit_code`). Anything else propagates unchanged.
+- **CLI layer:** The `AliasGroup.invoke()` method wraps every subcommand in `oaknut.exception.handled_errors`. The boundary catches `DataError` and `ConfigurationError` (and any `ExceptionGroup` of them), walks each leaf's `__cause__` chain and `__notes__` via `render_error`, prints to stderr via the `oaknut.disc.console.print_error` helper, and exits with the first leaf's `exit_code`. `InternalError` (and any non-OaknutException) propagates — its traceback is the report-an-issue signal. There is no per-command decorator and no per-class lookup table.
 
-Scripts MAY branch on the following exit codes. They are stable across the lifetime of the CLI:
+A group-level `--debug` flag re-raises `DataError`/`ConfigurationError` after printing so a developer sees the full traceback during iteration; users leave it off.
 
-| Code | Category | Mapped from |
-|---|---|---|
-| 1   | Generic CLI error | Plain `ClickException`, unmapped `FSError` subclasses |
-| 2   | Usage error | Click's `UsageError` (bad flags, missing arguments) |
-| 10  | Path not found | `ADFSPathError`, `AFSPathError`, `AFSDirectoryEntryNotFoundError`, `AFSUserNotFoundError`, "path not found" pre-checks |
-| 11  | Already exists | `ADFSEntryExistsError`, DFS `FileExistsError`, `AFSDirectoryEntryExistsError`, `AFSUserExistsError` |
-| 12  | Directory full | `ADFSDirectoryFullError`, `CatalogFullError`, `AFSDirectoryFullError` |
-| 13  | Disc / quota full | `ADFSDiscFullError`, DFS `DiskFullError`, `AFSInsufficientSpaceError`, `AFSQuotaExceededError` |
-| 14  | Locked | `ADFSFileLockedError`, DFS `FileLocked`, `AFSFileLockedError` |
-| 15  | Access denied | `AFSAccessDeniedError` |
-| 16  | Directory not empty | `ADFSDirectoryNotEmptyError`, `AFSDirectoryNotEmptyError` |
-| 20  | Format / structural error | `InvalidFormatError`, `ADFSDirectoryError`, `ADFSMapError`, `AFSFormatError` and subclasses |
-| 21  | Invalid name / value | `AFSInitSpecError` and subclasses (disc name, user name, password, quota) |
-| 22  | Host I/O | `AFSHostImportError` |
-| 30  | Repartition refused | `AFSRepartitionError` and subclasses |
-| 31  | Merge conflict | `AFSMergeConflictError` |
+Scripts MAY branch on the following exit codes. They are stable across the lifetime of the CLI and follow the BSD `sysexits.h` set (codes 0 and 64–78), exposed by the `exit-codes` package as `ExitCode`:
 
-The numeric table lives in `oaknut.disc.errors` as the single source of truth; new exception classes get a code by adding one entry to `_CLASS_PATH_EXIT_CODES`. Subclasses without their own entry inherit their parent's code automatically via the MRO walk in `exit_code_for`.
+| Code | `ExitCode`     | Category | Mapped from |
+|---|---|---|---|
+| 0   | `OK`           | Success | — |
+| 2   | —              | Click usage error | Bad flags, missing arguments (emitted by Click before `handled_errors` runs) |
+| 64  | `USAGE`        | Bad input shape | `AFSInitSpecError` and subclasses (disc name, user name, password, quota) |
+| 65  | `DATA_ERR`     | Invalid data on disc | `CatalogReadError`, `InvalidFormatError`, `ADFSDirectoryError`, `ADFSMapError`, `AFSFormatError` and subclasses, `AFSRepartitionError` and subclasses, `AFSMergeConflictError`. Fallback for any uncategorised `DataError`. |
+| 70  | `SOFTWARE`     | Internal failure | `InternalError` propagates with a traceback; this is what an uncategorised non-Oaknut exception is reported as if it ever reaches our handler. |
+| 72  | `OS_FILE`      | Path not found | `ADFSPathError`, `AFSPathError`, `AFSDirectoryEntryNotFoundError`, `AFSUserNotFoundError`, CLI-side "path not found" pre-checks |
+| 73  | `CANT_CREATE`  | Cannot create entry | Already exists, directory full, disc full, quota exceeded, directory not empty: `CatalogFullError`, `DiskFullError`, `FileExistsError`, `ADFSDirectoryFullError`, `ADFSDiscFullError`, `ADFSEntryExistsError`, `ADFSDirectoryNotEmptyError`, `AFSDirectoryFullError`, `AFSDirectoryEntryExistsError`, `AFSDirectoryNotEmptyError`, `AFSInsufficientSpaceError`, `AFSQuotaExceededError`, `AFSUserExistsError` |
+| 74  | `IO_ERR`       | Host-side I/O | `AFSHostImportError` |
+| 77  | `NO_PERM`      | Locked / access denied | `FileLocked`, `ADFSFileLockedError`, `AFSFileLockedError`, `AFSAccessDeniedError` |
+| 78  | `CONFIG`       | Runtime environment | `ConfigurationError`. Not commonly used by `disc` itself; reserved for programs built on the library. |
+
+The mapping lives on the exception classes themselves: each subclass declares its own `_exit_code`. New exception classes get a code by setting that attribute, not by editing a central table.
 
 ### Testing the contract
 
