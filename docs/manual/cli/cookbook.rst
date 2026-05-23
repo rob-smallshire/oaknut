@@ -8,15 +8,66 @@ reader's host platform on first visit.
 
 .. note::
 
-   This page is a placeholder. Anticipated recipes include:
+   The two recipes below are starter content carried over from the
+   previous documentation. Anticipated further recipes:
 
    - bulk-export a DFS floppy to a host directory tree
    - mass-rename files using shell patterns
    - import an entire host directory into a fresh AFS server disc
    - inspect a damaged disc's catalogue without writing
-   - copy between filing systems (DFS floppy to AFS hard disc)
    - automate WFSINIT analogues for many discs in one run
 
-   For inline ``disc <verb>`` syntax see :doc:`commands/index`; for
-   the path/wildcard/quoting/output rules used throughout, see
-   :doc:`conventions/index`.
+
+Cross-image copy
+----------------
+
+The ``cp`` command uses ``image:path`` colon syntax for copying files
+between disc images of any format combination:
+
+.. code-block:: sh
+
+   disc cp source.ssd:'$.HELLO' target.dat:'$.HELLO'
+
+Load and exec addresses are preserved. Access attributes are mapped
+as losslessly as the target format allows (e.g. DFS only has a
+locked bit, so public-read from ADFS is dropped).
+
+For within-image copies, use the three-argument form:
+
+.. code-block:: sh
+
+   disc cp image.adl '$.Original' '$.Copy'
+
+
+Creating a Level 3 File Server disc
+-----------------------------------
+
+A complete walkthrough for building a bootable L3FS hard disc image:
+
+.. code-block:: sh
+
+   # Create a 10 MiB ADFS hard disc image
+   disc create scsi0.dat --format adfs-hard --capacity 10MiB --title Server
+
+   # Copy the file server binary from its DFS floppy
+   disc cp FS3v126.ssd:'$.FS3v126' scsi0.dat:'$.FS3v126'
+
+   # Create a !BOOT file and set the boot option
+   printf '*RUN $.FS3v126\r' | disc put scsi0.dat '$.!BOOT' -
+   disc opt scsi0.dat 3
+
+   # Plan the AFS partition (shows geometry, free space, suggested command)
+   disc afs-plan scsi0.dat
+
+   # Initialise AFS with users and libraries
+   disc afs-init scsi0.dat --disc-name Server --cylinders 309 \
+     --user Syst:S --user RJS:2MiB \
+     --emplace Library --emplace Library1
+
+   # Inspect the result
+   disc tree scsi0.dat
+
+The ``--emplace`` option accepts either a shipped library name
+(``Library``, ``Library1``, ``ArthurLib``) or a path to any ADFS
+``.adl`` image. Everything in the image is copied into a directory
+of the same name on the AFS partition.

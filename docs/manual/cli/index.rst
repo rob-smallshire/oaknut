@@ -10,6 +10,10 @@ binary, with a flat ``git``-style subcommand surface (``disc ls``,
 If you are writing Python code that consumes the on-disc formats
 directly rather than driving the CLI, see :doc:`/api/index` instead.
 
+Install ``oaknut-disc`` to get the tool — see :doc:`/install` for the
+recommended paths. Both ``disc`` and ``oaknut-disc`` are registered as
+console scripts; use whichever you prefer.
+
 .. toctree::
    :maxdepth: 1
    :caption: Getting started
