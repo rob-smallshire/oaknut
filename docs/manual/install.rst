@@ -22,13 +22,11 @@ shows. If you do not already have ``uv``, follow Astral's
 <https://docs.astral.sh/uv/getting-started/installation/>`__ — a
 single shell command on macOS and Linux, an MSI on Windows.
 
-``pip`` works identically with the package names below. For isolated
-global installs of the CLIs, ``uv tool`` is the preferred option;
-`pipx <https://pipx.pypa.io/>`__ is the supported alternative — see
-its `installation docs <https://pipx.pypa.io/stable/installation/>`__
-if you need to bootstrap it. For one-off zero-install execution
-without committing to either, ``uvx`` (bundled with ``uv``) and
-``pipx run`` are covered in :ref:`zero-install-cli` below.
+``pip`` works identically with the package names below, and
+`pipx <https://pipx.pypa.io/>`__ is the supported alternative if you
+prefer that to ``uv``'s tool management — bootstrap it from
+`its installation docs <https://pipx.pypa.io/stable/installation/>`__
+if you do not already have it.
 
 
 .. _cli-centric-packages:
@@ -58,23 +56,52 @@ gives you executables on ``PATH``.
        resolution, RISC OS filetypes). Also usable as a library — see
        below.
 
-Most readers want ``oaknut-disc``. Install it into a project:
+Most readers want ``oaknut-disc``. Pick the installation method
+that matches how often you will reach for the tool — each one ends
+with a concrete example invocation against an ``image.ssd``:
 
-.. code-block:: sh
+1. **Run once via uv, without installing.** ``uvx`` (bundled with
+   ``uv``) fetches ``oaknut-disc`` into a transient cached
+   environment and executes it. Subsequent invocations reuse the
+   cache, so repeated runs are fast.
 
-   uv add oaknut-disc                     # add to your uv project
-   pip install oaknut-disc                # or pip into the active venv
+   .. code-block:: sh
 
-…or install it globally with ``uv tool`` or ``pipx``:
+      uvx oaknut-disc ls image.ssd
+      uvx --from oaknut-disc disc ls image.ssd        # the shorter 'disc' name
 
-.. code-block:: sh
+   For a persistent install that puts ``disc`` on your shell ``PATH``,
+   use ``uv tool install oaknut-disc`` once, then ``disc ls image.ssd``
+   from any shell thereafter.
 
-   uv tool install oaknut-disc            # uv-managed isolated install
-   pipx install oaknut-disc               # pipx-managed isolated install
+2. **Add to a uv-managed Python project.** Use this when your project
+   drives ``disc`` from a script you are writing, or when you want to
+   import the library modules alongside.
 
-Both put the ``disc`` command on your ``PATH`` while keeping its
-dependencies in a private environment that cannot collide with other
-Python tools.
+   .. code-block:: sh
+
+      uv add oaknut-disc
+      uv run disc ls image.ssd
+
+3. **Install into a pip-managed virtualenv.** The traditional path
+   when ``uv`` is not part of your toolchain — install into your
+   currently active venv.
+
+   .. code-block:: sh
+
+      pip install oaknut-disc
+      oaknut-disc ls image.ssd
+
+4. **Run once via pipx, without installing.** The pipx-side equivalent
+   of ``uvx`` if you already use pipx for managing Python tools.
+
+   .. code-block:: sh
+
+      pipx run oaknut-disc ls image.ssd
+      pipx run --spec oaknut-disc disc ls image.ssd   # the shorter 'disc' name
+
+   For a persistent install via pipx, use ``pipx install oaknut-disc``
+   once, then ``disc ls image.ssd``.
 
 
 .. _library-packages:
@@ -127,31 +154,6 @@ top-level packages and imports from each:
    from oaknut.adfs import ADFS
    from oaknut.afs import AFS
    from oaknut.zip import extract_archive
-
-
-.. _zero-install-cli:
-
-Zero-install: running ``disc`` without committing
--------------------------------------------------
-
-Both ``uv`` and ``pipx`` can execute a CLI from PyPI in a one-shot
-ephemeral environment — useful for try-before-you-add and for
-scripted use on machines where you do not want a long-lived install.
-
-.. code-block:: sh
-
-   # uv: builds the environment in a cache, reuses on subsequent runs.
-   uvx oaknut-disc ls image.ssd
-   uvx --from oaknut-disc disc ls image.ssd        # uses the shorter 'disc' name
-
-   # pipx: same idea, runs in an isolated transient venv.
-   pipx run oaknut-disc ls image.ssd
-   pipx run --spec oaknut-disc disc ls image.ssd
-
-The first invocation pays a one-time setup cost while the package is
-fetched and a venv is built; subsequent invocations within the cache
-window are quick. For tight loops (driving ``disc`` from a script
-that calls it hundreds of times) prefer an installed copy.
 
 
 The ``oaknut`` placeholder
