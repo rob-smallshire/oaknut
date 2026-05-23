@@ -12,7 +12,7 @@ The oaknut monorepo now ships library packages for three Acorn filesystem famili
 
 We want a unified `disc` CLI that exposes all three surfaces and feels consistent with `oaknut-zip`'s existing CLI.
 
-The scope covers the original 25 DFS/ADFS operations plus AFS-specific operations: initialisation (the WFSINIT analogue), user management (passwords file), library merges, and transparent AFS-through-ADFS access where an ADFS disc carries an AFS partition. An interim standalone CLI (`oaknut-afs-disc`, shipped in phase 21 of the `oaknut-afs` build) already provides basic `info`/`ls`/`cat`/`put`/`initialise` subcommands for AFS; the unified `disc` tool subsumes it.
+The scope covers the original 25 DFS/ADFS operations plus AFS-specific operations: initialisation (the WFSINIT analogue), user management (passwords file), library merges, and transparent AFS-through-ADFS access where an ADFS disc carries an AFS partition. (Historical note: phase 21 of the `oaknut-afs` build shipped a standalone `oaknut-afs-disc` CLI with basic `info`/`ls`/`cat`/`put`/`initialise` subcommands as a stopgap. The unified `disc` tool subsumed it and the stopgap has been retired.)
 
 This document's job is to agree on **shape** before we build: naming conventions, command surface, TTY/output policy, error model, and which library gaps must be closed before which commands can ship.
 
@@ -62,11 +62,11 @@ The CLI lives in a new `oaknut-disc` package inside the monorepo. The monorepo m
 | `oaknut-basic` | BBC BASIC tokeniser/detokeniser |
 | `oaknut-dfs` | DFS / Watford DDFS / Opus DDOS |
 | `oaknut-adfs` | ADFS — hierarchical directories, free space maps, hard-disc images, `ADFS.afs_partition` |
-| `oaknut-afs` | AFS — the Level 3 File Server's on-disc format. Read/write, `wfsinit` init/partition, merge, host-tree import, shipped library images. Ships an interim `oaknut-afs-disc` CLI entry point |
+| `oaknut-afs` | AFS — the Level 3 File Server's on-disc format. Read/write, `wfsinit` init/partition, merge, host-tree import, shipped library images |
 | `oaknut-zip` | ZIP archives containing Acorn files |
 | `oaknut-disc` | **Unified CLI** — depends on all library packages; `oaknut-zip` optional |
 
-`oaknut-afs` already ships `oaknut-afs-disc` as a standalone entry point with `info`/`ls`/`cat`/`put`/`initialise`. When the unified `disc` tool ships, it subsumes those subcommands and `oaknut-afs-disc` becomes an alias or is retired.
+The standalone `oaknut-afs-disc` entry point that `oaknut-afs` shipped during the AFS build-out has been retired now that the unified `disc` tool is a strict functional superset (its `info` maps to `disc stat IMAGE afs:` + `disc afs-users`; the rest map one-for-one onto `disc ls`/`cat`/`put`/`afs-init`).
 
 ---
 

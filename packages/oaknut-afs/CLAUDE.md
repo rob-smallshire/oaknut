@@ -50,8 +50,6 @@ See `docs/afs-implementation-plan.md` §2–3 for the module layout. In
 brief, modules are layered:
 
 ```
-cli.py (oaknut-afs-disc entry point)
-  ↓
 wfsinit/ (partition.py, layout.py, driver.py)
   ↓
 AFS (afs.py)  ←  ADFS.afs_partition (oaknut-adfs)
