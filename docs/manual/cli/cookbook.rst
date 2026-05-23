@@ -108,14 +108,22 @@ Reading top to bottom:
   binary — pressing :kbd:`SHIFT-BREAK` will run ``*EXEC $.!BOOT``,
   which types the ``*RUN $.FS3v126`` line at the OS prompt.
 
-- **Attach the AFS partition** (``disc afs-plan`` / ``afs-init``).
-  ``disc afs-plan`` is a dry-run that shows the disc's geometry,
-  how many sectors ADFS currently occupies, and what an AFS
-  partition built from the remaining free space would look like.
-  Reviewing the plan before committing is the polite habit;
-  ``afs-init`` then carves out the AFS partition for real,
-  creates the ``Syst`` (system) and ``RJS`` (regular) users, and
-  ``--emplace``-s two shipped library images. Note the absence of
+- **Attach the AFS partition** (``disc afs-plan`` / ``afs-init`` /
+  ``afs-users``). ``disc afs-plan`` is a dry-run that shows the
+  disc's geometry, how many sectors ADFS currently occupies, and
+  what an AFS partition built from the remaining free space would
+  look like. Reviewing the plan before committing is the polite
+  habit; ``afs-init`` then carves out the AFS partition for real,
+  adds an ``RJS`` regular user, ``--omit-user``-s the built-in
+  ``Welcome`` account, and ``--emplace``-s two shipped library
+  images. The recipe does **not** create ``Syst`` or ``Boot``
+  explicitly — those are built-in accounts and arrive for free with
+  every freshly-initialised AFS partition (``Welcome`` would too,
+  hence the explicit omission). The follow-up ``disc afs-users``
+  confirms the user list: ``Syst``, ``Boot``, and ``RJS`` are
+  present; ``Welcome`` is not. To change a built-in's quota or
+  password instead of dropping it, supply ``--user NAME:...`` and
+  the spec overrides the default. Note also the absence of
   ``--cylinders``: when omitted, ``afs-init`` claims the existing
   free space, which is exactly what ``afs-plan`` would have
   suggested. Pass an explicit value if you want a smaller AFS

@@ -45,8 +45,10 @@ with in_tmp_dir():
     show("disc afs-plan scsi0.dat")
     show(
         "disc afs-init scsi0.dat --disc-name Server"
-        " --user Syst:S --user RJS:2MB"
+        " --user RJS:2MB"
+        " --omit-user Welcome"
         " --emplace Library --emplace Library1"
     )
 
+    show("disc afs-users scsi0.dat")
     show("disc stat scsi0.dat")
