@@ -21,7 +21,7 @@ file":
 
    disc ls     image.ssd                  # what's on this disc?
    disc tree   image.ssd                  # the same, recursive
-   disc type   'image.ssd:$.HELLO'        # read a text file to the terminal
+   disc type   'image.ssd:$.README'       # read a text file to the terminal
 
 If those work the way you expect, you already have enough of the
 mental model to compose ``disc`` with normal shell tools. The rest of
@@ -69,21 +69,32 @@ There are two ways to write into the disc.
 
 .. code-block:: sh
 
-   echo 'PRINT "Hello, BBC Micro!"' > hello.txt
-   disc put 'hello.ssd:$.HELLO' hello.txt
+   echo 'Welcome to the GETSTARTED disc.' > readme.txt
+   disc put 'hello.ssd:$.README' readme.txt
 
 **From standard input** (pipe a stream straight in):
 
 .. code-block:: sh
 
-   printf 'PRINT "Hello, BBC Micro!"\r' | disc put 'hello.ssd:$.HELLO' -
+   printf 'Welcome to the GETSTARTED disc.\r' | disc put 'hello.ssd:$.README' -
 
 The trailing ``-`` is the convention every ``disc`` write-command
 follows for "read from stdin". Note the ``\r`` (carriage return): BBC
 text files terminate lines with ``CR``, not ``LF``. See
 :doc:`conventions/quoting` for why the single quotes around
-``'hello.ssd:$.HELLO'`` matter — the ``$`` would otherwise be
+``'hello.ssd:$.README'`` matter — the ``$`` would otherwise be
 interpreted by your shell.
+
+.. note::
+
+   This example writes plain text. BBC BASIC programs *look* like
+   text but are stored on disc as a binary tokenised form — keywords
+   like ``PRINT`` and ``REM`` are single-byte tokens, not the
+   characters of their names. Putting plain BASIC source bytes onto a
+   disc with ``disc put`` makes a file that the BBC Micro will not
+   execute. A future ``oaknut-basic`` CLI will tokenise / detokenise
+   in both directions; for now, the bytes you put are the bytes you
+   get back.
 
 
 Read files out
@@ -93,9 +104,9 @@ Three commands depending on what you want:
 
 .. code-block:: sh
 
-   disc cat   'hello.ssd:$.HELLO'        # raw bytes to stdout (no translation)
-   disc type  'hello.ssd:$.HELLO'        # translates Acorn CR -> host newlines
-   disc get   'hello.ssd:$.HELLO' out.txt  # copy to a host file, with metadata
+   disc cat   'hello.ssd:$.README'        # raw bytes to stdout (no translation)
+   disc type  'hello.ssd:$.README'        # translates Acorn CR -> host newlines
+   disc get   'hello.ssd:$.README' out.txt  # copy to a host file, with metadata
 
 - ``disc cat`` is the byte-faithful one — pipe it into ``hexdump`` if
   you want to look at the structure, or another command if you want
@@ -143,7 +154,7 @@ otherwise a glob:
 
    disc '*CAT'  'hello.ssd:$'             # same as: disc ls hello.ssd:$
    disc '*INFO' hello.ssd                 # same as: disc stat
-   disc '*TYPE' 'hello.ssd:$.HELLO'       # same as: disc type
+   disc '*TYPE' 'hello.ssd:$.README'      # same as: disc type
 
 The full alias table is in :doc:`conventions/paths`.
 
