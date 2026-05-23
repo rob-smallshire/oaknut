@@ -118,10 +118,11 @@ for the attribute-mapping table.
 ``disc put`` writes a one-line ``!BOOT`` whose contents are
 ``*RUN $.FS3v126`` followed by the Acorn ``\r`` line ending.
 ``printf`` builds those bytes on stdout, the shell pipes them into
-``disc put``, and the trailing ``-`` is the project-wide convention
-for "read the file body from stdin". The ``printf`` rather than
-``echo`` choice is forced by the ``\r`` — see :doc:`getting-started`
-for the line-ending rationale.
+``disc put``, and the trailing ``-`` is the long-standing Unix
+idiom for "read this argument from stdin" — codified as a guideline
+in POSIX's *Utility Conventions* and inherited unchanged here. The
+``printf`` rather than ``echo`` choice is forced by the ``\r`` —
+see :doc:`getting-started` for the line-ending rationale.
 
 ``disc opt scsi0.dat`` with no value reads the current boot option
 (``0`` / ``OFF`` on a freshly-created disc) and ``disc opt

@@ -85,11 +85,12 @@ bytes it gets; the convention is yours to maintain. ``disc type``
 later translates ``\r`` back to your host's native line ending when
 reading the file out.
 
-The trailing ``-`` in the stdin form is the convention every ``disc``
-write-command follows for "read from stdin". See
-:doc:`conventions/quoting` for why the single quotes around
-``'hello.ssd:$.README'`` matter — the ``$`` would otherwise be
-interpreted by your shell.
+The trailing ``-`` in the stdin form is the long-standing Unix
+idiom for "read this argument from stdin" — codified as a guideline
+in POSIX's *Utility Conventions* and honoured by every ``disc``
+write-command. See :doc:`conventions/quoting` for why the single
+quotes around ``'hello.ssd:$.README'`` matter — the ``$`` would
+otherwise be interpreted by your shell.
 
 .. note::
 
