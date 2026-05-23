@@ -2036,7 +2036,9 @@ class TestCreate:
         result = runner.invoke(cli, ["create", str(out), "--format", "ssd"])
         assert result.exit_code == 0
         assert out.exists()
-        assert "Created" in result.output
+        # `disc create` is silent on success (Unix convention); the
+        # file appearing on disc is the success signal.
+        assert result.output == ""
 
     def test_create_adfs_l(self, runner: CliRunner, tmp_path: Path) -> None:
         out = tmp_path / "new.adl"
@@ -2106,12 +2108,12 @@ class TestCompact:
     def test_compact_adfs(self, runner: CliRunner, adfs_image_filepath: Path) -> None:
         result = runner.invoke(cli, ["compact", str(adfs_image_filepath)])
         assert result.exit_code == 0
-        assert "Compacted" in result.output
+        assert result.output == ""
 
     def test_compact_dfs(self, runner: CliRunner, dfs_image_filepath: Path) -> None:
         result = runner.invoke(cli, ["compact", str(dfs_image_filepath)])
         assert result.exit_code == 0
-        assert "Compacted" in result.output
+        assert result.output == ""
 
 
 # ---------------------------------------------------------------------------
@@ -2272,7 +2274,7 @@ class TestAfsInit:
             ],
         )
         assert result.exit_code == 0
-        assert "Initialised" in result.output
+        assert result.output == ""
 
 
 class TestAfsUsers:
@@ -2325,7 +2327,7 @@ class TestAfsUserDel:
             ],
         )
         assert result.exit_code == 0
-        assert "Removed" in result.output
+        assert result.output == ""
 
 
 class TestAfsUserAdd:
@@ -2356,7 +2358,7 @@ class TestAfsUserAdd:
             ],
         )
         assert result.exit_code == 0
-        assert "Added" in result.output
+        assert result.output == ""
 
         result = runner.invoke(cli, ["afs-users", str(afs_image_with_spare_slot)])
         assert "bob" in result.output
@@ -2405,7 +2407,7 @@ class TestExpand:
         result = runner.invoke(cli, ["expand", str(filepath)])
         assert result.exit_code == 0
         assert filepath.stat().st_size == 204800
-        assert "Expanded" in result.output
+        assert result.output == ""
 
     def test_expand_with_explicit_format(self, runner: CliRunner, tmp_path: Path) -> None:
         filepath = self._make_truncated_ssd(tmp_path, num_sectors=20)
@@ -2413,13 +2415,13 @@ class TestExpand:
         assert result.exit_code == 0
         assert filepath.stat().st_size == 204800
 
-    def test_expand_full_size_reports_no_change(
+    def test_expand_already_full_size_is_a_silent_noop(
         self, runner: CliRunner, dfs_image_filepath: Path
     ) -> None:
         original_size = dfs_image_filepath.stat().st_size
         result = runner.invoke(cli, ["expand", str(dfs_image_filepath)])
         assert result.exit_code == 0
-        assert "already" in result.output.lower()
+        assert result.output == ""
         assert dfs_image_filepath.stat().st_size == original_size
 
     def test_expand_not_sector_aligned(self, runner: CliRunner, tmp_path: Path) -> None:

@@ -2394,8 +2394,6 @@ def create(host_path: Path, fmt: str, disc_title: str, capacity: str | None) -> 
         with ADFS.create_file(host_path, capacity_bytes=capacity_bytes, title=disc_title):
             pass
 
-    click.echo(f"Created {host_path}")
-
 
 @cli.command()
 @click.argument("image", type=click.Path(exists=True, path_type=Path))
@@ -2404,10 +2402,9 @@ def compact(image: Path) -> None:
     fs = detect_filing_system(image)
     with open_image(image, fs, mode="r+b") as handle:
         try:
-            count = handle.compact()
+            handle.compact()
         except NotImplementedError as exc:
             raise click.ClickException(str(exc))
-        click.echo(f"Compacted {count} object(s)")
 
 
 @cli.command()
@@ -2450,14 +2447,9 @@ def expand(image: Path, fmt: str | None) -> None:
         disk_format = ACORN_DFS_80T_DOUBLE_SIDED_INTERLEAVED
 
     try:
-        bytes_added = dfs_expand(image, disk_format)
+        dfs_expand(image, disk_format)
     except ValueError as exc:
         raise click.ClickException(str(exc))
-
-    if bytes_added == 0:
-        click.echo(f"{image.name} is already {disk_format.image_size} bytes")
-    else:
-        click.echo(f"Expanded {image.name} by {bytes_added} bytes")
 
 
 # ---------------------------------------------------------------------------
@@ -2918,8 +2910,6 @@ def afs_init(
                         for fname in replaced:
                             click.echo(f"  replaced $.{name}/{fname}", err=True)
 
-    click.echo(f"Initialised AFS region on {image}")
-
 
 def _parse_user_specs(raw_specs: tuple[str, ...]) -> list:
     """Parse user specs from command-line strings.
@@ -3002,7 +2992,6 @@ def afs_useradd(
         )
         afs._update_passwords_on_disc(new_passwords)
         afs.flush()
-    click.echo(f"Added user '{name}'")
 
 
 @cli.command(name="afs-userdel")
@@ -3014,7 +3003,6 @@ def afs_userdel(image: Path, name: str) -> None:
         new_passwords = afs.users.with_removed(name)
         afs._update_passwords_on_disc(new_passwords)
         afs.flush()
-    click.echo(f"Removed user '{name}'")
 
 
 @cli.command(name="afs-merge")
@@ -3047,8 +3035,6 @@ def afs_merge(image: Path, source: Path, target_path: str | None) -> None:
 
             merge(target_root, source_afs.root)
             target_afs.flush()
-
-    click.echo(f"Merged {source} into {image}")
 
 
 # ---------------------------------------------------------------------------
