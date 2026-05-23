@@ -73,4 +73,4 @@ jobs:
         run: uv sync --group docs
 
       - name: Build Sphinx docs
-        run: uv run sphinx-build -b html docs docs/_build/html -W
+        run: uv run sphinx-build -b html docs/manual docs/manual/_build/html -W
