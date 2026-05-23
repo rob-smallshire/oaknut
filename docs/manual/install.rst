@@ -151,15 +151,22 @@ dependency — you do not normally install it directly.
    pip install oaknut-adfs                # ADFS floppies + hard discs
    pip install oaknut-afs                 # AFS server discs (also pulls oaknut-adfs)
 
-A program that walks every filesystem family installs the relevant
-top-level packages and imports from each:
+For example, a tiny program that lists the root directory of an
+ADFS image:
 
 .. code-block:: python
 
-   from oaknut.dfs import DFS
    from oaknut.adfs import ADFS
-   from oaknut.afs import AFS
-   from oaknut.zip import extract_archive
+
+   with ADFS.from_file("disc.adl") as adfs:
+       for entry in adfs.root.iterdir():
+           print(entry.name)
+
+``oaknut.dfs`` and ``oaknut.afs`` mirror the same
+context-manager shape, exposing ``DFS.from_file`` and
+``AFS.from_file`` respectively. ``oaknut.zip`` is function-shaped
+instead — ``extract_archive``, ``write_archive``. See
+:doc:`api/cookbook` for worked examples of each.
 
 
 The ``oaknut`` placeholder
