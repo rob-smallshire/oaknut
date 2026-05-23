@@ -32,3 +32,4 @@ console scripts; use whichever you prefer.
 
    conventions/index
    commands/index
+   commands/preview

@@ -7,6 +7,9 @@ from pathlib import Path
 from docutils import nodes
 from docutils.parsers.rst import Directive
 
+# Local extensions under docs/manual/_ext/.
+sys.path.insert(0, str(Path(__file__).resolve().parent / "_ext"))
+
 project = "oaknut"
 author = "Robert Smallshire"
 copyright = "2024-2026, Robert Smallshire"
@@ -18,6 +21,7 @@ extensions = [
     "sphinx_click",
     "sphinx_copybutton",
     "sphinx_design",
+    "oaknut_command",
 ]
 
 # Theme
