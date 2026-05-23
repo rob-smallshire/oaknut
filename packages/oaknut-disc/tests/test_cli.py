@@ -2394,6 +2394,33 @@ class TestAfsMerge:
             afs.flush()
         return filepath
 
+    def _make_source_afs_with_conflict(self, dirpath: Path) -> Path:
+        """Source AFS whose root entry overlaps the target fixture's ``Greeting``."""
+        from oaknut.adfs import ADFS, ADFS_L
+        from oaknut.afs.wfsinit import AFSSizeSpec, InitSpec, initialise
+
+        filepath = dirpath / "conflict.adl"
+        with ADFS.create_file(filepath, ADFS_L) as _adfs:
+            pass
+        with ADFS.from_file(filepath, mode="r+b") as adfs:
+            initialise(
+                adfs,
+                spec=InitSpec(
+                    disc_name="SourceAFS",
+                    size=AFSSizeSpec.cylinders(10),
+                    users=[],
+                ),
+            )
+        with ADFS.from_file(filepath, mode="r+b") as adfs:
+            afs = adfs.afs_partition
+            (afs.root / "Greeting").write_bytes(
+                b"Replacement greeting",
+                load_address=0,
+                exec_address=0,
+            )
+            afs.flush()
+        return filepath
+
     def test_afs_merge_brings_source_entries_into_target(
         self,
         runner: CliRunner,
@@ -2423,6 +2450,84 @@ class TestAfsMerge:
             assert (target.root / "Greeting").exists(), (
                 "target's original entry should survive a merge"
             )
+
+    def test_afs_merge_conflict_error_default_aborts(
+        self,
+        runner: CliRunner,
+        afs_image_filepath: Path,
+        tmp_path: Path,
+    ) -> None:
+        from oaknut.adfs import ADFS
+
+        source_filepath = self._make_source_afs_with_conflict(tmp_path)
+
+        result = runner.invoke(
+            cli,
+            [
+                "afs-merge",
+                str(afs_image_filepath),
+                "--source",
+                str(source_filepath),
+            ],
+        )
+        assert result.exit_code != 0
+        # Target's Greeting must still hold its original bytes —
+        # the conflict happened before any write.
+        with ADFS.from_file(afs_image_filepath) as adfs:
+            target = adfs.afs_partition
+            assert (target.root / "Greeting").read_bytes() == b"Hello AFS"
+
+    def test_afs_merge_conflict_skip_preserves_target(
+        self,
+        runner: CliRunner,
+        afs_image_filepath: Path,
+        tmp_path: Path,
+    ) -> None:
+        from oaknut.adfs import ADFS
+
+        source_filepath = self._make_source_afs_with_conflict(tmp_path)
+
+        result = runner.invoke(
+            cli,
+            [
+                "afs-merge",
+                str(afs_image_filepath),
+                "--source",
+                str(source_filepath),
+                "--on-conflict",
+                "skip",
+            ],
+        )
+        assert result.exit_code == 0, result.output
+        with ADFS.from_file(afs_image_filepath) as adfs:
+            target = adfs.afs_partition
+            assert (target.root / "Greeting").read_bytes() == b"Hello AFS"
+
+    def test_afs_merge_conflict_overwrite_replaces_target(
+        self,
+        runner: CliRunner,
+        afs_image_filepath: Path,
+        tmp_path: Path,
+    ) -> None:
+        from oaknut.adfs import ADFS
+
+        source_filepath = self._make_source_afs_with_conflict(tmp_path)
+
+        result = runner.invoke(
+            cli,
+            [
+                "afs-merge",
+                str(afs_image_filepath),
+                "--source",
+                str(source_filepath),
+                "--on-conflict",
+                "overwrite",
+            ],
+        )
+        assert result.exit_code == 0, result.output
+        with ADFS.from_file(afs_image_filepath) as adfs:
+            target = adfs.afs_partition
+            assert (target.root / "Greeting").read_bytes() == b"Replacement greeting"
 
 
 class TestAfsPrefixErrors:

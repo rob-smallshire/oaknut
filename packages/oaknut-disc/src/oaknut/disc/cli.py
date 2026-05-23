@@ -3014,7 +3014,19 @@ def afs_userdel(image: Path, name: str) -> None:
     help="Source AFS image to merge from.",
 )
 @click.option("--target-path", default=None, help="Target AFS path for merge root.")
-def afs_merge(image: Path, source: Path, target_path: str | None) -> None:
+@click.option(
+    "--on-conflict",
+    type=click.Choice(["error", "skip", "overwrite"], case_sensitive=False),
+    default="error",
+    show_default=True,
+    help="Policy when a source entry's name already exists on the target.",
+)
+def afs_merge(
+    image: Path,
+    source: Path,
+    target_path: str | None,
+    on_conflict: str,
+) -> None:
     """Bulk-copy the AFS file tree from one image into another.
 
     Walks the source AFS partition recursively and recreates every
@@ -3033,9 +3045,17 @@ def afs_merge(image: Path, source: Path, target_path: str | None) -> None:
         chosen subdirectory of the target's namespace.
 
     The ``Passwords`` file is always excluded so the target's own
-    user records survive intact. Conflicts on any other path abort
-    the merge before any bytes are written, so a refused merge never
-    leaves partial state on disc.
+    user records survive intact.
+
+    The ``--on-conflict`` policy chooses what happens when a source
+    entry's name already exists on the target:
+
+    \b
+      - ``error`` (default): abort the whole merge before writing
+        anything, so no partial state lands on disc;
+      - ``skip``: keep the target's existing entry, drop the source's;
+      - ``overwrite``: replace the target's entry with the source's
+        (the old bytes are released back to the allocator).
     """
     from oaknut.adfs import ADFS
     from oaknut.afs import merge
@@ -3054,7 +3074,12 @@ def afs_merge(image: Path, source: Path, target_path: str | None) -> None:
             if target_path:
                 target_root = _navigate_afs(target_afs, target_path)
 
-            merge(target_afs, source_afs, target_path=target_root)
+            merge(
+                target_afs,
+                source_afs,
+                target_path=target_root,
+                conflict=on_conflict.lower(),
+            )
             target_afs.flush()
 
 
