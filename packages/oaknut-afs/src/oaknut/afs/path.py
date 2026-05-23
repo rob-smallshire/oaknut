@@ -25,17 +25,25 @@ from. This keeps path algebra clean.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Iterator, Union
+from typing import TYPE_CHECKING, Iterator, Sequence, Union
 
 from oaknut.afs.directory import MAX_NAME_LENGTH
 from oaknut.afs.exceptions import AFSPathError
 from oaknut.file import Access
+from oaknut.file.host_bridge import (
+    DEFAULT_EXPORT_META_FORMAT,
+    DEFAULT_IMPORT_META_FORMATS,
+)
 
 if TYPE_CHECKING:
+    from os import PathLike
+    from pathlib import Path
+
     from oaknut.afs.access import AFSAccess
     from oaknut.afs.afs import AFS
     from oaknut.afs.directory import DirectoryEntry
     from oaknut.afs.types import AfsDate, SystemInternalName
+    from oaknut.file import MetaFormat
 
 ROOT = "$"
 SEPARATOR = "."
@@ -586,6 +594,104 @@ class AFSPath:
         new_src_parent = delete_entry(src_parent_raw, src_name)
         afs._write_object_bytes(src_parent_sin, new_src_parent)
         return target_bound
+
+    # ------------------------------------------------------------------
+    # Host filesystem transfer
+    # ------------------------------------------------------------------
+
+    def export_file(
+        self,
+        target_filepath: "Union[str, PathLike]",
+        *,
+        meta_format: "MetaFormat | None" = DEFAULT_EXPORT_META_FORMAT,
+        owner: int = 0,
+    ) -> "Path":
+        """Export file to host filesystem, emitting Acorn metadata.
+
+        Mirrors :meth:`DFSPath.export_file` and
+        :meth:`ADFSPath.export_file`.  The AFS on-disc access byte is
+        translated to the canonical wire-form :class:`oaknut.file.Access`
+        before encoding so the resulting sidecar / xattrs use the same
+        attribute representation as DFS and ADFS exports.
+
+        Args:
+            target_filepath: Destination path on the host.
+            meta_format: How to encode metadata. Defaults to traditional
+                INF sidecar (:data:`DEFAULT_EXPORT_META_FORMAT`). Pass
+                ``None`` to write only the data, with no sidecar / xattr
+                / filename rewrite.
+            owner: Econet owner ID, used only by PiEconetBridge formats.
+
+        Returns:
+            The actual path that was written. Equal to *target_filepath*
+            except for filename-encoded formats.
+        """
+        from pathlib import Path as _Path
+
+        from oaknut.file import AcornMeta
+        from oaknut.file.host_bridge import export_with_metadata
+
+        if self.is_root():
+            raise AFSPathError("cannot export the root directory")
+
+        st = self.stat()
+        data = self.read_bytes()
+        meta = AcornMeta(
+            load_address=st.load_address,
+            exec_address=st.exec_address,
+            access=int(st.access),
+        )
+        return export_with_metadata(
+            data,
+            _Path(target_filepath),
+            meta,
+            meta_format=meta_format,
+            owner=owner,
+            filename=self.name,
+        )
+
+    def import_file(
+        self,
+        source_filepath: "Union[str, PathLike]",
+        *,
+        meta_formats: "Sequence[MetaFormat]" = DEFAULT_IMPORT_META_FORMATS,
+    ) -> None:
+        """Import a file from the host filesystem.
+
+        Mirrors :meth:`DFSPath.import_file` and
+        :meth:`ADFSPath.import_file`.  The AFS filename is taken from
+        this ``AFSPath``; metadata is resolved by trying *meta_formats*
+        in order and the first reader to match wins.  The full Acorn
+        attribute byte (R/W/L/PR/PW — AFS does not have an execute
+        bit) is applied via :meth:`chmod` after the data is written
+        so owner-write / public-read permissions round-trip losslessly
+        via ``MetaFormat.INF_PIEB`` or either xattr format.
+
+        Args:
+            source_filepath: Path to the source file on the host.
+            meta_formats: Ordered cascade of metadata schemes to try.
+                Defaults to :data:`DEFAULT_IMPORT_META_FORMATS`.
+        """
+        from pathlib import Path as _Path
+
+        from oaknut.file.host_bridge import import_with_metadata
+
+        if self.is_root():
+            raise AFSPathError("cannot import onto the root directory")
+
+        source = _Path(source_filepath)
+        data = source.read_bytes()
+        _, _, meta = import_with_metadata(source, meta_formats=meta_formats)
+
+        self.write_bytes(
+            data,
+            load_address=meta.load_address or 0,
+            exec_address=meta.exec_address or 0,
+        )
+
+        # Apply richer access bits via chmod if the source had them.
+        if meta.access is not None:
+            self.chmod(int(meta.access))
 
 
 # ---------------------------------------------------------------------------
