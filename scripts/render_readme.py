@@ -1,16 +1,21 @@
 #!/usr/bin/env python3
-"""Render README.md from docs/README.md.j2.
+"""Render README.md and README-pypi.md from their Jinja2 templates.
 
-The template references Python example scripts in docs/readme_examples/.
-Each example is executed in a subprocess and its source + stdout are
-interleaved into a single Markdown code block, so the README always
-shows runnable code next to the exact output the reader will see if
-they run it themselves.
+Both READMEs are generated from each oaknut-* sub-package's pyproject.toml:
+
+- README.md is the developer-facing landing page on GitHub. Its template,
+  docs/README.md.j2, also embeds Python example scripts from
+  docs/readme_examples/ that are executed at render time so the README
+  always shows runnable code next to its exact output.
+
+- README-pypi.md is the short long-description used by the bare `oaknut`
+  namespace placeholder distribution on PyPI. Its template,
+  docs/README-pypi.md.j2, only lists the family members with PyPI links.
 
 Usage:
-    python scripts/render_readme.py          # write README.md
-    python scripts/render_readme.py --check  # verify README.md is fresh;
-                                             # exit 1 if it would change
+    python scripts/render_readme.py          # write both READMEs
+    python scripts/render_readme.py --check  # verify both are fresh;
+                                             # exit 1 if either is stale
 
 The --check mode is what the pre-commit hook runs.
 """
@@ -21,6 +26,7 @@ import argparse
 import subprocess
 import sys
 import tomllib
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -28,11 +34,19 @@ from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 TEMPLATE_DIRPATH = REPO_ROOT / "docs"
-TEMPLATE_FILENAME = "README.md.j2"
 EXAMPLES_DIRPATH = REPO_ROOT / "docs" / "readme_examples"
 PACKAGES_DIRPATH = REPO_ROOT / "packages"
-OUTPUT_FILEPATH = REPO_ROOT / "README.md"
 
+README_TEMPLATE_FILENAME = "README.md.j2"
+README_OUTPUT_FILEPATH = REPO_ROOT / "README.md"
+
+PYPI_README_TEMPLATE_FILENAME = "README-pypi.md.j2"
+PYPI_README_OUTPUT_FILEPATH = REPO_ROOT / "README-pypi.md"
+
+# Preferred ordering for the GitHub README's package table — packages
+# listed here come first, in this order, with any unlisted ones
+# appended alphabetically. The PyPI placeholder renders with order=()
+# for pure alphabetical.
 PACKAGE_ORDER = (
     "oaknut-file",
     "oaknut-discimage",
@@ -50,8 +64,14 @@ class PackageMeta:
     description: str
 
 
-def load_packages() -> list[PackageMeta]:
-    """Collect metadata from every packages/oaknut-*/pyproject.toml."""
+def load_packages(order: tuple[str, ...] = PACKAGE_ORDER) -> list[PackageMeta]:
+    """Collect metadata from every packages/oaknut-*/pyproject.toml.
+
+    Packages named in ``order`` come first, in that order. Any remaining
+    packages are appended alphabetically. Pass ``order=()`` for pure
+    alphabetical ordering — that is what the PyPI placeholder template
+    uses, since it has no opinion about layer/value ordering.
+    """
     found: dict[str, PackageMeta] = {}
     for pyproject_filepath in sorted(PACKAGES_DIRPATH.glob("oaknut-*/pyproject.toml")):
         with pyproject_filepath.open("rb") as f:
@@ -63,7 +83,7 @@ def load_packages() -> list[PackageMeta]:
         found[name] = PackageMeta(name=name, import_path=import_path, description=description)
 
     ordered = []
-    for name in PACKAGE_ORDER:
+    for name in order:
         if name in found:
             ordered.append(found.pop(name))
     for extra_name in sorted(found):
@@ -130,19 +150,40 @@ def _strip_module_docstring(source: str) -> str:
     return leading_ws + after_docstring.lstrip("\n")
 
 
-def render_readme() -> str:
-    env = Environment(
+def _jinja_env() -> Environment:
+    return Environment(
         loader=FileSystemLoader(TEMPLATE_DIRPATH),
         undefined=StrictUndefined,
         keep_trailing_newline=True,
         trim_blocks=False,
         lstrip_blocks=False,
     )
-    template = env.get_template(TEMPLATE_FILENAME)
+
+
+def render_readme() -> str:
+    template = _jinja_env().get_template(README_TEMPLATE_FILENAME)
     return template.render(
         packages=load_packages(),
         example=render_example,
     )
+
+
+def render_pypi_readme() -> str:
+    template = _jinja_env().get_template(PYPI_README_TEMPLATE_FILENAME)
+    return template.render(packages=load_packages(order=()))
+
+
+@dataclass(frozen=True)
+class RenderTarget:
+    name: str
+    output_filepath: Path
+    render: Callable[[], str]
+
+
+TARGETS: tuple[RenderTarget, ...] = (
+    RenderTarget("README.md", README_OUTPUT_FILEPATH, render_readme),
+    RenderTarget("README-pypi.md", PYPI_README_OUTPUT_FILEPATH, render_pypi_readme),
+)
 
 
 def main() -> int:
@@ -150,25 +191,31 @@ def main() -> int:
     parser.add_argument(
         "--check",
         action="store_true",
-        help="Verify README.md is up to date without writing. Exits 1 if stale.",
+        help="Verify the generated READMEs are up to date without writing. "
+        "Exits 1 if either is stale.",
     )
     args = parser.parse_args()
 
-    rendered = render_readme()
-
-    if args.check:
-        current = OUTPUT_FILEPATH.read_text() if OUTPUT_FILEPATH.exists() else ""
-        if current != rendered:
-            print(
-                "README.md is out of date. Regenerate it with:\n"
-                "    uv run python scripts/render_readme.py",
-                file=sys.stderr,
+    stale: list[str] = []
+    for target in TARGETS:
+        rendered = target.render()
+        if args.check:
+            current = (
+                target.output_filepath.read_text() if target.output_filepath.exists() else ""
             )
-            return 1
-        return 0
+            if current != rendered:
+                stale.append(target.name)
+            continue
+        target.output_filepath.write_text(rendered)
+        print(f"wrote {target.output_filepath.relative_to(REPO_ROOT)}")
 
-    OUTPUT_FILEPATH.write_text(rendered)
-    print(f"wrote {OUTPUT_FILEPATH.relative_to(REPO_ROOT)}")
+    if args.check and stale:
+        print(
+            f"{', '.join(stale)} out of date. Regenerate with:\n"
+            "    uv run python scripts/render_readme.py",
+            file=sys.stderr,
+        )
+        return 1
     return 0
 
 

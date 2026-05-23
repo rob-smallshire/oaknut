@@ -1,0 +1,22 @@
+{#-
+  README-pypi.md template. Rendered by scripts/render_readme.py.
+  Used as the long_description of the bare `oaknut` distribution on
+  PyPI, which exists only as a namespace placeholder. The package list
+  is generated alphabetically from each oaknut-* sub-package's
+  pyproject.toml — do not edit README-pypi.md directly.
+-#}
+# oaknut
+
+This distribution is a **namespace placeholder**. It ships no code and has no
+runtime dependencies. It exists so that the `oaknut` name on PyPI is owned by
+the same project that publishes the `oaknut-*` family of packages.
+
+You almost certainly want one of:
+
+| Package | Purpose |
+|---|---|
+{%- for pkg in packages %}
+| [`{{ pkg.name }}`](https://pypi.org/project/{{ pkg.name }}/) | {{ pkg.description }} |
+{%- endfor %}
+
+Source: https://github.com/rob-smallshire/oaknut
