@@ -29,14 +29,38 @@ from typing import TYPE_CHECKING, Iterator, Union
 
 from oaknut.afs.directory import MAX_NAME_LENGTH
 from oaknut.afs.exceptions import AFSPathError
+from oaknut.file import Access
 
 if TYPE_CHECKING:
     from oaknut.afs.access import AFSAccess
     from oaknut.afs.afs import AFS
     from oaknut.afs.directory import DirectoryEntry
+    from oaknut.afs.types import AfsDate, SystemInternalName
 
 ROOT = "$"
 SEPARATOR = "."
+
+
+@dataclass(frozen=True)
+class AFSStat:
+    """AFS file/directory metadata. Conforms to :class:`oaknut.file.Stat`.
+
+    AFS-specific extras (:attr:`afs_access`, :attr:`sin`, :attr:`name`)
+    are kept reachable for callers that need the raw on-disc bits or
+    the system internal name.
+    """
+
+    length: int
+    load_address: int
+    exec_address: int
+    access: Access
+    is_directory: bool
+    date: "AfsDate | None"
+
+    # AFS-specific extras
+    afs_access: "AFSAccess"
+    sin: "SystemInternalName"
+    name: str
 
 
 def _validate_part(part: str) -> None:
@@ -226,11 +250,46 @@ class AFSPath:
             raise AFSPathError(f"{self} is a directory, not a file")
         return afs._read_object_bytes(entry.sin)
 
-    def stat(self) -> "DirectoryEntry":
-        """Return the directory entry for this path.
+    def stat(self) -> AFSStat:
+        """Return the :class:`AFSStat` for this path.
+
+        Conforms to :class:`oaknut.file.Stat` — uniform across DFS,
+        ADFS, and AFS. Use :meth:`directory_entry` if you need the
+        raw on-disc :class:`DirectoryEntry` (with its ``sin`` and
+        AFSAccess-typed ``access`` byte).
 
         The root directory has no parent entry and is a special case;
         asking for its ``stat`` raises :class:`AFSPathError`.
+        """
+        from oaknut.file.access_mapping import access_from_afs_bits
+
+        afs = self._require_afs()
+        if self.is_root():
+            raise AFSPathError("cannot stat the root directory")
+        _, entry = afs._resolve(self)
+        if entry.is_directory:
+            length = 0
+        else:
+            length = afs._read_map_chain(entry.sin).object_size_bytes()
+        return AFSStat(
+            length=length,
+            load_address=entry.load_address,
+            exec_address=entry.exec_address,
+            access=access_from_afs_bits(int(entry.access)),
+            is_directory=entry.is_directory,
+            date=entry.date,
+            afs_access=entry.access,
+            sin=entry.sin,
+            name=entry.name,
+        )
+
+    def directory_entry(self) -> "DirectoryEntry":
+        """Return the raw on-disc :class:`DirectoryEntry`.
+
+        Lower-level companion to :meth:`stat`. Use this when you
+        specifically need the on-disc :class:`AFSAccess` byte layout,
+        the ``sin`` system internal name, or other AFS-only fields.
+        Most code should call :meth:`stat` instead.
         """
         afs = self._require_afs()
         if self.is_root():

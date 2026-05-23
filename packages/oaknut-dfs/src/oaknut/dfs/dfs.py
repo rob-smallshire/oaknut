@@ -29,7 +29,13 @@ _DFS_DIRECTORY_CHARS = frozenset("$ABCDEFGHIJKLMNOPQRSTUVWXYZ")
 
 @dataclass(frozen=True)
 class DFSStat:
-    """DFS file/directory metadata, analogous to os.stat_result."""
+    """DFS file/directory metadata, analogous to os.stat_result.
+
+    Conforms to :class:`oaknut.file.Stat` — :attr:`access` is
+    synthesised from :attr:`locked` plus DFS's implicit always-WR
+    base, and :attr:`date` is always ``None`` because DFS does not
+    store per-file date stamps.
+    """
 
     length: int
     load_address: int
@@ -37,6 +43,25 @@ class DFSStat:
     locked: bool
     start_sector: int
     is_directory: bool
+
+    @property
+    def access(self) -> "Access":
+        """Canonical :class:`~oaknut.file.Access` flags.
+
+        DFS only stores a single ``locked`` bit, so the result is
+        always owner-read + owner-write, plus ``L`` if locked.
+        """
+        from oaknut.file import Access
+
+        flags = Access.R | Access.W
+        if self.locked:
+            flags |= Access.L
+        return flags
+
+    @property
+    def date(self) -> None:
+        """DFS does not record per-file dates — always ``None``."""
+        return None
 
 
 class DFSPath:

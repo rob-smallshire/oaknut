@@ -35,7 +35,7 @@ class TestChmod:
         path.write_bytes(b"data")
         # Access.R | Access.W | Access.PR — owner R+W plus public read.
         path.chmod(int(Access.R | Access.W | Access.PR))
-        got = path.stat().access
+        got = path.stat().afs_access
         assert got & AFSAccess.OWNER_READ
         assert got & AFSAccess.OWNER_WRITE
         assert got & AFSAccess.PUBLIC_READ
@@ -52,7 +52,7 @@ class TestChmod:
         path.write_bytes(b"data")
         new_access = AFSAccess.from_string("LR/R")
         path.chmod(new_access)
-        got = path.stat().access
+        got = path.stat().afs_access
         assert got & AFSAccess.LOCKED
         assert got & AFSAccess.OWNER_READ
         assert got & AFSAccess.PUBLIC_READ
@@ -67,7 +67,7 @@ class TestChmod:
         path = afs.root / "Target"
         path.write_bytes(b"data")
         path.chmod(AFSAccess.from_byte(0x05))  # PR + OR
-        got = path.stat().access
+        got = path.stat().afs_access
         assert got & AFSAccess.PUBLIC_READ
         assert got & AFSAccess.OWNER_READ
 
@@ -79,7 +79,7 @@ class TestChmod:
         afs = adfs.afs_partition
         (afs.root / "Folder").mkdir()
         (afs.root / "Folder").chmod(int(Access.R | Access.W))
-        got = (afs.root / "Folder").stat().access
+        got = (afs.root / "Folder").stat().afs_access
         assert got & AFSAccess.DIRECTORY, "DIRECTORY bit must survive chmod"
 
     def test_chmod_preserves_directory_bit_on_file(self) -> None:
@@ -91,7 +91,7 @@ class TestChmod:
         path = afs.root / "RegFile"
         path.write_bytes(b"data")
         path.chmod(AFSAccess.DIRECTORY | AFSAccess.OWNER_READ)
-        got = path.stat().access
+        got = path.stat().afs_access
         assert not (got & AFSAccess.DIRECTORY)
         assert got & AFSAccess.OWNER_READ
 
@@ -120,16 +120,16 @@ class TestLockUnlock:
         path = afs.root / "File"
         path.write_bytes(b"data", access=AFSAccess.from_string("WR/"))
         path.lock()
-        assert path.stat().access & AFSAccess.LOCKED
+        assert path.stat().afs_access & AFSAccess.LOCKED
 
     def test_unlock_clears_l_bit(self) -> None:
         adfs = build_synthetic_adfs_with_afs()
         afs = adfs.afs_partition
         path = afs.root / "File"
         path.write_bytes(b"data", access=AFSAccess.from_string("LR/"))
-        assert path.stat().access & AFSAccess.LOCKED
+        assert path.stat().afs_access & AFSAccess.LOCKED
         path.unlock()
-        assert not (path.stat().access & AFSAccess.LOCKED)
+        assert not (path.stat().afs_access & AFSAccess.LOCKED)
 
     def test_lock_preserves_other_bits(self) -> None:
         adfs = build_synthetic_adfs_with_afs()
@@ -137,7 +137,7 @@ class TestLockUnlock:
         path = afs.root / "File"
         path.write_bytes(b"data", access=AFSAccess.from_string("WR/R"))
         path.lock()
-        got = path.stat().access
+        got = path.stat().afs_access
         assert got & AFSAccess.LOCKED
         assert got & AFSAccess.OWNER_READ
         assert got & AFSAccess.OWNER_WRITE
@@ -149,7 +149,7 @@ class TestLockUnlock:
         path = afs.root / "File"
         path.write_bytes(b"data", access=AFSAccess.from_string("LWR/R"))
         path.unlock()
-        got = path.stat().access
+        got = path.stat().afs_access
         assert not (got & AFSAccess.LOCKED)
         assert got & AFSAccess.OWNER_READ
         assert got & AFSAccess.OWNER_WRITE
@@ -160,7 +160,7 @@ class TestLockUnlock:
         afs = adfs.afs_partition
         (afs.root / "Dir").mkdir()
         (afs.root / "Dir").lock()
-        got = (afs.root / "Dir").stat().access
+        got = (afs.root / "Dir").stat().afs_access
         assert got & AFSAccess.LOCKED
         assert got & AFSAccess.DIRECTORY
 
@@ -283,10 +283,10 @@ class TestSetLoadExec:
         afs = adfs.afs_partition
         path = afs.root / "File"
         path.write_bytes(b"payload", access=AFSAccess.from_string("LR/R"))
-        original_access = path.stat().access
+        original_access = path.stat().afs_access
         path.set_load_address(0x1234)
         assert path.read_bytes() == b"payload"
-        assert path.stat().access == original_access
+        assert path.stat().afs_access == original_access
 
     def test_set_load_rejects_out_of_range(self) -> None:
         adfs = build_synthetic_adfs_with_afs()

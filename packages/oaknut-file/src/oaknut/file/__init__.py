@@ -42,6 +42,7 @@ from oaknut.file.inf import (
     write_inf_file,
 )
 from oaknut.file.meta import AcornMeta
+from oaknut.file.stat import Stat
 from oaknut.file.xattr import (
     read_acorn_xattrs,
     read_econet_xattrs,
@@ -65,6 +66,7 @@ __all__ = [
     "SOURCE_SPARKFS",
     "SOURCE_XATTR_ACORN",
     "SOURCE_XATTR_PIEB",
+    "Stat",
     "export_with_metadata",
     "import_with_metadata",
     "build_filename_suffix",

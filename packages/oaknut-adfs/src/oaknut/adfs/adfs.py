@@ -294,7 +294,13 @@ def _write_dsc(filepath: Union[str, PathLike], geometry: ADFSGeometry) -> None:
 
 @dataclass(frozen=True)
 class ADFSStat:
-    """File/directory metadata, analogous to os.stat_result."""
+    """File/directory metadata, analogous to os.stat_result.
+
+    Conforms to :class:`oaknut.file.Stat` — :attr:`access` is
+    synthesised from the per-owner / per-public bits, and
+    :attr:`date` is always ``None`` (ADFS dates live at the
+    directory level and are not currently surfaced here).
+    """
 
     length: int
     load_address: int
@@ -325,6 +331,11 @@ class ADFSStat:
         if self.public_write:
             flags |= Access.PW
         return flags
+
+    @property
+    def date(self) -> None:
+        """ADFS does not surface per-entry dates here — always ``None``."""
+        return None
 
 
 def _entry_to_stat(entry: _ADFSDirectoryEntry) -> ADFSStat:

@@ -55,7 +55,7 @@ def access_from_stat(st: Any) -> Access:
         if isinstance(access_val, Access):
             return access_val
         # AFS-style access: different bit layout. Map to Access.
-        return _access_from_afs_bits(int(access_val))
+        return access_from_afs_bits(int(access_val))
 
     # DFS: only locked bit.
     locked = getattr(st, "locked", False)
@@ -65,7 +65,7 @@ def access_from_stat(st: Any) -> Access:
     return result
 
 
-def _access_from_afs_bits(afs_byte: int) -> Access:
+def access_from_afs_bits(afs_byte: int) -> Access:
     """Map AFS on-disc access bits to the canonical ``Access`` IntFlag.
 
     AFS layout:  bit 0 = public R, 1 = public W, 2 = owner R,
@@ -88,7 +88,7 @@ def _access_from_afs_bits(afs_byte: int) -> Access:
     return result
 
 
-def _access_to_afs_bits(access: Access) -> int:
+def access_to_afs_bits(access: Access) -> int:
     """Map canonical ``Access`` to AFS on-disc access byte."""
     result = 0
     if access & Access.R:
@@ -119,6 +119,6 @@ def access_to_write_kwargs(access: Access, target_fs: str) -> dict[str, Any]:
     elif fs == "adfs":
         return {"locked": bool(access & Access.L)}
     elif fs == "afs":
-        return {"access": _access_to_afs_bits(access)}
+        return {"access": access_to_afs_bits(access)}
     else:
         raise ValueError(f"unknown target filesystem: {target_fs!r}")

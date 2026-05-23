@@ -209,11 +209,12 @@ class TestLsAccessByteFlag:
         """``--access-byte`` / ``-H`` adds a hex column for AFS files."""
         result = runner.invoke(cli, ["ls", flag, f"{afs_image_with_access_bytes}:afs:$"])
         assert result.exit_code == 0, result.output
-        # WR/R on AFS = PR (0x01) + OR (0x04) + OW (0x08) = 0x0D.
+        # WR/R on AFS, expressed as the canonical wire-form Access byte
+        # the CLI uses everywhere: R (0x01) + W (0x02) + PR (0x10) = 0x13.
         # The "0x" prefix makes it unambiguously hex and directly
         # copy-pasteable into ``disc chmod``.
         row = next(line for line in result.output.splitlines() if "alpha" in line)
-        assert "0x0D" in row, f"expected 0x0D in row, got: {row!r}"
+        assert "0x13" in row, f"expected 0x13 in row, got: {row!r}"
         assert "WR/R" in row, f"symbolic form must remain, got: {row!r}"
 
     def test_afs_access_byte_distinct_per_file(
@@ -224,10 +225,12 @@ class TestLsAccessByteFlag:
         result = runner.invoke(cli, ["ls", "-H", f"{afs_image_with_access_bytes}:afs:$"])
         assert result.exit_code == 0, result.output
         # Each file's hex byte appears on its own row, "0x"-prefixed.
+        # Bytes are the canonical wire-form Access — see Access definition
+        # in oaknut.file.access for the bit layout.
         expected = {
-            "alpha": "0x0D",  # WR/R
-            "bravo": "0x1D",  # LWR/R
-            "charlie": "0x0F",  # WR/WR
+            "alpha": "0x13",  # WR/R  = R | W | PR
+            "bravo": "0x1B",  # LWR/R = L | R | W | PR
+            "charlie": "0x33",  # WR/WR = R | W | PR | PW
             "delta": "0x00",  # /
         }
         for name, hex_byte in expected.items():
@@ -249,11 +252,12 @@ class TestLsAccessByteFlag:
         assert "WR/" in row
 
     def test_dfs_access_byte_flag(self, runner: CliRunner, dfs_image_filepath: Path) -> None:
-        """DFS files: unlocked (0x00) and locked (0x08) render."""
+        """DFS files: unlocked (0x03 = R | W) and locked (0x0B = R | W | L)."""
         result = runner.invoke(cli, ["ls", "-H", f"{dfs_image_filepath}:$"])
         assert result.exit_code == 0, result.output
-        # Neither test file is locked — both should show 0x00.
-        assert "0x00" in result.output
+        # DFS files are implicitly owner-readable and owner-writable; the
+        # canonical wire byte for an unlocked DFS file is 0x03 (R | W).
+        assert "0x03" in result.output
 
     def test_access_byte_round_trips_to_chmod(
         self,
@@ -269,10 +273,10 @@ class TestLsAccessByteFlag:
         """
         from oaknut.file import parse_access
 
-        # Parse "0x0D" the way disc chmod parses its argument.
-        # If the ls output format ever changed to a bare "0D", this
-        # would still work — but "WR" (also two valid hex digits)
-        # wouldn't, so insist on the explicit prefix.
+        # Parse "0x13" (canonical wire-form for WR/R) the way disc chmod
+        # parses its argument. If the ls output format ever changed to a
+        # bare "13", this would still work — but "WR" (also two valid hex
+        # digits) wouldn't, so insist on the explicit prefix.
         result = runner.invoke(cli, ["ls", "-H", f"{afs_image_with_access_bytes}:afs:$"])
         assert result.exit_code == 0, result.output
         row = next(line for line in result.output.splitlines() if "alpha" in line)
@@ -287,7 +291,7 @@ class TestLsAccessByteFlag:
         hex_token = tokens[-1].strip()
         assert hex_token.startswith("0x")
         # Round-trip: parse_access must accept the ls output unchanged.
-        assert int(parse_access(hex_token)) == 0x0D
+        assert int(parse_access(hex_token)) == 0x13
 
     def test_default_ls_has_no_hex_column(
         self, runner: CliRunner, afs_image_with_access_bytes: Path
