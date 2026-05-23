@@ -88,6 +88,34 @@ _REPORTS_EPILOG_RE = re.compile(
 )
 
 
+# Options injected by the asyoulikeit @report_output decorator. We keep
+# --as visible on every command — it's the format selector users actually
+# reach for — and fold the rest into a single cross-reference note so the
+# Options list does not duplicate the same five entries on twenty-odd
+# subcommands.
+_HIDDEN_REPORT_OUTPUT_OPTS = frozenset(
+    {
+        "--no-reports",
+        "--all-reports",
+        "--report",
+        "--header",
+        "--detailed",
+    }
+)
+
+_REPORT_OUTPUT_NOTE_RST = (
+    "The standard report-output flags — "
+    "``--report``, ``--no-reports``, ``--all-reports``, "
+    "``--header``/``--no-header``, "
+    "``--detailed``/``--essential`` — are also accepted; "
+    "see :doc:`/cli/conventions/output-formats`."
+)
+
+
+def _is_hidden_report_output_option(opt: click.Option) -> bool:
+    return any(name in _HIDDEN_REPORT_OUTPUT_OPTS for name in opt.opts)
+
+
 def _resolve_command(target: str) -> click.Command:
     """Resolve ``module.path:attr.chain`` to a Click command."""
     module_path, _, attr = target.partition(":")
@@ -388,13 +416,23 @@ class OaknutCommandDirective(SphinxDirective):
             section += self._build_arguments_deflist(args)
 
         # 4. Options.
-        opts = [
+        all_opts = [
             p for p in command.params
             if isinstance(p, click.Option) and not p.hidden
         ]
-        if opts and "hide-options" not in self.options:
+        visible_opts = [
+            o for o in all_opts
+            if not _is_hidden_report_output_option(o)
+        ]
+        has_hidden_report_opts = any(
+            _is_hidden_report_output_option(o) for o in all_opts
+        )
+        if (visible_opts or has_hidden_report_opts) and "hide-options" not in self.options:
             section += nodes.rubric(text="Options")
-            section += self._build_options_deflist(opts)
+            if visible_opts:
+                section += self._build_options_deflist(visible_opts)
+            if has_hidden_report_opts:
+                self._append_rst(section, _REPORT_OUTPUT_NOTE_RST)
 
         # 5. Reports.
         reports = _find_reports(command)
