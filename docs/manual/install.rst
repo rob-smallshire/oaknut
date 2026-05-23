@@ -143,6 +143,14 @@ dependency — you do not normally install it directly.
    uv add oaknut-adfs                     # ADFS floppies + hard discs
    uv add oaknut-afs                      # AFS server discs (also pulls oaknut-adfs)
 
+…or if you prefer ``pip``, install into the active venv:
+
+.. code-block:: sh
+
+   pip install oaknut-dfs                 # DFS floppies
+   pip install oaknut-adfs                # ADFS floppies + hard discs
+   pip install oaknut-afs                 # AFS server discs (also pulls oaknut-adfs)
+
 A program that walks every filesystem family installs the relevant
 top-level packages and imports from each:
 
