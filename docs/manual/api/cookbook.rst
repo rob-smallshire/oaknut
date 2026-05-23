@@ -1,7 +1,15 @@
 API cookbook
 ============
 
-Worked examples that compose the Python API to solve realistic tasks.
+Use the Python API when you need to compose Acorn-filesystem
+operations inside a larger Python program — building a disc image
+as part of an asset pipeline, scripting WFSINIT setup across many
+discs, integrating with an emulator, or implementing a feature the
+CLI does not yet expose. For ad-hoc operations from a shell, the
+:doc:`/cli/getting-started` walkthrough is usually the friendlier
+starting point.
+
+The recipes below compose the Python API to solve realistic tasks.
 
 .. note::
 

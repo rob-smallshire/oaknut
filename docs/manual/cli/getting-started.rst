@@ -1,14 +1,18 @@
 Getting started
 ===============
 
-This page assumes you have installed ``oaknut-disc`` (see
-:doc:`/install` if not). It walks from "I have a disc image" to "I am
-confident reading and writing files" in about ten minutes. Every
-command shown is runnable as-is — copy them into a shell.
+The ``disc`` command-line tool is how most readers will interact with
+oaknut. It speaks DFS, ADFS, and AFS transparently from a single
+binary, with a flat ``git``-style subcommand surface (``disc ls``,
+``disc cp``, ``disc afs-init``, …) and Acorn star-aliases (``*CAT``,
+``*RENAME``, …) for muscle-memory.
 
-If you do not have a real Acorn image handy, the
-:ref:`first-disc` section below builds a blank one to follow along
-with.
+This page walks from "I have a disc image" to "I am confident
+reading and writing files" in about ten minutes. Every command
+shown is runnable as-is — copy them into a shell. If you have not
+yet installed ``oaknut-disc``, see :doc:`/install`. If you do not
+have a real Acorn image handy, the :ref:`first-disc` section below
+builds a blank one to follow along with.
 
 
 First contact
@@ -262,5 +266,5 @@ Where to go next
 - :doc:`conventions/index` — the single source of truth for path
   syntax, wildcards, shell quoting, output formats, and exit codes.
   Every command page links back here rather than restating these.
-- :doc:`/api/index` if you want to drive the same operations from
+- :doc:`/api/cookbook` if you want to drive the same operations from
   Python code rather than the shell.
