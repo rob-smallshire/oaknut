@@ -7,7 +7,7 @@ recover from single-sector corruption on read. ``wfsinit.partition``
 is responsible for writing both copies; the read path verifies they
 match and raises :class:`AFSInfoSectorError` if not.
 
-Layout (see ``docs/afs-onwire.md`` §Info sector):
+Layout (see ``docs/dev/afs-onwire.md`` §Info sector):
 
 =======  ===========================================================
 Offset   Field (from L3V126 Uade02.asm:190-205)

@@ -7,7 +7,7 @@ the final byte. Two linked lists thread through the slots: one for
 in-use entries (kept in alphabetical order by the link chain) and
 one for free slots.
 
-On-disc layout (see ``docs/afs-onwire.md`` §Directory header and
+On-disc layout (see ``docs/dev/afs-onwire.md`` §Directory header and
 §Directory entry, and ``Uade02.asm:77-95``):
 
 Header (17 bytes at offset 0):

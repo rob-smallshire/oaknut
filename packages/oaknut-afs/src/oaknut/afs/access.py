@@ -2,7 +2,7 @@
 
 The Level 3 File Server stores an object's access attributes in a
 single byte at offset 20 of its directory entry (see
-``docs/afs-onwire.md`` §Directory entry). The bit layout **differs**
+``docs/dev/afs-onwire.md`` §Directory entry). The bit layout **differs**
 from the standard Acorn attribute byte used by client-side NFS/ANFS
 clients and by ``oaknut.file.Access``. Per ``Uade01.asm:257-275`` and
 Beebmaster's PDF:

@@ -43,7 +43,7 @@ INFO_SECTOR_BYTES: bytes = bytes.fromhex(
 
 
 # Field-by-field interpretation, as documented in the PDF's annotation
-# block on page 6 (and corrected in our docs/afs-onwire.md for bytes
+# block on page 6 (and corrected in our docs/dev/afs-onwire.md for bytes
 # 29/30 where the PDF disagreed with the ROM).
 
 INFO_SECTOR_DISC_NAME = "Level3MasterDisc"

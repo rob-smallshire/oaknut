@@ -38,7 +38,7 @@ Three external sources, in decreasing order of authority:
 3. **WFSINIT.bas** at `/Users/rjs/Code/beebium/scripts/wfsinit/`, with
    a reverse-engineered write-up in `wfsinit.md`.
 
-`docs/afs-onwire.md` at the workspace root is the living specification
+`docs/dev/afs-onwire.md` at the workspace root is the living specification
 that this package's code implements. Every non-obvious fact it records
 is cited to `Uade0x.asm:<label>`. When you extract new facts from the
 ROM, add them to `afs-onwire.md` and commit before (or with) the code
@@ -46,7 +46,7 @@ that depends on them.
 
 ## Architecture
 
-See `docs/afs-implementation-plan.md` §2–3 for the module layout. In
+See `docs/dev/afs-implementation-plan.md` §2–3 for the module layout. In
 brief, modules are layered:
 
 ```

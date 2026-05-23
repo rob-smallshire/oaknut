@@ -56,7 +56,7 @@ The empty-object case (zero extents in the head block) has size
 zero.
 
 References:
-    docs/afs-onwire.md §Map sector (JesMap).
+    docs/dev/afs-onwire.md §Map sector (JesMap).
     Beebmaster PDF pp.10-11 for the worked example.
     Uade02.asm:313-334 — MBENTS / ENSZ = 5 / MXENTS = 49 / LSTENT.
     Uade10.asm:58-236 — MPCRSP (magic write).

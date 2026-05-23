@@ -1,7 +1,7 @@
 # Implementation plan: `oaknut-afs`
 
 Status: **complete** — all 21 phases landed plus follow-up items 1-3, 5-6.
-Companion to `docs/afs-proposal.md` — read the proposal first for rationale
+Companion to `docs/dev/afs-proposal.md` — read the proposal first for rationale
 and naming. This document is about **what gets built, in what order, with
 what public surface**.
 
@@ -582,7 +582,7 @@ the public API.
 
 ### e) Cross-checks from L3V126 ROM reading
 
-As `docs/afs-onwire.md` grows, every non-obvious fact extracted from the
+As `docs/dev/afs-onwire.md` grows, every non-obvious fact extracted from the
 ROM becomes a unit test. Example: if DIRMAN turns out to grow directories
 by doubling, `test_directory_growth.py` has a test that inserts until the
 directory grows and asserts the new size is 2× the old.
@@ -596,7 +596,7 @@ produced.
 
 ### Phase 0 — Research and spec bootstrap
 - **Inputs:** L3V126 `Uade01`, `Uade02`.
-- **Output:** `docs/afs-onwire.md` seeded with authoritative struct
+- **Output:** `docs/dev/afs-onwire.md` seeded with authoritative struct
   layouts cited to `Uade0x.asm:<label>`.
 - **Done when:** every field referenced in the proposal and in this plan
   has a citation in `afs-onwire.md`.

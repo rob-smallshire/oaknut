@@ -2,7 +2,7 @@
 """Ad-hoc inspection tool for RetroClinic Data Centre cfbackup ``.dat`` images.
 
 Usage:
-    uv run python docs/analysis/data-centre/inspect.py <image.dat> [...]
+    uv run python docs/dev/analysis/data-centre/inspect.py <image.dat> [...]
 
 Reports:
 

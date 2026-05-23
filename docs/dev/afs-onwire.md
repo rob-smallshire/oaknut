@@ -1,7 +1,7 @@
 # AFS on-the-wire specification
 
 Status: living document. Seeded from `L3V126/Uade01.asm` + `Uade02.asm`
-in phase 0 of `docs/afs-implementation-plan.md`. Subsequent phases will
+in phase 0 of `docs/dev/afs-implementation-plan.md`. Subsequent phases will
 extend this document as they consult further ROM modules.
 
 **When this document disagrees with either `wfsinit.md` or Beebmaster's

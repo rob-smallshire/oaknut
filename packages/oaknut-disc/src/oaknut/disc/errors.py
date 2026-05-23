@@ -15,7 +15,7 @@ unless overridden), and re-raise as :class:`FSClickException`. Any
 other exception (programming bugs, ``KeyboardInterrupt``, plain
 ``click.ClickException``) propagates unchanged.
 
-Exit codes are documented in ``docs/cli-design.md``. The numeric
+Exit codes are documented in ``docs/dev/cli-design.md``. The numeric
 table below is the single source of truth; new error classes get a
 code by adding one entry to :data:`_EXCEPTION_EXIT_CODES`.
 """

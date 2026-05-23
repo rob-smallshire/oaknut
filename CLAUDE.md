@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 `oaknut` is a family of Python packages for working with Acorn computer filesystems, files, and formats (BBC Micro, Electron, Archimedes, RISC OS). The repository is a `uv` workspace under `packages/oaknut-*`, each independently publishable to PyPI. All packages contribute to a shared **PEP 420 implicit namespace package** named `oaknut`, so imports read as `from oaknut.dfs import DFS`, `from oaknut.file import AcornMeta`, `from oaknut.adfs import ADFS`, and so on.
 
-See `docs/monorepo.md` for the architectural doc and `docs/cli-design.md` for the forthcoming `disc` CLI design.
+See `docs/dev/monorepo.md` for the architectural doc and `docs/dev/cli-design.md` for the forthcoming `disc` CLI design.
 
 ## Package layering
 

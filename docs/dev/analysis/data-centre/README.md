@@ -53,7 +53,7 @@ transformation. The checksum over bytes `0xFE..0x00` (with carry) at
 file offsets `0x000` and `0x100` matches the byte stored at `0xFF` and
 `0x1FF` respectively in all four samples — see
 `oaknut.adfs.free_space_map._calculate_old_map_checksum` for the
-algorithm. (`docs/analysis/data-centre/dc_inspect.py` reports the
+algorithm. (`docs/dev/analysis/data-centre/dc_inspect.py` reports the
 status.)
 
 ### 2. Root directory `Hugo` signatures sit at the standard ADFS old offsets
@@ -400,5 +400,5 @@ is straightforward:
 * `dc_inspect.py` — quick-and-dirty inspector that prints the FSM
   fields, free-space entries, the truncation-invariant check, and a
   root-directory listing for any `.dat` passed on the command line.
-  Run with `uv run python docs/analysis/data-centre/dc_inspect.py
+  Run with `uv run python docs/dev/analysis/data-centre/dc_inspect.py
   tests/data/images/data-centre/*.dat`.

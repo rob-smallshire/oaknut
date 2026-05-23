@@ -1,7 +1,7 @@
 # CLAUDE.md -- oaknut-disc
 
 Unified CLI for Acorn DFS, ADFS, and AFS disc images. See
-`docs/cli-design.md` for the authoritative design document covering
+`docs/dev/cli-design.md` for the authoritative design document covering
 every subcommand, the filing-system prefix convention, argument
 ordering, Acorn star-aliases, and error model.
 

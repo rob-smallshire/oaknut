@@ -81,7 +81,7 @@ this project. They are listed in decreasing order of authority:
 **Working approach for the ROM source:** read `Uade01`/`Uade02` cover-to-
 cover up front (the struct-layout headers), then treat the rest as a
 reference manual — open a module only when you have a specific question.
-Capture findings into `docs/afs-onwire.md` as you extract them, citing the
+Capture findings into `docs/dev/afs-onwire.md` as you extract them, citing the
 exact assembly file and label, so the next person (including future-you)
 does not have to re-read the ROM to reconstruct the answers.
 
@@ -332,7 +332,7 @@ is deliberately not a thing.
 ## 6. Suggested implementation order
 
 1. **Read `Uade01`/`Uade02` from L3V126**, cover-to-cover, and start
-   `docs/afs-onwire.md` — a living specification that records the
+   `docs/dev/afs-onwire.md` — a living specification that records the
    authoritative struct layouts, workspace offsets, and any workspace
    constants we will need to interpret later modules. Cite each fact to
    `Uade0x.asm:<label>`. This is the one piece of the ROM we read
@@ -357,6 +357,6 @@ is deliberately not a thing.
 8. `wfsinit.initialise()` driver, composed from the pieces above, with the
    ADFS old-map shrink routine landed in `oaknut-adfs` alongside it.
 9. A small `afs` sub-command in the forthcoming `disc` CLI (see
-   `docs/cli-design.md`) that wraps `initialise()`, `ls`, `cat`, `put`.
+   `docs/dev/cli-design.md`) that wraps `initialise()`, `ls`, `cat`, `put`.
 
 Test-first throughout, per project convention.

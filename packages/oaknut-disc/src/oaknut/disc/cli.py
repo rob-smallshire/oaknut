@@ -1,7 +1,7 @@
 """Click command-line interface for the unified disc tool.
 
 Provides a single ``disc`` / ``oaknut-disc`` entry point for working
-with Acorn DFS, ADFS, and AFS disc images. See ``docs/cli-design.md``
+with Acorn DFS, ADFS, and AFS disc images. See ``docs/dev/cli-design.md``
 for the design rationale.
 """
 
@@ -3097,7 +3097,7 @@ def afs_merge(image: Path, source: Path, target_path: str | None) -> None:
 # the most common situation in which a .dat arrives with no .dsc — the
 # Windows cfbackup utility doesn't ship one. The patched ADFS ROM
 # initialises the IDE drive with INITIALIZE DEVICE PARAMETERS (heads=4,
-# sectors-per-track=64). See docs/analysis/data-centre/ for the
+# sectors-per-track=64). See docs/dev/analysis/data-centre/ for the
 # disassembly evidence.
 _DEFAULT_HEADS = 4
 _DEFAULT_SPT = 64

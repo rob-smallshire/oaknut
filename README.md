@@ -141,8 +141,8 @@ instead.
 ## Documentation
 
 - [**Online docs**](https://rob-smallshire.github.io/oaknut/) — CLI guide, cookbook, and API reference
-- [`docs/cli-design.md`](docs/cli-design.md) — CLI design rationale
-- [`docs/monorepo.md`](docs/monorepo.md) — monorepo architecture
+- [`docs/dev/cli-design.md`](docs/dev/cli-design.md) — CLI design rationale
+- [`docs/dev/monorepo.md`](docs/dev/monorepo.md) — monorepo architecture
 
 ## Licence
 

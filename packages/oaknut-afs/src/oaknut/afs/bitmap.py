@@ -29,7 +29,7 @@ This module provides two classes:
   and writes dirty bitmaps back on ``flush()``.
 
 References:
-    docs/afs-onwire.md §Bit map — the on-disc format.
+    docs/dev/afs-onwire.md §Bit map — the on-disc format.
     Uade02.asm:180 — MPSZCY, bit-map size in bytes.
     Uade02.asm:199 — MPSZSB, bit-map size in sectors.
     Uade01.asm:254 — BLKSZE = 256.

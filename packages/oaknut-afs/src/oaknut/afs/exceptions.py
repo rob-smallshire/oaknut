@@ -6,7 +6,7 @@ who want to catch any filesystem error catch ``FSError``; callers who
 care specifically about AFS catch ``AFSError``.
 
 Where the Level 3 File Server reports a numeric FS error code (see
-``docs/afs-onwire.md`` §FS error codes), the exception carries it on
+``docs/dev/afs-onwire.md`` §FS error codes), the exception carries it on
 ``err.fs_error_code`` for symmetry with the server's own reporting.
 
 Hierarchy::

@@ -7,7 +7,7 @@ a ``Sector`` is not interchangeable with a ``Cylinder``, and a
 address even though both are 24-bit integers.
 
 All multi-byte integers on disc are little-endian (see
-``docs/afs-onwire.md`` §Conventions). These types do **not** encode
+``docs/dev/afs-onwire.md`` §Conventions). These types do **not** encode
 byte order; they are pure integer wrappers.
 
 References:
@@ -49,7 +49,7 @@ class Geometry:
     """Physical geometry of the disc containing an AFS region.
 
     Attributes match the fields in the AFS info sector (see
-    ``docs/afs-onwire.md`` §Info sector):
+    ``docs/dev/afs-onwire.md`` §Info sector):
 
     - ``cylinders``: total cylinders on the physical disc (``MPSZNC``).
     - ``sectors_per_cylinder``: ``MPSZSC``.
