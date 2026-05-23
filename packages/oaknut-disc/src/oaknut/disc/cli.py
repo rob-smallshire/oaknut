@@ -3033,7 +3033,7 @@ def afs_merge(image: Path, source: Path, target_path: str | None) -> None:
             if target_path:
                 target_root = _navigate_afs(target_afs, target_path)
 
-            merge(target_root, source_afs.root)
+            merge(target_afs, source_afs, target_path=target_root)
             target_afs.flush()
 
 

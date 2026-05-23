@@ -2364,6 +2364,67 @@ class TestAfsUserAdd:
         assert "bob" in result.output
 
 
+class TestAfsMerge:
+    """Regression cover for the disc afs-merge CLI wrapper (issue #22)."""
+
+    def _make_source_afs(self, dirpath: Path) -> Path:
+        """Build a small AFS image with one identifiable entry under the root."""
+        from oaknut.adfs import ADFS, ADFS_L
+        from oaknut.afs.wfsinit import AFSSizeSpec, InitSpec, initialise
+
+        filepath = dirpath / "source.adl"
+        with ADFS.create_file(filepath, ADFS_L) as _adfs:
+            pass
+        with ADFS.from_file(filepath, mode="r+b") as adfs:
+            initialise(
+                adfs,
+                spec=InitSpec(
+                    disc_name="SourceAFS",
+                    size=AFSSizeSpec.cylinders(10),
+                    users=[],
+                ),
+            )
+        with ADFS.from_file(filepath, mode="r+b") as adfs:
+            afs = adfs.afs_partition
+            (afs.root / "FromSource").write_bytes(
+                b"Hello from source",
+                load_address=0,
+                exec_address=0,
+            )
+            afs.flush()
+        return filepath
+
+    def test_afs_merge_brings_source_entries_into_target(
+        self,
+        runner: CliRunner,
+        afs_image_filepath: Path,
+        tmp_path: Path,
+    ) -> None:
+        from oaknut.adfs import ADFS
+
+        source_filepath = self._make_source_afs(tmp_path)
+
+        result = runner.invoke(
+            cli,
+            [
+                "afs-merge",
+                str(afs_image_filepath),
+                "--source",
+                str(source_filepath),
+            ],
+        )
+        assert result.exit_code == 0, result.output
+
+        with ADFS.from_file(afs_image_filepath) as adfs:
+            target = adfs.afs_partition
+            assert (target.root / "FromSource").exists(), (
+                "merged entry from source not present on target"
+            )
+            assert (target.root / "Greeting").exists(), (
+                "target's original entry should survive a merge"
+            )
+
+
 class TestAfsPrefixErrors:
     def test_afs_prefix_on_dfs(self, runner: CliRunner, dfs_image_filepath: Path) -> None:
         result = runner.invoke(cli, ["ls", f"{dfs_image_filepath}:afs:$"])

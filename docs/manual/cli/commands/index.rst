@@ -216,6 +216,8 @@ Acorn File Server (AFS)
 .. oaknut-command:: oaknut.disc.cli:afs-merge
    :prog: disc afs-merge
 
+   .. cli-example:: cmd_afs_merge
+
 
 Diagnostics
 -----------
