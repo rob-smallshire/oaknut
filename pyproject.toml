@@ -5,10 +5,12 @@
 # 1. It declares the uv workspace that stitches together the
 #    packages/oaknut-* members into a single development environment.
 #
-# 2. It defines an optional `oaknut` meta-distribution on PyPI whose
-#    only job is to depend on every family member, so `pip install
-#    oaknut` is a one-shot install of the whole suite. Publishing it
-#    also claims the bare `oaknut` name on PyPI before anyone else.
+# 2. It defines the bare `oaknut` distribution on PyPI, which is a
+#    namespace placeholder: it ships no code and has no runtime
+#    dependencies. Its only role is to own the `oaknut` name on PyPI
+#    so the project that publishes the oaknut-* family of packages
+#    also owns the unadorned namespace name. Functionality lives in
+#    the oaknut-* siblings; users install only what they need.
 #
 # All packages in packages/ contribute to a single PEP 420 implicit
 # namespace package (`oaknut`). No package ever ships
@@ -23,13 +25,12 @@ build-backend = "setuptools.build_meta"
 name = "oaknut"
 version = "10.7.0"
 requires-python = ">=3.11"
-description = "Oaknut family meta-distribution — tools for Acorn computer filesystems, files, and formats."
-readme = "README.md"
+description = "Namespace placeholder for the oaknut-* family of Acorn computer tools. Install oaknut-dfs, oaknut-adfs, oaknut-disc, etc. — not this."
+readme = "README-pypi.md"
 license = "MIT"
 authors = [{ name = "Robert Smallshire", email = "robert@smallshire.org.uk" }]
 classifiers = [
     "Development Status :: 3 - Alpha",
-    "Environment :: Console",
     "Intended Audience :: Developers",
     "Operating System :: OS Independent",
     "Programming Language :: Python",
@@ -38,17 +39,12 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Topic :: System :: Filesystems",
 ]
-dependencies = [
-    "oaknut-file>=10.0",
-    "oaknut-discimage>=10.0",
-    "oaknut-basic>=10.0",
-    "oaknut-dfs>=10.0",
-    "oaknut-adfs>=10.0",
-    "oaknut-afs>=10.0",
-    "oaknut-zip>=10.0",
-    "oaknut-disc>=10.0",
-]
+# The bare `oaknut` distribution is a namespace placeholder; it has
+# no runtime dependencies. Each oaknut-* sibling is installed on its
+# own merits via `pip install oaknut-<name>` or `uv add oaknut-<name>`.
+dependencies = []
 
 [project.urls]
 Homepage = "https://github.com/rob-smallshire/oaknut"
@@ -73,9 +69,24 @@ oaknut-zip   = { workspace = true }
 oaknut-disc  = { workspace = true }
 
 [tool.uv]
-default-groups = ["test", "lint", "dev"]
+default-groups = ["test", "lint", "dev", "workspace"]
 
 [dependency-groups]
+# The `workspace` group exists purely to make `uv sync` install every
+# oaknut-* sibling editable in dev. They were previously runtime deps
+# of the `oaknut` placeholder distribution, which conflated "claim
+# the PyPI name" with "install everything". Now the placeholder is
+# truly empty, and dev installs happen via this group instead.
+workspace = [
+    "oaknut-file",
+    "oaknut-discimage",
+    "oaknut-basic",
+    "oaknut-dfs",
+    "oaknut-adfs",
+    "oaknut-afs",
+    "oaknut-zip",
+    "oaknut-disc",
+]
 test = [
     "pytest>=8.3",
     "pytest-cov>=5",
