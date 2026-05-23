@@ -86,22 +86,29 @@ single ADFS hard disc, each under its own subdirectory named for
 the source. Three lines of shell — a ``for`` loop wrapping a
 single ``disc cp -r`` per SSD — does the work.
 
-**1. Loop the SSDs, copying each into its own subdirectory.**
+**1. Look at the source filenames.**
+
+.. cli-example:: bulk_archive_ssds
+   :section: sources
+
+Each SSD is named ``DiscNNN-Title.ssd`` — the disc-number prefix
+gives a stable, sortable identifier and the trailing title says
+what the disc contains. The loop in the next step picks the
+prefix as the subdirectory name on the archive disc; the title
+stays visible in the source filename if anyone wants to look it up
+later.
+
+**2. Loop the SSDs, copying each into its own subdirectory.**
 
 .. cli-example:: bulk_archive_ssds
    :section: loop
 
 The interesting moves:
 
-- ``$(basename "$ssd" .ssd)`` strips both the directory prefix and
-  the ``.ssd`` extension, leaving the stem of the source filename.
-- The ``sed`` expression keeps the first CamelCase word *after* the
-  first hyphen — for our SSDs that yields ``Planetoid``,
-  ``Arcadians``, ``Zalaga``. A naïve truncate-to-10-chars approach
-  (e.g. ``cut -c1-10``) would land arbitrary cuts like
-  ``Disc001-Pl``; pulling out the first real word gives a
-  human-readable name that also happens to fit ADFS's 10-character
-  filename limit.
+- ``$(basename "$ssd" .ssd | cut -d- -f1)`` extracts ``Disc001`` /
+  ``Disc002`` / ``Disc003`` from each source filename — short
+  enough to fit ADFS's 10-character filename limit, ordered enough
+  to sort the archive sensibly.
 - ``disc cp -r SOURCE:$ TARGET:$.NAME`` recursively copies every
   file under the DFS root (``$``) into ``$.NAME`` on the archive
   disc. The destination directory is **created automatically** —
@@ -113,7 +120,7 @@ golden" stance: every successful ``disc cp -r`` writes nothing to
 stdout, so an 18-file copy spread across three SSDs produces zero
 chatter, leaving the shell loop entirely to its own narrative.
 
-**2. Verify the archive.**
+**3. Verify the archive.**
 
 .. cli-example:: bulk_archive_ssds
    :section: verify
