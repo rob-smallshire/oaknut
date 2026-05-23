@@ -84,7 +84,11 @@ def merge(
     if conflict == "error":
         conflicts: list[str] = []
         for src_descendant, tgt_descendant in _walk_pairs(
-            source, source_path, target, target_path, exclude,
+            source,
+            source_path,
+            target,
+            target_path,
+            exclude,
         ):
             if tgt_descendant.exists():
                 conflicts.append(str(tgt_descendant))
@@ -96,7 +100,11 @@ def merge(
 
     # Actual copy pass.
     for src_descendant, tgt_descendant in _walk_pairs(
-        source, source_path, target, target_path, exclude,
+        source,
+        source_path,
+        target,
+        target_path,
+        exclude,
     ):
         src_stat = src_descendant.stat()
         if tgt_descendant.exists():

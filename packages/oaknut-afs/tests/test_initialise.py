@@ -170,9 +170,7 @@ class TestInitialise:
         assert afs.users.find("alice").boot_option == BootOption.RUN
 
     @pytest.mark.parametrize("initial_boot_option", [0, 1, 2, 3])
-    def test_initialise_leaves_adfs_boot_option_alone(
-        self, initial_boot_option: int
-    ) -> None:
+    def test_initialise_leaves_adfs_boot_option_alone(self, initial_boot_option: int) -> None:
         adfs = ADFS.create(ADFS_L, boot_option=initial_boot_option)
         initialise(
             adfs,
@@ -193,13 +191,13 @@ class TestInitSpecEagerValidation:
     @pytest.mark.parametrize(
         "bad_name",
         [
-            "Has Space",          # space in the middle
-            " LeadingSpace",      # leading space
-            "TrailingSpace ",     # trailing space
-            "Non\x00Printable",   # NUL
-            "Bell\x07Inside",     # control character
-            "Café",               # non-ASCII
-            "A" * 17,             # too long
+            "Has Space",  # space in the middle
+            " LeadingSpace",  # leading space
+            "TrailingSpace ",  # trailing space
+            "Non\x00Printable",  # NUL
+            "Bell\x07Inside",  # control character
+            "Café",  # non-ASCII
+            "A" * 17,  # too long
         ],
     )
     def test_initspec_rejects_invalid_disc_name(self, bad_name: str) -> None:
@@ -392,9 +390,7 @@ class TestBuiltinOverride:
             )
 
     @pytest.mark.parametrize("name", ["Boot", "Welcome"])
-    def test_non_system_builtin_override_rejects_system_flag(
-        self, name: str
-    ) -> None:
+    def test_non_system_builtin_override_rejects_system_flag(self, name: str) -> None:
         """Boot and Welcome are non-system accounts; overriding with
         ``system=True`` is inconsistent and must be rejected.
         """

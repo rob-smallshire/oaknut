@@ -56,9 +56,7 @@ def create_equivalent_image(output_filepath: Path) -> None:
     """Build a disc image equivalent to what WFSINIT produced."""
 
     # Step 1: Read FS3v126 from the DFS floppy.
-    with DFS.from_file(
-        _FS3V126_FLOPPY_FILEPATH, ACORN_DFS_80T_SINGLE_SIDED
-    ) as dfs:
+    with DFS.from_file(_FS3V126_FLOPPY_FILEPATH, ACORN_DFS_80T_SINGLE_SIDED) as dfs:
         fs3_path = dfs.root / "$" / "FS3v126"
         fs3_data = fs3_path.read_bytes()
         fs3_stat = fs3_path.stat()
@@ -66,9 +64,7 @@ def create_equivalent_image(output_filepath: Path) -> None:
     # Step 2: Create a 10 MB ADFS hard disc image with title "L3FS".
     # Use SI 10,000,000 bytes — "disc create --capacity 10MB" parses
     # MB as SI, giving 296 cylinders at 4 heads × 33 SPT.
-    with ADFS.create_file(
-        output_filepath, capacity_bytes=10_000_000, title="L3FS"
-    ) as adfs:
+    with ADFS.create_file(output_filepath, capacity_bytes=10_000_000, title="L3FS") as adfs:
         # Step 3: Copy FS3v126 onto it.
         adfs.path("$.FS3v126").write_bytes(
             fs3_data,
@@ -296,11 +292,7 @@ def compare_images(reference_filepath: Path, candidate_filepath: Path) -> None:
         ref_sector = ref_bytes[offset : offset + _SECTOR_SIZE]
         cand_sector = cand_bytes[offset : offset + _SECTOR_SIZE]
         ignored = _NON_DETERMINISTIC.get(sector, set())
-        if any(
-            ref_sector[i] != cand_sector[i]
-            for i in range(_SECTOR_SIZE)
-            if i not in ignored
-        ):
+        if any(ref_sector[i] != cand_sector[i] for i in range(_SECTOR_SIZE) if i not in ignored):
             differences.append(sector)
 
     if not differences:
@@ -316,7 +308,11 @@ def compare_images(reference_filepath: Path, candidate_filepath: Path) -> None:
         cand_sector = cand_bytes[offset : offset + _SECTOR_SIZE]
 
         annotation = _annotate_sector(
-            sector, ref_sector, cand_sector, ref_afs_start, cand_afs_start,
+            sector,
+            ref_sector,
+            cand_sector,
+            ref_afs_start,
+            cand_afs_start,
         )
         print(f"--- Sector {sector} (0x{offset:06X}) --- {annotation}")
 

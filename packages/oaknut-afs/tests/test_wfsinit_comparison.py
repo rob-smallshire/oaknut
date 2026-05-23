@@ -125,9 +125,7 @@ class TestWFSINITComparison:
         candidate_filepath = tmp_path / "l3fs-wfsinit.dat"
 
         # Step 1: Create a 10 MB ADFS hard disc (SI megabytes).
-        with ADFS.create_file(
-            candidate_filepath, capacity_bytes=10_000_000, title="L3FS"
-        ) as adfs:
+        with ADFS.create_file(candidate_filepath, capacity_bytes=10_000_000, title="L3FS") as adfs:
             # Step 2: Copy FS3v126 with original load/exec addresses.
             adfs.path("$.FS3v126").write_bytes(
                 fs3_data,
@@ -188,8 +186,7 @@ class TestWFSINITComparison:
             s = sector * _SECTOR_SIZE
             if ref_masked[s : s + _SECTOR_SIZE] != cand_masked[s : s + _SECTOR_SIZE]:
                 diff_bytes = [
-                    i for i in range(_SECTOR_SIZE)
-                    if ref_masked[s + i] != cand_masked[s + i]
+                    i for i in range(_SECTOR_SIZE) if ref_masked[s + i] != cand_masked[s + i]
                 ]
                 differing_sectors.append((sector, diff_bytes))
 
@@ -201,8 +198,8 @@ class TestWFSINITComparison:
                 for pos in positions[:8]:
                     lines.append(
                         f"    byte 0x{pos:02X}: "
-                        f"ref=0x{ref_masked[s+pos]:02X} "
-                        f"ours=0x{cand_masked[s+pos]:02X}"
+                        f"ref=0x{ref_masked[s + pos]:02X} "
+                        f"ours=0x{cand_masked[s + pos]:02X}"
                     )
                 if len(positions) > 8:
                     lines.append(f"    ... and {len(positions) - 8} more")

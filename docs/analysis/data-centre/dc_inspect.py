@@ -47,21 +47,20 @@ def inspect(filepath: Path) -> None:
     # FSM
     fsm = OldFreeSpaceMap(_flat_view(memoryview(data)))
     file_sectors = len(data) // 256
-    first_free = (
-        data[0] | (data[1] << 8) | (data[2] << 16)
-    )
-    print(f"  FSM total size : {fsm.total_size:,} bytes "
-          f"({fsm.total_sectors:,} sectors)")
+    first_free = data[0] | (data[1] << 8) | (data[2] << 16)
+    print(f"  FSM total size : {fsm.total_size:,} bytes ({fsm.total_sectors:,} sectors)")
     print(f"  FSM free space : {fsm.free_space:,} bytes")
     print(f"  Boot option    : {fsm.boot_option}")
     print(f"  Disc id        : 0x{fsm.disc_id:04X}")
     print(f"  Disc name      : {fsm.disc_name!r}")
     print(f"  Free entries   : {fsm.num_entries}")
     for i, (start, length) in enumerate(fsm.free_space_entries()):
-        print(f"    [{i}] start={start//256:>8d} sec  length={length//256:>8d} sec")
-    print(f"  Truncation OK  : "
-          f"file_sectors ({file_sectors}) == first_free ({first_free}) "
-          f"→ {file_sectors == first_free}")
+        print(f"    [{i}] start={start // 256:>8d} sec  length={length // 256:>8d} sec")
+    print(
+        f"  Truncation OK  : "
+        f"file_sectors ({file_sectors}) == first_free ({first_free}) "
+        f"→ {file_sectors == first_free}"
+    )
 
     # Directory walk
     adfs = ADFS.from_buffer(memoryview(data))
@@ -69,10 +68,12 @@ def inspect(filepath: Path) -> None:
     for entry in adfs.root.iterdir():
         stat = entry.stat()
         kind = "DIR " if stat.is_directory else "FILE"
-        print(f"    {kind} {entry.name:<12s} "
-              f"load={stat.load_address:08X} "
-              f"exec={stat.exec_address:08X} "
-              f"size={stat.length:>8d}")
+        print(
+            f"    {kind} {entry.name:<12s} "
+            f"load={stat.load_address:08X} "
+            f"exec={stat.exec_address:08X} "
+            f"size={stat.length:>8d}"
+        )
     print()
 
 

@@ -329,9 +329,7 @@ class TestParseImageArgWithTrailing:
     def test_split_form_with_trailing(self, tmp_path: Path) -> None:
         # chmod image.dat $.HELLO LWR/R
         img = self._make_image(tmp_path)
-        image, path, trail = parse_image_arg_with_trailing(
-            str(img), "$.HELLO", "LWR/R"
-        )
+        image, path, trail = parse_image_arg_with_trailing(str(img), "$.HELLO", "LWR/R")
         assert image == img
         assert path == "$.HELLO"
         assert trail == "LWR/R"
@@ -339,9 +337,7 @@ class TestParseImageArgWithTrailing:
     def test_split_form_without_trailing(self, tmp_path: Path) -> None:
         # get image.dat $.HELLO   (HOST_PATH omitted)
         img = self._make_image(tmp_path)
-        image, path, trail = parse_image_arg_with_trailing(
-            str(img), "$.HELLO", None
-        )
+        image, path, trail = parse_image_arg_with_trailing(str(img), "$.HELLO", None)
         assert image == img
         assert path == "$.HELLO"
         assert trail is None
@@ -349,9 +345,7 @@ class TestParseImageArgWithTrailing:
     def test_fused_form_with_trailing(self, tmp_path: Path) -> None:
         # chmod image.dat:$.HELLO LWR/R
         img = self._make_image(tmp_path)
-        image, path, trail = parse_image_arg_with_trailing(
-            f"{img}:$.HELLO", "LWR/R", None
-        )
+        image, path, trail = parse_image_arg_with_trailing(f"{img}:$.HELLO", "LWR/R", None)
         assert image == img
         assert path == "$.HELLO"
         assert trail == "LWR/R"
@@ -359,9 +353,7 @@ class TestParseImageArgWithTrailing:
     def test_fused_form_without_trailing(self, tmp_path: Path) -> None:
         # get image.dat:$.HELLO   (HOST_PATH omitted)
         img = self._make_image(tmp_path)
-        image, path, trail = parse_image_arg_with_trailing(
-            f"{img}:$.HELLO", None, None
-        )
+        image, path, trail = parse_image_arg_with_trailing(f"{img}:$.HELLO", None, None)
         assert image == img
         assert path == "$.HELLO"
         assert trail is None
@@ -371,17 +363,13 @@ class TestParseImageArgWithTrailing:
         # to arg3 means the user gave too many args alongside fused.
         img = self._make_image(tmp_path)
         with pytest.raises(click.UsageError, match="too many arguments"):
-            parse_image_arg_with_trailing(
-                f"{img}:$.HELLO", "LWR/R", "EXTRA"
-            )
+            parse_image_arg_with_trailing(f"{img}:$.HELLO", "LWR/R", "EXTRA")
 
     def test_fused_form_with_fs_prefix_and_trailing(self, tmp_path: Path) -> None:
         # chmod image.dat:afs:$.HELLO LWR/R — the inner fs prefix
         # passes through to the in-image path.
         img = self._make_image(tmp_path)
-        image, path, trail = parse_image_arg_with_trailing(
-            f"{img}:afs:$.HELLO", "LWR/R", None
-        )
+        image, path, trail = parse_image_arg_with_trailing(f"{img}:afs:$.HELLO", "LWR/R", None)
         assert image == img
         assert path == "afs:$.HELLO"
         assert trail == "LWR/R"

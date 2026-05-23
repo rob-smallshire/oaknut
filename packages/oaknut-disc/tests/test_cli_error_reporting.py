@@ -60,15 +60,10 @@ def assert_clean_error(
             f"printed a Python traceback"
         )
     assert result.exit_code == exit_code, (
-        f"expected exit code {exit_code}, got {result.exit_code}\n"
-        f"output:\n{result.output}"
+        f"expected exit code {exit_code}, got {result.exit_code}\noutput:\n{result.output}"
     )
     if message_contains is not None:
-        needles = (
-            (message_contains,)
-            if isinstance(message_contains, str)
-            else message_contains
-        )
+        needles = (message_contains,) if isinstance(message_contains, str) else message_contains
         lowered = result.output.lower()
         for needle in needles:
             assert needle.lower() in lowered, (
@@ -82,24 +77,16 @@ def assert_clean_error(
 
 
 class TestMkdirErrors:
-    def test_directory_full(
-        self, runner: CliRunner, adfs_image_full_root: Path
-    ) -> None:
-        result = runner.invoke(
-            cli, ["mkdir", str(adfs_image_full_root), "$.OneMore"]
-        )
+    def test_directory_full(self, runner: CliRunner, adfs_image_full_root: Path) -> None:
+        result = runner.invoke(cli, ["mkdir", str(adfs_image_full_root), "$.OneMore"])
         assert_clean_error(
             result,
             exit_code=EXIT_DIRECTORY_FULL,
             message_contains=("directory full",),
         )
 
-    def test_already_exists_without_p(
-        self, runner: CliRunner, adfs_image_filepath: Path
-    ) -> None:
-        result = runner.invoke(
-            cli, ["mkdir", str(adfs_image_filepath), "$.Games"]
-        )
+    def test_already_exists_without_p(self, runner: CliRunner, adfs_image_filepath: Path) -> None:
+        result = runner.invoke(cli, ["mkdir", str(adfs_image_filepath), "$.Games"])
         assert_clean_error(
             result,
             exit_code=EXIT_ALREADY_EXISTS,
@@ -109,34 +96,24 @@ class TestMkdirErrors:
     def test_already_exists_with_p_is_silent(
         self, runner: CliRunner, adfs_image_filepath: Path
     ) -> None:
-        result = runner.invoke(
-            cli, ["mkdir", "-p", str(adfs_image_filepath), "$.Games"]
-        )
+        result = runner.invoke(cli, ["mkdir", "-p", str(adfs_image_filepath), "$.Games"])
         assert result.exit_code == 0, result.output
 
-    def test_parent_not_found(
-        self, runner: CliRunner, adfs_image_filepath: Path
-    ) -> None:
-        result = runner.invoke(
-            cli, ["mkdir", str(adfs_image_filepath), "$.NoSuchDir.Child"]
-        )
+    def test_parent_not_found(self, runner: CliRunner, adfs_image_filepath: Path) -> None:
+        result = runner.invoke(cli, ["mkdir", str(adfs_image_filepath), "$.NoSuchDir.Child"])
         assert_clean_error(
             result,
             exit_code=EXIT_PATH_NOT_FOUND,
         )
 
-    def test_dfs_not_supported(
-        self, runner: CliRunner, dfs_image_filepath: Path
-    ) -> None:
-        result = runner.invoke(
-            cli, ["mkdir", str(dfs_image_filepath), "$.Whatever"]
-        )
+    def test_dfs_not_supported(self, runner: CliRunner, dfs_image_filepath: Path) -> None:
+        result = runner.invoke(cli, ["mkdir", str(dfs_image_filepath), "$.Whatever"])
         # Already a clean ClickException today; exit_code stays at the
         # Click default (1) because this is a usage-shape error, not an
         # FSError category. Just confirm there's no leaked traceback.
-        assert result.exception is None or isinstance(
-            result.exception, SystemExit
-        ), result.exception
+        assert result.exception is None or isinstance(result.exception, SystemExit), (
+            result.exception
+        )
         assert result.exit_code == 1
         assert "not supported for DFS" in result.output
 
@@ -147,9 +124,7 @@ class TestMkdirErrors:
 
 
 class TestMvErrors:
-    def test_source_not_found(
-        self, runner: CliRunner, adfs_image_filepath: Path
-    ) -> None:
+    def test_source_not_found(self, runner: CliRunner, adfs_image_filepath: Path) -> None:
         result = runner.invoke(
             cli,
             ["mv", str(adfs_image_filepath), "$.NoSuch", "$.Renamed"],
@@ -160,9 +135,7 @@ class TestMvErrors:
             message_contains="not found",
         )
 
-    def test_destination_already_exists(
-        self, runner: CliRunner, adfs_image_filepath: Path
-    ) -> None:
+    def test_destination_already_exists(self, runner: CliRunner, adfs_image_filepath: Path) -> None:
         # Hello and Games both exist in the root; renaming Hello -> Games
         # collides.
         result = runner.invoke(
@@ -185,9 +158,7 @@ class TestRmErrors:
     def test_locked_file_without_force(
         self, runner: CliRunner, adfs_image_locked_file: Path
     ) -> None:
-        result = runner.invoke(
-            cli, ["rm", str(adfs_image_locked_file), "$.Locked"]
-        )
+        result = runner.invoke(cli, ["rm", str(adfs_image_locked_file), "$.Locked"])
         assert_clean_error(
             result,
             exit_code=EXIT_LOCKED,
@@ -197,9 +168,7 @@ class TestRmErrors:
     def test_locked_file_with_force_succeeds(
         self, runner: CliRunner, adfs_image_locked_file: Path
     ) -> None:
-        result = runner.invoke(
-            cli, ["rm", "-f", str(adfs_image_locked_file), "$.Locked"]
-        )
+        result = runner.invoke(cli, ["rm", "-f", str(adfs_image_locked_file), "$.Locked"])
         assert result.exit_code == 0, result.output
 
     def test_nonempty_dir_without_recursive(
@@ -214,9 +183,7 @@ class TestRmErrors:
             cli,
             ["rm", str(adfs_image_with_subdir_with_entries), "$.Games"],
         )
-        assert result.exception is None or isinstance(
-            result.exception, SystemExit
-        )
+        assert result.exception is None or isinstance(result.exception, SystemExit)
         assert result.exit_code == 1
         assert "directory" in result.output.lower()
 
@@ -265,9 +232,9 @@ class TestCpErrors:
         )
         # "no matches" / "path not found" — should be a clean error
         # without a traceback.
-        assert result.exception is None or isinstance(
-            result.exception, SystemExit
-        ), result.exception
+        assert result.exception is None or isinstance(result.exception, SystemExit), (
+            result.exception
+        )
         assert result.exit_code != 0
 
     def test_dfs_catalogue_full(
@@ -401,54 +368,38 @@ class TestImportErrors:
 
 
 class TestChmodErrors:
-    def test_path_not_found(
-        self, runner: CliRunner, adfs_image_filepath: Path
-    ) -> None:
-        result = runner.invoke(
-            cli, ["chmod", str(adfs_image_filepath), "$.NoSuch", "WR/R"]
-        )
+    def test_path_not_found(self, runner: CliRunner, adfs_image_filepath: Path) -> None:
+        result = runner.invoke(cli, ["chmod", str(adfs_image_filepath), "$.NoSuch", "WR/R"])
         # _iter_targets raises ClickException("no matches") for an
         # unmatched non-wildcard path; that's a clean ClickException
         # without a traceback. Exit code is 1 (generic), not the
         # path-not-found category.
-        assert result.exception is None or isinstance(
-            result.exception, SystemExit
-        ), result.exception
+        assert result.exception is None or isinstance(result.exception, SystemExit), (
+            result.exception
+        )
         assert result.exit_code != 0
 
 
 class TestLockUnlockErrors:
-    def test_lock_path_not_found(
-        self, runner: CliRunner, adfs_image_filepath: Path
-    ) -> None:
-        result = runner.invoke(
-            cli, ["lock", str(adfs_image_filepath), "$.NoSuch"]
+    def test_lock_path_not_found(self, runner: CliRunner, adfs_image_filepath: Path) -> None:
+        result = runner.invoke(cli, ["lock", str(adfs_image_filepath), "$.NoSuch"])
+        assert result.exception is None or isinstance(result.exception, SystemExit), (
+            result.exception
         )
-        assert result.exception is None or isinstance(
-            result.exception, SystemExit
-        ), result.exception
         assert result.exit_code != 0
 
 
 class TestGetLoadExecErrors:
-    def test_get_load_path_not_found(
-        self, runner: CliRunner, adfs_image_filepath: Path
-    ) -> None:
-        result = runner.invoke(
-            cli, ["get-load", str(adfs_image_filepath), "$.NoSuch"]
-        )
+    def test_get_load_path_not_found(self, runner: CliRunner, adfs_image_filepath: Path) -> None:
+        result = runner.invoke(cli, ["get-load", str(adfs_image_filepath), "$.NoSuch"])
         assert_clean_error(
             result,
             exit_code=EXIT_PATH_NOT_FOUND,
             message_contains="not found",
         )
 
-    def test_get_exec_path_not_found(
-        self, runner: CliRunner, adfs_image_filepath: Path
-    ) -> None:
-        result = runner.invoke(
-            cli, ["get-exec", str(adfs_image_filepath), "$.NoSuch"]
-        )
+    def test_get_exec_path_not_found(self, runner: CliRunner, adfs_image_filepath: Path) -> None:
+        result = runner.invoke(cli, ["get-exec", str(adfs_image_filepath), "$.NoSuch"])
         assert_clean_error(
             result,
             exit_code=EXIT_PATH_NOT_FOUND,
@@ -457,38 +408,28 @@ class TestGetLoadExecErrors:
 
 
 class TestSetLoadExecErrors:
-    def test_set_load_path_not_found(
-        self, runner: CliRunner, adfs_image_filepath: Path
-    ) -> None:
+    def test_set_load_path_not_found(self, runner: CliRunner, adfs_image_filepath: Path) -> None:
         result = runner.invoke(
             cli,
             ["set-load", str(adfs_image_filepath), "$.NoSuch", "0x2000"],
         )
-        assert result.exception is None or isinstance(
-            result.exception, SystemExit
-        ), result.exception
+        assert result.exception is None or isinstance(result.exception, SystemExit), (
+            result.exception
+        )
         assert result.exit_code != 0
 
 
 class TestCatErrors:
-    def test_path_not_found(
-        self, runner: CliRunner, adfs_image_filepath: Path
-    ) -> None:
-        result = runner.invoke(
-            cli, ["cat", str(adfs_image_filepath), "$.NoSuch"]
-        )
+    def test_path_not_found(self, runner: CliRunner, adfs_image_filepath: Path) -> None:
+        result = runner.invoke(cli, ["cat", str(adfs_image_filepath), "$.NoSuch"])
         assert_clean_error(
             result,
             exit_code=EXIT_PATH_NOT_FOUND,
             message_contains="not found",
         )
 
-    def test_path_is_directory(
-        self, runner: CliRunner, adfs_image_filepath: Path
-    ) -> None:
-        result = runner.invoke(
-            cli, ["cat", str(adfs_image_filepath), "$.Games"]
-        )
+    def test_path_is_directory(self, runner: CliRunner, adfs_image_filepath: Path) -> None:
+        result = runner.invoke(cli, ["cat", str(adfs_image_filepath), "$.Games"])
         assert_clean_error(
             result,
             exit_code=EXIT_PATH_NOT_FOUND,
@@ -497,12 +438,8 @@ class TestCatErrors:
 
 
 class TestTypeErrors:
-    def test_path_not_found(
-        self, runner: CliRunner, adfs_image_filepath: Path
-    ) -> None:
-        result = runner.invoke(
-            cli, ["type", str(adfs_image_filepath), "$.NoSuch"]
-        )
+    def test_path_not_found(self, runner: CliRunner, adfs_image_filepath: Path) -> None:
+        result = runner.invoke(cli, ["type", str(adfs_image_filepath), "$.NoSuch"])
         assert_clean_error(
             result,
             exit_code=EXIT_PATH_NOT_FOUND,
@@ -511,63 +448,47 @@ class TestTypeErrors:
 
 
 class TestStatErrors:
-    def test_path_not_found(
-        self, runner: CliRunner, adfs_image_filepath: Path
-    ) -> None:
-        result = runner.invoke(
-            cli, ["stat", str(adfs_image_filepath), "$.NoSuch"]
-        )
+    def test_path_not_found(self, runner: CliRunner, adfs_image_filepath: Path) -> None:
+        result = runner.invoke(cli, ["stat", str(adfs_image_filepath), "$.NoSuch"])
         # stat uses its own pre-check ClickException (exit 1); confirm
         # there's no leaked traceback.
-        assert result.exception is None or isinstance(
-            result.exception, SystemExit
-        ), result.exception
+        assert result.exception is None or isinstance(result.exception, SystemExit), (
+            result.exception
+        )
         assert result.exit_code != 0
 
 
 class TestLsErrors:
-    def test_path_not_found(
-        self, runner: CliRunner, adfs_image_filepath: Path
-    ) -> None:
-        result = runner.invoke(
-            cli, ["ls", str(adfs_image_filepath), "$.NoSuch"]
+    def test_path_not_found(self, runner: CliRunner, adfs_image_filepath: Path) -> None:
+        result = runner.invoke(cli, ["ls", str(adfs_image_filepath), "$.NoSuch"])
+        assert result.exception is None or isinstance(result.exception, SystemExit), (
+            result.exception
         )
-        assert result.exception is None or isinstance(
-            result.exception, SystemExit
-        ), result.exception
         assert result.exit_code != 0
 
 
 class TestTreeErrors:
-    def test_path_not_found(
-        self, runner: CliRunner, adfs_image_filepath: Path
-    ) -> None:
-        result = runner.invoke(
-            cli, ["tree", str(adfs_image_filepath), "$.NoSuch"]
+    def test_path_not_found(self, runner: CliRunner, adfs_image_filepath: Path) -> None:
+        result = runner.invoke(cli, ["tree", str(adfs_image_filepath), "$.NoSuch"])
+        assert result.exception is None or isinstance(result.exception, SystemExit), (
+            result.exception
         )
-        assert result.exception is None or isinstance(
-            result.exception, SystemExit
-        ), result.exception
         assert result.exit_code != 0
 
 
 class TestCreateErrors:
-    def test_adfs_hard_without_capacity(
-        self, runner: CliRunner, tmp_path: Path
-    ) -> None:
+    def test_adfs_hard_without_capacity(self, runner: CliRunner, tmp_path: Path) -> None:
         result = runner.invoke(
             cli,
             ["create", "--format", "adfs-hard", str(tmp_path / "new.dat")],
         )
-        assert result.exception is None or isinstance(
-            result.exception, SystemExit
-        ), result.exception
+        assert result.exception is None or isinstance(result.exception, SystemExit), (
+            result.exception
+        )
         assert result.exit_code != 0
         assert "capacity" in result.output.lower()
 
-    def test_adfs_hard_invalid_capacity(
-        self, runner: CliRunner, tmp_path: Path
-    ) -> None:
+    def test_adfs_hard_invalid_capacity(self, runner: CliRunner, tmp_path: Path) -> None:
         result = runner.invoke(
             cli,
             [
@@ -579,16 +500,14 @@ class TestCreateErrors:
                 str(tmp_path / "new.dat"),
             ],
         )
-        assert result.exception is None or isinstance(
-            result.exception, SystemExit
-        ), result.exception
+        assert result.exception is None or isinstance(result.exception, SystemExit), (
+            result.exception
+        )
         assert result.exit_code != 0
 
 
 class TestAfsInitErrors:
-    def test_invalid_disc_name(
-        self, runner: CliRunner, adfs_hard_no_afs_filepath: Path
-    ) -> None:
+    def test_invalid_disc_name(self, runner: CliRunner, adfs_hard_no_afs_filepath: Path) -> None:
         # Disc names must be printable ASCII, 1..16 chars.
         result = runner.invoke(
             cli,
@@ -601,9 +520,9 @@ class TestAfsInitErrors:
                 "20",
             ],
         )
-        assert result.exception is None or isinstance(
-            result.exception, SystemExit
-        ), result.exception
+        assert result.exception is None or isinstance(result.exception, SystemExit), (
+            result.exception
+        )
         assert result.exit_code != 0
 
     def test_already_partitioned(
@@ -624,22 +543,18 @@ class TestAfsInitErrors:
                 "20",
             ],
         )
-        assert result.exception is None or isinstance(
-            result.exception, SystemExit
-        ), result.exception
+        assert result.exception is None or isinstance(result.exception, SystemExit), (
+            result.exception
+        )
         assert result.exit_code != 0
 
 
 class TestAfsUserCommandErrors:
-    def test_userdel_unknown_user(
-        self, runner: CliRunner, afs_image_filepath: Path
-    ) -> None:
-        result = runner.invoke(
-            cli, ["afs-userdel", str(afs_image_filepath), "nosuch"]
+    def test_userdel_unknown_user(self, runner: CliRunner, afs_image_filepath: Path) -> None:
+        result = runner.invoke(cli, ["afs-userdel", str(afs_image_filepath), "nosuch"])
+        assert result.exception is None or isinstance(result.exception, SystemExit), (
+            result.exception
         )
-        assert result.exception is None or isinstance(
-            result.exception, SystemExit
-        ), result.exception
         assert result.exit_code != 0
 
     def test_useradd_no_afs(
@@ -649,12 +564,10 @@ class TestAfsUserCommandErrors:
     ) -> None:
         # ADFS image with no AFS partition; useradd should fail with a
         # clean diagnostic, not a traceback.
-        result = runner.invoke(
-            cli, ["afs-useradd", str(adfs_no_afs_filepath), "alice"]
+        result = runner.invoke(cli, ["afs-useradd", str(adfs_no_afs_filepath), "alice"])
+        assert result.exception is None or isinstance(result.exception, SystemExit), (
+            result.exception
         )
-        assert result.exception is None or isinstance(
-            result.exception, SystemExit
-        ), result.exception
         assert result.exit_code != 0
 
 
@@ -674,8 +587,6 @@ class TestExportErrors:
         tmp_path: Path,
     ) -> None:
         out_dirpath = tmp_path / "out"
-        result = runner.invoke(
-            cli, ["export", str(adfs_empty_filepath), str(out_dirpath)]
-        )
+        result = runner.invoke(cli, ["export", str(adfs_empty_filepath), str(out_dirpath)])
         assert result.exit_code == 0, result.output
         assert out_dirpath.exists()

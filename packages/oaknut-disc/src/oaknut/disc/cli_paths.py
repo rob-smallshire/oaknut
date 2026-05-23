@@ -150,12 +150,7 @@ def _split_at_image_colon(text: str) -> tuple[str, str] | None:
 
     # Skip a Windows drive letter: single ASCII letter followed by :\ or :/.
     start = 0
-    if (
-        len(text) >= 3
-        and text[1] == ":"
-        and text[2] in ("\\", "/")
-        and text[0].isalpha()
-    ):
+    if len(text) >= 3 and text[1] == ":" and text[2] in ("\\", "/") and text[0].isalpha():
         start = 2
 
     idx = text.find(":", start)
@@ -191,9 +186,7 @@ def parse_image_path(text: str) -> tuple[Path, str] | None:
     return image_filepath, in_image_part
 
 
-def parse_image_arg(
-    image_spec: str, path: str | None = None
-) -> tuple[Path, str]:
+def parse_image_arg(image_spec: str, path: str | None = None) -> tuple[Path, str]:
     """Resolve an ``IMAGE_SPEC [PATH]`` positional pair into ``(image, in_image_path)``.
 
     Accepts two equivalent shapes uniformly across every command:

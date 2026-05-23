@@ -234,9 +234,7 @@ class PasswordsFile(Sequence[UserRecord]):
                 continue
             if record.full_id.upper() == target or record.name.upper() == target:
                 return record
-        raise AFSUserNotFoundError(
-            f"no user named {name!r} in passwords file"
-        )
+        raise AFSUserNotFoundError(f"no user named {name!r} in passwords file")
 
     # ------------------------------------------------------------------
     # Mutation — phase 14 (AUTMAN / USRMAN equivalents)

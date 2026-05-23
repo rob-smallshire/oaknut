@@ -89,9 +89,7 @@ def dfs_image_full_catalogue(tmp_path: Path) -> Path:
     Any further attempt to add a file raises ``CatalogFullError``.
     """
     filepath = tmp_path / "full.ssd"
-    with DFS.create_file(
-        filepath, ACORN_DFS_80T_SINGLE_SIDED, title="FullCat"
-    ) as dfs:
+    with DFS.create_file(filepath, ACORN_DFS_80T_SINGLE_SIDED, title="FullCat") as dfs:
         for index in range(31):
             (dfs.root / f"$.F{index:02d}").write_bytes(b"x")
     return filepath
@@ -198,21 +196,11 @@ def dfs_multi_dir_filepath(tmp_path: Path) -> Path:
     """
     filepath = tmp_path / "multi.ssd"
     with DFS.create_file(filepath, ACORN_DFS_80T_SINGLE_SIDED, title="Multi") as dfs:
-        (dfs.root / "$.HELLO").write_bytes(
-            b"hi-root", load_address=0x1900, exec_address=0x8023
-        )
-        (dfs.root / "$.DATA").write_bytes(
-            b"data-root", load_address=0xFF00, exec_address=0xFF00
-        )
-        (dfs.root / "A.GAME").write_bytes(
-            b"game-a", load_address=0x1100, exec_address=0x1100
-        )
-        (dfs.root / "G.FOO").write_bytes(
-            b"foo-g", load_address=0x2200, exec_address=0x2200
-        )
-        (dfs.root / "G.BAR").write_bytes(
-            b"bar-g", load_address=0x3300, exec_address=0x3300
-        )
+        (dfs.root / "$.HELLO").write_bytes(b"hi-root", load_address=0x1900, exec_address=0x8023)
+        (dfs.root / "$.DATA").write_bytes(b"data-root", load_address=0xFF00, exec_address=0xFF00)
+        (dfs.root / "A.GAME").write_bytes(b"game-a", load_address=0x1100, exec_address=0x1100)
+        (dfs.root / "G.FOO").write_bytes(b"foo-g", load_address=0x2200, exec_address=0x2200)
+        (dfs.root / "G.BAR").write_bytes(b"bar-g", load_address=0x3300, exec_address=0x3300)
         dfs.path("$.DATA").lock()
     return filepath
 
@@ -340,18 +328,10 @@ def afs_image_with_access_bytes(tmp_path: Path) -> Path:
         )
     with ADFS.from_file(filepath, mode="r+b") as adfs:
         afs = adfs.afs_partition
-        (afs.root / "alpha").write_bytes(
-            b"a", access=AFSAccess.from_string("WR/R")
-        )
-        (afs.root / "bravo").write_bytes(
-            b"b", access=AFSAccess.from_string("LWR/R")
-        )
-        (afs.root / "charlie").write_bytes(
-            b"c", access=AFSAccess.from_string("WR/WR")
-        )
-        (afs.root / "delta").write_bytes(
-            b"d", access=AFSAccess.from_string("/")
-        )
+        (afs.root / "alpha").write_bytes(b"a", access=AFSAccess.from_string("WR/R"))
+        (afs.root / "bravo").write_bytes(b"b", access=AFSAccess.from_string("LWR/R"))
+        (afs.root / "charlie").write_bytes(b"c", access=AFSAccess.from_string("WR/WR"))
+        (afs.root / "delta").write_bytes(b"d", access=AFSAccess.from_string("/"))
         (afs.root / "Folder").mkdir()
         afs.flush()
     return filepath

@@ -106,9 +106,7 @@ def initialise(adfs: "ADFS", *, spec: InitSpec) -> None:
         plan_obj = None
         sec1, sec2 = adfs._fsm.afs_info_pointers
         if sec1 == 0 or sec2 == 0:
-            raise AFSInitSpecError(
-                "spec.repartition=False but no AFS pointers are installed"
-            )
+            raise AFSInitSpecError("spec.repartition=False but no AFS pointers are installed")
         start_cylinder = sec1 // physical_spc
         afs_cylinders = physical_total_cyls - start_cylinder
 
@@ -149,7 +147,8 @@ def initialise(adfs: "ADFS", *, spec: InitSpec) -> None:
         write_sector((start_cylinder + cylinder) * spc, data)
 
     shadow = BitmapShadow(
-        afs_cylinders, spc,
+        afs_cylinders,
+        spc,
         reader=_bitmap_reader,
         writer=_bitmap_writer,
     )
@@ -310,7 +309,9 @@ def initialise(adfs: "ADFS", *, spec: InitSpec) -> None:
         override = builtin_overrides.get(canonical.upper())
         if override is None:
             return passwords.with_added(
-                canonical, quota=default_quota, system=system,
+                canonical,
+                quota=default_quota,
+                system=system,
             )
         return passwords.with_added(
             canonical,
@@ -346,9 +347,7 @@ def initialise(adfs: "ADFS", *, spec: InitSpec) -> None:
     # so BILB = 256 MOD 256 = 0. The passwords file is always padded
     # to whole sectors; the logical size for the map sector is the
     # padded size, not the raw data length.
-    passwords_padded_size = (
-        ((len(passwords_raw) + _SECTOR_SIZE - 1) // _SECTOR_SIZE) * _SECTOR_SIZE
-    )
+    passwords_padded_size = ((len(passwords_raw) + _SECTOR_SIZE - 1) // _SECTOR_SIZE) * _SECTOR_SIZE
     if len(passwords_raw) < passwords_padded_size:
         passwords_raw = passwords_raw.ljust(passwords_padded_size, b"\x00")
 
@@ -389,9 +388,7 @@ def initialise(adfs: "ADFS", *, spec: InitSpec) -> None:
     write_object(root_map_sin, root_extents, root_bytes, 0)
 
     # Per-user URD map blocks + data.
-    for (user_name, urd_map_sin, urd_extents), urd_bytes in zip(
-        urd_allocations, urd_bytes_list
-    ):
+    for (user_name, urd_map_sin, urd_extents), urd_bytes in zip(urd_allocations, urd_bytes_list):
         write_object(urd_map_sin, urd_extents, urd_bytes, 0)
 
     # Passwords file map block + data.

@@ -32,8 +32,16 @@ class FakeADFSStat:
 class FakeAFSAccess:
     """Mimics AFSAccess with the bits we care about."""
 
-    def __init__(self, *, owner_read=False, owner_write=False, locked=False,
-                 public_read=False, public_write=False, is_directory=False):
+    def __init__(
+        self,
+        *,
+        owner_read=False,
+        owner_write=False,
+        locked=False,
+        public_read=False,
+        public_write=False,
+        is_directory=False,
+    ):
         self._or = owner_read
         self._ow = owner_write
         self._l = locked

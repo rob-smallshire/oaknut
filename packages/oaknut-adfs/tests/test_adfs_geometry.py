@@ -54,7 +54,10 @@ class TestGeometryFromHardDiscCreate:
     def test_hard_disc_explicit_geometry(self, tmp_path: Path):
         filepath = tmp_path / "scsi0.dat"
         with ADFS.create_file(
-            filepath, cylinders=100, heads=4, sectors_per_track=33,
+            filepath,
+            cylinders=100,
+            heads=4,
+            sectors_per_track=33,
         ) as adfs:
             g = adfs.geometry
             assert g.cylinders == 100

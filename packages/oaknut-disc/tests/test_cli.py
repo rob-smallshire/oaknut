@@ -52,9 +52,7 @@ class TestLs:
         # --as display pins the Rich renderer so the format-label in the
         # table title ("DFS") is part of the output.  Default piped
         # output is TSV, which omits titles.
-        result = runner.invoke(
-            cli, ["ls", "--as", "display", str(dfs_image_filepath)]
-        )
+        result = runner.invoke(cli, ["ls", "--as", "display", str(dfs_image_filepath)])
         assert result.exit_code == 0
         # Root shows the $ directory, not the files directly.
         assert "$" in result.output
@@ -67,9 +65,7 @@ class TestLs:
         assert "DATA" in result.output
 
     def test_ls_adfs_root(self, runner: CliRunner, adfs_image_filepath: Path) -> None:
-        result = runner.invoke(
-            cli, ["ls", "--as", "display", str(adfs_image_filepath)]
-        )
+        result = runner.invoke(cli, ["ls", "--as", "display", str(adfs_image_filepath)])
         assert result.exit_code == 0
         assert "Hello" in result.output
         assert "Games" in result.output
@@ -81,9 +77,7 @@ class TestLs:
         assert "Elite" in result.output
 
     def test_ls_afs_prefix(self, runner: CliRunner, afs_image_filepath: Path) -> None:
-        result = runner.invoke(
-            cli, ["ls", "--as", "display", str(afs_image_filepath), "afs:"]
-        )
+        result = runner.invoke(cli, ["ls", "--as", "display", str(afs_image_filepath), "afs:"])
         assert result.exit_code == 0
         assert "AFS" in result.output
 
@@ -121,9 +115,7 @@ class TestAccessBytesFormattedCorrectlyOnAFS:
         filename: str,
         expected_attr: str,
     ) -> None:
-        result = runner.invoke(
-            cli, ["ls", str(afs_image_with_access_bytes), "afs:$"]
-        )
+        result = runner.invoke(cli, ["ls", str(afs_image_with_access_bytes), "afs:$"])
         assert result.exit_code == 0, result.output
         # Find the row for this file and check the Attr column matches
         # the AFS-form string the file was written with.
@@ -133,8 +125,7 @@ class TestAccessBytesFormattedCorrectlyOnAFS:
         )
         assert row is not None, f"no row for {filename!r} in:\n{result.output}"
         assert expected_attr in row, (
-            f"expected {expected_attr!r} in row for {filename!r}, "
-            f"got: {row!r}"
+            f"expected {expected_attr!r} in row for {filename!r}, got: {row!r}"
         )
 
     @pytest.mark.parametrize(
@@ -160,9 +151,7 @@ class TestAccessBytesFormattedCorrectlyOnAFS:
         # Default piped output is TSV ("Attr\tWR/R"); display mode uses
         # a bordered table.  Match either by looking for Attr on a line
         # followed by the expected symbolic string.
-        attr_line = next(
-            ln for ln in result.output.splitlines() if "Attr" in ln
-        )
+        attr_line = next(ln for ln in result.output.splitlines() if "Attr" in ln)
         assert expected_attr in attr_line, attr_line
 
     def test_ls_afs_directory_shows_D_form(
@@ -173,9 +162,7 @@ class TestAccessBytesFormattedCorrectlyOnAFS:
         """A directory must render with the ``D/`` form, not be
         misinterpreted as a file.
         """
-        result = runner.invoke(
-            cli, ["ls", str(afs_image_with_access_bytes), "afs:$"]
-        )
+        result = runner.invoke(cli, ["ls", str(afs_image_with_access_bytes), "afs:$"])
         assert result.exit_code == 0, result.output
         # The ls code path renders directories as a separate row
         # without an Attr column — just verify the directory name
@@ -183,9 +170,7 @@ class TestAccessBytesFormattedCorrectlyOnAFS:
         # doesn't leak a misformatted file-style attr for it.
         assert "Folder/" in result.output
 
-    def test_ls_adfs_unchanged(
-        self, runner: CliRunner, adfs_image_filepath: Path
-    ) -> None:
+    def test_ls_adfs_unchanged(self, runner: CliRunner, adfs_image_filepath: Path) -> None:
         """Regression: ADFS ls must still produce its wire-form
         Access rendering — the fix must not affect non-AFS paths.
         """
@@ -211,16 +196,12 @@ class TestLsAccessByteFlag:
         flag: str,
     ) -> None:
         """``--access-byte`` / ``-H`` adds a hex column for AFS files."""
-        result = runner.invoke(
-            cli, ["ls", flag, str(afs_image_with_access_bytes), "afs:$"]
-        )
+        result = runner.invoke(cli, ["ls", flag, str(afs_image_with_access_bytes), "afs:$"])
         assert result.exit_code == 0, result.output
         # WR/R on AFS = PR (0x01) + OR (0x04) + OW (0x08) = 0x0D.
         # The "0x" prefix makes it unambiguously hex and directly
         # copy-pasteable into ``disc chmod``.
-        row = next(
-            line for line in result.output.splitlines() if "alpha" in line
-        )
+        row = next(line for line in result.output.splitlines() if "alpha" in line)
         assert "0x0D" in row, f"expected 0x0D in row, got: {row!r}"
         assert "WR/R" in row, f"symbolic form must remain, got: {row!r}"
 
@@ -229,16 +210,14 @@ class TestLsAccessByteFlag:
         runner: CliRunner,
         afs_image_with_access_bytes: Path,
     ) -> None:
-        result = runner.invoke(
-            cli, ["ls", "-H", str(afs_image_with_access_bytes), "afs:$"]
-        )
+        result = runner.invoke(cli, ["ls", "-H", str(afs_image_with_access_bytes), "afs:$"])
         assert result.exit_code == 0, result.output
         # Each file's hex byte appears on its own row, "0x"-prefixed.
         expected = {
-            "alpha": "0x0D",    # WR/R
-            "bravo": "0x1D",    # LWR/R
+            "alpha": "0x0D",  # WR/R
+            "bravo": "0x1D",  # LWR/R
             "charlie": "0x0F",  # WR/WR
-            "delta": "0x00",    # /
+            "delta": "0x00",  # /
         }
         for name, hex_byte in expected.items():
             row = next(
@@ -246,29 +225,19 @@ class TestLsAccessByteFlag:
                 None,
             )
             assert row is not None, f"no row for {name!r}"
-            assert hex_byte in row, (
-                f"expected {hex_byte!r} in row for {name!r}, got: {row!r}"
-            )
+            assert hex_byte in row, f"expected {hex_byte!r} in row for {name!r}, got: {row!r}"
 
-    def test_adfs_access_byte_flag(
-        self, runner: CliRunner, adfs_image_filepath: Path
-    ) -> None:
+    def test_adfs_access_byte_flag(self, runner: CliRunner, adfs_image_filepath: Path) -> None:
         """Flag also works on ADFS files."""
-        result = runner.invoke(
-            cli, ["ls", "-H", str(adfs_image_filepath)]
-        )
+        result = runner.invoke(cli, ["ls", "-H", str(adfs_image_filepath)])
         assert result.exit_code == 0, result.output
         # ADFS default write_bytes access is WR/R = owner R+W + public R
         # = wire byte R(0x01) | W(0x02) | PR(0x10) = 0x13.
-        row = next(
-            line for line in result.output.splitlines() if "Hello" in line
-        )
+        row = next(line for line in result.output.splitlines() if "Hello" in line)
         assert "0x13" in row, f"expected 0x13 in row, got: {row!r}"
         assert "WR/" in row
 
-    def test_dfs_access_byte_flag(
-        self, runner: CliRunner, dfs_image_filepath: Path
-    ) -> None:
+    def test_dfs_access_byte_flag(self, runner: CliRunner, dfs_image_filepath: Path) -> None:
         """DFS files: unlocked (0x00) and locked (0x08) render."""
         result = runner.invoke(cli, ["ls", "-H", str(dfs_image_filepath), "$"])
         assert result.exit_code == 0, result.output
@@ -293,9 +262,7 @@ class TestLsAccessByteFlag:
         # If the ls output format ever changed to a bare "0D", this
         # would still work — but "WR" (also two valid hex digits)
         # wouldn't, so insist on the explicit prefix.
-        result = runner.invoke(
-            cli, ["ls", "-H", str(afs_image_with_access_bytes), "afs:$"]
-        )
+        result = runner.invoke(cli, ["ls", "-H", str(afs_image_with_access_bytes), "afs:$"])
         assert result.exit_code == 0, result.output
         row = next(line for line in result.output.splitlines() if "alpha" in line)
         # The row has cells separated by tabs in the default TSV
@@ -317,9 +284,7 @@ class TestLsAccessByteFlag:
         """Without the flag the hex column is not added — a
         regression guard so the default ls output stays compact.
         """
-        result = runner.invoke(
-            cli, ["ls", str(afs_image_with_access_bytes), "afs:$"]
-        )
+        result = runner.invoke(cli, ["ls", str(afs_image_with_access_bytes), "afs:$"])
         assert result.exit_code == 0, result.output
         # 0x-prefixed bytes must not leak into the default ls output.
         assert "0x0D" not in result.output
@@ -343,15 +308,11 @@ class TestTree:
         assert "Games" in result.output
         assert "Elite" in result.output
 
-    def test_tree_json_preserves_hierarchy(
-        self, runner: CliRunner, adfs_image_tree: Path
-    ) -> None:
+    def test_tree_json_preserves_hierarchy(self, runner: CliRunner, adfs_image_tree: Path) -> None:
         """--as json emits a nested document mirroring the tree."""
         import json as _json
 
-        result = runner.invoke(
-            cli, ["tree", "--as", "json", str(adfs_image_tree)]
-        )
+        result = runner.invoke(cli, ["tree", "--as", "json", str(adfs_image_tree)])
         assert result.exit_code == 0, result.output
         doc = _json.loads(result.output)
         payload = next(iter(doc["reports"].values()))
@@ -401,9 +362,7 @@ def _collect_names(node: dict) -> list[str]:
 
 
 class TestFind:
-    def test_find_dfs_bare_paths(
-        self, runner: CliRunner, dfs_image_filepath: Path
-    ) -> None:
+    def test_find_dfs_bare_paths(self, runner: CliRunner, dfs_image_filepath: Path) -> None:
         """Single-partition DFS image: output stays unprefixed for
         backward compatibility.
         """
@@ -415,9 +374,7 @@ class TestFind:
         assert "adfs:" not in result.output
         assert "dfs:" not in result.output
 
-    def test_find_adfs_only_bare_paths(
-        self, runner: CliRunner, adfs_image_filepath: Path
-    ) -> None:
+    def test_find_adfs_only_bare_paths(self, runner: CliRunner, adfs_image_filepath: Path) -> None:
         """Single-partition ADFS image: output stays unprefixed."""
         result = runner.invoke(cli, ["find", str(adfs_image_filepath), "*"])
         assert result.exit_code == 0, result.output
@@ -435,9 +392,7 @@ class TestFind:
         fall back to leaf names only because AFSPath has no ``.path``
         attribute).
         """
-        result = runner.invoke(
-            cli, ["find", str(partitioned_image_with_files), "afs:*"]
-        )
+        result = runner.invoke(cli, ["find", str(partitioned_image_with_files), "afs:*"])
         assert result.exit_code == 0, result.output
         assert "afs:$.afsA" in result.output
         assert "afs:$.GAMES.Elite" in result.output
@@ -467,9 +422,7 @@ class TestFind:
         """With no prefix on a multi-partition image, find enumerates
         every partition and labels each result with its partition.
         """
-        result = runner.invoke(
-            cli, ["find", str(partitioned_image_with_files), "*"]
-        )
+        result = runner.invoke(cli, ["find", str(partitioned_image_with_files), "*"])
         assert result.exit_code == 0, result.output
         assert "adfs:$.adfsA" in result.output
         assert "adfs:$.adfsB" in result.output
@@ -507,19 +460,12 @@ class TestFind:
         another command that understands the prefix syntax — the
         whole point of emitting prefixed paths on partitioned images.
         """
-        result = runner.invoke(
-            cli, ["find", str(partitioned_image_with_files), "afs:*"]
-        )
+        result = runner.invoke(cli, ["find", str(partitioned_image_with_files), "afs:*"])
         assert result.exit_code == 0, result.output
         # Skip header and comment lines; pick the first data line that
         # starts with the partition prefix.
-        line = next(
-            ln for ln in result.output.splitlines()
-            if ln.startswith("afs:$.GAMES.Elite")
-        )
-        cat = runner.invoke(
-            cli, ["cat", str(partitioned_image_with_files), line.strip()]
-        )
+        line = next(ln for ln in result.output.splitlines() if ln.startswith("afs:$.GAMES.Elite"))
+        cat = runner.invoke(cli, ["cat", str(partitioned_image_with_files), line.strip()])
         assert cat.exit_code == 0, cat.output
         assert b"e" in cat.output_bytes
 
@@ -532,12 +478,8 @@ class TestFind:
 class TestFindAsFormats:
     """disc find emits a TableContent; --as selects the renderer."""
 
-    def test_find_tsv_header_and_rows(
-        self, runner: CliRunner, dfs_image_filepath: Path
-    ) -> None:
-        result = runner.invoke(
-            cli, ["find", "--as", "tsv", str(dfs_image_filepath), "*"]
-        )
+    def test_find_tsv_header_and_rows(self, runner: CliRunner, dfs_image_filepath: Path) -> None:
+        result = runner.invoke(cli, ["find", "--as", "tsv", str(dfs_image_filepath), "*"])
         assert result.exit_code == 0, result.output
         lines = [ln for ln in result.output.splitlines() if ln]
         # TSV header is prefixed with "# " per asyoulikeit convention.
@@ -546,14 +488,10 @@ class TestFindAsFormats:
         assert "$.HELLO" in data_rows
         assert "$.DATA" in data_rows
 
-    def test_find_json_parses(
-        self, runner: CliRunner, dfs_image_filepath: Path
-    ) -> None:
+    def test_find_json_parses(self, runner: CliRunner, dfs_image_filepath: Path) -> None:
         import json as _json
 
-        result = runner.invoke(
-            cli, ["find", "--as", "json", str(dfs_image_filepath), "*"]
-        )
+        result = runner.invoke(cli, ["find", "--as", "json", str(dfs_image_filepath), "*"])
         assert result.exit_code == 0, result.output
         doc = _json.loads(result.output)
         # asyoulikeit JSON top level: {"reports": {name: {..., rows: [...]}}}
@@ -563,13 +501,9 @@ class TestFindAsFormats:
         assert "$.HELLO" in paths
         assert "$.DATA" in paths
 
-    def test_find_display_is_rich_table(
-        self, runner: CliRunner, dfs_image_filepath: Path
-    ) -> None:
+    def test_find_display_is_rich_table(self, runner: CliRunner, dfs_image_filepath: Path) -> None:
         """display mode produces a bordered Rich table."""
-        result = runner.invoke(
-            cli, ["find", "--as", "display", str(dfs_image_filepath), "*"]
-        )
+        result = runner.invoke(cli, ["find", "--as", "display", str(dfs_image_filepath), "*"])
         assert result.exit_code == 0, result.output
         # Rich tables draw box-drawing chars.  Any presence of "│" or "┃"
         # confirms the display renderer ran.
@@ -595,10 +529,7 @@ class TestFindAsFormats:
             ],
         )
         assert result.exit_code == 0, result.output
-        data = [
-            ln for ln in result.output.splitlines()
-            if ln and not ln.startswith("#")
-        ]
+        data = [ln for ln in result.output.splitlines() if ln and not ln.startswith("#")]
         assert "adfs:$.adfsA" in data
         assert "afs:$.GAMES.Elite" in data
 
@@ -688,9 +619,7 @@ class TestStatPartitionStructure:
         # Display mode pins the human-readable layout so the section
         # titles (Disc, Partition 1: DFS) appear as literal text.  TSV
         # omits titles by design.
-        result = runner.invoke(
-            cli, ["stat", "--as", "display", str(dfs_image_filepath)]
-        )
+        result = runner.invoke(cli, ["stat", "--as", "display", str(dfs_image_filepath)])
         assert result.exit_code == 0, result.output
         assert "Disc" in result.output
         assert "Partition 1: DFS" in result.output
@@ -698,16 +627,12 @@ class TestStatPartitionStructure:
         assert "TestDFS" in result.output
         # Byte/sector pairs must be self-consistent (issue #7 regression).
         for bytes_value, sector_value in _extract_sizes(result.output):
-            assert bytes_value == sector_value * 256, (
-                f"{bytes_value} bytes != {sector_value}*256"
-            )
+            assert bytes_value == sector_value * 256, f"{bytes_value} bytes != {sector_value}*256"
 
     def test_adfs_floppy_disc_and_single_partition(
         self, runner: CliRunner, adfs_image_filepath: Path
     ) -> None:
-        result = runner.invoke(
-            cli, ["stat", "--as", "display", str(adfs_image_filepath)]
-        )
+        result = runner.invoke(cli, ["stat", "--as", "display", str(adfs_image_filepath)])
         assert result.exit_code == 0, result.output
         assert "Disc" in result.output
         assert "Partition 1: ADFS" in result.output
@@ -719,9 +644,7 @@ class TestStatPartitionStructure:
     def test_adfs_hard_no_afs_single_partition(
         self, runner: CliRunner, adfs_hard_no_afs_filepath: Path
     ) -> None:
-        result = runner.invoke(
-            cli, ["stat", "--as", "display", str(adfs_hard_no_afs_filepath)]
-        )
+        result = runner.invoke(cli, ["stat", "--as", "display", str(adfs_hard_no_afs_filepath)])
         assert result.exit_code == 0, result.output
         assert "Partition 1: ADFS" in result.output
         # Without AFS there is no Partition 2.
@@ -741,8 +664,8 @@ class TestStatPartitionStructure:
         assert "Partition 2: AFS" in result.output
         # Disc-level geometry is a 296-cylinder SCSI hard disc.
         assert "296 cylinders" in result.output
-        assert "Split" in result.output       # ADFS title
-        assert "TwinFS" in result.output      # AFS disc name
+        assert "Split" in result.output  # ADFS title
+        assert "TwinFS" in result.output  # AFS disc name
         # Every byte/sector pair must be self-consistent — this is the
         # specific regression the reporter asked to guard (issue #7).
         pairs = _extract_sizes(result.output)
@@ -764,14 +687,12 @@ class TestStatPartitionStructure:
         size_lines = _extract_size_lines(result.output)
         # One Size line per block: disc, then each partition.
         assert len(size_lines) == 3, (
-            f"expected 3 Size lines (disc + 2 partitions), "
-            f"got {size_lines!r}"
+            f"expected 3 Size lines (disc + 2 partitions), got {size_lines!r}"
         )
         disc_sectors = size_lines[0][1]
         partition_sectors = size_lines[1][1] + size_lines[2][1]
         assert partition_sectors == disc_sectors, (
-            f"partitions sum to {partition_sectors} sectors but "
-            f"disc is {disc_sectors} sectors"
+            f"partitions sum to {partition_sectors} sectors but disc is {disc_sectors} sectors"
         )
 
     def test_adfs_hard_with_afs_omits_user_list(
@@ -792,9 +713,7 @@ class TestStatPartitionStructure:
         the ``afs:`` prefix explicitly asks for the AFS view, so the
         disc-level + multi-partition layout does not apply.
         """
-        result = runner.invoke(
-            cli, ["stat", str(adfs_hard_with_afs_filepath), "afs:"]
-        )
+        result = runner.invoke(cli, ["stat", str(adfs_hard_with_afs_filepath), "afs:"])
         assert result.exit_code == 0, result.output
         # AFS-scoped view: disc name and AFS-specific fields, no
         # Partition N headings.
@@ -859,12 +778,8 @@ def adfs_with_acorn_text(tmp_path: Path) -> Path:
 
     filepath = tmp_path / "text.adl"
     with ADFS.create_file(filepath, ADFS_L, title="TXT") as adfs:
-        (adfs.root / "BOOT").write_bytes(
-            b"*DIR $\r*LIB $.LIBRARY\rCHAIN\"!MENU\"\r"
-        )
-        (adfs.root / "MIXED").write_bytes(
-            b"acorn-line\rdos-line\r\nunix-line\nfinal\r"
-        )
+        (adfs.root / "BOOT").write_bytes(b'*DIR $\r*LIB $.LIBRARY\rCHAIN"!MENU"\r')
+        (adfs.root / "MIXED").write_bytes(b"acorn-line\rdos-line\r\nunix-line\nfinal\r")
         (adfs.root / "EMPTY").write_bytes(b"")
         (adfs.root / "Games").mkdir()
     return filepath
@@ -901,18 +816,14 @@ class TestType:
         # Mixed input: \r, \r\n, \n -> all become \n.
         assert result.output_bytes == b"acorn-line\ndos-line\nunix-line\nfinal\n"
 
-    def test_crlf_forces_crlf(
-        self, runner: CliRunner, adfs_with_acorn_text: Path
-    ) -> None:
+    def test_crlf_forces_crlf(self, runner: CliRunner, adfs_with_acorn_text: Path) -> None:
         result = runner.invoke(
             cli,
             ["type", "--line-endings", "crlf", str(adfs_with_acorn_text), "$.MIXED"],
         )
         assert result.exit_code == 0
         # Crucially: \r\n in the input must NOT be doubled to \r\r\n.
-        assert result.output_bytes == (
-            b"acorn-line\r\ndos-line\r\nunix-line\r\nfinal\r\n"
-        )
+        assert result.output_bytes == (b"acorn-line\r\ndos-line\r\nunix-line\r\nfinal\r\n")
 
     def test_cr_forces_cr(self, runner: CliRunner, adfs_with_acorn_text: Path) -> None:
         result = runner.invoke(
@@ -922,43 +833,31 @@ class TestType:
         assert result.exit_code == 0
         assert result.output_bytes == b"acorn-line\rdos-line\runix-line\rfinal\r"
 
-    def test_keep_emits_raw_bytes(
-        self, runner: CliRunner, adfs_with_acorn_text: Path
-    ) -> None:
+    def test_keep_emits_raw_bytes(self, runner: CliRunner, adfs_with_acorn_text: Path) -> None:
         result = runner.invoke(
             cli,
             ["type", "--line-endings", "keep", str(adfs_with_acorn_text), "$.MIXED"],
         )
         assert result.exit_code == 0
         # Identical to the on-disc bytes — equivalent to ``disc cat``.
-        assert result.output_bytes == (
-            b"acorn-line\rdos-line\r\nunix-line\nfinal\r"
-        )
+        assert result.output_bytes == (b"acorn-line\rdos-line\r\nunix-line\nfinal\r")
 
     def test_short_option(self, runner: CliRunner, adfs_with_acorn_text: Path) -> None:
-        result = runner.invoke(
-            cli, ["type", "-l", "lf", str(adfs_with_acorn_text), "$.BOOT"]
-        )
+        result = runner.invoke(cli, ["type", "-l", "lf", str(adfs_with_acorn_text), "$.BOOT"])
         assert result.exit_code == 0
-        assert result.output_bytes == (
-            b"*DIR $\n*LIB $.LIBRARY\nCHAIN\"!MENU\"\n"
-        )
+        assert result.output_bytes == (b'*DIR $\n*LIB $.LIBRARY\nCHAIN"!MENU"\n')
 
     def test_empty_file(self, runner: CliRunner, adfs_with_acorn_text: Path) -> None:
         result = runner.invoke(cli, ["type", str(adfs_with_acorn_text), "$.EMPTY"])
         assert result.exit_code == 0
         assert result.output_bytes == b""
 
-    def test_directory_errors(
-        self, runner: CliRunner, adfs_with_acorn_text: Path
-    ) -> None:
+    def test_directory_errors(self, runner: CliRunner, adfs_with_acorn_text: Path) -> None:
         result = runner.invoke(cli, ["type", str(adfs_with_acorn_text), "$.Games"])
         assert result.exit_code != 0
         assert "directory" in result.output
 
-    def test_path_not_found(
-        self, runner: CliRunner, adfs_with_acorn_text: Path
-    ) -> None:
+    def test_path_not_found(self, runner: CliRunner, adfs_with_acorn_text: Path) -> None:
         result = runner.invoke(cli, ["type", str(adfs_with_acorn_text), "$.MISSING"])
         assert result.exit_code != 0
         assert "not found" in result.output
@@ -974,9 +873,7 @@ class TestType:
         # Click shows the valid choices in the error.
         assert "host" in result.output
 
-    def test_star_alias_routes_to_type(
-        self, runner: CliRunner, adfs_with_acorn_text: Path
-    ) -> None:
+    def test_star_alias_routes_to_type(self, runner: CliRunner, adfs_with_acorn_text: Path) -> None:
         """*TYPE now invokes the text-aware command rather than raw cat,
         so Acorn line endings get translated by default."""
         result = runner.invoke(cli, ["*TYPE", str(adfs_with_acorn_text), "$.BOOT"])
@@ -1011,7 +908,10 @@ class TestTranslateLineEndings:
         from oaknut.disc.cli import _translate_line_endings
 
         raw = b"a\rb\r\nc\nd"
-        assert _translate_line_endings(raw, "keep") is raw or _translate_line_endings(raw, "keep") == raw
+        assert (
+            _translate_line_endings(raw, "keep") is raw
+            or _translate_line_endings(raw, "keep") == raw
+        )
 
     def test_host_resolves_to_os_default(self) -> None:
         """``host`` mode picks LF on POSIX, CRLF on Windows."""
@@ -1265,7 +1165,10 @@ class TestCp:
         assert result.exit_code == 0
 
     def test_cp_dfs_to_adfs(
-        self, runner: CliRunner, dfs_image_filepath: Path, adfs_image_filepath: Path,
+        self,
+        runner: CliRunner,
+        dfs_image_filepath: Path,
+        adfs_image_filepath: Path,
     ) -> None:
         result = runner.invoke(
             cli,
@@ -1282,7 +1185,10 @@ class TestCp:
         assert b"Hello world" in result.output_bytes
 
     def test_cp_adfs_to_dfs(
-        self, runner: CliRunner, dfs_image_filepath: Path, adfs_image_filepath: Path,
+        self,
+        runner: CliRunner,
+        dfs_image_filepath: Path,
+        adfs_image_filepath: Path,
     ) -> None:
         result = runner.invoke(
             cli,
@@ -1298,7 +1204,10 @@ class TestCp:
         assert b"Hello ADFS" in result.output_bytes
 
     def test_cp_cross_preserves_load_exec(
-        self, runner: CliRunner, dfs_image_filepath: Path, adfs_image_filepath: Path,
+        self,
+        runner: CliRunner,
+        dfs_image_filepath: Path,
+        adfs_image_filepath: Path,
     ) -> None:
         runner.invoke(
             cli,
@@ -1308,9 +1217,7 @@ class TestCp:
                 f"{adfs_image_filepath}:$.Copied",
             ],
         )
-        result = runner.invoke(
-            cli, ["stat", str(adfs_image_filepath), "$.Copied"]
-        )
+        result = runner.invoke(cli, ["stat", str(adfs_image_filepath), "$.Copied"])
         assert result.exit_code == 0
         assert "00001900" in result.output  # load address preserved
         assert "00008023" in result.output  # exec address preserved
@@ -1494,14 +1401,10 @@ class TestCpRecursive:
         )
         assert result.exit_code == 0, result.output
         # Dir/Inside and Dir/Sub/Deep arrive under $.Dir on the dst.
-        cat_inside = runner.invoke(
-            cli, ["cat", str(adfs_empty_filepath), "$.Dir.Inside"]
-        )
+        cat_inside = runner.invoke(cli, ["cat", str(adfs_empty_filepath), "$.Dir.Inside"])
         assert cat_inside.exit_code == 0, cat_inside.output
         assert b"inside-data" in cat_inside.output_bytes
-        cat_deep = runner.invoke(
-            cli, ["cat", str(adfs_empty_filepath), "$.Dir.Sub.Deep"]
-        )
+        cat_deep = runner.invoke(cli, ["cat", str(adfs_empty_filepath), "$.Dir.Sub.Deep"])
         assert cat_deep.exit_code == 0, cat_deep.output
         assert b"deep-data" in cat_deep.output_bytes
 
@@ -1616,8 +1519,11 @@ class TestCpRecursive:
             ],
         )
         assert result.exit_code != 0
-        assert "dfs" in result.output.lower() or "flat" in result.output.lower() \
+        assert (
+            "dfs" in result.output.lower()
+            or "flat" in result.output.lower()
             or "nest" in result.output.lower()
+        )
 
 
 class TestCpGlobRecursiveCombined:
@@ -1643,9 +1549,7 @@ class TestCpGlobRecursiveCombined:
         )
         assert result.exit_code == 0, result.output
         # File at top level.
-        cat_root = runner.invoke(
-            cli, ["cat", str(adfs_empty_filepath), "$.Archive.Root1"]
-        )
+        cat_root = runner.invoke(cli, ["cat", str(adfs_empty_filepath), "$.Archive.Root1"])
         assert cat_root.exit_code == 0
         assert b"root1-data" in cat_root.output_bytes
         # Directory recursed.
@@ -1708,9 +1612,7 @@ class TestCpDfsAdfsMapping:
             ],
         )
         assert result.exit_code == 0, result.output
-        listed = runner.invoke(
-            cli, ["ls", str(adfs_empty_filepath), "$.A"]
-        )
+        listed = runner.invoke(cli, ["ls", str(adfs_empty_filepath), "$.A"])
         assert "GAME" in listed.output
 
     def test_dfs_whole_image_to_adfs(
@@ -1735,9 +1637,7 @@ class TestCpDfsAdfsMapping:
         # $.HELLO, $.DATA at root; A/GAME, G/FOO, G/BAR in subdirs.
         for bare in ("$.HELLO", "$.DATA", "$.A.GAME", "$.G.FOO", "$.G.BAR"):
             stat = runner.invoke(cli, ["stat", str(adfs_empty_filepath), bare])
-            assert stat.exit_code == 0, (
-                f"{bare} missing on destination: {stat.output!r}"
-            )
+            assert stat.exit_code == 0, f"{bare} missing on destination: {stat.output!r}"
 
     def test_adfs_one_level_tree_flattens_to_dfs(
         self,
@@ -1751,15 +1651,18 @@ class TestCpDfsAdfsMapping:
         directories.
         """
         # Round-trip stage 1: DFS → ADFS.
-        assert runner.invoke(
-            cli,
-            [
-                "cp",
-                "-r",
-                f"{dfs_multi_dir_filepath}:",
-                f"{adfs_empty_filepath}:$/",
-            ],
-        ).exit_code == 0
+        assert (
+            runner.invoke(
+                cli,
+                [
+                    "cp",
+                    "-r",
+                    f"{dfs_multi_dir_filepath}:",
+                    f"{adfs_empty_filepath}:$/",
+                ],
+            ).exit_code
+            == 0
+        )
 
         # Round-trip stage 2: ADFS → DFS.
         result = runner.invoke(
@@ -1774,9 +1677,7 @@ class TestCpDfsAdfsMapping:
         assert result.exit_code == 0, result.output
         for bare in ("$.HELLO", "$.DATA", "A.GAME", "G.FOO", "G.BAR"):
             stat = runner.invoke(cli, ["stat", str(dfs_empty_filepath), bare])
-            assert stat.exit_code == 0, (
-                f"{bare} missing on DFS destination: {stat.output!r}"
-            )
+            assert stat.exit_code == 0, f"{bare} missing on DFS destination: {stat.output!r}"
 
     def test_full_roundtrip_preserves_bytes_and_metadata(
         self,
@@ -1805,38 +1706,41 @@ class TestCpDfsAdfsMapping:
                 }
 
         # Round-trip.
-        assert runner.invoke(
-            cli,
-            [
-                "cp",
-                "-r",
-                f"{dfs_multi_dir_filepath}:",
-                f"{adfs_empty_filepath}:$/",
-            ],
-        ).exit_code == 0, "DFS→ADFS leg failed"
-        assert runner.invoke(
-            cli,
-            [
-                "cp",
-                "-r",
-                f"{adfs_empty_filepath}:$",
-                f"{dfs_empty_filepath}:$/",
-            ],
-        ).exit_code == 0, "ADFS→DFS leg failed"
+        assert (
+            runner.invoke(
+                cli,
+                [
+                    "cp",
+                    "-r",
+                    f"{dfs_multi_dir_filepath}:",
+                    f"{adfs_empty_filepath}:$/",
+                ],
+            ).exit_code
+            == 0
+        ), "DFS→ADFS leg failed"
+        assert (
+            runner.invoke(
+                cli,
+                [
+                    "cp",
+                    "-r",
+                    f"{adfs_empty_filepath}:$",
+                    f"{dfs_empty_filepath}:$/",
+                ],
+            ).exit_code
+            == 0
+        ), "ADFS→DFS leg failed"
 
         # Compare.
         with DFS.from_file(dfs_empty_filepath, ACORN_DFS_80T_SINGLE_SIDED) as dfs:
             dst_files = {entry.path for entry in dfs.files}
-            assert dst_files == set(src_files), (
-                f"file set differs: {dst_files} vs {set(src_files)}"
-            )
+            assert dst_files == set(src_files), f"file set differs: {dst_files} vs {set(src_files)}"
             for path_str, expected in src_files.items():
                 p = dfs.path(path_str)
                 st = p.stat()
                 assert p.read_bytes() == expected["bytes"], path_str
                 assert st.load_address == expected["load"], (
-                    f"{path_str}: load {st.load_address:#x} vs "
-                    f"{expected['load']:#x}"
+                    f"{path_str}: load {st.load_address:#x} vs {expected['load']:#x}"
                 )
                 assert st.exec_address == expected["exec"], path_str
                 assert st.locked == expected["locked"], (
@@ -1851,9 +1755,7 @@ class TestCpDfsAdfsMapping:
 
 class TestChmod:
     def test_chmod_adfs_symbolic(self, runner: CliRunner, adfs_image_filepath: Path) -> None:
-        result = runner.invoke(
-            cli, ["chmod", str(adfs_image_filepath), "$.Hello", "LWR/R"]
-        )
+        result = runner.invoke(cli, ["chmod", str(adfs_image_filepath), "$.Hello", "LWR/R"])
         assert result.exit_code == 0
         # Verify the access changed.
         result = runner.invoke(cli, ["stat", str(adfs_image_filepath), "$.Hello"])
@@ -1861,9 +1763,7 @@ class TestChmod:
         assert "L" in result.output
 
     def test_chmod_adfs_hex(self, runner: CliRunner, adfs_image_filepath: Path) -> None:
-        result = runner.invoke(
-            cli, ["chmod", str(adfs_image_filepath), "$.Hello", "0x0B"]
-        )
+        result = runner.invoke(cli, ["chmod", str(adfs_image_filepath), "$.Hello", "0x0B"])
         assert result.exit_code == 0
 
     def test_chmod_dfs_lock(self, runner: CliRunner, dfs_image_filepath: Path) -> None:
@@ -1871,59 +1771,41 @@ class TestChmod:
         assert result.exit_code == 0
 
     def test_chmod_star_alias(self, runner: CliRunner, adfs_image_filepath: Path) -> None:
-        result = runner.invoke(
-            cli, ["*access", str(adfs_image_filepath), "$.Hello", "WR/"]
-        )
+        result = runner.invoke(cli, ["*access", str(adfs_image_filepath), "$.Hello", "WR/"])
         assert result.exit_code == 0
 
 
 class TestSetGetLoad:
     def test_set_load_dfs(self, runner: CliRunner, dfs_image_filepath: Path) -> None:
-        result = runner.invoke(
-            cli, ["set-load", str(dfs_image_filepath), "$.HELLO", "0xFF00"]
-        )
+        result = runner.invoke(cli, ["set-load", str(dfs_image_filepath), "$.HELLO", "0xFF00"])
         assert result.exit_code == 0
-        result = runner.invoke(
-            cli, ["get-load", str(dfs_image_filepath), "$.HELLO"]
-        )
+        result = runner.invoke(cli, ["get-load", str(dfs_image_filepath), "$.HELLO"])
         assert result.exit_code == 0
         assert "0000FF00" in result.output
 
     def test_set_load_adfs(self, runner: CliRunner, adfs_image_filepath: Path) -> None:
-        result = runner.invoke(
-            cli, ["set-load", str(adfs_image_filepath), "$.Hello", "0xFFFF1234"]
-        )
+        result = runner.invoke(cli, ["set-load", str(adfs_image_filepath), "$.Hello", "0xFFFF1234"])
         assert result.exit_code == 0
-        result = runner.invoke(
-            cli, ["get-load", str(adfs_image_filepath), "$.Hello"]
-        )
+        result = runner.invoke(cli, ["get-load", str(adfs_image_filepath), "$.Hello"])
         assert result.exit_code == 0
         assert "FFFF1234" in result.output
 
     def test_get_load_original(self, runner: CliRunner, dfs_image_filepath: Path) -> None:
-        result = runner.invoke(
-            cli, ["get-load", str(dfs_image_filepath), "$.HELLO"]
-        )
+        result = runner.invoke(cli, ["get-load", str(dfs_image_filepath), "$.HELLO"])
         assert result.exit_code == 0
         assert "00001900" in result.output
 
 
 class TestSetGetExec:
     def test_set_exec_dfs(self, runner: CliRunner, dfs_image_filepath: Path) -> None:
-        result = runner.invoke(
-            cli, ["set-exec", str(dfs_image_filepath), "$.HELLO", "0xABCD"]
-        )
+        result = runner.invoke(cli, ["set-exec", str(dfs_image_filepath), "$.HELLO", "0xABCD"])
         assert result.exit_code == 0
-        result = runner.invoke(
-            cli, ["get-exec", str(dfs_image_filepath), "$.HELLO"]
-        )
+        result = runner.invoke(cli, ["get-exec", str(dfs_image_filepath), "$.HELLO"])
         assert result.exit_code == 0
         assert "0000ABCD" in result.output
 
     def test_get_exec_original(self, runner: CliRunner, dfs_image_filepath: Path) -> None:
-        result = runner.invoke(
-            cli, ["get-exec", str(dfs_image_filepath), "$.HELLO"]
-        )
+        result = runner.invoke(cli, ["get-exec", str(dfs_image_filepath), "$.HELLO"])
         assert result.exit_code == 0
         assert "00008023" in result.output
 
@@ -1955,9 +1837,7 @@ class TestBulkMutation:
             ],
         )
         assert result.exit_code == 0, result.output
-        stat_inside = runner.invoke(
-            cli, ["stat", str(adfs_image_tree), "$.Dir.Inside"]
-        )
+        stat_inside = runner.invoke(cli, ["stat", str(adfs_image_tree), "$.Dir.Inside"])
         assert "LR/R" in stat_inside.output
 
     def test_chmod_recursive_descends(
@@ -1986,9 +1866,7 @@ class TestBulkMutation:
         runner: CliRunner,
         adfs_image_tree: Path,
     ) -> None:
-        before = runner.invoke(
-            cli, ["stat", str(adfs_image_tree), "$.Root1"]
-        ).output
+        before = runner.invoke(cli, ["stat", str(adfs_image_tree), "$.Root1"]).output
         result = runner.invoke(
             cli,
             [
@@ -2001,9 +1879,7 @@ class TestBulkMutation:
         )
         assert result.exit_code == 0, result.output
         assert "would chmod" in result.output.lower() or "$.Root1" in result.output
-        after = runner.invoke(
-            cli, ["stat", str(adfs_image_tree), "$.Root1"]
-        ).output
+        after = runner.invoke(cli, ["stat", str(adfs_image_tree), "$.Root1"]).output
         assert before == after
 
     def test_chmod_glob_no_matches_errors(
@@ -2028,9 +1904,7 @@ class TestBulkMutation:
             ["lock", str(adfs_image_tree), "$.Dir.*"],
         )
         assert result.exit_code == 0, result.output
-        st = runner.invoke(
-            cli, ["stat", str(adfs_image_tree), "$.Dir.Inside"]
-        )
+        st = runner.invoke(cli, ["stat", str(adfs_image_tree), "$.Dir.Inside"])
         # Any "L"-bearing attr string indicates the lock took.
         assert "L" in st.output
 
@@ -2040,18 +1914,12 @@ class TestBulkMutation:
         adfs_image_tree: Path,
     ) -> None:
         # Lock recursively first.
-        assert runner.invoke(
-            cli, ["lock", "-r", str(adfs_image_tree), "$.Dir"]
-        ).exit_code == 0
+        assert runner.invoke(cli, ["lock", "-r", str(adfs_image_tree), "$.Dir"]).exit_code == 0
         # Now unlock recursively.
-        result = runner.invoke(
-            cli, ["unlock", "-r", str(adfs_image_tree), "$.Dir"]
-        )
+        result = runner.invoke(cli, ["unlock", "-r", str(adfs_image_tree), "$.Dir"])
         assert result.exit_code == 0, result.output
         # Deeply nested file should be unlocked.
-        st = runner.invoke(
-            cli, ["stat", str(adfs_image_tree), "$.Dir.Sub.Deep"]
-        )
+        st = runner.invoke(cli, ["stat", str(adfs_image_tree), "$.Dir.Sub.Deep"])
         assert "LR/" not in st.output  # No L in the attr
 
     def test_set_load_glob_applies_to_files_only(
@@ -2073,9 +1941,7 @@ class TestBulkMutation:
         # Every file descendant should have load_address 0x0000CAFE.
         for bare in ("$.Dir.Inside", "$.Dir.Sub.Deep"):
             st = runner.invoke(cli, ["get-load", str(adfs_image_tree), bare])
-            assert "0000CAFE" in st.output, (
-                f"{bare} not set: {st.output!r}"
-            )
+            assert "0000CAFE" in st.output, f"{bare} not set: {st.output!r}"
 
     def test_set_exec_glob(
         self,
@@ -2101,9 +1967,7 @@ class TestBulkMutation:
         dfs_image_many_files: Path,
     ) -> None:
         """``rm '$.He*'`` deletes Hello and Help, leaves Data."""
-        result = runner.invoke(
-            cli, ["rm", str(dfs_image_many_files), "$.He*"]
-        )
+        result = runner.invoke(cli, ["rm", str(dfs_image_many_files), "$.He*"])
         assert result.exit_code == 0, result.output
         listing = runner.invoke(cli, ["ls", str(dfs_image_many_files), "$"])
         assert "HELLO" not in listing.output
@@ -2116,9 +1980,7 @@ class TestBulkMutation:
         adfs_image_tree: Path,
     ) -> None:
         """``rm -r '$.Dir'`` empties the Dir subtree."""
-        result = runner.invoke(
-            cli, ["rm", "-r", str(adfs_image_tree), "$.Dir"]
-        )
+        result = runner.invoke(cli, ["rm", "-r", str(adfs_image_tree), "$.Dir"])
         assert result.exit_code == 0, result.output
         tree = runner.invoke(cli, ["tree", str(adfs_image_tree)])
         assert "Dir" not in tree.output
@@ -2130,9 +1992,7 @@ class TestBulkMutation:
         runner: CliRunner,
         adfs_image_tree: Path,
     ) -> None:
-        before = runner.invoke(
-            cli, ["get-load", str(adfs_image_tree), "$.Root1"]
-        ).output
+        before = runner.invoke(cli, ["get-load", str(adfs_image_tree), "$.Root1"]).output
         result = runner.invoke(
             cli,
             [
@@ -2145,9 +2005,7 @@ class TestBulkMutation:
         )
         assert result.exit_code == 0
         assert "would" in result.output.lower() or "$.Root1" in result.output
-        after = runner.invoke(
-            cli, ["get-load", str(adfs_image_tree), "$.Root1"]
-        ).output
+        after = runner.invoke(cli, ["get-load", str(adfs_image_tree), "$.Root1"]).output
         assert before == after
 
 
@@ -2262,15 +2120,16 @@ class TestCompact:
 
 class TestImport:
     def test_import_dfs(
-        self, runner: CliRunner, dfs_image_filepath: Path, tmp_path: Path,
+        self,
+        runner: CliRunner,
+        dfs_image_filepath: Path,
+        tmp_path: Path,
     ) -> None:
         # Create a host directory with files.
         src = tmp_path / "import_src"
         src.mkdir()
         (src / "NEW").write_bytes(b"imported file")
-        result = runner.invoke(
-            cli, ["import", str(dfs_image_filepath), str(src)]
-        )
+        result = runner.invoke(cli, ["import", str(dfs_image_filepath), str(src)])
         assert result.exit_code == 0
         # Verify the file was imported.
         result = runner.invoke(cli, ["cat", str(dfs_image_filepath), "$.NEW"])
@@ -2278,31 +2137,31 @@ class TestImport:
         assert b"imported file" in result.output_bytes
 
     def test_import_adfs_with_subdir(
-        self, runner: CliRunner, adfs_image_filepath: Path, tmp_path: Path,
+        self,
+        runner: CliRunner,
+        adfs_image_filepath: Path,
+        tmp_path: Path,
     ) -> None:
         src = tmp_path / "import_src"
         src.mkdir()
         (src / "Docs").mkdir()
         (src / "Docs" / "README").write_bytes(b"readme data")
-        result = runner.invoke(
-            cli, ["import", str(adfs_image_filepath), str(src)]
-        )
+        result = runner.invoke(cli, ["import", str(adfs_image_filepath), str(src)])
         assert result.exit_code == 0
-        result = runner.invoke(
-            cli, ["cat", str(adfs_image_filepath), "$.Docs.README"]
-        )
+        result = runner.invoke(cli, ["cat", str(adfs_image_filepath), "$.Docs.README"])
         assert result.exit_code == 0
         assert b"readme data" in result.output_bytes
 
     def test_import_verbose(
-        self, runner: CliRunner, dfs_image_filepath: Path, tmp_path: Path,
+        self,
+        runner: CliRunner,
+        dfs_image_filepath: Path,
+        tmp_path: Path,
     ) -> None:
         src = tmp_path / "import_src"
         src.mkdir()
         (src / "VER").write_bytes(b"verbose test")
-        result = runner.invoke(
-            cli, ["import", "-v", str(dfs_image_filepath), str(src)]
-        )
+        result = runner.invoke(cli, ["import", "-v", str(dfs_image_filepath), str(src)])
         assert result.exit_code == 0
 
 
@@ -2310,9 +2169,7 @@ class TestAfsPlan:
     def test_afs_plan_max(self, runner: CliRunner, adfs_no_afs_filepath: Path) -> None:
         # Display mode pins the report titles so the layout is
         # asserted as-is; TSV omits titles by design.
-        result = runner.invoke(
-            cli, ["afs-plan", "--as", "display", str(adfs_no_afs_filepath)]
-        )
+        result = runner.invoke(cli, ["afs-plan", "--as", "display", str(adfs_no_afs_filepath)])
         assert result.exit_code == 0
         assert "Disc geometry" in result.output
         assert "cylinders" in result.output
@@ -2320,42 +2177,42 @@ class TestAfsPlan:
         assert "disc afs-init" in result.output
 
     def test_afs_plan_explicit_cylinders(
-        self, runner: CliRunner, adfs_no_afs_filepath: Path,
+        self,
+        runner: CliRunner,
+        adfs_no_afs_filepath: Path,
     ) -> None:
-        result = runner.invoke(
-            cli, ["afs-plan", str(adfs_no_afs_filepath), "--cylinders", "10"]
-        )
+        result = runner.invoke(cli, ["afs-plan", str(adfs_no_afs_filepath), "--cylinders", "10"])
         assert result.exit_code == 0
         assert "10 cylinders" in result.output
 
     def test_afs_plan_already_partitioned(
-        self, runner: CliRunner, afs_image_filepath: Path,
+        self,
+        runner: CliRunner,
+        afs_image_filepath: Path,
     ) -> None:
         # The existing-partition case now surfaces as a dedicated
         # "Existing AFS partition" report rather than a free-text
         # message; pin --as display to see the title.
-        result = runner.invoke(
-            cli, ["afs-plan", "--as", "display", str(afs_image_filepath)]
-        )
+        result = runner.invoke(cli, ["afs-plan", "--as", "display", str(afs_image_filepath)])
         assert result.exit_code == 0
         assert "Existing AFS partition" in result.output
 
     def test_afs_plan_too_large(
-        self, runner: CliRunner, adfs_no_afs_filepath: Path,
+        self,
+        runner: CliRunner,
+        adfs_no_afs_filepath: Path,
     ) -> None:
-        result = runner.invoke(
-            cli, ["afs-plan", str(adfs_no_afs_filepath), "--cylinders", "9999"]
-        )
+        result = runner.invoke(cli, ["afs-plan", str(adfs_no_afs_filepath), "--cylinders", "9999"])
         assert result.exit_code != 0
 
     def test_afs_plan_as_json(
-        self, runner: CliRunner, adfs_no_afs_filepath: Path,
+        self,
+        runner: CliRunner,
+        adfs_no_afs_filepath: Path,
     ) -> None:
         import json
 
-        result = runner.invoke(
-            cli, ["afs-plan", str(adfs_no_afs_filepath), "--as", "json"]
-        )
+        result = runner.invoke(cli, ["afs-plan", str(adfs_no_afs_filepath), "--as", "json"])
         assert result.exit_code == 0
         doc = json.loads(result.output)
         reports = doc["reports"]
@@ -2373,13 +2230,13 @@ class TestAfsPlan:
         assert plan_row["suggested_command"].startswith("disc afs-init")
 
     def test_afs_plan_as_json_already_partitioned(
-        self, runner: CliRunner, afs_image_filepath: Path,
+        self,
+        runner: CliRunner,
+        afs_image_filepath: Path,
     ) -> None:
         import json
 
-        result = runner.invoke(
-            cli, ["afs-plan", str(afs_image_filepath), "--as", "json"]
-        )
+        result = runner.invoke(cli, ["afs-plan", str(afs_image_filepath), "--as", "json"])
         assert result.exit_code == 0
         doc = json.loads(result.output)
         reports = doc["reports"]
@@ -2390,11 +2247,11 @@ class TestAfsPlan:
         assert reports["existing_afs"]["rows"][0]["present"] == "yes"
 
     def test_afs_plan_rejects_unknown_format(
-        self, runner: CliRunner, adfs_no_afs_filepath: Path,
+        self,
+        runner: CliRunner,
+        adfs_no_afs_filepath: Path,
     ) -> None:
-        result = runner.invoke(
-            cli, ["afs-plan", str(adfs_no_afs_filepath), "--as", "xml"]
-        )
+        result = runner.invoke(cli, ["afs-plan", str(adfs_no_afs_filepath), "--as", "xml"])
         assert result.exit_code != 0
 
 
@@ -2423,15 +2280,11 @@ class TestAfsUsers:
         assert result.exit_code == 0
         assert "Syst" in result.output
 
-    def test_afs_users_json_roundtrip(
-        self, runner: CliRunner, afs_image_filepath: Path
-    ) -> None:
+    def test_afs_users_json_roundtrip(self, runner: CliRunner, afs_image_filepath: Path) -> None:
         """--as json emits a parseable document listing every user."""
         import json as _json
 
-        result = runner.invoke(
-            cli, ["afs-users", "--as", "json", str(afs_image_filepath)]
-        )
+        result = runner.invoke(cli, ["afs-users", "--as", "json", str(afs_image_filepath)])
         assert result.exit_code == 0, result.output
         doc = _json.loads(result.output)
         payload = next(iter(doc["reports"].values()))
@@ -2443,12 +2296,8 @@ class TestAfsUsers:
         syst_row = next(r for r in payload["rows"] if r["user"] == "Syst")
         assert syst_row["system"] == "yes"
 
-    def test_afs_users_tsv_columns(
-        self, runner: CliRunner, afs_image_filepath: Path
-    ) -> None:
-        result = runner.invoke(
-            cli, ["afs-users", "--as", "tsv", str(afs_image_filepath)]
-        )
+    def test_afs_users_tsv_columns(self, runner: CliRunner, afs_image_filepath: Path) -> None:
+        result = runner.invoke(cli, ["afs-users", "--as", "tsv", str(afs_image_filepath)])
         assert result.exit_code == 0, result.output
         lines = [ln for ln in result.output.splitlines() if ln]
         # First non-data line is the "# User..." header.
@@ -2587,9 +2436,7 @@ class TestExpand:
         from oaknut.dfs import ACORN_DFS_80T_DOUBLE_SIDED_INTERLEAVED, DFS
 
         full_filepath = tmp_path / "full.dsd"
-        with DFS.create_file(
-            full_filepath, ACORN_DFS_80T_DOUBLE_SIDED_INTERLEAVED, title="DSD"
-        ):
+        with DFS.create_file(full_filepath, ACORN_DFS_80T_DOUBLE_SIDED_INTERLEAVED, title="DSD"):
             pass
         data = full_filepath.read_bytes()
         truncated_filepath = tmp_path / "truncated.dsd"

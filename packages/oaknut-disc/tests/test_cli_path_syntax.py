@@ -58,18 +58,12 @@ class TestSingleImageSinglePath:
         command: str,
         path: str,
     ):
-        split_result = runner.invoke(
-            cli, [command, str(adfs_image_filepath), path]
-        )
-        fused_result = runner.invoke(
-            cli, [command, f"{adfs_image_filepath}:{path}"]
-        )
+        split_result = runner.invoke(cli, [command, str(adfs_image_filepath), path])
+        fused_result = runner.invoke(cli, [command, f"{adfs_image_filepath}:{path}"])
         assert split_result.exit_code == 0, split_result.output
         assert fused_result.exit_code == 0, fused_result.output
 
-    def test_ls_directory_both_forms(
-        self, runner: CliRunner, adfs_image_filepath: Path
-    ):
+    def test_ls_directory_both_forms(self, runner: CliRunner, adfs_image_filepath: Path):
         split = runner.invoke(cli, ["ls", str(adfs_image_filepath), "$.Games"])
         fused = runner.invoke(cli, ["ls", f"{adfs_image_filepath}:$.Games"])
         assert split.exit_code == 0
@@ -77,9 +71,7 @@ class TestSingleImageSinglePath:
         # Same TSV output (no rendering differences between forms).
         assert split.output == fused.output
 
-    def test_ls_no_path_both_forms(
-        self, runner: CliRunner, adfs_image_filepath: Path
-    ):
+    def test_ls_no_path_both_forms(self, runner: CliRunner, adfs_image_filepath: Path):
         # "image" and "image:" both mean "list the root directory".
         split = runner.invoke(cli, ["ls", str(adfs_image_filepath)])
         fused = runner.invoke(cli, ["ls", f"{adfs_image_filepath}:"])
@@ -87,31 +79,19 @@ class TestSingleImageSinglePath:
         assert fused.exit_code == 0
         assert split.output == fused.output
 
-    def test_get_load_both_forms(
-        self, runner: CliRunner, adfs_image_filepath: Path
-    ):
-        split = runner.invoke(
-            cli, ["get-load", str(adfs_image_filepath), "$.Hello"]
-        )
-        fused = runner.invoke(
-            cli, ["get-load", f"{adfs_image_filepath}:$.Hello"]
-        )
+    def test_get_load_both_forms(self, runner: CliRunner, adfs_image_filepath: Path):
+        split = runner.invoke(cli, ["get-load", str(adfs_image_filepath), "$.Hello"])
+        fused = runner.invoke(cli, ["get-load", f"{adfs_image_filepath}:$.Hello"])
         assert split.exit_code == 0
         assert fused.exit_code == 0
         # The fixture writes Hello with load=0x1900.
         assert "1900" in split.output.lower() or "1900" in split.output
         assert split.output == fused.output
 
-    def test_mkdir_both_forms(
-        self, runner: CliRunner, adfs_image_filepath: Path
-    ):
-        split = runner.invoke(
-            cli, ["mkdir", str(adfs_image_filepath), "$.Split"]
-        )
+    def test_mkdir_both_forms(self, runner: CliRunner, adfs_image_filepath: Path):
+        split = runner.invoke(cli, ["mkdir", str(adfs_image_filepath), "$.Split"])
         assert split.exit_code == 0, split.output
-        fused = runner.invoke(
-            cli, ["mkdir", f"{adfs_image_filepath}:$.Fused"]
-        )
+        fused = runner.invoke(cli, ["mkdir", f"{adfs_image_filepath}:$.Fused"])
         assert fused.exit_code == 0, fused.output
         # Both directories should now exist.
         ls = runner.invoke(cli, ["ls", str(adfs_image_filepath)])
@@ -127,47 +107,31 @@ class TestSingleImageSinglePath:
 class TestImagePathTrailing:
     """chmod / set-load / set-exec / get / put -- the helper-based dispatch."""
 
-    def test_chmod_split_form(
-        self, runner: CliRunner, adfs_image_filepath: Path
-    ):
+    def test_chmod_split_form(self, runner: CliRunner, adfs_image_filepath: Path):
         result = runner.invoke(
             cli,
             ["chmod", str(adfs_image_filepath), "$.Hello", "WR/R"],
         )
         assert result.exit_code == 0, result.output
 
-    def test_chmod_fused_form(
-        self, runner: CliRunner, adfs_image_filepath: Path
-    ):
-        result = runner.invoke(
-            cli, ["chmod", f"{adfs_image_filepath}:$.Hello", "WR/R"]
-        )
+    def test_chmod_fused_form(self, runner: CliRunner, adfs_image_filepath: Path):
+        result = runner.invoke(cli, ["chmod", f"{adfs_image_filepath}:$.Hello", "WR/R"])
         assert result.exit_code == 0, result.output
 
-    def test_set_load_split_form(
-        self, runner: CliRunner, adfs_image_filepath: Path
-    ):
+    def test_set_load_split_form(self, runner: CliRunner, adfs_image_filepath: Path):
         result = runner.invoke(
             cli,
             ["set-load", str(adfs_image_filepath), "$.Hello", "0x2A00"],
         )
         assert result.exit_code == 0, result.output
         # Verify it stuck.
-        gl = runner.invoke(
-            cli, ["get-load", str(adfs_image_filepath), "$.Hello"]
-        )
+        gl = runner.invoke(cli, ["get-load", str(adfs_image_filepath), "$.Hello"])
         assert "2A00" in gl.output
 
-    def test_set_load_fused_form(
-        self, runner: CliRunner, adfs_image_filepath: Path
-    ):
-        result = runner.invoke(
-            cli, ["set-load", f"{adfs_image_filepath}:$.Hello", "0x3B00"]
-        )
+    def test_set_load_fused_form(self, runner: CliRunner, adfs_image_filepath: Path):
+        result = runner.invoke(cli, ["set-load", f"{adfs_image_filepath}:$.Hello", "0x3B00"])
         assert result.exit_code == 0, result.output
-        gl = runner.invoke(
-            cli, ["get-load", f"{adfs_image_filepath}:$.Hello"]
-        )
+        gl = runner.invoke(cli, ["get-load", f"{adfs_image_filepath}:$.Hello"])
         assert "3B00" in gl.output
 
     def test_get_split_form(
@@ -225,9 +189,7 @@ class TestRmPathSyntax:
         runner: CliRunner,
         adfs_image_filepath: Path,
     ):
-        result = runner.invoke(
-            cli, ["rm", f"{adfs_image_filepath}:$.Hello"]
-        )
+        result = runner.invoke(cli, ["rm", f"{adfs_image_filepath}:$.Hello"])
         assert result.exit_code == 0, result.output
 
     def test_fused_form_with_extra_paths(
@@ -328,18 +290,14 @@ class TestCpPathSyntax:
 
 
 class TestMvPathSyntax:
-    def test_three_arg_split_form(
-        self, runner: CliRunner, adfs_image_filepath: Path
-    ):
+    def test_three_arg_split_form(self, runner: CliRunner, adfs_image_filepath: Path):
         result = runner.invoke(
             cli,
             ["mv", str(adfs_image_filepath), "$.Hello", "$.Greeting"],
         )
         assert result.exit_code == 0, result.output
 
-    def test_two_arg_fused_form(
-        self, runner: CliRunner, adfs_image_filepath: Path
-    ):
+    def test_two_arg_fused_form(self, runner: CliRunner, adfs_image_filepath: Path):
         result = runner.invoke(
             cli,
             [
@@ -432,9 +390,7 @@ class TestFsPrefixWithBothForms:
 
 
 class TestParserNegativeCases:
-    def test_fused_plus_extra_path_rejected(
-        self, runner: CliRunner, adfs_image_filepath: Path
-    ):
+    def test_fused_plus_extra_path_rejected(self, runner: CliRunner, adfs_image_filepath: Path):
         # ls image:path path -- supplying both fused form AND a
         # separate PATH should fail with a UsageError, not silently
         # drop one.
@@ -445,16 +401,12 @@ class TestParserNegativeCases:
         assert result.exit_code != 0
         assert "must not be given" in result.output
 
-    def test_fused_with_nonexistent_image_quotes_lhs(
-        self, runner: CliRunner, tmp_path: Path
-    ):
+    def test_fused_with_nonexistent_image_quotes_lhs(self, runner: CliRunner, tmp_path: Path):
         # When the LHS of a fused spec doesn't exist, the error should
         # quote only the LHS portion -- not the whole string -- so the
         # user immediately sees what was looked up.
         missing = tmp_path / "no_such.adl"
-        result = runner.invoke(
-            cli, ["ls", f"{missing}:$.Games"]
-        )
+        result = runner.invoke(cli, ["ls", f"{missing}:$.Games"])
         assert result.exit_code != 0
         assert "image not found" in result.output
         assert "no_such.adl" in result.output

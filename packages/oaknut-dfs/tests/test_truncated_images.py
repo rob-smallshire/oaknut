@@ -69,14 +69,14 @@ class TestFromBufferTruncated:
         _minimal_catalogue(buf)
         # Write recognisable data into the last physical sector
         last_sector_start = (truncated_sectors - 1) * BYTES_PER_SECTOR
-        buf[last_sector_start : last_sector_start + 4] = b"\xDE\xAD\xBE\xEF"
+        buf[last_sector_start : last_sector_start + 4] = b"\xde\xad\xbe\xef"
 
         dfs = DFS.from_buffer(memoryview(buf), ACORN_DFS_80T_SINGLE_SIDED)
 
         # The last physical sector should have our data
         surface = dfs._catalogued_surface._surface
         last_physical = surface.sector_range(truncated_sectors - 1, 1)
-        assert bytes(last_physical[0:4]) == b"\xDE\xAD\xBE\xEF"
+        assert bytes(last_physical[0:4]) == b"\xde\xad\xbe\xef"
 
         # A sector beyond the physical extent should be all zeros
         beyond = surface.sector_range(truncated_sectors, 1)
@@ -113,9 +113,7 @@ class TestFromBufferTruncated:
         truncated_size = 10 * BYTES_PER_TRACK  # 25600
         buf = bytearray(truncated_size)
         _minimal_catalogue(buf)  # Side 0 catalogue at offset 0
-        dfs = DFS.from_buffer(
-            memoryview(buf), ACORN_DFS_80T_DOUBLE_SIDED_INTERLEAVED, side=0
-        )
+        dfs = DFS.from_buffer(memoryview(buf), ACORN_DFS_80T_DOUBLE_SIDED_INTERLEAVED, side=0)
         assert dfs.title == "TRUNCATD"
 
     def test_sequential_double_sided_truncated(self):
@@ -125,9 +123,7 @@ class TestFromBufferTruncated:
         truncated_size = 50 * BYTES_PER_TRACK
         buf = bytearray(truncated_size)
         _minimal_catalogue(buf)
-        dfs = DFS.from_buffer(
-            memoryview(buf), ACORN_DFS_80T_DOUBLE_SIDED_SEQUENTIAL, side=0
-        )
+        dfs = DFS.from_buffer(memoryview(buf), ACORN_DFS_80T_DOUBLE_SIDED_SEQUENTIAL, side=0)
         assert dfs.title == "TRUNCATD"
 
 
@@ -242,7 +238,7 @@ class TestFromFileTruncatedReadWrite:
         _minimal_catalogue(buf)
         # Write a marker into the last sector of the original data
         marker_offset = truncated_size - BYTES_PER_SECTOR
-        buf[marker_offset : marker_offset + 4] = b"\xCA\xFE\xBA\xBE"
+        buf[marker_offset : marker_offset + 4] = b"\xca\xfe\xba\xbe"
 
         filepath = tmp_path / "truncated.ssd"
         filepath.write_bytes(buf)
@@ -251,7 +247,7 @@ class TestFromFileTruncatedReadWrite:
             pass
 
         data = filepath.read_bytes()
-        assert data[marker_offset : marker_offset + 4] == b"\xCA\xFE\xBA\xBE"
+        assert data[marker_offset : marker_offset + 4] == b"\xca\xfe\xba\xbe"
 
     def test_read_write_full_size_not_modified(self, tmp_path):
         """A full-size image opened read-write should not change size."""
@@ -296,7 +292,7 @@ class TestExpand:
         truncated_size = 20 * BYTES_PER_SECTOR
         buf = bytearray(truncated_size)
         _minimal_catalogue(buf)
-        buf[-4:] = b"\xDE\xAD\xBE\xEF"
+        buf[-4:] = b"\xde\xad\xbe\xef"
 
         filepath = tmp_path / "truncated.ssd"
         filepath.write_bytes(buf)

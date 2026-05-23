@@ -166,9 +166,7 @@ def _detect_dfs_format(image_filepath: Path):
         # matches the actual file size. The catalogue type is always
         # Acorn DFS for .ssd files.
         if size % 256 != 0:
-            raise click.ClickException(
-                f"SSD image size ({size}) is not a multiple of 256 bytes"
-            )
+            raise click.ClickException(f"SSD image size ({size}) is not a multiple of 256 bytes")
         total_sectors = size // 256
         return DiskFormat(
             surface_specs=[
@@ -366,9 +364,7 @@ cli.add_command(describe_report_command(), name="describe-report")
     is_flag=True,
     help="Show the raw access byte as two hex digits alongside the symbolic form.",
 )
-@report_output(
-    reports={"entries": "Directory entries with load/exec/length/attributes."}
-)
+@report_output(reports={"entries": "Directory entries with load/exec/length/attributes."})
 @handles_fs_errors
 def ls(image_spec: str, path: str | None, show_access_byte: bool):
     """List directory contents (Acorn alias: *CAT).
@@ -642,9 +638,7 @@ def _stat_disc(image_filepath: Path, fs: FilingSystem):
             sections["partition_1"] = Report(data=_adfs_partition_tc(handle))
             afs = handle.afs_partition
             if afs is not None:
-                sections["partition_2"] = Report(
-                    data=_afs_partition_tc(handle, afs)
-                )
+                sections["partition_2"] = Report(data=_afs_partition_tc(handle, afs))
     return Reports(sections)
 
 
@@ -725,9 +719,7 @@ def _adfs_partition_tc(handle):
         ("boot_option", "Boot option", f"{boot.name} ({boot.value})"),
     ]
     if adfs_cylinders < geom.cylinders:
-        pairs.append(
-            ("range", "Range", f"cylinders 0-{adfs_cylinders - 1}")
-        )
+        pairs.append(("range", "Range", f"cylinders 0-{adfs_cylinders - 1}"))
     pairs.append(("size", "Size", _format_size(adfs_sectors)))
     free_sectors = handle.free_space // _SECTOR_SIZE
     pairs.append(("free", "Free", _format_size(free_sectors)))
@@ -790,13 +782,9 @@ def cat(image_spec: str, path: str | None) -> None:
     with open_image(image, fs) as handle:
         target = _navigate(handle, bare, fs)
         if not target.exists():
-            raise FSClickException(
-                f"path not found: {bare}", EXIT_PATH_NOT_FOUND
-            )
+            raise FSClickException(f"path not found: {bare}", EXIT_PATH_NOT_FOUND)
         if target.is_dir():
-            raise FSClickException(
-                f"'{bare}' is a directory", EXIT_PATH_NOT_FOUND
-            )
+            raise FSClickException(f"'{bare}' is a directory", EXIT_PATH_NOT_FOUND)
         sys.stdout.buffer.write(target.read_bytes())
 
 
@@ -864,13 +852,9 @@ def type_(image_spec: str, path: str | None, line_endings: str) -> None:
     with open_image(image, fs) as handle:
         target = _navigate(handle, bare, fs)
         if not target.exists():
-            raise FSClickException(
-                f"path not found: {bare}", EXIT_PATH_NOT_FOUND
-            )
+            raise FSClickException(f"path not found: {bare}", EXIT_PATH_NOT_FOUND)
         if target.is_dir():
-            raise FSClickException(
-                f"'{bare}' is a directory", EXIT_PATH_NOT_FOUND
-            )
+            raise FSClickException(f"'{bare}' is a directory", EXIT_PATH_NOT_FOUND)
         data = _translate_line_endings(target.read_bytes(), line_endings.lower())
         sys.stdout.buffer.write(data)
 
@@ -1014,8 +998,7 @@ def _freemap_dfs(handle) -> None:
     if regions:
         largest = max(length for _, length in regions)
         click.echo(
-            f"Free: {free} sectors in {len(regions)} region(s) "
-            f"(largest {largest} contiguous)"
+            f"Free: {free} sectors in {len(regions)} region(s) (largest {largest} contiguous)"
         )
     else:
         click.echo("Free: 0 sectors")
@@ -1138,9 +1121,7 @@ def get(
     """
     from oaknut.file import AcornMeta, MetaFormat, export_with_metadata
 
-    image, path, trailing = parse_image_arg_with_trailing(
-        image_spec, path_or_host, host_path
-    )
+    image, path, trailing = parse_image_arg_with_trailing(image_spec, path_or_host, host_path)
     if not path:
         raise click.UsageError("PATH is required")
     host_path = Path(trailing) if trailing is not None else None
@@ -1148,13 +1129,9 @@ def get(
     with open_image(image, fs) as handle:
         target = _navigate(handle, bare, fs)
         if not target.exists():
-            raise FSClickException(
-                f"path not found: {bare}", EXIT_PATH_NOT_FOUND
-            )
+            raise FSClickException(f"path not found: {bare}", EXIT_PATH_NOT_FOUND)
         if target.is_dir():
-            raise FSClickException(
-                f"'{bare}' is a directory", EXIT_PATH_NOT_FOUND
-            )
+            raise FSClickException(f"'{bare}' is a directory", EXIT_PATH_NOT_FOUND)
 
         data = target.read_bytes()
 
@@ -1229,9 +1206,7 @@ def put(
     Accepts ``IMAGE PATH [HOST_PATH]`` (split form) or
     ``IMAGE:PATH [HOST_PATH]`` (fused form).
     """
-    image, path, trailing = parse_image_arg_with_trailing(
-        image_spec, path_or_host, host_path
-    )
+    image, path, trailing = parse_image_arg_with_trailing(image_spec, path_or_host, host_path)
     if not path:
         raise click.UsageError("PATH is required")
     host_path = Path(trailing) if trailing is not None else None
@@ -1334,9 +1309,7 @@ def rm(
         for path_fs, bare in per_path:
             # --force downgrades "no matches" to a no-op.
             try:
-                targets = list(
-                    _iter_targets(handle, bare, path_fs, recursive=recursive)
-                )
+                targets = list(_iter_targets(handle, bare, path_fs, recursive=recursive))
             except click.ClickException:
                 if force:
                     continue
@@ -1345,8 +1318,7 @@ def rm(
             for target in targets:
                 if target.is_dir() and not recursive:
                     raise click.ClickException(
-                        f"'{target.path}' is a directory "
-                        "(use -r to remove recursively)"
+                        f"'{target.path}' is a directory (use -r to remove recursively)"
                     )
                 if dry_run:
                     click.echo(f"would remove: {target.path}")
@@ -1409,9 +1381,7 @@ def mv(args: tuple[str, ...], force: bool) -> None:
         # Fused form: IMAGE:SRC IMAGE:DST. Both must be fused, and
         # must name the same image file.
         if _split_at_image_colon(args[0]) is None or _split_at_image_colon(args[1]) is None:
-            raise click.UsageError(
-                "two-argument mv requires both SRC and DST in image:path form"
-            )
+            raise click.UsageError("two-argument mv requires both SRC and DST in image:path form")
         src_image, bare_src = parse_image_arg(args[0], None)
         dst_image, bare_dst = parse_image_arg(args[1], None)
         if src_image.resolve() != dst_image.resolve():
@@ -1421,9 +1391,7 @@ def mv(args: tuple[str, ...], force: bool) -> None:
             )
         image = src_image
     else:
-        raise click.UsageError(
-            "mv takes 2 args (image:src image:dst) or 3 (IMAGE SRC DST)"
-        )
+        raise click.UsageError("mv takes 2 args (image:src image:dst) or 3 (IMAGE SRC DST)")
 
     fs, bare_src = resolve_path(image, bare_src)
     _, bare_dst = parse_prefix(bare_dst)
@@ -1434,9 +1402,7 @@ def mv(args: tuple[str, ...], force: bool) -> None:
         # carries the user's original input rather than whatever the
         # library uses internally (which may be a leaf component).
         if not source.exists():
-            raise FSClickException(
-                f"path not found: {bare_src}", EXIT_PATH_NOT_FOUND
-            )
+            raise FSClickException(f"path not found: {bare_src}", EXIT_PATH_NOT_FOUND)
         source.rename(bare_dst)
         if fs is FilingSystem.AFS:
             handle.flush()
@@ -1490,8 +1456,12 @@ def cp(args: tuple[str, ...], force: bool, recursive: bool) -> None:
         src_image, src_path = parse_image_arg(args[0], None)
         dst_image, dst_path = parse_image_arg(args[1], None)
         _cp_dispatch(
-            src_image, src_path, dst_image, dst_path,
-            force=force, recursive=recursive,
+            src_image,
+            src_path,
+            dst_image,
+            dst_path,
+            force=force,
+            recursive=recursive,
         )
     elif len(args) == 3:
         # Same-image split form: IMAGE SRC DST. Reuses the image for
@@ -1499,16 +1469,24 @@ def cp(args: tuple[str, ...], force: bool, recursive: bool) -> None:
         image, src_path = parse_image_arg(args[0], args[1])
         dst_path = args[2]
         _cp_dispatch(
-            image, src_path, image, dst_path,
-            force=force, recursive=recursive,
+            image,
+            src_path,
+            image,
+            dst_path,
+            force=force,
+            recursive=recursive,
         )
     elif len(args) == 4:
         # Cross-image split form: SRC_IMAGE SRC DST_IMAGE DST.
         src_image, src_path = parse_image_arg(args[0], args[1])
         dst_image, dst_path = parse_image_arg(args[2], args[3])
         _cp_dispatch(
-            src_image, src_path, dst_image, dst_path,
-            force=force, recursive=recursive,
+            src_image,
+            src_path,
+            dst_image,
+            dst_path,
+            force=force,
+            recursive=recursive,
         )
     else:
         raise click.UsageError(
@@ -1644,7 +1622,9 @@ def _cp_dispatch(
     # --- Read phase: open source, collect one or more copy items. ---
     with open_image(src_image, src_fs) as src_handle:
         items = _collect_copy_items(
-            src_handle, src_bare, src_fs,
+            src_handle,
+            src_bare,
+            src_fs,
             dst_bare=dst_bare,
             dst_slash=dst_slash,
             dst_image=dst_image,
@@ -1697,9 +1677,7 @@ def _collect_copy_items(
         if not matches:
             raise click.ClickException(f"no matches for {src_bare!r}")
         dst_must_be_dir = len(matches) > 1 or any(m.is_dir() for m in matches)
-        _check_dst_is_dir(
-            dst_image, dst_fs, dst_bare, dst_slash, required=dst_must_be_dir
-        )
+        _check_dst_is_dir(dst_image, dst_fs, dst_bare, dst_slash, required=dst_must_be_dir)
         if dst_must_be_dir or dst_slash:
             items.append({"kind": "mkdir", "dst": dst_bare})
         for match in matches:
@@ -1710,8 +1688,7 @@ def _collect_copy_items(
             if match.is_dir():
                 if not recursive:
                     click.echo(
-                        f"skipping directory {match.path}"
-                        f" (use -r to copy recursively)",
+                        f"skipping directory {match.path} (use -r to copy recursively)",
                         err=True,
                     )
                     continue
@@ -1730,15 +1707,11 @@ def _collect_copy_items(
     # Figure out whether the destination should be treated as a
     # target directory (and we copy source "into" it) or as the
     # full target path.
-    dst_is_dir_like = dst_slash or _path_is_existing_dir(
-        dst_image, dst_fs, dst_bare
-    )
+    dst_is_dir_like = dst_slash or _path_is_existing_dir(dst_image, dst_fs, dst_bare)
 
     if source.is_dir():
         if not recursive:
-            raise click.ClickException(
-                f"'{src_bare}' is a directory (use -r to copy recursively)"
-            )
+            raise click.ClickException(f"'{src_bare}' is a directory (use -r to copy recursively)")
         # A source that IS the root (ADFS ``$``, AFS ``$``, or the
         # DFS virtual root whose children are directory letters) is
         # transparent on the copy — there's no sensible subdirectory
@@ -1787,9 +1760,7 @@ def _expand_glob(handle, src_bare: str, fs: FilingSystem) -> list:
         )
     parent_node = _navigate(handle, parent, fs)
     if not parent_node.exists() or not parent_node.is_dir():
-        raise click.ClickException(
-            f"parent directory of glob does not exist: {parent or '$'!r}"
-        )
+        raise click.ClickException(f"parent directory of glob does not exist: {parent or '$'!r}")
     return [c for c in parent_node.iterdir() if _match_acorn(leaf_pattern, c.name)]
 
 
@@ -1852,9 +1823,7 @@ def _validate_dfs_items(items: list[dict]) -> None:
     items[:] = _remap_items_for_dfs(items)
 
 
-def _walk_tree(
-    dir_node, dst_prefix: str, items: list[dict], *, src_is_dfs: bool = False
-) -> None:
+def _walk_tree(dir_node, dst_prefix: str, items: list[dict], *, src_is_dfs: bool = False) -> None:
     """Depth-first walk: record each directory with a mkdir item
     and each file with a file item.
 
@@ -1967,9 +1936,7 @@ def _write_copy_item(
     dest = _navigate(dst_handle, dst_path, dst_fs)
     if dest.exists():
         if not force:
-            raise click.ClickException(
-                f"'{dst_path}' already exists (use -f to overwrite)"
-            )
+            raise click.ClickException(f"'{dst_path}' already exists (use -f to overwrite)")
         dest.unlink()
 
     kwargs: dict = {
@@ -2022,9 +1989,7 @@ _alias("*CDIR", "mkdir")
 @click.argument("image_spec")
 @click.argument("path_or_access", required=False, default=None)
 @click.argument("access", required=False, default=None)
-@click.option(
-    "-r", "--recursive", is_flag=True, help="Recurse into directory matches."
-)
+@click.option("-r", "--recursive", is_flag=True, help="Recurse into directory matches.")
 @click.option(
     "--dry-run", is_flag=True, help="Print what would change without modifying the image."
 )
@@ -2048,9 +2013,7 @@ def chmod(
     same access to every matching file.  ``-r`` recurses into any
     directory match.
     """
-    image, path, access = parse_image_arg_with_trailing(
-        image_spec, path_or_access, access
-    )
+    image, path, access = parse_image_arg_with_trailing(image_spec, path_or_access, access)
     if not path:
         raise click.UsageError("PATH is required")
     if access is None:
@@ -2083,9 +2046,7 @@ _alias("*ACCESS", "chmod")
 @cli.command()
 @click.argument("image_spec")
 @click.argument("path", required=False, default=None)
-@click.option(
-    "-r", "--recursive", is_flag=True, help="Recurse into directory matches."
-)
+@click.option("-r", "--recursive", is_flag=True, help="Recurse into directory matches.")
 @click.option(
     "--dry-run", is_flag=True, help="Print what would change without modifying the image."
 )
@@ -2114,9 +2075,7 @@ def lock(image_spec: str, path: str | None, recursive: bool, dry_run: bool) -> N
 @cli.command()
 @click.argument("image_spec")
 @click.argument("path", required=False, default=None)
-@click.option(
-    "-r", "--recursive", is_flag=True, help="Recurse into directory matches."
-)
+@click.option("-r", "--recursive", is_flag=True, help="Recurse into directory matches.")
 @click.option(
     "--dry-run", is_flag=True, help="Print what would change without modifying the image."
 )
@@ -2146,9 +2105,7 @@ def unlock(image_spec: str, path: str | None, recursive: bool, dry_run: bool) ->
 @click.argument("image_spec")
 @click.argument("path_or_addr", required=False, default=None)
 @click.argument("addr", required=False, default=None)
-@click.option(
-    "-r", "--recursive", is_flag=True, help="Recurse into directory matches."
-)
+@click.option("-r", "--recursive", is_flag=True, help="Recurse into directory matches.")
 @click.option(
     "--dry-run", is_flag=True, help="Print what would change without modifying the image."
 )
@@ -2169,9 +2126,7 @@ def set_load(
     matches (directories themselves are skipped — they have no load
     address field).
     """
-    image, path, addr = parse_image_arg_with_trailing(
-        image_spec, path_or_addr, addr
-    )
+    image, path, addr = parse_image_arg_with_trailing(image_spec, path_or_addr, addr)
     if not path:
         raise click.UsageError("PATH is required")
     if addr is None:
@@ -2195,9 +2150,7 @@ def set_load(
 @click.argument("image_spec")
 @click.argument("path_or_addr", required=False, default=None)
 @click.argument("addr", required=False, default=None)
-@click.option(
-    "-r", "--recursive", is_flag=True, help="Recurse into directory matches."
-)
+@click.option("-r", "--recursive", is_flag=True, help="Recurse into directory matches.")
 @click.option(
     "--dry-run", is_flag=True, help="Print what would change without modifying the image."
 )
@@ -2218,9 +2171,7 @@ def set_exec(
     matches (directories themselves are skipped — they have no exec
     address field).
     """
-    image, path, addr = parse_image_arg_with_trailing(
-        image_spec, path_or_addr, addr
-    )
+    image, path, addr = parse_image_arg_with_trailing(image_spec, path_or_addr, addr)
     if not path:
         raise click.UsageError("PATH is required")
     if addr is None:
@@ -2260,9 +2211,7 @@ def get_load(image_spec: str, path: str | None):
     with open_image(image, fs) as handle:
         target = _navigate(handle, bare, fs)
         if not target.exists():
-            raise FSClickException(
-                f"path not found: {bare}", EXIT_PATH_NOT_FOUND
-            )
+            raise FSClickException(f"path not found: {bare}", EXIT_PATH_NOT_FOUND)
         st = target.stat()
     return Reports(
         load=Report(
@@ -2291,9 +2240,7 @@ def get_exec(image_spec: str, path: str | None):
     with open_image(image, fs) as handle:
         target = _navigate(handle, bare, fs)
         if not target.exists():
-            raise FSClickException(
-                f"path not found: {bare}", EXIT_PATH_NOT_FOUND
-            )
+            raise FSClickException(f"path not found: {bare}", EXIT_PATH_NOT_FOUND)
         st = target.stat()
     return Reports(
         exec=Report(
@@ -2305,9 +2252,7 @@ def get_exec(image_spec: str, path: str | None):
 @cli.command()
 @click.argument("image", type=click.Path(exists=True, path_type=Path))
 @click.argument("new_title", required=False, default=None)
-@report_output(
-    reports={"title": "Current disc title (when no new title is supplied)."}
-)
+@report_output(reports={"title": "Current disc title (when no new title is supplied)."})
 @handles_fs_errors
 def title(image: Path, new_title: str | None):
     """Read or set disc title (Acorn alias: *TITLE)."""
@@ -2372,8 +2317,7 @@ class BootOptionParam(click.ParamType):
 @report_output(
     reports={
         "boot_option": (
-            "Current boot option (0/OFF, 1/LOAD, 2/RUN, 3/EXEC) when "
-            "no value is supplied."
+            "Current boot option (0/OFF, 1/LOAD, 2/RUN, 3/EXEC) when no value is supplied."
         )
     }
 )
@@ -2652,7 +2596,10 @@ def _export_recursive(
 @click.option("-v", "--verbose", is_flag=True, help="Show import progress.")
 @handles_fs_errors
 def import_cmd(
-    image: Path, host_dir: Path, meta_format: str | None, verbose: bool,
+    image: Path,
+    host_dir: Path,
+    meta_format: str | None,
+    verbose: bool,
 ) -> None:
     """Bulk-import a host directory into the image."""
     from oaknut.file import DEFAULT_IMPORT_META_FORMATS, MetaFormat
@@ -2707,11 +2654,15 @@ def _import_host_dir(handle, target_dir, host_dir: Path, meta_formats, verbose, 
 @cli.command(name="afs-plan")
 @click.argument("image", type=click.Path(exists=True, path_type=Path))
 @click.option(
-    "--cylinders", type=int, default=None,
+    "--cylinders",
+    type=int,
+    default=None,
     help="Proposed AFS region size in cylinders.",
 )
 @click.option(
-    "--compact", is_flag=True, default=False,
+    "--compact",
+    is_flag=True,
+    default=False,
     help="Plan with ADFS compaction to maximise AFS space.",
 )
 @report_output(
@@ -2843,8 +2794,7 @@ def _build_afs_plan_reports(document: dict):
                 (
                     "total",
                     "Total",
-                    f"{geom['total_sectors']} sectors "
-                    f"({geom['total_bytes']:,} bytes)",
+                    f"{geom['total_sectors']} sectors ({geom['total_bytes']:,} bytes)",
                 ),
             ],
         )
@@ -2867,12 +2817,8 @@ def _build_afs_plan_reports(document: dict):
         pairs = [("present", "Present", "yes")]
         if "disc_name" in existing:
             pairs.append(("disc_name", "Disc name", existing["disc_name"]))
-            pairs.append(
-                ("start_cylinder", "Start cylinder", str(existing["start_cylinder"]))
-            )
-        sections["existing_afs"] = Report(
-            data=_kv_table("Existing AFS partition", pairs)
-        )
+            pairs.append(("start_cylinder", "Start cylinder", str(existing["start_cylinder"])))
+        sections["existing_afs"] = Report(data=_kv_table("Existing AFS partition", pairs))
         return Reports(sections)
 
     p = document["plan"]
@@ -2893,9 +2839,7 @@ def _build_afs_plan_reports(document: dict):
         ),
     ]
     if "suggested_command" in document:
-        plan_pairs.append(
-            ("suggested_command", "Suggested command", document["suggested_command"])
-        )
+        plan_pairs.append(("suggested_command", "Suggested command", document["suggested_command"]))
     sections["plan"] = Report(data=_kv_table("Proposed AFS partition", plan_pairs))
     return Reports(sections)
 
@@ -2904,11 +2848,15 @@ def _build_afs_plan_reports(document: dict):
 @click.argument("image", type=click.Path(exists=True, path_type=Path))
 @click.option("--disc-name", required=True, help="AFS disc name.")
 @click.option(
-    "--cylinders", type=int, default=None,
+    "--cylinders",
+    type=int,
+    default=None,
     help="AFS region size in cylinders (default: use existing free space).",
 )
 @click.option(
-    "--compact", is_flag=True, default=False,
+    "--compact",
+    is_flag=True,
+    default=False,
     help="Compact the ADFS partition first to maximise AFS space.",
 )
 @click.option(
@@ -3197,26 +3145,19 @@ def generate_dsc(image: Path, heads: int, spt: int, force: bool) -> None:
     from oaknut.discimage.unified_disc import UnifiedDisc
 
     if image.suffix.lower() != ".dat":
-        raise click.ClickException(
-            f"image must have a .dat extension, got '{image.suffix}'"
-        )
+        raise click.ClickException(f"image must have a .dat extension, got '{image.suffix}'")
 
     dsc_filepath = image.with_suffix(".dsc")
     if dsc_filepath.exists() and not force:
-        raise click.ClickException(
-            f"refusing to overwrite existing '{dsc_filepath}'; pass --force"
-        )
+        raise click.ClickException(f"refusing to overwrite existing '{dsc_filepath}'; pass --force")
 
     data = image.read_bytes()
     if len(data) < 512:
         raise click.ClickException(
-            f"image is too small ({len(data)} bytes) to contain an ADFS "
-            f"old map"
+            f"image is too small ({len(data)} bytes) to contain an ADFS old map"
         )
     if len(data) % 256 != 0:
-        raise click.ClickException(
-            f"image size ({len(data)} bytes) is not a multiple of 256"
-        )
+        raise click.ClickException(f"image size ({len(data)} bytes) is not a multiple of 256")
 
     spec = SurfaceSpec(
         num_tracks=1,
@@ -3229,9 +3170,7 @@ def generate_dsc(image: Path, heads: int, spt: int, force: bool) -> None:
     try:
         fsm = OldFreeSpaceMap(sectors)
     except Exception as exc:
-        raise click.ClickException(
-            f"image does not parse as an ADFS Old Map: {exc}"
-        )
+        raise click.ClickException(f"image does not parse as an ADFS Old Map: {exc}")
 
     total_sectors = fsm.total_sectors
     if total_sectors == 0:
@@ -3247,9 +3186,7 @@ def generate_dsc(image: Path, heads: int, spt: int, force: bool) -> None:
         )
     cylinders = total_sectors // sectors_per_cylinder
     if cylinders < 1 or cylinders > 0xFFFF:
-        raise click.ClickException(
-            f"derived cylinders ({cylinders}) out of range 1..65535"
-        )
+        raise click.ClickException(f"derived cylinders ({cylinders}) out of range 1..65535")
 
     geometry = ADFSGeometry(
         cylinders=cylinders,

@@ -62,29 +62,22 @@ class UserSpec:
         try:
             encoded_name = self.name.encode("ascii")
         except UnicodeEncodeError as exc:
-            raise AFSUserNameError(
-                f"user name {self.name!r} must be ASCII"
-            ) from exc
+            raise AFSUserNameError(f"user name {self.name!r} must be ASCII") from exc
         if len(encoded_name) > _MAX_USER_NAME_LEN:
             raise AFSUserNameError(
-                f"user name {self.name!r} exceeds "
-                f"{_MAX_USER_NAME_LEN} characters"
+                f"user name {self.name!r} exceeds {_MAX_USER_NAME_LEN} characters"
             )
         try:
             encoded_password = self.password.encode("ascii")
         except UnicodeEncodeError as exc:
-            raise AFSPasswordError(
-                f"user {self.name!r}: password must be ASCII"
-            ) from exc
+            raise AFSPasswordError(f"user {self.name!r}: password must be ASCII") from exc
         if len(encoded_password) > _MAX_PASSWORD_LEN:
             raise AFSPasswordError(
-                f"user {self.name!r}: password exceeds "
-                f"{_MAX_PASSWORD_LEN} characters"
+                f"user {self.name!r}: password exceeds {_MAX_PASSWORD_LEN} characters"
             )
         if self.quota is not None and not (0 <= self.quota <= _MAX_QUOTA):
             raise AFSQuotaError(
-                f"user {self.name!r}: quota {self.quota} outside "
-                f"0..{_MAX_QUOTA:#x}"
+                f"user {self.name!r}: quota {self.quota} outside 0..{_MAX_QUOTA:#x}"
             )
 
 
@@ -133,9 +126,7 @@ class InitSpec:
         except ValueError as exc:
             raise AFSDiscNameError(str(exc)) from exc
         if not (0 <= self.default_quota <= _MAX_QUOTA):
-            raise AFSQuotaError(
-                f"default_quota {self.default_quota} outside 0..{_MAX_QUOTA:#x}"
-            )
+            raise AFSQuotaError(f"default_quota {self.default_quota} outside 0..{_MAX_QUOTA:#x}")
         # Validate omit_builtins against the known set.
         builtin_upper = {n.upper(): n for n in BUILTIN_ACCOUNT_NAMES}
         for name in self.omit_builtins:

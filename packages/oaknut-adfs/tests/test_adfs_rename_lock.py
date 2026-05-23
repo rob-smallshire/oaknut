@@ -190,7 +190,9 @@ class TestSetLoadAddress:
     def test_set_load_preserves_exec(self):
         adfs = ADFS.create(ADFS_S)
         (adfs.root / "File").write_bytes(
-            b"data", load_address=0x1900, exec_address=0x8023,
+            b"data",
+            load_address=0x1900,
+            exec_address=0x8023,
         )
         (adfs.root / "File").set_load_address(0xFF00)
         assert (adfs.root / "File").stat().exec_address == 0x8023
@@ -229,7 +231,9 @@ class TestSetExecAddress:
     def test_set_exec_preserves_load(self):
         adfs = ADFS.create(ADFS_S)
         (adfs.root / "File").write_bytes(
-            b"data", load_address=0x1900, exec_address=0x8023,
+            b"data",
+            load_address=0x1900,
+            exec_address=0x8023,
         )
         (adfs.root / "File").set_exec_address(0xABCD)
         assert (adfs.root / "File").stat().load_address == 0x1900

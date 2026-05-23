@@ -51,8 +51,9 @@ class FakePath:
             length=len(self._data) if self._data else 0,
         )
 
-    def write_bytes(self, data: bytes, *, load_address: int = 0,
-                    exec_address: int = 0, **kwargs) -> None:
+    def write_bytes(
+        self, data: bytes, *, load_address: int = 0, exec_address: int = 0, **kwargs
+    ) -> None:
         self._data = data
         self.load_address = load_address
         self.exec_address = exec_address

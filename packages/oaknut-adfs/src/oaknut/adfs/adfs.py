@@ -1299,7 +1299,10 @@ class ADFS:
 
     @classmethod
     def _from_buffer_with_format(
-        cls, buffer: memoryview, fmt: ADFSFormat, geometry: ADFSGeometry,
+        cls,
+        buffer: memoryview,
+        fmt: ADFSFormat,
+        geometry: ADFSGeometry,
     ) -> ADFS:
         """Create ADFS from a buffer with an explicit format and geometry."""
         disc_image = DiscImage(buffer, fmt.surface_specs)
@@ -2209,8 +2212,7 @@ class ADFS:
         )
 
         new_entries = tuple(
-            updated_entry if e.name.upper() == filename.upper() else e
-            for e in parent_dir.entries
+            updated_entry if e.name.upper() == filename.upper() else e for e in parent_dir.entries
         )
         new_seq = (parent_dir.sequence_number + 1) & 0xFF
 
@@ -2244,8 +2246,7 @@ class ADFS:
         )
 
         new_entries = tuple(
-            updated_entry if e.name.upper() == filename.upper() else e
-            for e in parent_dir.entries
+            updated_entry if e.name.upper() == filename.upper() else e for e in parent_dir.entries
         )
         new_seq = (parent_dir.sequence_number + 1) & 0xFF
 
