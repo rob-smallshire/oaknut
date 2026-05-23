@@ -172,11 +172,17 @@ Whole-image operations
 .. oaknut-command:: oaknut.disc.cli:create
    :prog: disc create
 
+   .. cli-example:: cmd_create
+
 .. oaknut-command:: oaknut.disc.cli:compact
    :prog: disc compact
 
+   .. cli-example:: cmd_compact
+
 .. oaknut-command:: oaknut.disc.cli:expand
    :prog: disc expand
+
+   .. cli-example:: cmd_expand
 
 
 Acorn File Server (AFS)
