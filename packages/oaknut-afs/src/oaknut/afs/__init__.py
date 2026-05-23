@@ -58,15 +58,29 @@ from oaknut.afs.types import (
     Sector,
     SystemInternalName,
 )
+from oaknut.afs.wfsinit import (
+    BUILTIN_ACCOUNT_NAMES,
+    AFSSizeSpec,
+    InitSpec,
+    RepartitionPlan,
+    UserSpec,
+    initialise,
+)
 
 __all__ = [
     "AFS",
     "AFSAccess",
     "AFSNotPresentError",
     "AFSPath",
+    "AFSSizeSpec",
     "Allocator",
+    "BUILTIN_ACCOUNT_NAMES",
+    "InitSpec",
+    "RepartitionPlan",
     "SHIPPED_LIBRARIES",
+    "UserSpec",
     "emplace_library",
+    "initialise",
     "PasswordsFile",
     "UserRecord",
     "import_host_tree",
