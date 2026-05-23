@@ -22,6 +22,7 @@ from asyoulikeit.cli import (
     list_reports_command,
     report_output,
 )
+from exit_codes import ExitCode
 
 from . import __version__
 from .cli_paths import (
@@ -32,7 +33,6 @@ from .cli_paths import (
     resolve_path,
 )
 from .errors import (
-    EXIT_PATH_NOT_FOUND,
     FSClickException,
     handles_fs_errors,
 )
@@ -775,9 +775,9 @@ def cat(file_spec: str) -> None:
     with open_image(image, fs) as handle:
         target = _navigate(handle, bare, fs)
         if not target.exists():
-            raise FSClickException(f"path not found: {bare}", EXIT_PATH_NOT_FOUND)
+            raise FSClickException(f"path not found: {bare}", ExitCode.OS_FILE)
         if target.is_dir():
-            raise FSClickException(f"'{bare}' is a directory", EXIT_PATH_NOT_FOUND)
+            raise FSClickException(f"'{bare}' is a directory", ExitCode.OS_FILE)
         sys.stdout.buffer.write(target.read_bytes())
 
 
@@ -843,9 +843,9 @@ def type_(file_spec: str, line_endings: str) -> None:
     with open_image(image, fs) as handle:
         target = _navigate(handle, bare, fs)
         if not target.exists():
-            raise FSClickException(f"path not found: {bare}", EXIT_PATH_NOT_FOUND)
+            raise FSClickException(f"path not found: {bare}", ExitCode.OS_FILE)
         if target.is_dir():
-            raise FSClickException(f"'{bare}' is a directory", EXIT_PATH_NOT_FOUND)
+            raise FSClickException(f"'{bare}' is a directory", ExitCode.OS_FILE)
         data = _translate_line_endings(target.read_bytes(), line_endings.lower())
         sys.stdout.buffer.write(data)
 
@@ -1115,9 +1115,9 @@ def get(
     with open_image(image, fs) as handle:
         target = _navigate(handle, bare, fs)
         if not target.exists():
-            raise FSClickException(f"path not found: {bare}", EXIT_PATH_NOT_FOUND)
+            raise FSClickException(f"path not found: {bare}", ExitCode.OS_FILE)
         if target.is_dir():
-            raise FSClickException(f"'{bare}' is a directory", EXIT_PATH_NOT_FOUND)
+            raise FSClickException(f"'{bare}' is a directory", ExitCode.OS_FILE)
 
         data = target.read_bytes()
 
@@ -1365,7 +1365,7 @@ def mv(src: str, dst: str, force: bool) -> None:
         # carries the user's original input rather than whatever the
         # library uses internally (which may be a leaf component).
         if not source.exists():
-            raise FSClickException(f"path not found: {bare_src}", EXIT_PATH_NOT_FOUND)
+            raise FSClickException(f"path not found: {bare_src}", ExitCode.OS_FILE)
         source.rename(bare_dst)
         if fs is FilingSystem.AFS:
             handle.flush()
@@ -2113,7 +2113,7 @@ def get_load(file_spec: str):
     with open_image(image, fs) as handle:
         target = _navigate(handle, bare, fs)
         if not target.exists():
-            raise FSClickException(f"path not found: {bare}", EXIT_PATH_NOT_FOUND)
+            raise FSClickException(f"path not found: {bare}", ExitCode.OS_FILE)
         st = target.stat()
     return Reports(
         load=Report(
@@ -2141,7 +2141,7 @@ def get_exec(file_spec: str):
     with open_image(image, fs) as handle:
         target = _navigate(handle, bare, fs)
         if not target.exists():
-            raise FSClickException(f"path not found: {bare}", EXIT_PATH_NOT_FOUND)
+            raise FSClickException(f"path not found: {bare}", ExitCode.OS_FILE)
         st = target.stat()
     return Reports(
         exec=Report(

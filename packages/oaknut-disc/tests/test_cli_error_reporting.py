@@ -15,8 +15,9 @@ three invariants on every result:
 2. ``exit_code`` matches the category for that error class.
 3. The rendered message contains a recognisable hint.
 
-The exit-code constants live in ``oaknut.disc.errors``; tests reference
-them by name so the contract stays visible.
+Exit codes are :class:`ExitCode` enum members from the ``exit-codes``
+package — the standard BSD ``sysexits.h`` set. Tests reference them
+by name so the contract stays visible.
 """
 
 from __future__ import annotations
@@ -24,14 +25,8 @@ from __future__ import annotations
 from pathlib import Path
 
 from click.testing import CliRunner, Result
+from exit_codes import ExitCode
 from oaknut.disc.cli import cli
-from oaknut.disc.errors import (
-    EXIT_ALREADY_EXISTS,
-    EXIT_DIRECTORY_FULL,
-    EXIT_LOCKED,
-    EXIT_NOT_EMPTY,
-    EXIT_PATH_NOT_FOUND,
-)
 
 
 def assert_clean_error(
@@ -81,7 +76,7 @@ class TestMkdirErrors:
         result = runner.invoke(cli, ["mkdir", f"{adfs_image_full_root}:$.OneMore"])
         assert_clean_error(
             result,
-            exit_code=EXIT_DIRECTORY_FULL,
+            exit_code=ExitCode.CANT_CREATE,
             message_contains=("directory full",),
         )
 
@@ -89,7 +84,7 @@ class TestMkdirErrors:
         result = runner.invoke(cli, ["mkdir", f"{adfs_image_filepath}:$.Games"])
         assert_clean_error(
             result,
-            exit_code=EXIT_ALREADY_EXISTS,
+            exit_code=ExitCode.CANT_CREATE,
             message_contains="already exists",
         )
 
@@ -103,7 +98,7 @@ class TestMkdirErrors:
         result = runner.invoke(cli, ["mkdir", f"{adfs_image_filepath}:$.NoSuchDir.Child"])
         assert_clean_error(
             result,
-            exit_code=EXIT_PATH_NOT_FOUND,
+            exit_code=ExitCode.OS_FILE,
         )
 
     def test_dfs_not_supported(self, runner: CliRunner, dfs_image_filepath: Path) -> None:
@@ -131,7 +126,7 @@ class TestMvErrors:
         )
         assert_clean_error(
             result,
-            exit_code=EXIT_PATH_NOT_FOUND,
+            exit_code=ExitCode.OS_FILE,
             message_contains="not found",
         )
 
@@ -144,7 +139,7 @@ class TestMvErrors:
         )
         assert_clean_error(
             result,
-            exit_code=EXIT_ALREADY_EXISTS,
+            exit_code=ExitCode.CANT_CREATE,
             message_contains="already exists",
         )
 
@@ -161,7 +156,7 @@ class TestRmErrors:
         result = runner.invoke(cli, ["rm", f"{adfs_image_locked_file}:$.Locked"])
         assert_clean_error(
             result,
-            exit_code=EXIT_LOCKED,
+            exit_code=ExitCode.NO_PERM,
             message_contains="locked",
         )
 
@@ -212,7 +207,7 @@ class TestCpErrors:
         )
         assert_clean_error(
             result,
-            exit_code=EXIT_DIRECTORY_FULL,
+            exit_code=ExitCode.CANT_CREATE,
             message_contains=("directory full",),
         )
 
@@ -253,7 +248,7 @@ class TestCpErrors:
         )
         assert_clean_error(
             result,
-            exit_code=EXIT_DIRECTORY_FULL,
+            exit_code=ExitCode.CANT_CREATE,
             message_contains=("full",),
         )
 
@@ -280,7 +275,7 @@ class TestGetErrors:
         )
         assert_clean_error(
             result,
-            exit_code=EXIT_PATH_NOT_FOUND,
+            exit_code=ExitCode.OS_FILE,
             message_contains="not found",
         )
 
@@ -300,7 +295,7 @@ class TestGetErrors:
         )
         assert_clean_error(
             result,
-            exit_code=EXIT_PATH_NOT_FOUND,
+            exit_code=ExitCode.OS_FILE,
             message_contains="directory",
         )
 
@@ -324,7 +319,7 @@ class TestPutErrors:
         )
         assert_clean_error(
             result,
-            exit_code=EXIT_DIRECTORY_FULL,
+            exit_code=ExitCode.CANT_CREATE,
             message_contains=("directory full",),
         )
 
@@ -359,7 +354,7 @@ class TestImportErrors:
         )
         assert_clean_error(
             result,
-            exit_code=EXIT_DIRECTORY_FULL,
+            exit_code=ExitCode.CANT_CREATE,
             message_contains=("directory full",),
         )
 
@@ -391,7 +386,7 @@ class TestGetLoadExecErrors:
         result = runner.invoke(cli, ["get-load", f"{adfs_image_filepath}:$.NoSuch"])
         assert_clean_error(
             result,
-            exit_code=EXIT_PATH_NOT_FOUND,
+            exit_code=ExitCode.OS_FILE,
             message_contains="not found",
         )
 
@@ -399,7 +394,7 @@ class TestGetLoadExecErrors:
         result = runner.invoke(cli, ["get-exec", f"{adfs_image_filepath}:$.NoSuch"])
         assert_clean_error(
             result,
-            exit_code=EXIT_PATH_NOT_FOUND,
+            exit_code=ExitCode.OS_FILE,
             message_contains="not found",
         )
 
@@ -421,7 +416,7 @@ class TestCatErrors:
         result = runner.invoke(cli, ["cat", f"{adfs_image_filepath}:$.NoSuch"])
         assert_clean_error(
             result,
-            exit_code=EXIT_PATH_NOT_FOUND,
+            exit_code=ExitCode.OS_FILE,
             message_contains="not found",
         )
 
@@ -429,7 +424,7 @@ class TestCatErrors:
         result = runner.invoke(cli, ["cat", f"{adfs_image_filepath}:$.Games"])
         assert_clean_error(
             result,
-            exit_code=EXIT_PATH_NOT_FOUND,
+            exit_code=ExitCode.OS_FILE,
             message_contains="directory",
         )
 
@@ -439,7 +434,7 @@ class TestTypeErrors:
         result = runner.invoke(cli, ["type", f"{adfs_image_filepath}:$.NoSuch"])
         assert_clean_error(
             result,
-            exit_code=EXIT_PATH_NOT_FOUND,
+            exit_code=ExitCode.OS_FILE,
             message_contains="not found",
         )
 

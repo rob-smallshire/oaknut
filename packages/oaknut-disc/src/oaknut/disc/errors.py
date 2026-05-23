@@ -9,15 +9,18 @@ shape for an end-user tool: the user wants a one-line diagnostic and
 a non-zero exit code their script can branch on.
 
 The :func:`handles_fs_errors` decorator wraps a Click command callback
-to catch any :class:`FSError`, look up a stable exit code for its
+to catch any :class:`FSError`, look up an :class:`ExitCode` for its
 class (walking the MRO so subclasses inherit their parent's code
 unless overridden), and re-raise as :class:`FSClickException`. Any
 other exception (programming bugs, ``KeyboardInterrupt``, plain
 ``click.ClickException``) propagates unchanged.
 
-Exit codes are documented in ``docs/dev/cli-design.md``. The numeric
-table below is the single source of truth; new error classes get a
-code by adding one entry to :data:`_EXCEPTION_EXIT_CODES`.
+Exit codes come from the standard BSD ``sysexits.h`` set, exposed by
+the ``exit-codes`` package as :class:`ExitCode`. The mapping below is
+the single source of truth; new error classes get a code by adding
+one entry to :data:`_CLASS_PATH_EXIT_CODES`. The full table and its
+script-facing semantics are documented in
+``docs/manual/cli/conventions/exit-codes.rst``.
 """
 
 from __future__ import annotations
@@ -26,69 +29,52 @@ import functools
 from typing import Callable, TypeVar
 
 import click
+from exit_codes import ExitCode
 from oaknut.file.exceptions import FSError
 
 # ---------------------------------------------------------------------------
-# Exit codes -- stable across the lifetime of the CLI. Scripts MAY branch
-# on these.
+# FSError class -> ExitCode mapping.
+#
+# Stored as (dotted_class_path, code) so the library packages stay
+# optional at import time; classes are resolved lazily on first lookup.
+# The MRO walk in `exit_code_for` makes subclasses inherit their
+# parent's code unless they have their own entry.
 # ---------------------------------------------------------------------------
 
-EXIT_GENERIC = 1
-EXIT_PATH_NOT_FOUND = 10
-EXIT_ALREADY_EXISTS = 11
-EXIT_DIRECTORY_FULL = 12
-EXIT_DISC_FULL = 13
-EXIT_LOCKED = 14
-EXIT_ACCESS_DENIED = 15
-EXIT_NOT_EMPTY = 16
-EXIT_FORMAT_ERROR = 20
-EXIT_INVALID_NAME = 21
-EXIT_HOST_IO = 22
-EXIT_REPARTITION = 30
-EXIT_MERGE_CONFLICT = 31
-
-
-# ---------------------------------------------------------------------------
-# Class -> exit code mapping. Stored as (dotted_class_path, code) so the
-# library packages stay optional at import time; classes are resolved
-# lazily on first lookup. The MRO walk in `exit_code_for` makes subclasses
-# inherit their parent's code unless they have their own entry.
-# ---------------------------------------------------------------------------
-
-_CLASS_PATH_EXIT_CODES: tuple[tuple[str, int], ...] = (
+_CLASS_PATH_EXIT_CODES: tuple[tuple[str, ExitCode], ...] = (
     # --- DFS ---
-    ("oaknut.dfs.exceptions.CatalogFullError", EXIT_DIRECTORY_FULL),
-    ("oaknut.dfs.exceptions.FileExistsError", EXIT_ALREADY_EXISTS),
-    ("oaknut.dfs.exceptions.CatalogReadError", EXIT_FORMAT_ERROR),
-    ("oaknut.dfs.exceptions.DiskFullError", EXIT_DISC_FULL),
-    ("oaknut.dfs.exceptions.FileLocked", EXIT_LOCKED),
-    ("oaknut.dfs.exceptions.InvalidFormatError", EXIT_FORMAT_ERROR),
+    ("oaknut.dfs.exceptions.CatalogFullError", ExitCode.CANT_CREATE),
+    ("oaknut.dfs.exceptions.FileExistsError", ExitCode.CANT_CREATE),
+    ("oaknut.dfs.exceptions.CatalogReadError", ExitCode.DATA_ERR),
+    ("oaknut.dfs.exceptions.DiskFullError", ExitCode.CANT_CREATE),
+    ("oaknut.dfs.exceptions.FileLocked", ExitCode.NO_PERM),
+    ("oaknut.dfs.exceptions.InvalidFormatError", ExitCode.DATA_ERR),
     # --- ADFS ---
-    ("oaknut.adfs.exceptions.ADFSDirectoryFullError", EXIT_DIRECTORY_FULL),
-    ("oaknut.adfs.exceptions.ADFSDirectoryError", EXIT_FORMAT_ERROR),
-    ("oaknut.adfs.exceptions.ADFSDiscFullError", EXIT_DISC_FULL),
-    ("oaknut.adfs.exceptions.ADFSMapError", EXIT_FORMAT_ERROR),
-    ("oaknut.adfs.exceptions.ADFSEntryExistsError", EXIT_ALREADY_EXISTS),
-    ("oaknut.adfs.exceptions.ADFSDirectoryNotEmptyError", EXIT_NOT_EMPTY),
-    ("oaknut.adfs.exceptions.ADFSPathError", EXIT_PATH_NOT_FOUND),
-    ("oaknut.adfs.exceptions.ADFSFileLockedError", EXIT_LOCKED),
+    ("oaknut.adfs.exceptions.ADFSDirectoryFullError", ExitCode.CANT_CREATE),
+    ("oaknut.adfs.exceptions.ADFSDirectoryError", ExitCode.DATA_ERR),
+    ("oaknut.adfs.exceptions.ADFSDiscFullError", ExitCode.CANT_CREATE),
+    ("oaknut.adfs.exceptions.ADFSMapError", ExitCode.DATA_ERR),
+    ("oaknut.adfs.exceptions.ADFSEntryExistsError", ExitCode.CANT_CREATE),
+    ("oaknut.adfs.exceptions.ADFSDirectoryNotEmptyError", ExitCode.CANT_CREATE),
+    ("oaknut.adfs.exceptions.ADFSPathError", ExitCode.OS_FILE),
+    ("oaknut.adfs.exceptions.ADFSFileLockedError", ExitCode.NO_PERM),
     # --- AFS ---
-    ("oaknut.afs.exceptions.AFSDirectoryFullError", EXIT_DIRECTORY_FULL),
-    ("oaknut.afs.exceptions.AFSDirectoryEntryExistsError", EXIT_ALREADY_EXISTS),
-    ("oaknut.afs.exceptions.AFSDirectoryEntryNotFoundError", EXIT_PATH_NOT_FOUND),
-    ("oaknut.afs.exceptions.AFSDirectoryNotEmptyError", EXIT_NOT_EMPTY),
-    ("oaknut.afs.exceptions.AFSPathError", EXIT_PATH_NOT_FOUND),
-    ("oaknut.afs.exceptions.AFSAccessDeniedError", EXIT_ACCESS_DENIED),
-    ("oaknut.afs.exceptions.AFSFileLockedError", EXIT_LOCKED),
-    ("oaknut.afs.exceptions.AFSInsufficientSpaceError", EXIT_DISC_FULL),
-    ("oaknut.afs.exceptions.AFSQuotaExceededError", EXIT_DISC_FULL),
-    ("oaknut.afs.exceptions.AFSFormatError", EXIT_FORMAT_ERROR),
-    ("oaknut.afs.exceptions.AFSInitSpecError", EXIT_INVALID_NAME),
-    ("oaknut.afs.exceptions.AFSRepartitionError", EXIT_REPARTITION),
-    ("oaknut.afs.exceptions.AFSMergeConflictError", EXIT_MERGE_CONFLICT),
-    ("oaknut.afs.exceptions.AFSHostImportError", EXIT_HOST_IO),
-    ("oaknut.afs.exceptions.AFSUserNotFoundError", EXIT_PATH_NOT_FOUND),
-    ("oaknut.afs.exceptions.AFSUserExistsError", EXIT_ALREADY_EXISTS),
+    ("oaknut.afs.exceptions.AFSDirectoryFullError", ExitCode.CANT_CREATE),
+    ("oaknut.afs.exceptions.AFSDirectoryEntryExistsError", ExitCode.CANT_CREATE),
+    ("oaknut.afs.exceptions.AFSDirectoryEntryNotFoundError", ExitCode.OS_FILE),
+    ("oaknut.afs.exceptions.AFSDirectoryNotEmptyError", ExitCode.CANT_CREATE),
+    ("oaknut.afs.exceptions.AFSPathError", ExitCode.OS_FILE),
+    ("oaknut.afs.exceptions.AFSAccessDeniedError", ExitCode.NO_PERM),
+    ("oaknut.afs.exceptions.AFSFileLockedError", ExitCode.NO_PERM),
+    ("oaknut.afs.exceptions.AFSInsufficientSpaceError", ExitCode.CANT_CREATE),
+    ("oaknut.afs.exceptions.AFSQuotaExceededError", ExitCode.CANT_CREATE),
+    ("oaknut.afs.exceptions.AFSFormatError", ExitCode.DATA_ERR),
+    ("oaknut.afs.exceptions.AFSInitSpecError", ExitCode.USAGE),
+    ("oaknut.afs.exceptions.AFSRepartitionError", ExitCode.DATA_ERR),
+    ("oaknut.afs.exceptions.AFSMergeConflictError", ExitCode.DATA_ERR),
+    ("oaknut.afs.exceptions.AFSHostImportError", ExitCode.IO_ERR),
+    ("oaknut.afs.exceptions.AFSUserNotFoundError", ExitCode.OS_FILE),
+    ("oaknut.afs.exceptions.AFSUserExistsError", ExitCode.CANT_CREATE),
 )
 
 
@@ -97,7 +83,8 @@ def _resolve_class(dotted: str) -> type | None:
 
     Returns ``None`` rather than raising so the mapping stays resilient
     when a class is renamed or removed in a library package; the only
-    consequence is that the fallback ``EXIT_GENERIC`` will be used.
+    consequence is that the fallback :data:`ExitCode.SOFTWARE` will be
+    used.
     """
     module_name, _, class_name = dotted.rpartition(".")
     try:
@@ -107,13 +94,13 @@ def _resolve_class(dotted: str) -> type | None:
     return getattr(module, class_name, None)
 
 
-_RESOLVED_EXIT_CODES: dict[type, int] | None = None
+_RESOLVED_EXIT_CODES: dict[type, ExitCode] | None = None
 
 
-def _exit_code_table() -> dict[type, int]:
+def _exit_code_table() -> dict[type, ExitCode]:
     global _RESOLVED_EXIT_CODES
     if _RESOLVED_EXIT_CODES is None:
-        table: dict[type, int] = {}
+        table: dict[type, ExitCode] = {}
         for dotted, code in _CLASS_PATH_EXIT_CODES:
             cls = _resolve_class(dotted)
             if cls is not None:
@@ -122,19 +109,19 @@ def _exit_code_table() -> dict[type, int]:
     return _RESOLVED_EXIT_CODES
 
 
-def exit_code_for(exc: BaseException) -> int:
-    """Return the exit code for an ``FSError`` instance.
+def exit_code_for(exc: BaseException) -> ExitCode:
+    """Return the :class:`ExitCode` for an ``FSError`` instance.
 
     Walks the MRO from most-specific to least-specific so subclasses
     inherit their parent's code automatically. Falls back to
-    :data:`EXIT_GENERIC` if no ancestor is in the table.
+    :data:`ExitCode.SOFTWARE` if no ancestor is in the table.
     """
     table = _exit_code_table()
     for ancestor in type(exc).__mro__:
         code = table.get(ancestor)
         if code is not None:
             return code
-    return EXIT_GENERIC
+    return ExitCode.SOFTWARE
 
 
 # ---------------------------------------------------------------------------
@@ -143,16 +130,18 @@ def exit_code_for(exc: BaseException) -> int:
 
 
 class FSClickException(click.ClickException):
-    """``click.ClickException`` with a per-category exit code.
+    """``click.ClickException`` with a per-category :class:`ExitCode`.
 
     Click's stock ``ClickException`` hard-codes ``exit_code = 1``; we
     override it instance-by-instance so each FSError category surfaces
-    its own stable code.
+    its own stable code. The constructor accepts the ``ExitCode`` enum
+    member (or any int) and stores its integer value where Click
+    expects it.
     """
 
-    def __init__(self, message: str, exit_code: int) -> None:
+    def __init__(self, message: str, exit_code: ExitCode | int) -> None:
         super().__init__(message)
-        self.exit_code = exit_code
+        self.exit_code = int(exit_code)
 
 
 # ---------------------------------------------------------------------------
