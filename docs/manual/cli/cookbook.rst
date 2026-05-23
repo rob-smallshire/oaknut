@@ -80,55 +80,49 @@ in :doc:`/api/patterns/metadata`.
 Creating a Level 3 File Server disc
 -----------------------------------
 
-A complete walkthrough for building a bootable L3FS hard disc image.
-This recipe needs an SSD containing the Level 3 File Server
-executable (e.g. ``FS3v126.ssd``); that image is not yet shipped in
-the test fixtures. Once it lands, the sequence below runs end-to-end.
+The full walkthrough builds a bootable L3FS hard disc from a fresh
+ADFS envelope plus the file-server executable shipped on
+``tests/data/images/cookbook/FS3v126.ssd``:
 
-.. code-block:: sh
+.. cli-example:: l3fs_disc
 
-   # Create a 10 MiB ADFS hard disc image
-   disc create scsi0.dat --format adfs-hard --capacity 10MiB --title Server
+Reading top to bottom:
 
-   # Copy the file server binary from its DFS floppy
-   disc cp FS3v126.ssd:'$.FS3v126' scsi0.dat:'$.FS3v126'
+- **Build the ADFS half** (``disc create`` / ``cp`` / ``put``).
+  ``disc create`` lays down a 10 MiB ADFS hard-disc envelope titled
+  ``Server``. ``disc cp`` pulls the file-server binary out of the
+  SSD it ships on and onto the new hard disc — a classic
+  cross-image copy. ``disc put`` writes a one-line ``!BOOT`` whose
+  contents are ``*RUN $.FS3v126`` followed by the Acorn ``\r`` line
+  ending (built with ``printf`` into a local file we then feed to
+  ``put`` — see :doc:`getting-started` for why ``printf`` rather
+  than ``echo``).
 
-   # Write a !BOOT file that *RUNs the file server binary
-   printf '*RUN $.FS3v126\r' | disc put 'scsi0.dat:$.!BOOT' -
+- **Configure auto-boot** (``disc opt``). ``disc opt scsi0.dat``
+  with no value reads the current boot option — ``0`` / ``OFF`` on
+  a freshly-created disc. ``disc opt scsi0.dat EXEC`` sets it.
+  Symbolic names (``OFF`` / ``LOAD`` / ``RUN`` / ``EXEC``) are
+  accepted alongside the numeric forms (``0`` / ``1`` / ``2`` /
+  ``3``); ``disc opt --help`` lists the full mapping. ``EXEC`` is
+  the right choice here because ``!BOOT`` is a command file, not a
+  binary — pressing :kbd:`SHIFT-BREAK` will run ``*EXEC $.!BOOT``,
+  which types the ``*RUN $.FS3v126`` line at the OS prompt.
 
-   # Confirm the current boot option (it is OFF on a freshly-created disc)
-   disc opt scsi0.dat
+- **Attach the AFS partition** (``disc afs-plan`` / ``afs-init``).
+  ``disc afs-plan`` is a dry-run that shows the disc's geometry,
+  how many sectors ADFS currently occupies, and a suggested
+  ``--cylinders`` value for the AFS region. Its *Suggested command*
+  line is intended to be copied verbatim into the next invocation.
+  ``disc afs-init`` then carves out the AFS partition, creates the
+  ``Syst`` (system) and ``RJS`` (regular) users, and ``--emplace``-s
+  two shipped library images. ``--emplace`` accepts a shipped name
+  (``Library``, ``Library1``, ``ArthurLib``) or a path to any ADFS
+  ``.adl``; the contents land in a directory of the same name on
+  the AFS partition.
 
-   # Set the boot option to EXEC — pressing SHIFT-BREAK will then
-   # *EXEC $.!BOOT, running its contents as a sequence of commands.
-   disc opt scsi0.dat EXEC
-
-   # Plan the AFS partition (shows geometry, free space, suggested command)
-   disc afs-plan scsi0.dat
-
-   # Initialise AFS with users and libraries
-   disc afs-init scsi0.dat --disc-name Server --cylinders 309 \
-     --user Syst:S --user RJS:2MiB \
-     --emplace Library --emplace Library1
-
-   # Inspect the result
-   disc tree scsi0.dat
-
-``disc opt`` accepts either the numeric form Acorn machines use
-(``0``, ``1``, ``2``, ``3``) or the symbolic name it represents
-(``OFF``, ``LOAD``, ``RUN``, ``EXEC``). The symbolic form is
-self-documenting and recommended in scripts. Run ``disc opt --help``
-to see the full table with the corresponding ``*LOAD`` / ``*RUN`` /
-``*EXEC`` behaviour for each.
-
-The ``--emplace`` option accepts either a shipped library name
-(``Library``, ``Library1``, ``ArthurLib``) or a path to any ADFS
-``.adl`` image. Everything in the image is copied into a directory
-of the same name on the AFS partition.
-
-.. note::
-
-   When the file-server SSD is added to the test corpus, this recipe
-   will become a ``.. cli-example::`` block too — so the captured
-   output matches the live behaviour the same way the other recipes
-   on this page already do.
+- **Verify** (``disc stat``). The closing ``disc stat`` confirms the
+  dual-partition shape — the same three-block layout
+  (Disc envelope + Partition 1: ADFS + Partition 2: AFS) that
+  :doc:`conventions/output-formats` describes, with the
+  geometry block carrying information that is genuinely distinct
+  from either partition's own slice.
