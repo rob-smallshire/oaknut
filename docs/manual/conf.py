@@ -34,6 +34,7 @@ html_title = "oaknut"
 # detection logic and conventions).
 html_static_path = ["_static"]
 html_js_files = ["platform-tabs.js"]
+html_css_files = ["font-size.css"]
 
 # Autodoc
 autodoc_member_order = "bysource"

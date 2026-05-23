@@ -1,0 +1,15 @@
+/*
+ * Bump the root font-size so the bulk of the theme's rem-based sizing
+ * scales up proportionally. The clarity theme leans heavily on
+ * 0.875rem for body text and var(--text-sm) for sidebar / metadata —
+ * both relative to the html root — so raising the root from the
+ * browser default (16px) carries them along.
+ *
+ * Target audience for this manual skews 50+ retro-enthusiast; the
+ * default theme size is too small for comfortable extended reading.
+ * 18px root keeps body copy near 16px and nudges everything that
+ * was tiny (sidebar, captions, code blocks) up a touch.
+ */
+html {
+    font-size: 18px;
+}
