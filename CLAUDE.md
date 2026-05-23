@@ -14,7 +14,8 @@ Seven packages, layered strictly bottom-up:
 
 | PyPI distribution | Import path | Depends on | Scope |
 |---|---|---|---|
-| `oaknut-file` | `oaknut.file` | — | INF sidecars, xattr namespaces, filename encoding, `Access`, `AcornMeta`, `MetaFormat`, `BootOption`, `FSError` base, `acorn` text codec, `host_bridge` |
+| `oaknut-exception` | `oaknut.exception` | — | Categorised exception hierarchy (`OaknutException`, `DataError`, `ConfigurationError`, `InternalError`) with class-attached `ExitCode` values, plus the `handled_errors` CLI boundary helper |
+| `oaknut-file` | `oaknut.file` | `exception` | INF sidecars, xattr namespaces, filename encoding, `Access`, `AcornMeta`, `MetaFormat`, `BootOption`, `FSError` base (a `DataError`), `acorn` text codec, `host_bridge` |
 | `oaknut-discimage` | `oaknut.discimage` | `file` | `Surface`, `SectorsView`, `UnifiedDisc`, generic `DiskFormat` + surface-spec helpers |
 | `oaknut-basic` | `oaknut.basic` | — | BBC BASIC tokeniser/detokeniser, language constants |
 | `oaknut-dfs` | `oaknut.dfs` | `file`, `discimage`, `basic` | Acorn DFS / Watford DDFS / Opus DDOS — flat-catalogue BBC/Electron floppies |

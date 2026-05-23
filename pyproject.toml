@@ -59,6 +59,7 @@ packages = []
 members = ["packages/oaknut-*"]
 
 [tool.uv.sources]
+oaknut-exception = { workspace = true }
 oaknut-file  = { workspace = true }
 oaknut-discimage = { workspace = true }
 oaknut-basic = { workspace = true }
@@ -78,6 +79,7 @@ default-groups = ["test", "lint", "dev", "workspace"]
 # the PyPI name" with "install everything". Now the placeholder is
 # truly empty, and dev installs happen via this group instead.
 workspace = [
+    "oaknut-exception",
     "oaknut-file",
     "oaknut-discimage",
     "oaknut-basic",
@@ -120,6 +122,9 @@ search = 'version = "{current_version}"'
 replace = 'version = "{new_version}"'
 
 [[tool.bumpversion.files]]
+filename = "packages/oaknut-exception/src/oaknut/exception/__init__.py"
+
+[[tool.bumpversion.files]]
 filename = "packages/oaknut-file/src/oaknut/file/__init__.py"
 
 [[tool.bumpversion.files]]
@@ -150,6 +155,7 @@ filename = "packages/oaknut-disc/src/oaknut/disc/__init__.py"
 minversion = "8.0"
 addopts = ["--import-mode=importlib"]
 testpaths = [
+    "packages/oaknut-exception/tests",
     "packages/oaknut-file/tests",
     "packages/oaknut-discimage/tests",
     "packages/oaknut-basic/tests",
