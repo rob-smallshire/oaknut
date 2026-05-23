@@ -135,8 +135,16 @@ def show(command: str) -> None:
     The displayed ``$ command`` line is the command as the recipe
     wrote it — no auto-appended ``--as display`` leaks through to the
     reader. The executed command may differ; see module docstring.
+
+    Multi-line commands (shell ``for`` loops, ``if``/``then``/``fi``
+    blocks, anything with embedded newlines) are rendered with a
+    ``> `` continuation prompt on subsequent lines, the same way a
+    real interactive shell echoes them.
     """
-    print(f"$ {command}")
+    lines = command.splitlines() or [""]
+    print(f"$ {lines[0]}")
+    for cont in lines[1:]:
+        print(f"> {cont}")
 
     run_command = command
     if _needs_display_flag(command):

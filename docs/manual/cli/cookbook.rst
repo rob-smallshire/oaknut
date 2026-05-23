@@ -77,6 +77,53 @@ filesystems, and where information is lost in either direction) live
 in :doc:`/api/patterns/metadata`.
 
 
+Archive a folder of SSDs to one ADFS hard disc
+----------------------------------------------
+
+A common real-world ergonomic: you have a directory full of DFS
+``.ssd`` floppies on your host and want them all sitting on a
+single ADFS hard disc, each under its own subdirectory named for
+the source. Three lines of shell — a ``for`` loop wrapping a
+single ``disc cp -r`` per SSD — does the work.
+
+**1. Loop the SSDs, copying each into its own subdirectory.**
+
+.. cli-example:: bulk_archive_ssds
+   :section: loop
+
+The interesting moves:
+
+- ``$(basename "$ssd" .ssd)`` strips both the directory prefix and
+  the ``.ssd`` extension, leaving the stem of the source filename.
+- The ``sed`` expression keeps the first CamelCase word *after* the
+  first hyphen — for our SSDs that yields ``Planetoid``,
+  ``Arcadians``, ``Zalaga``. A naïve truncate-to-10-chars approach
+  (e.g. ``cut -c1-10``) would land arbitrary cuts like
+  ``Disc001-Pl``; pulling out the first real word gives a
+  human-readable name that also happens to fit ADFS's 10-character
+  filename limit.
+- ``disc cp -r SOURCE:$ TARGET:$.NAME`` recursively copies every
+  file under the DFS root (``$``) into ``$.NAME`` on the archive
+  disc. The destination directory is **created automatically** —
+  same convention as Unix ``cp -r SRC DEST`` when ``DEST`` does not
+  exist. No explicit ``disc mkdir`` is required.
+
+The recipe is also a good demonstration of ``disc``'s "silence is
+golden" stance: every successful ``disc cp -r`` writes nothing to
+stdout, so an 18-file copy spread across three SSDs produces zero
+chatter, leaving the shell loop entirely to its own narrative.
+
+**2. Verify the archive's top level.**
+
+.. cli-example:: bulk_archive_ssds
+   :section: verify
+
+Three sibling directories, one per SSD, each containing the
+files extracted from that SSD's ``$``. Drill in with
+``disc ls 'archive.dat:$.Arcadians'`` to inspect any one of them —
+or ``disc tree archive.dat`` for the whole thing.
+
+
 Creating a Level 3 File Server disc
 -----------------------------------
 
