@@ -24,14 +24,17 @@ repos:
           ships src/oaknut/__init__.py. Each package's code lives at
           src/oaknut/<name>/__init__.py instead.
 
-      - id: readme-fresh
-        name: README.md is up to date
+      - id: readmes-fresh
+        name: README.md and README-pypi.md are up to date
         entry: uv run python scripts/render_readme.py --check
         language: system
         pass_filenames: false
-        files: ^(README\.md|docs/README\.md\.j2|docs/readme_examples/.*\.py|scripts/render_readme\.py|packages/oaknut-[^/]+/pyproject\.toml)$
+        files: ^(README\.md|README-pypi\.md|docs/README\.md\.j2|docs/README-pypi\.md\.j2|docs/readme_examples/.*\.py|scripts/render_readme\.py|packages/oaknut-[^/]+/pyproject\.toml)$
         description: |
-          README.md is generated from docs/README.md.j2 and the example
-          scripts in docs/readme_examples/. If any of those change (or
-          any package's pyproject.toml description), regenerate with:
+          README.md is generated from docs/README.md.j2 plus the example
+          scripts in docs/readme_examples/. README-pypi.md, the long
+          description for the `oaknut` namespace placeholder distribution,
+          is generated from docs/README-pypi.md.j2. Both are driven by
+          each oaknut-* sub-package's pyproject.toml — if any of those
+          change, regenerate with:
               uv run python scripts/render_readme.py
