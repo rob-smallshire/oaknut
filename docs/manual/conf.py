@@ -17,6 +17,13 @@ extensions = [
 html_theme = "sphinx_clarity_theme"
 html_title = "oaknut"
 
+# Custom static assets. _static/platform-tabs.js auto-selects the
+# host-platform tab in sphinx-design tab-sets that use the :sync: IDs
+# `bash` / `zsh` / `powershell` (see _static/platform-tabs.js for the
+# detection logic and conventions).
+html_static_path = ["_static"]
+html_js_files = ["platform-tabs.js"]
+
 # Autodoc
 autodoc_member_order = "bysource"
 autodoc_typehints = "description"
