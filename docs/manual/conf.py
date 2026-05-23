@@ -25,11 +25,7 @@ intersphinx_mapping = {
 }
 
 # Source
-exclude_patterns = [
-    "readme_examples",
-    "README.md.j2",
-    "_build",
-]
+exclude_patterns = ["_build"]
 
 # Suppress warnings from star-aliases (*CAT etc.) in Click docstrings
 # that sphinx-click renders — the * is misinterpreted as RST emphasis.
