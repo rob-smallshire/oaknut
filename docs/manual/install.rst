@@ -186,24 +186,6 @@ specific ``oaknut-*`` package(s) you want instead — see
 :ref:`cli-centric-packages` and :ref:`library-packages`.
 
 
-Verifying the install
----------------------
-
-For the CLI:
-
-.. code-block:: sh
-
-   disc --version
-
-For the Python API, any installed package answers to ``__version__``:
-
-.. code-block:: python
-
-   >>> import oaknut.dfs
-   >>> oaknut.dfs.__version__
-   '10.7.0'
-
-
 Where to go next
 ----------------
 
