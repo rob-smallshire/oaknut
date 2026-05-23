@@ -24,7 +24,9 @@ single shell command on macOS and Linux, an MSI on Windows.
 global installs of the CLIs, ``uv tool`` is the preferred option;
 `pipx <https://pipx.pypa.io/>`__ is the supported alternative — see
 its `installation docs <https://pipx.pypa.io/stable/installation/>`__
-if you need to bootstrap it.
+if you need to bootstrap it. For one-off zero-install execution
+without committing to either, ``uvx`` (bundled with ``uv``) and
+``pipx run`` are covered in :ref:`zero-install-cli` below.
 
 
 .. _cli-centric-packages:
