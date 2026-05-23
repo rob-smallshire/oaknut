@@ -9,39 +9,45 @@ Where the Level 3 File Server reports a numeric FS error code (see
 ``docs/dev/afs-onwire.md`` §FS error codes), the exception carries it on
 ``err.fs_error_code`` for symmetry with the server's own reporting.
 
+Each subclass pins a more specific :class:`ExitCode` than the
+``ExitCode.DATA_ERR`` it inherits from ``DataError``.
+
 Hierarchy::
 
-    FSError  (oaknut.file.exceptions)
+    FSError  (oaknut.file.exceptions, a DataError)
     └── AFSError
-        ├── AFSFormatError
+        ├── AFSFormatError                (ExitCode.DATA_ERR)
         │   ├── AFSBrokenDirectoryError   (fs_error_code = 0x42)
         │   ├── AFSBrokenMapError
         │   └── AFSInfoSectorError
-        ├── AFSPathError
-        ├── AFSAccessDeniedError          (fs_error_code = 0xBD)
-        ├── AFSFileLockedError            (fs_error_code = 0xC3)
-        ├── AFSInsufficientSpaceError     (fs_error_code = 0xC6)
-        ├── AFSQuotaExceededError         (fs_error_code = 0x5C)
-        ├── AFSDirectoryFullError         (no growth room — phase 10 will auto-grow)
-        ├── AFSDirectoryEntryExistsError
-        ├── AFSDirectoryEntryNotFoundError
-        ├── AFSDirectoryNotEmptyError
-        ├── AFSRepartitionError
+        ├── AFSPathError                  (ExitCode.OS_FILE)
+        ├── AFSAccessDeniedError          (fs_error_code = 0xBD, ExitCode.NO_PERM)
+        ├── AFSFileLockedError            (fs_error_code = 0xC3, ExitCode.NO_PERM)
+        ├── AFSInsufficientSpaceError     (fs_error_code = 0xC6, ExitCode.CANT_CREATE)
+        ├── AFSQuotaExceededError         (fs_error_code = 0x5C, ExitCode.CANT_CREATE)
+        ├── AFSDirectoryFullError         (ExitCode.CANT_CREATE)
+        ├── AFSDirectoryEntryExistsError  (ExitCode.CANT_CREATE)
+        ├── AFSDirectoryEntryNotFoundError(ExitCode.OS_FILE)
+        ├── AFSDirectoryNotEmptyError     (ExitCode.CANT_CREATE)
+        ├── AFSRepartitionError           (ExitCode.DATA_ERR)
         │   ├── AFSNewMapNotSupportedError
         │   ├── AFSDiscNotCompactedError
         │   ├── AFSAlreadyPartitionedError
         │   └── AFSInsufficientADFSSpaceError
-        ├── AFSInitSpecError
+        ├── AFSInitSpecError              (ExitCode.USAGE)
         │   ├── AFSDiscNameError
         │   ├── AFSUserNameError
         │   ├── AFSPasswordError
         │   └── AFSQuotaError
-        ├── AFSMergeConflictError
-        └── AFSHostImportError
+        ├── AFSMergeConflictError         (ExitCode.DATA_ERR)
+        ├── AFSHostImportError            (ExitCode.IO_ERR)
+        ├── AFSUserNotFoundError          (ExitCode.OS_FILE)
+        └── AFSUserExistsError            (ExitCode.CANT_CREATE)
 """
 
 from __future__ import annotations
 
+from exit_codes import ExitCode
 from oaknut.file.exceptions import FSError
 
 
@@ -58,6 +64,8 @@ class AFSError(FSError):
 
 class AFSFormatError(AFSError):
     """Malformed on-disc AFS structure."""
+
+    _exit_code = ExitCode.DATA_ERR
 
 
 class AFSBrokenDirectoryError(AFSFormatError):
@@ -92,17 +100,21 @@ class AFSPathError(AFSError):
     ``foo`` does not exist.
     """
 
+    _exit_code = ExitCode.OS_FILE
+
 
 class AFSAccessDeniedError(AFSError):
     """Acting user lacks permission for the requested operation."""
 
     fs_error_code = 0xBD  # DRERRE — insufficient access
+    _exit_code = ExitCode.NO_PERM
 
 
 class AFSFileLockedError(AFSError):
     """Operation refused because the object's ``L`` bit is set."""
 
     fs_error_code = 0xC3  # DRERRG — dir entry locked
+    _exit_code = ExitCode.NO_PERM
 
 
 # ---------------------------------------------------------------------------
@@ -114,12 +126,14 @@ class AFSInsufficientSpaceError(AFSError):
     """The allocator cannot satisfy a request from the free space pool."""
 
     fs_error_code = 0xC6  # MPERRB — disc space exhausted
+    _exit_code = ExitCode.CANT_CREATE
 
 
 class AFSQuotaExceededError(AFSError):
     """The acting user does not have enough quota for this operation."""
 
     fs_error_code = 0x5C  # MPERRN — insufficient user free space
+    _exit_code = ExitCode.CANT_CREATE
 
 
 # ---------------------------------------------------------------------------
@@ -136,9 +150,13 @@ class AFSDirectoryFullError(AFSError):
     — phase 10 will add automatic growth, matching the ROM.
     """
 
+    _exit_code = ExitCode.CANT_CREATE
+
 
 class AFSDirectoryEntryExistsError(AFSError):
     """An entry with the same name already exists in the directory."""
+
+    _exit_code = ExitCode.CANT_CREATE
 
 
 class AFSDirectoryEntryNotFoundError(AFSError):
@@ -149,6 +167,8 @@ class AFSDirectoryEntryNotFoundError(AFSError):
     the in-use list without a match.
     """
 
+    _exit_code = ExitCode.OS_FILE
+
 
 class AFSDirectoryNotEmptyError(AFSError):
     """Cannot remove a directory that still has entries.
@@ -156,6 +176,8 @@ class AFSDirectoryNotEmptyError(AFSError):
     Raised by ``rmdir`` / ``unlink`` on a non-empty sub-directory,
     matching ``DELCHK`` at ``Uade0D:1218+`` (``DRERRJ``).
     """
+
+    _exit_code = ExitCode.CANT_CREATE
 
 
 # ---------------------------------------------------------------------------
@@ -165,6 +187,8 @@ class AFSDirectoryNotEmptyError(AFSError):
 
 class AFSRepartitionError(AFSError):
     """Base for repartitioning failures."""
+
+    _exit_code = ExitCode.DATA_ERR
 
 
 class AFSNewMapNotSupportedError(AFSRepartitionError):
@@ -202,6 +226,8 @@ class AFSInsufficientADFSSpaceError(AFSRepartitionError):
 class AFSInitSpecError(AFSError):
     """Base for InitSpec / UserSpec validation failures."""
 
+    _exit_code = ExitCode.USAGE
+
 
 class AFSDiscNameError(AFSInitSpecError):
     """The proposed AFS disc name is empty, too long, or contains
@@ -229,9 +255,13 @@ class AFSQuotaError(AFSInitSpecError):
 class AFSMergeConflictError(AFSError):
     """A target name already exists and the merge policy is ``"error"``."""
 
+    _exit_code = ExitCode.DATA_ERR
+
 
 class AFSHostImportError(AFSError):
     """``import_host_tree`` failed to read or translate a host-side file."""
+
+    _exit_code = ExitCode.IO_ERR
 
 
 # ---------------------------------------------------------------------------
@@ -247,9 +277,13 @@ class AFSUserNotFoundError(AFSError):
     / ``with_quota`` when the caller names a user the file does not contain.
     """
 
+    _exit_code = ExitCode.OS_FILE
+
 
 class AFSUserExistsError(AFSError):
     """A passwords-file mutation would collide with an existing active user.
 
     Raised by ``with_added`` when the requested name is already present.
     """
+
+    _exit_code = ExitCode.CANT_CREATE

@@ -5,34 +5,36 @@ derives from the shared ``FSError`` base in oaknut.file. Callers
 that want to catch any filesystem error catch ``FSError``; callers
 that care specifically about ADFS catch ``ADFSError``.
 
+Each subclass below pins a more specific :class:`ExitCode` than the
+``ExitCode.DATA_ERR`` it inherits from ``DataError``.
+
 Hierarchy::
 
-    FSError (oaknut.file.exceptions)
+    FSError (oaknut.file.exceptions, a DataError)
     └── ADFSError
         ├── ADFSDirectoryError
-        │   └── ADFSDirectoryFullError
+        │   └── ADFSDirectoryFullError    (ExitCode.CANT_CREATE)
         ├── ADFSMapError
-        │   └── ADFSDiscFullError
-        ├── ADFSPathError
-        │   ├── ADFSEntryExistsError
-        │   └── ADFSDirectoryNotEmptyError
-        └── ADFSFileLockedError
+        │   └── ADFSDiscFullError         (ExitCode.CANT_CREATE)
+        ├── ADFSPathError                 (ExitCode.OS_FILE)
+        │   ├── ADFSEntryExistsError      (ExitCode.CANT_CREATE)
+        │   └── ADFSDirectoryNotEmptyError(ExitCode.CANT_CREATE)
+        └── ADFSFileLockedError           (ExitCode.NO_PERM)
 
 ``ADFSEntryExistsError`` and ``ADFSDirectoryNotEmptyError`` are
 subclasses of ``ADFSPathError`` for backwards compatibility -- callers
 that previously caught ``ADFSPathError`` for "already exists" or "not
-empty" continue to do so, while new code (notably the ``disc`` CLI's
-exit-code mapping) can match the more specific subclass to distinguish
-these distinct categories from "not found".
+empty" continue to do so. Their own ``_exit_code`` overrides the
+parent's ``OS_FILE`` so the CLI distinguishes them from
+"not found".
 """
 
+from exit_codes import ExitCode
 from oaknut.file.exceptions import FSError
 
 
 class ADFSError(FSError):
     """Base exception for all ADFS errors."""
-
-    pass
 
 
 class ADFSDirectoryError(ADFSError):
@@ -42,8 +44,6 @@ class ADFSDirectoryError(ADFSError):
     unrecognised magic bytes, or other structural problems.
     """
 
-    pass
-
 
 class ADFSDirectoryFullError(ADFSDirectoryError):
     """ADFS directory is full and cannot accept more entries.
@@ -52,7 +52,7 @@ class ADFSDirectoryFullError(ADFSDirectoryError):
     reached its maximum capacity (47 entries for old-format directories).
     """
 
-    pass
+    _exit_code = ExitCode.CANT_CREATE
 
 
 class ADFSMapError(ADFSError):
@@ -62,8 +62,6 @@ class ADFSMapError(ADFSError):
     or inconsistent data.
     """
 
-    pass
-
 
 class ADFSDiscFullError(ADFSMapError):
     """Insufficient free space on ADFS disc.
@@ -72,7 +70,7 @@ class ADFSDiscFullError(ADFSMapError):
     region is large enough.
     """
 
-    pass
+    _exit_code = ExitCode.CANT_CREATE
 
 
 class ADFSPathError(ADFSError):
@@ -82,7 +80,7 @@ class ADFSPathError(ADFSError):
     or path components with forbidden characters.
     """
 
-    pass
+    _exit_code = ExitCode.OS_FILE
 
 
 class ADFSEntryExistsError(ADFSPathError):
@@ -94,7 +92,7 @@ class ADFSEntryExistsError(ADFSPathError):
     previously matched on the broader class continue to work.
     """
 
-    pass
+    _exit_code = ExitCode.CANT_CREATE
 
 
 class ADFSDirectoryNotEmptyError(ADFSPathError):
@@ -105,7 +103,7 @@ class ADFSDirectoryNotEmptyError(ADFSPathError):
     compatibility.
     """
 
-    pass
+    _exit_code = ExitCode.CANT_CREATE
 
 
 class ADFSFileLockedError(ADFSError):
@@ -115,4 +113,4 @@ class ADFSFileLockedError(ADFSError):
     that has the locked attribute set.
     """
 
-    pass
+    _exit_code = ExitCode.NO_PERM

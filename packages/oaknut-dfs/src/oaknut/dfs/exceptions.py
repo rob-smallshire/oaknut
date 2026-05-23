@@ -4,26 +4,30 @@ All DFS-specific exceptions derive from DFSError, which in turn
 derives from the shared ``FSError`` base defined in oaknut.file.
 ADFS exception subclasses live in oaknut.adfs.exceptions.
 
+Each subclass below pins a more specific :class:`ExitCode` than the
+``ExitCode.DATA_ERR`` it inherits from ``DataError``. The CLI
+boundary just reads the exception's :attr:`exit_code` to decide its
+exit status — no per-class mapping table is needed in the CLI side.
+
 Hierarchy::
 
-    FSError (oaknut.file.exceptions)
+    FSError (oaknut.file.exceptions, a DataError)
     └── DFSError
         ├── CatalogError
-        │   ├── CatalogReadError
-        │   ├── CatalogFullError
-        │   └── FileExistsError
-        ├── DiskFullError
-        ├── FileLocked
-        └── InvalidFormatError
+        │   ├── CatalogReadError      (ExitCode.DATA_ERR)
+        │   ├── CatalogFullError      (ExitCode.CANT_CREATE)
+        │   └── FileExistsError       (ExitCode.CANT_CREATE)
+        ├── DiskFullError             (ExitCode.CANT_CREATE)
+        ├── FileLocked                (ExitCode.NO_PERM)
+        └── InvalidFormatError        (ExitCode.DATA_ERR)
 """
 
+from exit_codes import ExitCode
 from oaknut.file.exceptions import FSError
 
 
 class DFSError(FSError):
     """Base exception for all DFS errors."""
-
-    pass
 
 
 class CatalogError(DFSError):
@@ -31,8 +35,6 @@ class CatalogError(DFSError):
 
     Raised when operations on the disc catalog fail.
     """
-
-    pass
 
 
 class CatalogReadError(CatalogError):
@@ -42,7 +44,7 @@ class CatalogReadError(CatalogError):
     This typically indicates disc corruption or an unsupported format variant.
     """
 
-    pass
+    _exit_code = ExitCode.DATA_ERR
 
 
 class CatalogFullError(CatalogError):
@@ -52,7 +54,7 @@ class CatalogFullError(CatalogError):
     its maximum capacity (31 files for standard Acorn DFS).
     """
 
-    pass
+    _exit_code = ExitCode.CANT_CREATE
 
 
 class FileExistsError(CatalogError):
@@ -62,7 +64,7 @@ class FileExistsError(CatalogError):
     Note: This shadows the builtin FileExistsError, providing DFS-specific context.
     """
 
-    pass
+    _exit_code = ExitCode.CANT_CREATE
 
 
 class DiskFullError(DFSError):
@@ -72,7 +74,7 @@ class DiskFullError(DFSError):
     free sectors available.
     """
 
-    pass
+    _exit_code = ExitCode.CANT_CREATE
 
 
 class FileLocked(DFSError):
@@ -82,7 +84,7 @@ class FileLocked(DFSError):
     that has the locked attribute set.
     """
 
-    pass
+    _exit_code = ExitCode.NO_PERM
 
 
 class InvalidFormatError(DFSError):
@@ -92,4 +94,4 @@ class InvalidFormatError(DFSError):
     has invalid size, or contains malformed data structures.
     """
 
-    pass
+    _exit_code = ExitCode.DATA_ERR
