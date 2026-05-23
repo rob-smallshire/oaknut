@@ -485,8 +485,8 @@ def ls(file_spec: str, show_access_byte: bool):
                 table.add_row(**row)
                 continue
             st = child.stat()
-            load_str = f"{st.load_address:08X}" if hasattr(st, "load_address") else ""
-            exec_str = f"{st.exec_address:08X}" if hasattr(st, "exec_address") else ""
+            load_str = f"0x{st.load_address:08X}" if hasattr(st, "load_address") else ""
+            exec_str = f"0x{st.exec_address:08X}" if hasattr(st, "exec_address") else ""
             length_str = f"{st.length:08X}" if hasattr(st, "length") else ""
             locked = getattr(st, "locked", False)
             attr_str = "L" if locked else ""
@@ -625,10 +625,10 @@ def stat(file_spec: str):
         row: dict = {"name": target.name}
         if hasattr(st, "load_address"):
             tc.add_column("load", "Load")
-            row["load"] = f"{st.load_address:08X}"
+            row["load"] = f"0x{st.load_address:08X}"
         if hasattr(st, "exec_address"):
             tc.add_column("exec", "Exec")
-            row["exec"] = f"{st.exec_address:08X}"
+            row["exec"] = f"0x{st.exec_address:08X}"
         if hasattr(st, "length"):
             tc.add_column("length", "Length")
             row["length"] = f"{st.length:08X}"
@@ -2172,7 +2172,7 @@ def set_exec(
 
 @cli.command(name="get-load")
 @click.argument("file_spec")
-@report_output(reports={"load": "File load address as 8 hex digits."})
+@report_output(reports={"load": "File load address as ``0x``-prefixed 8 hex digits."})
 def get_load(file_spec: str):
     """Print a file's load address.
 
@@ -2192,14 +2192,14 @@ def get_load(file_spec: str):
         st = target.stat()
     return Reports(
         load=Report(
-            data=ScalarContent(value=f"{st.load_address:08X}", title="Load"),
+            data=ScalarContent(value=f"0x{st.load_address:08X}", title="Load"),
         ),
     )
 
 
 @cli.command(name="get-exec")
 @click.argument("file_spec")
-@report_output(reports={"exec": "File exec address as 8 hex digits."})
+@report_output(reports={"exec": "File exec address as ``0x``-prefixed 8 hex digits."})
 def get_exec(file_spec: str):
     """Print a file's exec address.
 
@@ -2219,7 +2219,7 @@ def get_exec(file_spec: str):
         st = target.stat()
     return Reports(
         exec=Report(
-            data=ScalarContent(value=f"{st.exec_address:08X}", title="Exec"),
+            data=ScalarContent(value=f"0x{st.exec_address:08X}", title="Exec"),
         ),
     )
 
