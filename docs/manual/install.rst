@@ -13,11 +13,18 @@ packages. Two questions decide which ones you install:
 
 oaknut supports Python 3.11 and newer.
 
-This guide leads with `uv <https://docs.astral.sh/uv/>`__ because that's
-how the project is developed and what every internal command shows.
-``pip`` works identically; ``uvx`` and ``pipx`` cover zero-install
-execution of the CLIs. Substitute your preferred tool — the package
-names and behaviour are the same.
+This guide leads with `uv <https://docs.astral.sh/uv/>`__ because
+that's how the project is developed and what every internal command
+shows. If you do not already have ``uv``, follow Astral's
+`installation guide
+<https://docs.astral.sh/uv/getting-started/installation/>`__ — a
+single shell command on macOS and Linux, an MSI on Windows.
+
+``pip`` works identically with the package names below. For isolated
+global installs of the CLIs, ``uv tool`` is the preferred option;
+`pipx <https://pipx.pypa.io/>`__ is the supported alternative — see
+its `installation docs <https://pipx.pypa.io/stable/installation/>`__
+if you need to bootstrap it.
 
 
 .. _cli-centric-packages:
