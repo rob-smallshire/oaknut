@@ -33,7 +33,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from os import PathLike
-from typing import TYPE_CHECKING, Iterator, Union
+from typing import TYPE_CHECKING, Iterator, Sequence, Union
 
 from oaknut.afs.directory import (
     AfsDirectory,
@@ -70,6 +70,9 @@ _DIRECTORY_GROW_STEP_BYTES = 256
 _MAX_DIRECTORY_BYTES = 26 * 256
 
 if TYPE_CHECKING:
+    from os import PathLike
+
+    from oaknut.afs.wfsinit import UserSpec
     from oaknut.discimage.unified_disc import UnifiedDisc
 
 
@@ -141,6 +144,88 @@ class AFS:
                 raise AFSNotPresentError(
                     f"{filepath} has no AFS partition (no info-sector pointers)"
                 )
+            yield afs
+
+    @staticmethod
+    @contextmanager
+    def create_file(
+        filepath: Union[str, PathLike],
+        *,
+        capacity: "int | str | None" = None,
+        disc_name: str = "",
+        cylinders: int | None = None,
+        compact_adfs: bool = False,
+        users: "Sequence[UserSpec]" = (),
+        omit_users: "Sequence[str]" = (),
+        emplacements: "Sequence[str | PathLike]" = (),
+    ) -> Iterator[AFS]:
+        """Create a new AFS image as a context manager.
+
+        Top-level orchestrator that composes
+        :meth:`oaknut.adfs.ADFS.create_file` (#30 capacity strings) +
+        :func:`oaknut.afs.wfsinit.initialise` + zero or more
+        :func:`oaknut.afs.libraries.emplace_library` calls into a
+        single named constructor — mirroring the symmetric shape
+        :meth:`DFS.create_file` / :meth:`ADFS.create_file` already
+        provide for their filesystems.
+
+        Args:
+            filepath: Path for the new ``.dat`` hard-disc image. A
+                companion ``.dsc`` sidecar is written automatically.
+            capacity: Hard-disc capacity. ``int`` is bytes; ``str``
+                accepts ``"10MB"`` / ``"40MiB"`` / etc. (see
+                :func:`oaknut.file.capacity.parse_capacity`). Default
+                ``None`` uses ADFS's smallest hard-disc size.
+            disc_name: AFS disc-name string written into the info
+                sector. Defaults to empty.
+            cylinders: Number of cylinders the AFS partition should
+                claim. ``None`` (default) takes the existing free
+                extent at the end of the ADFS partition — the same
+                behaviour as ``disc afs-init`` without ``--cylinders``.
+            compact_adfs: Run ``ADFS.compact()`` before partitioning,
+                consolidating ADFS data so AFS can claim the maximum
+                possible tail extent.
+            users: Sequence of :class:`UserSpec` accounts to create
+                in addition to the built-in ``Syst``, ``Boot``, and
+                ``Welcome``.
+            omit_users: Names of built-in accounts to *not* create,
+                e.g. ``("Welcome",)``. ``Syst`` and ``Boot`` cannot
+                be omitted.
+            emplacements: Sequence of library names or paths passed to
+                :func:`oaknut.afs.emplace_library`. Names like
+                ``"Library"``, ``"Library1"``, ``"ArthurLib"`` resolve
+                to shipped images; anything else is treated as a path
+                to an ADFS ``.adl``.
+
+        Yields:
+            The newly-initialised :class:`AFS` partition handle.
+        """
+        # Deferred imports: oaknut-adfs depends on oaknut-afs (through
+        # the afs_partition accessor), so wiring these at module load
+        # would create a cycle during workspace import.
+        from oaknut.adfs import ADFS
+        from oaknut.afs.libraries import emplace_library
+        from oaknut.afs.wfsinit import AFSSizeSpec, InitSpec, initialise
+
+        if cylinders is None:
+            size = AFSSizeSpec.existing_free()
+        else:
+            size = AFSSizeSpec.cylinders(cylinders)
+
+        with ADFS.create_file(filepath, capacity=capacity) as adfs:
+            initialise(
+                adfs,
+                spec=InitSpec(
+                    disc_name=disc_name,
+                    size=size,
+                    compact_adfs=compact_adfs,
+                    users=tuple(users),
+                    omit_builtins=frozenset(omit_users),
+                ),
+            )
+            afs = adfs.afs_partition
+            for name_or_path in emplacements:
+                emplace_library(afs, name_or_path)
             yield afs
 
     # ------------------------------------------------------------------
