@@ -115,26 +115,28 @@ Guidance for working on the codebase lives in [`CLAUDE.md`](CLAUDE.md) at the wo
 
 ## Installing from PyPI
 
-Install the whole family with [`uv`](https://github.com/astral-sh/uv):
+Pick the `oaknut-*` packages you actually need. With [`uv`](https://github.com/astral-sh/uv):
 
 ```sh
-uv add oaknut
-```
-
-Or install individual packages as needed:
-
-```sh
-uv add oaknut-dfs        # DFS floppy images only
+uv add oaknut-disc       # the disc CLI tool (most users want this)
+uv add oaknut-dfs        # DFS floppy images
 uv add oaknut-adfs       # ADFS floppy and hard disc images
-uv add oaknut-disc       # the disc CLI tool
+uv add oaknut-afs        # Level 3 File Server discs
+uv add oaknut-zip        # ZIP archives carrying Acorn metadata
+uv add oaknut-basic      # BBC BASIC tokeniser / detokeniser
 ```
 
-With pip:
+Or with pip:
 
 ```sh
-pip install oaknut        # everything
-pip install oaknut-disc   # just the CLI
+pip install oaknut-disc
 ```
+
+The bare `oaknut` distribution on PyPI is a **namespace placeholder** — it
+ships no code and has no dependencies. It exists only to own the `oaknut`
+name on PyPI alongside the family. `pip install oaknut` will succeed and
+install nothing useful; install the specific `oaknut-*` package you want
+instead.
 
 ## Documentation
 
