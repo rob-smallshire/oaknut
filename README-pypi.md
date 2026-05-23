@@ -14,6 +14,7 @@ You almost certainly want one of:
 | [`oaknut-dfs`](https://pypi.org/project/oaknut-dfs/) | Python library for handling Acorn DFS disc images (SSD/DSD format) |
 | [`oaknut-disc`](https://pypi.org/project/oaknut-disc/) | CLI for working with Acorn DFS, ADFS, and AFS disc images |
 | [`oaknut-discimage`](https://pypi.org/project/oaknut-discimage/) | Disc image sector abstractions shared by Acorn filesystem packages |
+| [`oaknut-exception`](https://pypi.org/project/oaknut-exception/) | Categorised exceptions and CLI error-reporting boundary for the oaknut package family |
 | [`oaknut-file`](https://pypi.org/project/oaknut-file/) | Acorn file metadata handling: INF sidecars, filename encoding, xattrs, and access flags |
 | [`oaknut-zip`](https://pypi.org/project/oaknut-zip/) | Work with ZIP files containing Acorn computer metadata |
 

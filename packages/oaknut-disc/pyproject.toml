@@ -22,6 +22,7 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
 ]
 dependencies = [
+    "oaknut-exception>=10.7",
     "oaknut-file>=10.0",
     "oaknut-dfs>=10.0",
     "oaknut-adfs>=10.0",

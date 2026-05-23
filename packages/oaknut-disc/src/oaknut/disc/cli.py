@@ -23,6 +23,7 @@ from asyoulikeit.cli import (
     report_output,
 )
 from exit_codes import ExitCode
+from oaknut.file.exceptions import FSError
 
 from . import __version__
 from .cli_paths import (
@@ -31,10 +32,6 @@ from .cli_paths import (
     parse_file_spec,
     parse_prefix,
     resolve_path,
-)
-from .errors import (
-    FSClickException,
-    handles_fs_errors,
 )
 
 # ---------------------------------------------------------------------------
@@ -45,7 +42,18 @@ _ALIASES: dict[str, str] = {}
 
 
 class AliasGroup(click.Group):
-    """Click group that supports star-prefixed Acorn aliases."""
+    """Click group that supports star-prefixed Acorn aliases and applies
+    the :func:`oaknut.exception.handled_errors` boundary around every
+    subcommand.
+
+    Wrapping at the group means every command is automatically wrapped
+    once — there is no need for a per-command ``@handled_errors``
+    decorator (the visning-style boilerplate). A group-level
+    ``--debug`` flag opts into re-raising :class:`DataError` /
+    :class:`ConfigurationError` after they have been printed, so a
+    developer running ``disc --debug ...`` still sees the full Python
+    traceback.
+    """
 
     def _resolve_alias(self, cmd_name: str) -> str | None:
         """Look up an alias, case-insensitively."""
@@ -73,6 +81,15 @@ class AliasGroup(click.Group):
             if canonical is not None:
                 args = [canonical] + args[1:]
         return super().resolve_command(ctx, args)
+
+    def invoke(self, ctx: click.Context):
+        from oaknut.exception import handled_errors
+
+        from .console import print_error
+
+        debug = bool(ctx.params.get("debug", False))
+        with handled_errors(print_error, debug=debug):
+            return super().invoke(ctx)
 
     def format_commands(self, ctx: click.Context, formatter: click.HelpFormatter) -> None:
         """List commands without aliases to keep --help clean."""
@@ -333,8 +350,20 @@ def _iter_search_partitions(
 
 @click.group(cls=AliasGroup)
 @click.version_option(version=__version__, prog_name="disc")
-def cli() -> None:
+@click.option(
+    "--debug",
+    is_flag=True,
+    default=False,
+    help=(
+        "Re-raise DataError / ConfigurationError after printing them, "
+        "so the full Python traceback is visible. For development; "
+        "users should leave this off."
+    ),
+)
+def cli(debug: bool) -> None:
     """Work with Acorn DFS, ADFS, and AFS disc images."""
+    # The flag is consumed by AliasGroup.invoke before the subcommand
+    # runs; the callback body is intentionally empty.
 
 
 # "format" is overloaded in this CLI — disc formats (ssd, dsd, adfs-hard, ...)
@@ -363,7 +392,6 @@ cli.add_command(describe_report_command(), name="describe-report")
     help="Show the raw access byte as two hex digits alongside the symbolic form.",
 )
 @report_output(reports={"entries": "Directory entries with load/exec/length/attributes."})
-@handles_fs_errors
 def ls(file_spec: str, show_access_byte: bool):
     """List directory contents (Acorn alias: *CAT).
 
@@ -473,7 +501,6 @@ _alias("*CAT", "ls")
 @cli.command()
 @click.argument("file_spec")
 @report_output(reports={"tree": "Hierarchical directory listing."})
-@handles_fs_errors
 def tree(file_spec: str):
     """Display recursive directory tree.
 
@@ -553,7 +580,6 @@ def _attach_children(dir_node, parent_tree_node) -> None:
         "file": "Per-file metadata when the path denotes a file.",
     }
 )
-@handles_fs_errors
 def stat(file_spec: str):
     """Disc summary (no path) or file metadata (with path). Alias: *INFO.
 
@@ -758,7 +784,6 @@ def _afs_partition_only_tc(handle):
 
 @cli.command()
 @click.argument("file_spec")
-@handles_fs_errors
 def cat(file_spec: str) -> None:
     """Dump file contents to stdout as raw bytes.
 
@@ -775,9 +800,9 @@ def cat(file_spec: str) -> None:
     with open_image(image, fs) as handle:
         target = _navigate(handle, bare, fs)
         if not target.exists():
-            raise FSClickException(f"path not found: {bare}", ExitCode.OS_FILE)
+            raise FSError(f"path not found: {bare}", exit_code=ExitCode.OS_FILE)
         if target.is_dir():
-            raise FSClickException(f"'{bare}' is a directory", ExitCode.OS_FILE)
+            raise FSError(f"'{bare}' is a directory", exit_code=ExitCode.OS_FILE)
         sys.stdout.buffer.write(target.read_bytes())
 
 
@@ -822,7 +847,6 @@ def _translate_line_endings(data: bytes, mode: str) -> bytes:
         "lf/crlf/cr = force a specific style; keep = no translation."
     ),
 )
-@handles_fs_errors
 def type_(file_spec: str, line_endings: str) -> None:
     """Display a text file with line endings translated for the host.
 
@@ -843,9 +867,9 @@ def type_(file_spec: str, line_endings: str) -> None:
     with open_image(image, fs) as handle:
         target = _navigate(handle, bare, fs)
         if not target.exists():
-            raise FSClickException(f"path not found: {bare}", ExitCode.OS_FILE)
+            raise FSError(f"path not found: {bare}", exit_code=ExitCode.OS_FILE)
         if target.is_dir():
-            raise FSClickException(f"'{bare}' is a directory", ExitCode.OS_FILE)
+            raise FSError(f"'{bare}' is a directory", exit_code=ExitCode.OS_FILE)
         data = _translate_line_endings(target.read_bytes(), line_endings.lower())
         sys.stdout.buffer.write(data)
 
@@ -856,7 +880,6 @@ _alias("*TYPE", "type")
 @cli.command()
 @click.argument("file_spec")
 @report_output(reports={"matches": "Paths matching the wildcard pattern."})
-@handles_fs_errors
 def find(file_spec: str):
     """Find files matching an Acorn wildcard pattern.
 
@@ -926,7 +949,6 @@ def _find_recursive(node, pattern: str, prefix: str, rows: list[dict]) -> None:
 
 @cli.command()
 @click.argument("file_spec")
-@handles_fs_errors
 def freemap(file_spec: str) -> None:
     """Show free-space map with ASCII fragmentation bar.
 
@@ -1048,7 +1070,6 @@ def _freemap_afs(handle) -> None:
 
 @cli.command()
 @click.argument("image", type=click.Path(exists=True, path_type=Path))
-@handles_fs_errors
 def validate(image: Path) -> None:
     """Validate disc image structure."""
     fs = detect_filing_system(image)
@@ -1094,7 +1115,6 @@ def validate(image: Path) -> None:
     help="Metadata sidecar format.",
 )
 @click.option("--owner", type=int, default=0, help="Econet owner ID for PiEB formats.")
-@handles_fs_errors
 def get(
     file_spec: str,
     host_path: str | None,
@@ -1115,9 +1135,9 @@ def get(
     with open_image(image, fs) as handle:
         target = _navigate(handle, bare, fs)
         if not target.exists():
-            raise FSClickException(f"path not found: {bare}", ExitCode.OS_FILE)
+            raise FSError(f"path not found: {bare}", exit_code=ExitCode.OS_FILE)
         if target.is_dir():
-            raise FSClickException(f"'{bare}' is a directory", ExitCode.OS_FILE)
+            raise FSError(f"'{bare}' is a directory", exit_code=ExitCode.OS_FILE)
 
         data = target.read_bytes()
 
@@ -1177,7 +1197,6 @@ def get(
     default=None,
     help="Metadata format to read from host file.",
 )
-@handles_fs_errors
 def put(
     file_spec: str,
     host_path: str | None,
@@ -1246,7 +1265,6 @@ def put(
 @click.option("-f", "--force", is_flag=True, help="Ignore missing, override locks.")
 @click.option("-r", "--recursive", is_flag=True, help="Remove directories recursively.")
 @click.option("--dry-run", is_flag=True, help="Print what would be removed.")
-@handles_fs_errors
 def rm(
     file_spec: str,
     paths: tuple[str, ...],
@@ -1339,7 +1357,6 @@ _alias("*DELETE", "rm")
 @click.argument("src")
 @click.argument("dst")
 @click.option("-f", "--force", is_flag=True, help="Overwrite existing destination.")
-@handles_fs_errors
 def mv(src: str, dst: str, force: bool) -> None:
     """Rename or move a file within the image (Acorn alias: *RENAME).
 
@@ -1365,7 +1382,7 @@ def mv(src: str, dst: str, force: bool) -> None:
         # carries the user's original input rather than whatever the
         # library uses internally (which may be a leaf component).
         if not source.exists():
-            raise FSClickException(f"path not found: {bare_src}", ExitCode.OS_FILE)
+            raise FSError(f"path not found: {bare_src}", exit_code=ExitCode.OS_FILE)
         source.rename(bare_dst)
         if fs is FilingSystem.AFS:
             handle.flush()
@@ -1384,7 +1401,6 @@ _alias("*RENAME", "mv")
     is_flag=True,
     help="Copy directories recursively.",
 )
-@handles_fs_errors
 def cp(src: str, dst: str, force: bool, recursive: bool) -> None:
     """Copy file(s) or a tree within or between disc images.
 
@@ -1875,7 +1891,6 @@ _alias("*COPY", "cp")
 @cli.command()
 @click.argument("file_spec")
 @click.option("-p", is_flag=True, help="No error if directory already exists.")
-@handles_fs_errors
 def mkdir(file_spec: str, p: bool) -> None:
     """Create a directory (ADFS/AFS only). Alias: *CDIR.
 
@@ -1912,7 +1927,6 @@ _alias("*CDIR", "mkdir")
 @click.option(
     "--dry-run", is_flag=True, help="Print what would change without modifying the image."
 )
-@handles_fs_errors
 def chmod(
     file_spec: str,
     access: str,
@@ -1964,7 +1978,6 @@ _alias("*ACCESS", "chmod")
 @click.option(
     "--dry-run", is_flag=True, help="Print what would change without modifying the image."
 )
-@handles_fs_errors
 def lock(file_spec: str, recursive: bool, dry_run: bool) -> None:
     """Lock a file.
 
@@ -1992,7 +2005,6 @@ def lock(file_spec: str, recursive: bool, dry_run: bool) -> None:
 @click.option(
     "--dry-run", is_flag=True, help="Print what would change without modifying the image."
 )
-@handles_fs_errors
 def unlock(file_spec: str, recursive: bool, dry_run: bool) -> None:
     """Unlock a file.
 
@@ -2021,7 +2033,6 @@ def unlock(file_spec: str, recursive: bool, dry_run: bool) -> None:
 @click.option(
     "--dry-run", is_flag=True, help="Print what would change without modifying the image."
 )
-@handles_fs_errors
 def set_load(
     file_spec: str,
     addr: str,
@@ -2061,7 +2072,6 @@ def set_load(
 @click.option(
     "--dry-run", is_flag=True, help="Print what would change without modifying the image."
 )
-@handles_fs_errors
 def set_exec(
     file_spec: str,
     addr: str,
@@ -2097,7 +2107,6 @@ def set_exec(
 @cli.command(name="get-load")
 @click.argument("file_spec")
 @report_output(reports={"load": "File load address as 8 hex digits."})
-@handles_fs_errors
 def get_load(file_spec: str):
     """Print a file's load address.
 
@@ -2113,7 +2122,7 @@ def get_load(file_spec: str):
     with open_image(image, fs) as handle:
         target = _navigate(handle, bare, fs)
         if not target.exists():
-            raise FSClickException(f"path not found: {bare}", ExitCode.OS_FILE)
+            raise FSError(f"path not found: {bare}", exit_code=ExitCode.OS_FILE)
         st = target.stat()
     return Reports(
         load=Report(
@@ -2125,7 +2134,6 @@ def get_load(file_spec: str):
 @cli.command(name="get-exec")
 @click.argument("file_spec")
 @report_output(reports={"exec": "File exec address as 8 hex digits."})
-@handles_fs_errors
 def get_exec(file_spec: str):
     """Print a file's exec address.
 
@@ -2141,7 +2149,7 @@ def get_exec(file_spec: str):
     with open_image(image, fs) as handle:
         target = _navigate(handle, bare, fs)
         if not target.exists():
-            raise FSClickException(f"path not found: {bare}", ExitCode.OS_FILE)
+            raise FSError(f"path not found: {bare}", exit_code=ExitCode.OS_FILE)
         st = target.stat()
     return Reports(
         exec=Report(
@@ -2154,7 +2162,6 @@ def get_exec(file_spec: str):
 @click.argument("image", type=click.Path(exists=True, path_type=Path))
 @click.argument("new_title", required=False, default=None)
 @report_output(reports={"title": "Current disc title (when no new title is supplied)."})
-@handles_fs_errors
 def title(image: Path, new_title: str | None):
     """Read or set disc title (Acorn alias: *TITLE)."""
     from asyoulikeit.scalar_data import ScalarContent
@@ -2222,7 +2229,6 @@ class BootOptionParam(click.ParamType):
         )
     }
 )
-@handles_fs_errors
 def opt(image: Path, boot_option: int | None):
     """Read or set boot option (Acorn alias: *OPT4).
 
@@ -2282,7 +2288,6 @@ _alias("*OPT4", "opt")
     default=None,
     help="Capacity (hard disc). Accepts e.g. 10MB, 40MiB, 1024kB, or plain bytes.",
 )
-@handles_fs_errors
 def create(host_path: Path, fmt: str, disc_title: str, capacity: str | None) -> None:
     """Create a new empty disc image."""
     if fmt == "ssd":
@@ -2328,7 +2333,6 @@ def create(host_path: Path, fmt: str, disc_title: str, capacity: str | None) -> 
 
 @cli.command()
 @click.argument("image", type=click.Path(exists=True, path_type=Path))
-@handles_fs_errors
 def compact(image: Path) -> None:
     """Defragment a disc image, consolidating free space."""
     fs = detect_filing_system(image)
@@ -2349,7 +2353,6 @@ def compact(image: Path) -> None:
     default=None,
     help="Target disc format. Inferred from file extension if omitted.",
 )
-@handles_fs_errors
 def expand(image: Path, fmt: str | None) -> None:
     """Expand a truncated disc image to its canonical format size.
 
@@ -2418,7 +2421,6 @@ def expand(image: Path, fmt: str | None) -> None:
 )
 @click.option("--owner", type=int, default=0, help="Econet owner ID for PiEB formats.")
 @click.option("-v", "--verbose", is_flag=True, help="Show extraction progress.")
-@handles_fs_errors
 def export_cmd(image: Path, host_dir: Path, meta_format: str, owner: int, verbose: bool) -> None:
     """Bulk-export entire image to a host directory."""
     from oaknut.file import MetaFormat
@@ -2495,7 +2497,6 @@ def _export_recursive(
     help="Metadata format to read from host files.",
 )
 @click.option("-v", "--verbose", is_flag=True, help="Show import progress.")
-@handles_fs_errors
 def import_cmd(
     image: Path,
     host_dir: Path,
@@ -2574,7 +2575,6 @@ def _import_host_dir(handle, target_dir, host_dir: Path, meta_formats, verbose, 
         "plan": "Proposed new AFS partition (only when computable).",
     }
 )
-@handles_fs_errors
 def afs_plan(
     image: Path,
     cylinders: int | None,
@@ -2791,7 +2791,6 @@ def _build_afs_plan_reports(document: dict):
         "or a path to an ADFS .adl image. Repeat for multiple."
     ),
 )
-@handles_fs_errors
 def afs_init(
     image: Path,
     disc_name: str,
@@ -2895,7 +2894,6 @@ def _parse_user_specs(raw_specs: tuple[str, ...]) -> list:
 @cli.command(name="afs-users")
 @click.argument("image", type=click.Path(exists=True, path_type=Path))
 @report_output(reports={"users": "Users with system flag and quota."})
-@handles_fs_errors
 def afs_users(image: Path):
     """List AFS users with quota and flags."""
     from asyoulikeit.tabular_data import Report, Reports, TableContent
@@ -2921,7 +2919,6 @@ def afs_users(image: Path):
 @click.option("--system", is_flag=True, help="System user flag.")
 @click.option("--quota", type=int, default=None, help="Quota in bytes.")
 @click.option("--password", default="", help="Initial password.")
-@handles_fs_errors
 def afs_useradd(
     image: Path,
     name: str,
@@ -2945,7 +2942,6 @@ def afs_useradd(
 @cli.command(name="afs-userdel")
 @click.argument("image", type=click.Path(exists=True, path_type=Path))
 @click.argument("name")
-@handles_fs_errors
 def afs_userdel(image: Path, name: str) -> None:
     """Remove a user from the AFS passwords file."""
     with open_image_for_afs_write(image) as (adfs, afs):
@@ -2964,7 +2960,6 @@ def afs_userdel(image: Path, name: str) -> None:
     help="Source AFS image to merge from.",
 )
 @click.option("--target-path", default=None, help="Target AFS path for merge root.")
-@handles_fs_errors
 def afs_merge(image: Path, source: Path, target_path: str | None) -> None:
     """Merge a source AFS tree into the target image."""
     from oaknut.adfs import ADFS
@@ -3026,7 +3021,6 @@ _DEFAULT_SPT = 64
     is_flag=True,
     help="Overwrite an existing .dsc next to the image.",
 )
-@handles_fs_errors
 def generate_dsc(image: Path, heads: int, spt: int, force: bool) -> None:
     """Write a ``.dsc`` geometry sidecar for an ADFS hard-disc ``.dat``.
 
