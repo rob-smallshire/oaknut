@@ -19,8 +19,8 @@ file":
 
 .. code-block:: sh
 
-   disc stat   image.ssd                  # what's on this disc?
-   disc tree   image.ssd                  # show the contents
+   disc ls     image.ssd                  # what's on this disc?
+   disc tree   image.ssd                  # the same, recursive
    disc type   'image.ssd:$.HELLO'        # read a text file to the terminal
 
 If those work the way you expect, you already have enough of the
