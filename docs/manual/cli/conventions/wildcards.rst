@@ -76,8 +76,8 @@ must produce names that fit, or the match will simply find nothing:
      - Directory naming
    * - DFS
      - 7 characters
-     - Single-character "directory" prefix (``$``, ``A``..``Z``); there
-       is no real hierarchy
+     - Single-character directories (``$`` and ``A``..``Z``); these
+       do not nest
    * - ADFS
      - 10 characters
      - Hierarchical directories, 10 characters per name
@@ -85,11 +85,13 @@ must produce names that fit, or the match will simply find nothing:
      - 10 characters
      - Hierarchical directories, 10 characters per name
 
-DFS does not have nested directories. Its catalogue is flat; the
-``A``..``Z`` letters that appear before the dot are filename-space
-partitions, not directories in the modern sense. A pattern like
-``A.M*`` finds files in the ``A`` partition whose names start with
-``M``; a recursive flag has no work to do on a DFS image.
+DFS directories do not nest. The ``$`` and ``A``..``Z`` letters that
+appear before the dot are real directories in the everyday sense —
+they contain files and you list them with ``disc ls`` — but a
+directory cannot itself contain another directory. A pattern like
+``A.M*`` finds files in the ``A`` directory whose names start with
+``M``; a recursive flag has no work to do on a DFS image because
+there is nothing below the top-level directories to recurse into.
 
 Filename matching is case-insensitive, but filename *creation* is
 case-preserving. ``disc cp host.txt 'image.adl:Hello'`` stores the

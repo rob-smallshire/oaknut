@@ -102,17 +102,17 @@ Three commands depending on what you want:
 Browsing the catalogue
 ----------------------
 
-The display you get from ``disc tree`` is a hierarchical view that
-walks every partition. ``disc ls`` lists a single directory:
+The display you get from ``disc tree`` is a recursive view of every
+entry on the disc. ``disc ls`` lists a single directory:
 
 .. cli-example:: getting_started_browse
 
-On a DFS image with files in the letter-prefixed "directories" you
-can list them individually too:
+DFS files can sit under any of the single-character directories
+``$`` (the root) and ``A`` through ``Z`` — pick whichever you like:
 
 .. code-block:: sh
 
-   disc ls 'hello.ssd:$.D'                # list the D-letter partition
+   disc ls 'hello.ssd:$.D'                # list the D directory
 
 Both commands default to a human-readable display when stdout is a
 terminal, and switch to a tab-separated, headers-on-the-first-line
@@ -141,11 +141,11 @@ The full alias table is in :doc:`conventions/paths`.
 A note on the other filing systems
 ----------------------------------
 
-DFS images (``.ssd`` / ``.dsd``) carry a flat catalogue with optional
-single-character "directory" prefixes (``$``, ``A``..``Z``) — there
-is no nesting. ADFS images (``.adf`` / ``.adl`` / ``.dat``) and AFS
-partitions on top of ADFS have proper hierarchical directories, so
-paths nest naturally (``$.Games.Elite``).
+DFS images (``.ssd`` / ``.dsd``) have a flat catalogue with
+single-character directories (``$`` and ``A``..``Z``) that do not
+nest. ADFS images (``.adf`` / ``.adl`` / ``.dat``) and AFS
+partitions on top of ADFS have hierarchical directories, so paths
+nest naturally (``$.Games.Elite``).
 
 On a disc that carries both ADFS *and* an AFS partition (most Level 3
 File Server hard discs are like this), the ``afs:`` / ``adfs:``
