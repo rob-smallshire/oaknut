@@ -200,9 +200,7 @@ def main() -> int:
     for target in TARGETS:
         rendered = target.render()
         if args.check:
-            current = (
-                target.output_filepath.read_text() if target.output_filepath.exists() else ""
-            )
+            current = target.output_filepath.read_text() if target.output_filepath.exists() else ""
             if current != rendered:
                 stale.append(target.name)
             continue
