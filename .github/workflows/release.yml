@@ -95,10 +95,10 @@ jobs:
       - name: Build all packages
         run: |
           rm -rf dist/
-          for pkg in oaknut-file oaknut-discimage oaknut-basic oaknut-dfs oaknut-adfs oaknut-afs oaknut-zip oaknut-disc; do
-            uv build --package "$pkg" --out-dir dist/
-          done
-          uv build --out-dir dist/
+          # --all-packages covers every workspace member plus the root
+          # `oaknut` placeholder. The package list lives only in
+          # [tool.uv.sources] / [tool.uv.workspace], not in CI.
+          uv build --all-packages --out-dir dist/
           echo "=== Built artefacts ==="
           ls -la dist/
 
