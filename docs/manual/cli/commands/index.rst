@@ -222,3 +222,5 @@ Diagnostics
 
 .. oaknut-command:: oaknut.disc.cli:generate-dsc
    :prog: disc generate-dsc
+
+   .. cli-example:: cmd_generate_dsc
