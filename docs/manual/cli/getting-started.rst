@@ -49,13 +49,21 @@ walkthrough that builds a Level 3 File Server disc).
 Inspect what you just made::
 
    $ disc stat hello.ssd
-   # Size  204,800 bytes (800 sectors)
+                    Disc
+   ┏━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+   ┃ Size ┃ 204,800 bytes (800 sectors) ┃
+   ┡━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
+   └──────┴─────────────────────────────┘
 
-   # Title       GETSTARTED
-   Boot option   OFF (0)
-   Size          204,800 bytes (800 sectors)
-   Free          204,032 bytes (797 sectors)
-   Files         0
+                 Partition 1: DFS
+   ┏━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+   ┃ Title       ┃ GETSTARTED                  ┃
+   ┡━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
+   │ Boot option │ OFF (0)                     │
+   │ Size        │ 204,800 bytes (800 sectors) │
+   │ Free        │ 204,032 bytes (797 sectors) │
+   │ Files       │ 0                           │
+   └─────────────┴─────────────────────────────┘
 
 The disc is empty but the catalogue, free-space map, and boot option
 are all in place. Three sectors are "used" already — those are the
@@ -118,17 +126,27 @@ The display you get from ``disc tree`` is a hierarchical view that
 walks every partition::
 
    $ disc tree hello.ssd
-   # Name       Path1       Path2  Path3
-   hello.ssd    hello.ssd
-   $            hello.ssd   $
-   HELLO        hello.ssd   $      HELLO
+   hello.ssd
+   └── $
+       └── HELLO
 
-``disc ls`` is for single-directory listings:
+``disc ls`` is for single-directory listings::
+
+   $ disc ls 'hello.ssd:$'
+             hello.ssd — GETSTARTED [DFS]
+   ┏━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━┓
+   ┃ Name  ┃ Load     ┃ Exec     ┃ Length   ┃ Attr ┃
+   ┡━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━┩
+   │ HELLO │ 0000FFFF │ 0000FFFF │ 0000001A │      │
+   └───────┴──────────┴──────────┴──────────┴──────┘
+                   Free: 797 sectors
+
+On a DFS image with files in the letter-prefixed "directories" you
+can list them individually too:
 
 .. code-block:: sh
 
-   disc ls 'hello.ssd:$'                  # list the root partition
-   disc ls 'hello.ssd:$.D'                # list the D-letter partition (DFS-specific)
+   disc ls 'hello.ssd:$.D'                # list the D-letter partition
 
 Both commands default to a human-readable display when stdout is a
 terminal, and switch to a tab-separated, headers-on-the-first-line
