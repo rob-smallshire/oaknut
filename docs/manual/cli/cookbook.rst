@@ -80,11 +80,11 @@ in :doc:`/api/patterns/metadata`.
 Archive a folder of SSDs to one ADFS hard disc
 ----------------------------------------------
 
-A common real-world ergonomic: you have a directory full of DFS
-``.ssd`` floppies on your host and want them all sitting on a
-single ADFS hard disc, each under its own subdirectory named for
-the source. Three lines of shell — a ``for`` loop wrapping a
-single ``disc cp -r`` per SSD — does the work.
+You have a directory full of DFS ``.ssd`` floppies on your host
+and want them all sitting on a single ADFS hard disc, each under
+its own subdirectory named for the source. Three lines of shell —
+a ``for`` loop wrapping a single ``disc cp -r`` per SSD — does
+the work.
 
 **1. Look at the source filenames.**
 
