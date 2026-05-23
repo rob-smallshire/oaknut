@@ -338,6 +338,22 @@ class ADFSStat:
         return None
 
 
+def _coerce_access_to_locked(access: "Access | bool | None") -> bool:
+    """Normalise the unified ``access`` kwarg to ``locked: bool``.
+
+    write_bytes only sets the locked bit at the catalogue-write
+    layer; richer flags (R/W/E/PR/PW) are applied later via
+    :meth:`chmod`. ``None`` defaults to unlocked; ``bool`` passes
+    straight through; an ``Access`` / ``int`` is masked against
+    ``Access.L``.
+    """
+    if access is None:
+        return False
+    if isinstance(access, bool):
+        return access
+    return bool(int(access) & int(Access.L))
+
+
 def _entry_to_stat(entry: _ADFSDirectoryEntry) -> ADFSStat:
     """Convert an internal directory entry to a public ADFSStat."""
     return ADFSStat(
@@ -380,11 +396,6 @@ class ADFSPath:
 
         data = elite.read_bytes()
     """
-
-    # Identifies this class to oaknut.file.copy.copy_file so the
-    # source-stat -> destination-kwargs mapping can dispatch without
-    # the caller passing target_fs=.
-    _target_fs_kind: str = "adfs"
 
     def __init__(self, adfs: ADFS, path: str):
         self._adfs = adfs
@@ -588,21 +599,37 @@ class ADFSPath:
         *,
         load_address: int = 0,
         exec_address: int = 0,
-        locked: bool = False,
+        access: "Access | bool | None" = None,
+        date: object = None,
     ) -> None:
         """Write file contents, creating or overwriting the file.
+
+        ``access`` accepts the canonical :class:`oaknut.file.Access`
+        flags, a plain ``bool`` (``True`` => locked, ``False`` =>
+        unlocked), or ``None`` to use the filesystem default
+        (unlocked + owner R+W). The directory entry's "locked"
+        attribute is set from the bit; richer flags (owner R/W/E,
+        public R/W) must be applied via :meth:`chmod` after the
+        write — :meth:`write_bytes` itself only honours the locked
+        bit through the underlying ``_write_file`` path.
+
+        ``date`` is accepted for cross-filesystem signature uniformity
+        but silently ignored at this layer.
 
         Args:
             data: File contents.
             load_address: Load address (default 0).
             exec_address: Execution address (default 0).
-            locked: Whether to lock the file (default False).
 
         Raises:
             ADFSPathError: If this path is the root directory.
             ADFSDiscFullError: If the disc has insufficient free space.
             ADFSDirectoryFullError: If the parent directory is full.
         """
+        del date  # accepted for signature uniformity only
+
+        locked_val = _coerce_access_to_locked(access)
+
         if self._path == "$":
             raise ADFSPathError("Cannot write to root directory")
 
@@ -615,7 +642,7 @@ class ADFSPath:
             data,
             load_address,
             exec_address,
-            locked,
+            locked_val,
         )
 
     def write_text(
@@ -625,7 +652,7 @@ class ADFSPath:
         encoding: str = "acorn",
         load_address: int = 0,
         exec_address: int = 0,
-        locked: bool = False,
+        access: "Access | bool | None" = None,
     ) -> None:
         """Write text contents using the specified encoding.
 
@@ -634,13 +661,13 @@ class ADFSPath:
             encoding: Text encoding (default ``"acorn"``).
             load_address: Load address (default 0).
             exec_address: Execution address (default 0).
-            locked: Whether to lock the file (default False).
+            access: Access flags (see :meth:`write_bytes`).
         """
         self.write_bytes(
             text.encode(encoding),
             load_address=load_address,
             exec_address=exec_address,
-            locked=locked,
+            access=access,
         )
 
     def write_basic(
@@ -649,7 +676,7 @@ class ADFSPath:
         *,
         load_address: int = basic.BBC_BASIC_LOAD_ADDRESS,
         exec_address: int = 0,
-        locked: bool = False,
+        access: "Access | bool | None" = None,
     ) -> None:
         """Write a BBC BASIC program, tokenising the source first.
 
@@ -663,7 +690,7 @@ class ADFSPath:
             source: BBC BASIC source text.
             load_address: Load address (default ``0x1900``).
             exec_address: Execution address (default 0).
-            locked: Whether to lock the file (default False).
+            access: Access flags (see :meth:`write_bytes`).
 
         Raises:
             ADFSPathError: If this path is the root directory.
@@ -675,7 +702,7 @@ class ADFSPath:
             basic.tokenise(source),
             load_address=load_address,
             exec_address=exec_address,
-            locked=locked,
+            access=access,
         )
 
     def unlink(self) -> None:
@@ -862,13 +889,12 @@ class ADFSPath:
         load_address = meta.load_address or 0
         exec_address = meta.exec_address or 0
         access = meta.access
-        locked = bool((access or 0) & int(Access.L))
 
         self.write_bytes(
             data,
             load_address=load_address,
             exec_address=exec_address,
-            locked=locked,
+            access=bool((access or 0) & int(Access.L)),
         )
 
         # If the resolved metadata carries richer Acorn attributes than

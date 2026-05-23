@@ -101,7 +101,7 @@ class TestWriteBasic:
         (dfs.root / "$" / "PROG").write_basic(
             "10 PRINT",
             exec_address=0x8023,
-            locked=True,
+            access=True,
         )
         stat = (dfs.root / "$" / "PROG").stat()
         assert stat.exec_address == 0x8023
@@ -149,7 +149,7 @@ class TestExportFile:
             b"\x00" * 100,
             load_address=0x1900,
             exec_address=0x8023,
-            locked=True,
+            access=True,
         )
         target = tmp_path / "CODE"
         (dfs.root / "$" / "CODE").export_file(target)

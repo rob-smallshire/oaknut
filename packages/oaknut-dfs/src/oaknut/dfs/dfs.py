@@ -27,6 +27,21 @@ from oaknut.file.host_bridge import (
 _DFS_DIRECTORY_CHARS = frozenset("$ABCDEFGHIJKLMNOPQRSTUVWXYZ")
 
 
+def _coerce_access_to_locked(access: "Access | bool | None") -> bool:
+    """Normalise the unified ``access`` kwarg to a plain ``locked`` bool.
+
+    DFS only stores the locked bit, so the richer :class:`Access`
+    flags collapse to ``Access.L`` presence. ``None`` defaults to
+    unlocked; ``bool`` passes straight through; an ``Access`` /
+    ``int`` is masked against ``Access.L``.
+    """
+    if access is None:
+        return False
+    if isinstance(access, bool):
+        return access
+    return bool(int(access) & int(Access.L))
+
+
 @dataclass(frozen=True)
 class DFSStat:
     """DFS file/directory metadata, analogous to os.stat_result.
@@ -81,11 +96,6 @@ class DFSPath:
 
         dfs.root / "$" / "HELLO"    # → DFSPath("$.HELLO")
     """
-
-    # Identifies this class to oaknut.file.copy.copy_file so the
-    # source-stat -> destination-kwargs mapping can dispatch without
-    # the caller passing target_fs=.
-    _target_fs_kind: str = "dfs"
 
     def __init__(self, dfs: DFS, path: str):
         self._dfs = dfs
@@ -249,18 +259,32 @@ class DFSPath:
         *,
         load_address: int = 0,
         exec_address: int = 0,
-        locked: bool = False,
+        access: "Access | bool | None" = None,
+        date: object = None,
     ) -> None:
         """Write file contents (*SAVE).
+
+        ``access`` accepts the canonical :class:`oaknut.file.Access`
+        flags, a plain ``bool`` (``True`` => locked, ``False`` =>
+        unlocked), or ``None`` to use the filesystem default
+        (unlocked). DFS only stores the locked bit, so any other
+        :class:`Access` bits are silently dropped.
+
+        ``date`` is accepted for cross-filesystem signature uniformity
+        but silently ignored — DFS does not store per-file dates.
 
         Raises:
             ValueError: If this path is a directory or filename is invalid.
         """
+        del date  # accepted for signature uniformity only
+
+        locked_val = _coerce_access_to_locked(access)
+
         if not self._path or self._is_directory_path():
             raise ValueError(f"Cannot write to directory: '{self._path}'")
         parsed = self._dfs._catalogued_surface.catalogue.parse_filename(self._path)
         self._dfs._catalogued_surface.write_file(
-            parsed.filename, parsed.directory, data, load_address, exec_address, locked
+            parsed.filename, parsed.directory, data, load_address, exec_address, locked_val
         )
 
     def read_basic(self) -> str:
@@ -285,7 +309,7 @@ class DFSPath:
         *,
         load_address: int = basic.BBC_BASIC_LOAD_ADDRESS,
         exec_address: int = 0,
-        locked: bool = False,
+        access: "Access | bool | None" = None,
     ) -> None:
         """Write a BBC BASIC program, tokenising the source first.
 
@@ -299,7 +323,7 @@ class DFSPath:
             source: BBC BASIC source text.
             load_address: Load address (default ``0x1900``).
             exec_address: Execution address (default 0).
-            locked: Whether to lock the file (default False).
+            access: Access flags (see :meth:`write_bytes`).
 
         Raises:
             ValueError: If this path is a directory or filename is invalid.
@@ -309,7 +333,7 @@ class DFSPath:
             basic.tokenise(source),
             load_address=load_address,
             exec_address=exec_address,
-            locked=locked,
+            access=access,
         )
 
     def write_text(
@@ -319,7 +343,7 @@ class DFSPath:
         encoding: str = "acorn",
         load_address: int = 0,
         exec_address: int = 0,
-        locked: bool = False,
+        access: "Access | bool | None" = None,
     ) -> None:
         """Write text contents using the specified encoding.
 
@@ -328,13 +352,13 @@ class DFSPath:
             encoding: Text encoding (default ``"acorn"``).
             load_address: Load address (default 0).
             exec_address: Execution address (default 0).
-            locked: Whether to lock the file (default False).
+            access: Access flags (see :meth:`write_bytes`).
         """
         self.write_bytes(
             text.encode(encoding),
             load_address=load_address,
             exec_address=exec_address,
-            locked=locked,
+            access=access,
         )
 
     # --- Modification ---
@@ -441,15 +465,11 @@ class DFSPath:
         data = source.read_bytes()
         _, _, meta = import_with_metadata(source, meta_formats=meta_formats)
 
-        load_address = meta.load_address or 0
-        exec_address = meta.exec_address or 0
-        locked = bool((meta.access or 0) & int(Access.L))
-
         self.write_bytes(
             data,
-            load_address=load_address,
-            exec_address=exec_address,
-            locked=locked,
+            load_address=meta.load_address or 0,
+            exec_address=meta.exec_address or 0,
+            access=meta.access,
         )
 
     def copy_to(self, dst: object) -> None:

@@ -29,7 +29,7 @@ class TestRenameCrossDirectory:
             b"code",
             load_address=0x1900,
             exec_address=0x8023,
-            locked=True,
+            access=True,
         )
         (adfs.root / "Prog").rename(adfs.root / "Dir" / "Prog")
         stat = (adfs.root / "Dir" / "Prog").stat()

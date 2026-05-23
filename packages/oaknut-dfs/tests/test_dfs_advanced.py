@@ -272,7 +272,7 @@ class TestCompaction:
         dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
         # Add a locked file
-        (dfs.root / "$" / "LOCKED").write_bytes(b"data", locked=True)
+        (dfs.root / "$" / "LOCKED").write_bytes(b"data", access=True)
 
         with pytest.raises(PermissionError, match="locked files present"):
             dfs.compact()

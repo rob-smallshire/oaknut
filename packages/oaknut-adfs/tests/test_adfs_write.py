@@ -36,7 +36,7 @@ class TestWriteBytes:
 
     def test_write_locked_file(self):
         adfs = ADFS.create(ADFS_S)
-        (adfs.root / "Secret").write_bytes(b"hidden", locked=True)
+        (adfs.root / "Secret").write_bytes(b"hidden", access=True)
         stat = (adfs.root / "Secret").stat()
         assert stat.locked is True
 
@@ -220,7 +220,7 @@ class TestWriteBasic:
         (adfs.root / "Prog").write_basic(
             "10 PRINT",
             exec_address=0xFFFF8023,
-            locked=True,
+            access=True,
         )
         stat = (adfs.root / "Prog").stat()
         assert stat.exec_address == 0xFFFF8023

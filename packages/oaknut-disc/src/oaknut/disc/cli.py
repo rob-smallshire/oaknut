@@ -1925,7 +1925,6 @@ def _write_copy_item(
     dst_handle, dst_fs: FilingSystem, dst_path: str, item: dict, force: bool
 ) -> None:
     """Write a file item to its destination path."""
-    from oaknut.file.access_mapping import access_to_write_kwargs
 
     # Make sure the parent exists for hierarchical destinations.
     # On DFS there are no real directories to create — the letter
@@ -1942,12 +1941,12 @@ def _write_copy_item(
             raise click.ClickException(f"'{dst_path}' already exists (use -f to overwrite)")
         dest.unlink()
 
-    kwargs: dict = {
-        "load_address": item["load"],
-        "exec_address": item["exec"],
-    }
-    kwargs.update(access_to_write_kwargs(item["access"], dst_fs.value))
-    dest.write_bytes(item["data"], **kwargs)
+    dest.write_bytes(
+        item["data"],
+        load_address=item["load"],
+        exec_address=item["exec"],
+        access=item["access"],
+    )
 
 
 _alias("*COPY", "cp")

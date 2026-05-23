@@ -21,7 +21,7 @@ class TestExportFile:
             b"\x00" * 100,
             load_address=0x1900,
             exec_address=0x8023,
-            locked=True,
+            access=True,
         )
         target = tmp_path / "Code"
         (adfs.root / "Code").export_file(target)
@@ -146,7 +146,7 @@ class TestExportImportRoundTrip:
 
     def test_export_then_import_locked_file(self, tmp_path):
         adfs1 = ADFS.create(ADFS_S)
-        (adfs1.root / "Sec").write_bytes(b"secret", locked=True)
+        (adfs1.root / "Sec").write_bytes(b"secret", access=True)
 
         export_path = tmp_path / "Sec"
         (adfs1.root / "Sec").export_file(export_path)

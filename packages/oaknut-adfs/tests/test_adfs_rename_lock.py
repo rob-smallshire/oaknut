@@ -32,7 +32,7 @@ class TestRename:
             b"data",
             load_address=0x1900,
             exec_address=0x8023,
-            locked=True,
+            access=True,
         )
         (adfs.root / "Old").rename(adfs.root / "New")
         stat = (adfs.root / "New").stat()
@@ -103,7 +103,7 @@ class TestLock:
 
     def test_lock_already_locked(self):
         adfs = ADFS.create(ADFS_S)
-        (adfs.root / "File").write_bytes(b"data", locked=True)
+        (adfs.root / "File").write_bytes(b"data", access=True)
         (adfs.root / "File").lock()  # Should be a no-op
         assert (adfs.root / "File").stat().locked is True
 
@@ -140,7 +140,7 @@ class TestLock:
 class TestUnlock:
     def test_unlock_file(self):
         adfs = ADFS.create(ADFS_S)
-        (adfs.root / "File").write_bytes(b"data", locked=True)
+        (adfs.root / "File").write_bytes(b"data", access=True)
         (adfs.root / "File").unlock()
         assert (adfs.root / "File").stat().locked is False
 
@@ -162,14 +162,14 @@ class TestUnlock:
 
     def test_unlock_then_delete(self):
         adfs = ADFS.create(ADFS_S)
-        (adfs.root / "File").write_bytes(b"data", locked=True)
+        (adfs.root / "File").write_bytes(b"data", access=True)
         (adfs.root / "File").unlock()
         (adfs.root / "File").unlink()
         assert not (adfs.root / "File").exists()
 
     def test_validate_after_unlock(self):
         adfs = ADFS.create(ADFS_S)
-        (adfs.root / "File").write_bytes(b"data", locked=True)
+        (adfs.root / "File").write_bytes(b"data", access=True)
         (adfs.root / "File").unlock()
         assert adfs.validate() == []
 

@@ -106,7 +106,7 @@ class TestExportAll:
         (dfs.root / "$" / "FILE2").write_bytes(
             b"Contents 2", load_address=0x2000, exec_address=0x3000
         )
-        (dfs.root / "A" / "FILE3").write_bytes(b"Contents 3", locked=True)
+        (dfs.root / "A" / "FILE3").write_bytes(b"Contents 3", access=True)
 
         # Export
         target = tmp_path / "export"
@@ -284,7 +284,7 @@ class TestExportImportRoundTrip:
         (dfs1.root / "$" / "DATA").write_bytes(
             b"Data file", load_address=0x2000, exec_address=0x2000
         )
-        (dfs1.root / "$" / "LOCKED").write_bytes(b"Protected", locked=True)
+        (dfs1.root / "$" / "LOCKED").write_bytes(b"Protected", access=True)
         (dfs1.root / "A" / "FILE").write_bytes(b"In directory A")
 
         export_path = tmp_path / "export"
@@ -351,7 +351,7 @@ class TestMetaFormatRoundTrip:
     def test_dfs_locked_round_trip_inf_trad(self, tmp_path):
         """Locked bit survives INF_TRAD round-trip."""
         dfs1 = _make_dfs(_blank_buffer())
-        (dfs1.root / "$" / "SEC").write_bytes(b"secret", locked=True)
+        (dfs1.root / "$" / "SEC").write_bytes(b"secret", access=True)
 
         target = tmp_path / "SEC"
         (dfs1.root / "$" / "SEC").export_file(target)

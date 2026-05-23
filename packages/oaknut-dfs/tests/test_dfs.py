@@ -326,7 +326,7 @@ class TestDFSCopyFile:
             orig_path.read_bytes(),
             load_address=orig_stat.load_address,
             exec_address=orig_stat.exec_address,
-            locked=orig_stat.locked,
+            access=orig_stat.locked,
         )
 
         # Both files should exist
@@ -364,7 +364,7 @@ class TestDFSCopyFile:
             src_path.read_bytes(),
             load_address=src_stat.load_address,
             exec_address=src_stat.exec_address,
-            locked=src_stat.locked,
+            access=src_stat.locked,
         )
 
         assert (dfs.root / "$" / "FILE").exists()
@@ -389,7 +389,7 @@ class TestDFSCopyFile:
         dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
         # Save and lock file
-        (dfs.root / "$" / "LOCKED").write_bytes(b"data", locked=True)
+        (dfs.root / "$" / "LOCKED").write_bytes(b"data", access=True)
 
         # Copy it
         src_path = dfs.root / "$" / "LOCKED"
@@ -398,7 +398,7 @@ class TestDFSCopyFile:
             src_path.read_bytes(),
             load_address=src_stat.load_address,
             exec_address=src_stat.exec_address,
-            locked=src_stat.locked,
+            access=src_stat.locked,
         )
 
         # Both should be locked
@@ -527,7 +527,7 @@ class TestDFSConvenienceMethods:
 
         # Save with metadata
         data = Path(source_file).read_bytes()
-        (dfs.root / "$" / "PROG").write_bytes(data, load_address=0x1900, locked=True)
+        (dfs.root / "$" / "PROG").write_bytes(data, load_address=0x1900, access=True)
 
         # Verify
         info = (dfs.root / "$" / "PROG").stat()

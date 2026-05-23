@@ -25,7 +25,7 @@ from. This keeps path algebra clean.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, ClassVar, Iterator, Sequence, Union
+from typing import TYPE_CHECKING, Iterator, Sequence, Union
 
 from oaknut.afs.directory import MAX_NAME_LENGTH
 from oaknut.afs.exceptions import AFSPathError
@@ -109,12 +109,6 @@ class AFSPath:
 
     parts: tuple[str, ...]
     afs: "AFS | None" = field(default=None, compare=False, repr=False, hash=False)
-
-    # Identifies this class to oaknut.file.copy.copy_file so the
-    # source-stat -> destination-kwargs mapping can dispatch without
-    # the caller passing target_fs=.  ClassVar so dataclass field
-    # generation does not pick it up.
-    _target_fs_kind: ClassVar[str] = "afs"
 
     # ------------------------------------------------------------------
     # Construction
@@ -334,7 +328,7 @@ class AFSPath:
         *,
         load_address: int = 0,
         exec_address: int = 0,
-        access=None,
+        access: "Access | AFSAccess | bool | int | None" = None,
         date=None,
     ) -> None:
         """Create or replace a file at this path with ``data``.
@@ -344,22 +338,42 @@ class AFSPath:
         placed in freshly-allocated sectors. Allocator-level rollback
         on space exhaustion is handled by the lower layers.
 
-        ``access`` defaults to ``"LR/R"``; ``date`` defaults to
-        today's date.
+        ``access`` accepts five forms:
+
+          - ``None``: filesystem default — owner R+W, no public, unlocked.
+          - ``True`` / ``False``: locked shortcut.
+          - :class:`oaknut.file.Access` (canonical wire form): translated
+            to the AFS on-disc layout via
+            :func:`oaknut.file.access_mapping.access_to_afs_bits`.
+          - :class:`oaknut.afs.access.AFSAccess`: used verbatim.
+          - ``int``: raw on-disc byte (interpreted via
+            :meth:`AFSAccess.from_byte`).
+
+        ``date`` defaults to today's date.
         """
         import datetime
 
         from oaknut.afs.access import AFSAccess
         from oaknut.afs.types import AfsDate
+        from oaknut.file.access_mapping import access_to_afs_bits
 
         afs = self._require_afs()
         if self.is_root():
             raise AFSPathError("cannot write_bytes to the root directory")
+
+        # Normalise the unified `access` argument to an AFSAccess.
         if access is None:
             # ACCDEF at Uade01:271 — owner R+W, no public access,
             # unlocked. Matches what the ROM's create path defaults to.
             access = AFSAccess.from_string("WR/")
-        elif isinstance(access, int) and not isinstance(access, AFSAccess):
+        elif isinstance(access, bool):
+            access = AFSAccess.from_string("LR/" if access else "WR/")
+        elif isinstance(access, AFSAccess):
+            pass
+        elif isinstance(access, Access):
+            # Canonical wire-form Access — translate to AFS on-disc bits.
+            access = AFSAccess.from_byte(access_to_afs_bits(access))
+        elif isinstance(access, int):
             access = AFSAccess.from_byte(access)
         if date is None:
             date = AfsDate(datetime.date.today())

@@ -94,20 +94,22 @@ class TestCopyFile:
             copy_file(src, dst)
 
 
-class TestPolymorphicDispatch:
-    """``copy_file`` now reads ``_target_fs_kind`` off the destination.
+class TestUnifiedAccess:
+    """``copy_file`` passes ``access=`` uniformly to every destination.
 
-    Cover for issue #24: callers no longer need to pass ``target_fs=``.
-    The dispatch via the class attribute means access bits map to the
-    right ``write_bytes`` kwarg shape automatically — DFS receives
-    ``locked=bool``, ADFS the same, AFS receives an ``AFSAccess``.
+    Cover for issue #25: after write_bytes was unified to take ``access``
+    (a canonical :class:`oaknut.file.Access` flag, a bool, or None) on
+    every path class, ``copy_file`` no longer has to dispatch on the
+    destination's filesystem family — it computes the source access
+    once and hands the same value to every destination.
     """
 
-    def test_dispatch_for_dfs_destination_passes_locked(self) -> None:
+    def test_access_kwarg_passed_to_destination(self) -> None:
+        from oaknut.file import Access
+
         src = FakePath("Hello", b"data")
         src.locked = True
         dst = FakePath("Copy")
-        dst._target_fs_kind = "dfs"  # type: ignore[attr-defined]
         captured: dict = {}
 
         def capture(data: bytes, **kwargs):
@@ -116,23 +118,6 @@ class TestPolymorphicDispatch:
 
         dst.write_bytes = capture  # type: ignore[assignment]
         copy_file(src, dst)
-        assert captured.get("locked") is True
-
-    def test_dispatch_for_afs_destination_passes_access(self) -> None:
-        # AFS access_to_write_kwargs returns {access: AFSAccess(...)}.
-        src = FakePath("Hello", b"data")
-        src.locked = True
-        dst = FakePath("Copy")
-        dst._target_fs_kind = "afs"  # type: ignore[attr-defined]
-        captured: dict = {}
-
-        def capture(data: bytes, **kwargs):
-            captured.update(kwargs)
-            FakePath.write_bytes(dst, data, **{k: kwargs[k] for k in ("load_address", "exec_address")})
-
-        dst.write_bytes = capture  # type: ignore[assignment]
-        copy_file(src, dst)
-        # AFS write_kwargs ships an `access` integer-flag value, not a
-        # `locked` bool — that's the whole point of the dispatch.
         assert "access" in captured
-        assert "locked" not in captured
+        assert isinstance(captured["access"], Access)
+        assert captured["access"] & Access.L

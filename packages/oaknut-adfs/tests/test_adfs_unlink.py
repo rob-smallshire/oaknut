@@ -43,7 +43,7 @@ class TestUnlink:
 
     def test_unlink_locked_raises(self):
         adfs = ADFS.create(ADFS_S)
-        (adfs.root / "Secret").write_bytes(b"data", locked=True)
+        (adfs.root / "Secret").write_bytes(b"data", access=True)
         with pytest.raises(ADFSFileLockedError):
             (adfs.root / "Secret").unlink()
         # File should still exist

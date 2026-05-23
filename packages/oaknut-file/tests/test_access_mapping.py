@@ -1,7 +1,7 @@
 """Tests for cross-filesystem access attribute mapping."""
 
 from oaknut.file.access import Access
-from oaknut.file.access_mapping import access_from_stat, access_to_write_kwargs
+from oaknut.file.access_mapping import access_from_stat
 
 
 class FakeDFSStat:
@@ -121,31 +121,3 @@ class TestAccessFromStat:
         assert result & Access.R
         assert result & Access.W
         assert result & Access.PR
-
-
-class TestAccessToWriteKwargs:
-    def test_for_dfs(self):
-        access = Access.L | Access.W | Access.R
-        kwargs = access_to_write_kwargs(access, "dfs")
-        assert kwargs == {"locked": True}
-
-    def test_for_dfs_unlocked(self):
-        access = Access.W | Access.R
-        kwargs = access_to_write_kwargs(access, "dfs")
-        assert kwargs == {"locked": False}
-
-    def test_for_adfs(self):
-        access = Access.L | Access.W | Access.R
-        kwargs = access_to_write_kwargs(access, "adfs")
-        assert kwargs == {"locked": True}
-
-    def test_for_afs(self):
-        access = Access.L | Access.W | Access.R | Access.PR
-        kwargs = access_to_write_kwargs(access, "afs")
-        # Should produce an AFSAccess-compatible value.
-        assert "access" in kwargs
-        afs_val = kwargs["access"]
-        assert afs_val & 0x10  # locked
-        assert afs_val & 0x04  # owner read
-        assert afs_val & 0x08  # owner write
-        assert afs_val & 0x01  # public read

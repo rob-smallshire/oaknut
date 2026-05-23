@@ -104,21 +104,3 @@ def access_to_afs_bits(access: Access) -> int:
     return result
 
 
-def access_to_write_kwargs(access: Access, target_fs: str) -> dict[str, Any]:
-    """Convert ``Access`` to ``write_bytes`` keyword arguments.
-
-    *target_fs* is one of ``"dfs"``, ``"adfs"``, or ``"afs"``
-    (case-insensitive).
-
-    Returns a dict suitable for ``**``-splatting into the target
-    path's ``write_bytes()`` call.
-    """
-    fs = target_fs.lower()
-    if fs == "dfs":
-        return {"locked": bool(access & Access.L)}
-    elif fs == "adfs":
-        return {"locked": bool(access & Access.L)}
-    elif fs == "afs":
-        return {"access": access_to_afs_bits(access)}
-    else:
-        raise ValueError(f"unknown target filesystem: {target_fs!r}")
