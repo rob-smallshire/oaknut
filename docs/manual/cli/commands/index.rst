@@ -125,6 +125,8 @@ Metadata
 .. oaknut-command:: oaknut.disc.cli:title
    :prog: disc title
 
+   .. cli-example:: cmd_title
+
 .. oaknut-command:: oaknut.disc.cli:opt
    :prog: disc opt
 
@@ -146,14 +148,22 @@ Metadata
 .. oaknut-command:: oaknut.disc.cli:get-load
    :prog: disc get-load
 
+   .. cli-example:: cmd_get_load
+
 .. oaknut-command:: oaknut.disc.cli:set-load
    :prog: disc set-load
+
+   .. cli-example:: cmd_set_load
 
 .. oaknut-command:: oaknut.disc.cli:get-exec
    :prog: disc get-exec
 
+   .. cli-example:: cmd_get_exec
+
 .. oaknut-command:: oaknut.disc.cli:set-exec
    :prog: disc set-exec
+
+   .. cli-example:: cmd_set_exec
 
 
 Whole-image operations
