@@ -4,13 +4,14 @@
 Both READMEs are generated from each oaknut-* sub-package's pyproject.toml:
 
 - README.md is the developer-facing landing page on GitHub. Its template,
-  docs/README.md.j2, also embeds Python example scripts from
-  docs/readme_examples/ that are executed at render time so the README
-  always shows runnable code next to its exact output.
+  scripts/readme-templates/README.md.j2, also embeds Python example scripts
+  from scripts/readme-examples/ that are executed at render time so the
+  README always shows runnable code next to its exact output.
 
 - README-pypi.md is the short long-description used by the bare `oaknut`
   namespace placeholder distribution on PyPI. Its template,
-  docs/README-pypi.md.j2, only lists the family members with PyPI links.
+  scripts/readme-templates/README-pypi.md.j2, only lists the family
+  members with PyPI links.
 
 Usage:
     python scripts/render_readme.py          # write both READMEs
@@ -33,8 +34,8 @@ from pathlib import Path
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-TEMPLATE_DIRPATH = REPO_ROOT / "docs"
-EXAMPLES_DIRPATH = REPO_ROOT / "docs" / "readme_examples"
+TEMPLATE_DIRPATH = REPO_ROOT / "scripts" / "readme-templates"
+EXAMPLES_DIRPATH = REPO_ROOT / "scripts" / "readme-examples"
 PACKAGES_DIRPATH = REPO_ROOT / "packages"
 
 README_TEMPLATE_FILENAME = "README.md.j2"
@@ -94,7 +95,7 @@ def load_packages(order: tuple[str, ...] = PACKAGE_ORDER) -> list[PackageMeta]:
 def render_example(example_name: str) -> str:
     """Return a Markdown code block showing an example script and its stdout.
 
-    The example is a standalone .py file under docs/readme_examples/. We
+    The example is a standalone .py file under scripts/readme-examples/. We
     execute it with the workspace python (so local editable installs
     resolve), capture stdout, and render:
 
