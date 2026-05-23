@@ -27,6 +27,56 @@ from oaknut.file.host_bridge import (
 _DFS_DIRECTORY_CHARS = frozenset("$ABCDEFGHIJKLMNOPQRSTUVWXYZ")
 
 
+def detect_dfs_format(filepath: Union[str, PathLike]) -> DiskFormat:
+    """Auto-detect a DFS :class:`DiskFormat` from the file extension and size.
+
+    Recognised pairs:
+
+    ============  =================  ================================
+    Extension     Size               Format
+    ============  =================  ================================
+    ``.ssd``      100 KiB (102 400)  ``ACORN_DFS_40T_SINGLE_SIDED``
+    ``.ssd``      200 KiB (204 800)  ``ACORN_DFS_80T_SINGLE_SIDED``
+    ``.dsd``      200 KiB (204 800)  ``ACORN_DFS_40T_DOUBLE_SIDED_INTERLEAVED``
+    ``.dsd``      400 KiB (409 600)  ``ACORN_DFS_80T_DOUBLE_SIDED_INTERLEAVED``
+    ============  =================  ================================
+
+    The sequential-double-sided variants share their byte count with
+    the interleaved forms, so detection cannot distinguish them — pass
+    ``disk_format=`` explicitly for those.
+
+    Raises:
+        FileNotFoundError: If *filepath* does not exist.
+        ValueError: If extension or size is not in the table above.
+    """
+    from oaknut.dfs.formats import (
+        ACORN_DFS_40T_DOUBLE_SIDED_INTERLEAVED,
+        ACORN_DFS_40T_SINGLE_SIDED,
+        ACORN_DFS_80T_DOUBLE_SIDED_INTERLEAVED,
+        ACORN_DFS_80T_SINGLE_SIDED,
+    )
+
+    filepath = Path(filepath)
+    ext = filepath.suffix.lower()
+    size = filepath.stat().st_size
+
+    if ext == ".ssd":
+        if size <= 102_400:
+            return ACORN_DFS_40T_SINGLE_SIDED
+        if size <= 204_800:
+            return ACORN_DFS_80T_SINGLE_SIDED
+    elif ext == ".dsd":
+        if size <= 204_800:
+            return ACORN_DFS_40T_DOUBLE_SIDED_INTERLEAVED
+        if size <= 409_600:
+            return ACORN_DFS_80T_DOUBLE_SIDED_INTERLEAVED
+
+    raise ValueError(
+        f"could not auto-detect DFS format for {filepath.name!r} "
+        f"(extension {ext!r}, size {size} bytes); pass disk_format= explicitly"
+    )
+
+
 def _coerce_access_to_locked(access: "Access | bool | None") -> bool:
     """Normalise the unified ``access`` kwarg to a plain ``locked`` bool.
 
@@ -553,22 +603,30 @@ class DFS:
     @contextmanager
     def from_file(
         filepath: Union[str, PathLike],
-        disk_format: DiskFormat,
+        disk_format: DiskFormat | None = None,
+        *,
         side: int = 0,
         mode: str = "rb",
     ) -> Iterator["DFS"]:
-        """
-        Open a disc image file as a context manager.
+        """Open a disc image file as a context manager.
 
-        When opened in read-write mode ("r+b"), changes are written
+        When opened in read-write mode (``r+b``), changes are written
         through to the file via mmap.
 
+        ``disk_format`` is optional — when omitted, the format is
+        auto-detected from the file extension and size (see
+        :func:`detect_dfs_format`).  Pass it explicitly to override
+        detection (necessary for the rare sequential-double-sided
+        flavour, which shares its byte count with the interleaved
+        form).
+
         Args:
-            filepath: Path to the disc image file (.ssd or .dsd)
-            disk_format: DiskFormat specifying geometry and catalogue type
-            side: Which surface to use (0-based index, default 0)
-            mode: File open mode — "rb" for read-only (default),
-                  "r+b" for read-write
+            filepath: Path to the disc image file (``.ssd`` or ``.dsd``).
+            disk_format: DiskFormat specifying geometry and catalogue
+                type; auto-detected when ``None``.
+            side: Which surface to use (0-based index, default 0).
+            mode: File open mode — ``"rb"`` for read-only (default),
+                ``"r+b"`` for read-write.
 
         Yields:
             DFS instance backed by the file
@@ -576,15 +634,16 @@ class DFS:
         Raises:
             FileNotFoundError: If the file does not exist
             IndexError: If side index is out of range for the format
-            ValueError: If mode is not "rb" or "r+b"
+            ValueError: If mode is not ``"rb"`` or ``"r+b"``, or
+                auto-detection cannot identify the format
 
         Examples:
-            # Read-only access
-            with DFS.from_file("Zalaga.ssd", ACORN_DFS_80T_SINGLE_SIDED) as dfs:
+            # Read-only access; format auto-detected.
+            with DFS.from_file("Zalaga.ssd") as dfs:
                 print(dfs.title)
                 data = (dfs.root / "$" / "ZALAGA").read_bytes()
 
-            # Read-write access
+            # Read-write access, explicit format.
             with DFS.from_file("disc.ssd", ACORN_DFS_40T_SINGLE_SIDED, mode="r+b") as dfs:
                 (dfs.root / "$" / "HELLO").write_bytes(b"Hello!")
         """
@@ -592,6 +651,8 @@ class DFS:
             raise ValueError(f"mode must be 'rb' or 'r+b', got {mode!r}")
 
         filepath = Path(filepath)
+        if disk_format is None:
+            disk_format = detect_dfs_format(filepath)
         file_size = filepath.stat().st_size
         expected_size = disk_format.image_size
         is_truncated = file_size < expected_size
@@ -759,7 +820,7 @@ class DFS:
     @contextmanager
     def create_file(
         filepath: Union[str, PathLike],
-        disk_format: DiskFormat,
+        disk_format: DiskFormat | None = None,
         *,
         side: int = 0,
         title: str = "",
@@ -770,9 +831,16 @@ class DFS:
         The file is created at *filepath* with the correct size and
         opened read-write via mmap. Changes are flushed on exit.
 
+        ``disk_format`` is optional — when omitted it is picked from
+        the filename extension (``.ssd`` ⇒ 80-track single-sided,
+        ``.dsd`` ⇒ 80-track double-sided interleaved).  Pass it
+        explicitly for the 40-track or sequential-double-sided
+        variants.
+
         Args:
             filepath: Path for the new disc image file.
-            disk_format: DiskFormat specifying geometry and catalogue type.
+            disk_format: DiskFormat specifying geometry and catalogue
+                type; chosen from the extension when ``None``.
             side: Which surface to initialise (0-based, default 0).
             title: Disc title (default empty).
             boot_option: Boot option 0–3 (default 0).
@@ -781,6 +849,22 @@ class DFS:
             DFS instance backed by the file.
         """
         from oaknut.dfs.catalogue import Catalogue
+        from oaknut.dfs.formats import (
+            ACORN_DFS_80T_DOUBLE_SIDED_INTERLEAVED,
+            ACORN_DFS_80T_SINGLE_SIDED,
+        )
+
+        if disk_format is None:
+            ext = Path(filepath).suffix.lower()
+            if ext == ".ssd":
+                disk_format = ACORN_DFS_80T_SINGLE_SIDED
+            elif ext == ".dsd":
+                disk_format = ACORN_DFS_80T_DOUBLE_SIDED_INTERLEAVED
+            else:
+                raise ValueError(
+                    f"cannot pick a default DFS format for extension {ext!r}; "
+                    f"pass disk_format= explicitly"
+                )
 
         # Calculate file size
         specs = disk_format.surface_specs
