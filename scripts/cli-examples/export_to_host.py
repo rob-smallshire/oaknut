@@ -27,8 +27,9 @@ with in_tmp_dir():
     show("disc export infinity.ssd extracted")
 
     # The disc's `$` directory becomes `extracted/$/` on host. List
-    # the first few files so the reader sees the file/sidecar pairing.
-    show(r"ls extracted/\$ | head -6")
+    # the contents so the reader sees the file/sidecar pairing
+    # across the whole catalogue.
+    show("ls 'extracted/$'")
 
     # And one sidecar so the on-disc metadata format is visible.
-    show(r"cat 'extracted/$/LOAD.inf'")
+    show("cat 'extracted/$/LOAD.inf'")
