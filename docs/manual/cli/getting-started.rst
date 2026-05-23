@@ -1,11 +1,10 @@
 Getting started
 ===============
 
-The ``disc`` command-line tool is how most readers will interact with
-oaknut. It speaks DFS, ADFS, and AFS transparently from a single
-binary, with a flat ``git``-style subcommand surface (``disc ls``,
-``disc cp``, ``disc afs-init``, …) and Acorn star-aliases (``*CAT``,
-``*RENAME``, …) for muscle-memory.
+The ``disc`` command-line tool speaks Acorn DFS, Acorn ADFS and AFS
+transparently, with a subcommand-style interface (``disc ls``,
+``disc cp``, ``disc afs-init``, etc.) supplemented by Acorn-style
+star-command aliases — ``disc '*CAT'``, ``disc '*COPY'`` and so on.
 
 This page walks from "I have a disc image" to "I am confident
 reading and writing files" in about ten minutes. Every command
