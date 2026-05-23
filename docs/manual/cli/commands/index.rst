@@ -62,14 +62,22 @@ File transfer (host ↔ image)
 .. oaknut-command:: oaknut.disc.cli:get
    :prog: disc get
 
+   .. cli-example:: cmd_get
+
 .. oaknut-command:: oaknut.disc.cli:put
    :prog: disc put
+
+   .. cli-example:: cmd_put
 
 .. oaknut-command:: oaknut.disc.cli:export
    :prog: disc export
 
+   .. cli-example:: cmd_export
+
 .. oaknut-command:: oaknut.disc.cli:import
    :prog: disc import
+
+   .. cli-example:: cmd_import
 
 
 Modification (within an image)
