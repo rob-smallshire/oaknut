@@ -10,6 +10,19 @@ before we touch the cookbook.
 Themes are ordered roughly by impact-per-line, not implementation
 size. Each theme calls out which package(s) it touches.
 
+| Theme | GitHub issue |
+|---|---|
+| 1 + 2: symmetric export_file / import_file | [#23](https://github.com/rob-smallshire/oaknut/issues/23) |
+| 3: drop copy_file target_fs | [#24](https://github.com/rob-smallshire/oaknut/issues/24) |
+| 4: unify write_bytes access surface | [#25](https://github.com/rob-smallshire/oaknut/issues/25) |
+| 5: unified Stat protocol | [#26](https://github.com/rob-smallshire/oaknut/issues/26) |
+| 6: dfs.root should be `$` | [#27](https://github.com/rob-smallshire/oaknut/issues/27) |
+| 7: DFS.from_file format auto-detect | [#28](https://github.com/rob-smallshire/oaknut/issues/28) |
+| 8: AFS.create_file orchestrator | [#29](https://github.com/rob-smallshire/oaknut/issues/29) |
+| 9: capacity strings on create_file / UserSpec | [#30](https://github.com/rob-smallshire/oaknut/issues/30) |
+| 10: AFS top-level re-exports | [#31](https://github.com/rob-smallshire/oaknut/issues/31) |
+| 11: AcornMeta field rename | [#32](https://github.com/rob-smallshire/oaknut/issues/32) |
+
 ---
 
 ## 1. `entry.export_file()` exists but the cookbook still marshals by hand
