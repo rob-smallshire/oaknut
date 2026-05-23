@@ -29,9 +29,6 @@ dependencies = [
     "oaknut-adfs>=10.0",
 ]
 
-[project.scripts]
-oaknut-afs-disc = "oaknut.afs.cli:main"
-
 [project.urls]
 Homepage = "https://github.com/rob-smallshire/oaknut"
 Repository = "https://github.com/rob-smallshire/oaknut"
