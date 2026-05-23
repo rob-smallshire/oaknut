@@ -166,7 +166,7 @@ def capture_adfs_hdd_create() -> str:
         "",
         "# Create a 20MB hard disc image",
         "with ADFS.create_file(",
-        '    "scsi0.dat", capacity_bytes=20 * 1024 * 1024, title="Data"',
+        '    "scsi0.dat", capacity="20MB", title="Data"',
         ") as adfs:",
         "    pass  # creates both scsi0.dat and scsi0.dsc",
     ]

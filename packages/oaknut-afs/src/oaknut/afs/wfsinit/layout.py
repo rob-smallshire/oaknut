@@ -47,11 +47,17 @@ _MAX_QUOTA = 0xFFFFFFFF
 
 @dataclass(frozen=True)
 class UserSpec:
-    """Caller-facing description of one user account to create."""
+    """Caller-facing description of one user account to create.
+
+    ``quota`` accepts either an integer byte count or a capacity string
+    (``"2MB"``, ``"512KiB"``, etc.) — see
+    :func:`oaknut.file.capacity.parse_capacity` for the suffix table.
+    Strings are parsed once at construction time and stored as bytes.
+    """
 
     name: str
     password: str = ""
-    quota: int | None = None  # None → use InitSpec.default_quota
+    quota: "int | str | None" = None  # None → use InitSpec.default_quota
     system: bool = False
     privileged: bool = False
     boot: BootOption = BootOption.OFF
@@ -75,6 +81,11 @@ class UserSpec:
             raise AFSPasswordError(
                 f"user {self.name!r}: password exceeds {_MAX_PASSWORD_LEN} characters"
             )
+        # Normalise a capacity-string quota into bytes.
+        if isinstance(self.quota, str):
+            from oaknut.file.capacity import parse_capacity
+
+            object.__setattr__(self, "quota", parse_capacity(self.quota))
         if self.quota is not None and not (0 <= self.quota <= _MAX_QUOTA):
             raise AFSQuotaError(
                 f"user {self.name!r}: quota {self.quota} outside 0..{_MAX_QUOTA:#x}"

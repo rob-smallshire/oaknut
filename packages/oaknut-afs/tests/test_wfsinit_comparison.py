@@ -125,7 +125,7 @@ class TestWFSINITComparison:
         candidate_filepath = tmp_path / "l3fs-wfsinit.dat"
 
         # Step 1: Create a 10 MB ADFS hard disc (SI megabytes).
-        with ADFS.create_file(candidate_filepath, capacity_bytes=10_000_000, title="L3FS") as adfs:
+        with ADFS.create_file(candidate_filepath, capacity=10_000_000, title="L3FS") as adfs:
             # Step 2: Copy FS3v126 with original load/exec addresses.
             adfs.path("$.FS3v126").write_bytes(
                 fs3_data,

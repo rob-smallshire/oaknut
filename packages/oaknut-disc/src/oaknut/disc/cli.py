@@ -2389,7 +2389,7 @@ def create(host_path: Path, fmt: str, disc_title: str, capacity: str | None) -> 
             capacity_bytes = parse_capacity(capacity)
         except ValueError as exc:
             raise click.ClickException(str(exc))
-        with ADFS.create_file(host_path, capacity_bytes=capacity_bytes, title=disc_title):
+        with ADFS.create_file(host_path, capacity=capacity_bytes, title=disc_title):
             pass
 
 

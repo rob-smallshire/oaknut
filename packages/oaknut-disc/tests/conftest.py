@@ -250,7 +250,7 @@ def dfs_empty_filepath(tmp_path: Path) -> Path:
 def adfs_hard_no_afs_filepath(tmp_path: Path) -> Path:
     """ADFS hard-disc image (10 MB) without an AFS partition."""
     filepath = tmp_path / "hard_no_afs.dat"
-    with ADFS.create_file(filepath, capacity_bytes=10_000_000, title="Bigone"):
+    with ADFS.create_file(filepath, capacity=10_000_000, title="Bigone"):
         pass
     return filepath
 
@@ -263,7 +263,7 @@ def partitioned_image_with_files(tmp_path: Path) -> Path:
     enumerate every filing system the image carries.
     """
     filepath = tmp_path / "mixed.dat"
-    with ADFS.create_file(filepath, capacity_bytes=1_000_000, title="Mixed"):
+    with ADFS.create_file(filepath, capacity=1_000_000, title="Mixed"):
         pass
     with ADFS.from_file(filepath, mode="r+b") as adfs:
         (adfs.root / "adfsA").write_bytes(b"aa")
@@ -291,7 +291,7 @@ def partitioned_image_with_files(tmp_path: Path) -> Path:
 def adfs_hard_with_afs_filepath(tmp_path: Path) -> Path:
     """ADFS hard-disc image (10 MB) with an initialised AFS partition."""
     filepath = tmp_path / "hard_with_afs.dat"
-    with ADFS.create_file(filepath, capacity_bytes=10_000_000, title="Split"):
+    with ADFS.create_file(filepath, capacity=10_000_000, title="Split"):
         pass
     with ADFS.from_file(filepath, mode="r+b") as adfs:
         initialise(

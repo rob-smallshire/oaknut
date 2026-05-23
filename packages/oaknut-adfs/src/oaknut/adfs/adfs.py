@@ -1418,7 +1418,7 @@ class ADFS:
         filepath: Union[str, PathLike],
         adfs_format: ADFSFormat = None,
         *,
-        capacity_bytes: int = None,
+        capacity: "int | str | None" = None,
         cylinders: int = None,
         heads: int = 4,
         sectors_per_track: int = _SCSI_SECTORS_PER_TRACK,
@@ -1436,8 +1436,10 @@ class ADFS:
         explicit geometry.  A companion ``.dsc`` sidecar file is written
         automatically::
 
-            # By capacity (geometry chosen automatically)
-            with ADFS.create_file("scsi0.dat", capacity_bytes=10*1024*1024) as adfs:
+            # By capacity (str or int bytes). Geometry chosen automatically.
+            with ADFS.create_file("scsi0.dat", capacity="10MB") as adfs:
+                ...
+            with ADFS.create_file("scsi0.dat", capacity=10 * 1024 * 1024) as adfs:
                 ...
 
             # By explicit geometry
@@ -1447,7 +1449,10 @@ class ADFS:
         Args:
             filepath: Path for the new disc image file.
             adfs_format: Floppy format (ADFS_S, ADFS_M, or ADFS_L).
-            capacity_bytes: Minimum hard disc capacity in bytes.
+            capacity: Minimum hard disc capacity. ``int`` is bytes;
+                ``str`` accepts ``"10MB"``, ``"40MiB"``, ``"1024kB"``
+                etc. — see :func:`oaknut.file.capacity.parse_capacity`
+                for the full suffix table.
             cylinders: Number of cylinders (hard disc).
             heads: Number of heads (default 4, hard disc only).
             sectors_per_track: Sectors per track (default 33, hard disc only).
@@ -1457,6 +1462,13 @@ class ADFS:
         Yields:
             ADFS instance backed by the file.
         """
+        from oaknut.file.capacity import parse_capacity
+
+        if isinstance(capacity, str):
+            capacity_bytes = parse_capacity(capacity)
+        else:
+            capacity_bytes = capacity
+
         p = Path(filepath)
         ext = p.suffix.lower()
 

@@ -76,14 +76,14 @@ class TestGeometryForCapacity:
 class TestCreateHardDiscFile:
     def test_creates_dat_and_dsc(self, tmp_path):
         dat_filepath = tmp_path / "test.dat"
-        with ADFS.create_file(dat_filepath, capacity_bytes=1024 * 1024):
+        with ADFS.create_file(dat_filepath, capacity=1024 * 1024):
             pass
         assert dat_filepath.exists()
         assert (tmp_path / "test.dsc").exists()
 
     def test_dsc_is_22_bytes(self, tmp_path):
         dat_filepath = tmp_path / "test.dat"
-        with ADFS.create_file(dat_filepath, capacity_bytes=1024 * 1024):
+        with ADFS.create_file(dat_filepath, capacity=1024 * 1024):
             pass
         assert (tmp_path / "test.dsc").stat().st_size == 22
 
@@ -97,22 +97,22 @@ class TestCreateHardDiscFile:
 
     def test_empty_root(self, tmp_path):
         dat_filepath = tmp_path / "test.dat"
-        with ADFS.create_file(dat_filepath, capacity_bytes=1024 * 1024) as adfs:
+        with ADFS.create_file(dat_filepath, capacity=1024 * 1024) as adfs:
             assert list(adfs.root) == []
 
     def test_custom_title(self, tmp_path):
         dat_filepath = tmp_path / "test.dat"
-        with ADFS.create_file(dat_filepath, capacity_bytes=1024 * 1024, title="MyHDD") as adfs:
+        with ADFS.create_file(dat_filepath, capacity=1024 * 1024, title="MyHDD") as adfs:
             assert adfs.title == "MyHDD"
 
     def test_custom_boot_option(self, tmp_path):
         dat_filepath = tmp_path / "test.dat"
-        with ADFS.create_file(dat_filepath, capacity_bytes=1024 * 1024, boot_option=2) as adfs:
+        with ADFS.create_file(dat_filepath, capacity=1024 * 1024, boot_option=2) as adfs:
             assert adfs.boot_option == 2
 
     def test_validate_clean(self, tmp_path):
         dat_filepath = tmp_path / "test.dat"
-        with ADFS.create_file(dat_filepath, capacity_bytes=1024 * 1024) as adfs:
+        with ADFS.create_file(dat_filepath, capacity=1024 * 1024) as adfs:
             assert adfs.validate() == []
 
     def test_free_space(self, tmp_path):
@@ -140,7 +140,7 @@ class TestCreateHardDiscFile:
 class TestCreateHardDiscRoundTrip:
     def test_create_and_reopen(self, tmp_path):
         dat_filepath = tmp_path / "test.dat"
-        with ADFS.create_file(dat_filepath, capacity_bytes=1024 * 1024, title="RoundTrip"):
+        with ADFS.create_file(dat_filepath, capacity=1024 * 1024, title="RoundTrip"):
             pass
 
         with ADFS.from_file(dat_filepath) as adfs:
@@ -150,7 +150,7 @@ class TestCreateHardDiscRoundTrip:
     def test_reopen_via_dsc(self, tmp_path):
         dat_filepath = tmp_path / "test.dat"
         dsc_filepath = tmp_path / "test.dsc"
-        with ADFS.create_file(dat_filepath, capacity_bytes=1024 * 1024):
+        with ADFS.create_file(dat_filepath, capacity=1024 * 1024):
             pass
 
         with ADFS.from_file(dsc_filepath) as adfs:
@@ -158,7 +158,7 @@ class TestCreateHardDiscRoundTrip:
 
     def test_walk_after_reopen(self, tmp_path):
         dat_filepath = tmp_path / "test.dat"
-        with ADFS.create_file(dat_filepath, capacity_bytes=2 * 1024 * 1024, title="WalkTest"):
+        with ADFS.create_file(dat_filepath, capacity=2 * 1024 * 1024, title="WalkTest"):
             pass
 
         with ADFS.from_file(dat_filepath) as adfs:
@@ -175,7 +175,7 @@ class TestCreateHardDiscErrors:
         """Cannot specify both capacity_bytes and explicit cylinders."""
         dat_filepath = tmp_path / "test.dat"
         with pytest.raises((ValueError, TypeError)):
-            with ADFS.create_file(dat_filepath, capacity_bytes=1024 * 1024, cylinders=100):
+            with ADFS.create_file(dat_filepath, capacity=1024 * 1024, cylinders=100):
                 pass
 
     def test_dat_requires_capacity_or_geometry(self, tmp_path):

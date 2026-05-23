@@ -68,7 +68,7 @@ class TestGeometryFromHardDiscCreate:
 
     def test_hard_disc_from_capacity(self, tmp_path: Path):
         filepath = tmp_path / "scsi0.dat"
-        with ADFS.create_file(filepath, capacity_bytes=5 * 1024 * 1024) as adfs:
+        with ADFS.create_file(filepath, capacity=5 * 1024 * 1024) as adfs:
             g = adfs.geometry
             assert g.heads == 4
             assert g.sectors_per_track == 33
