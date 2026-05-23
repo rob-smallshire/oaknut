@@ -4,14 +4,14 @@ Exit codes
 ``disc`` follows the standard BSD ``sysexits.h`` exit-code vocabulary,
 exposed in Python as the
 `exit-codes <https://pypi.org/project/exit-codes/>`__ package's
-:class:`ExitCode` enum. Using the well-known codes (rather than
-oaknut-specific numbers) means scripts that already understand
-``sysexits.h`` from other tools — ``sendmail``, ``ssh``, ``rsync`` —
-recognise ``disc``'s codes without needing a project-specific table.
+:class:`ExitCode` enum. Using the well-known codes means scripts that
+already understand ``sysexits.h`` from other tools — ``sendmail``,
+``ssh``, ``rsync`` — recognise ``disc``'s codes without needing a
+project-specific table.
 
 The codes below are part of the CLI's public surface. New error
-categories may map onto codes not yet listed here, but the meaning
-of an existing code will not change without a major version bump.
+categories may map onto codes not yet listed here, but the meaning of
+an existing code will not change without a major version bump.
 Scripts may branch on any value listed here.
 
 
@@ -39,12 +39,15 @@ At a glance
      - Invalid data on the disc itself — a corrupted catalogue,
        inconsistent free-space map, repartition or merge structural
        conflict, or an image that does not match its claimed filing
-       system.
+       system. Also the fallback for any uncategorised
+       :class:`~oaknut.exception.DataError`.
    * - ``70``
      - ``SOFTWARE``
-     - An internal failure with no more specific category. Reserved
-       as the fallback when an unrecognised ``FSError`` subclass
-       leaks through; typically indicates a bug.
+     - An internal failure with no more specific category. This is
+       what an :class:`~oaknut.exception.InternalError` propagates
+       as when something escapes that ``disc`` was not expecting —
+       and the CLI prints a Python traceback alongside it, because
+       it is the report-an-issue signal.
    * - ``72``
      - ``OS_FILE``
      - A ``PATH_SPEC`` does not resolve to an entry on the disc (or
@@ -65,58 +68,66 @@ At a glance
      - The target file is locked (and ``--force`` was not given), or
        the current AFS user lacks the access rights for this
        operation.
+   * - ``78``
+     - ``CONFIG``
+     - A runtime-environment / configuration problem. Not commonly
+       used by ``disc`` itself (which has little user-configurable
+       state) but reserved for programs built on top of the library.
 
 Programming bugs (anything that escapes as an unhandled Python
-exception) deliberately do *not* go through this path — they
-propagate as a Python traceback to stderr, so the report-an-issue
-path is obvious. A clean ``Error:`` line means the failure is one
-``disc`` knows about.
+exception) deliberately do *not* go through the catch-and-print path
+— they propagate as a Python traceback to stderr, so the
+report-an-issue path is obvious. A clean ``Error:`` line means the
+failure is one ``disc`` knows about.
 
 
 Error message format
 --------------------
 
 Every non-zero exit is accompanied by exactly one line on stderr,
-prefixed with ``Error:``::
+prefixed with ``Error:`` and rendered in red on a colour-capable
+terminal::
 
    $ disc cat 'image.adl:$.MISSING'
    Error: path not found: $.MISSING
    $ echo $?
    72
 
-The message is the exception's own string from the library layer —
-short, single-line, and intended to be readable without a manual at
-hand.
+If the exception carries ``__notes__`` (PEP 678) or a ``__cause__``
+chain, those follow as muted continuation lines underneath. Colour is
+suppressed automatically when stderr is a pipe, when :envvar:`NO_COLOR`
+is set, or when :envvar:`CLICOLOR` is ``0``.
 
 
-Mapping to library errors
--------------------------
+``--debug``: see the traceback
+------------------------------
+
+``disc --debug <command> …`` re-raises any caught
+:class:`~oaknut.exception.DataError` or
+:class:`~oaknut.exception.ConfigurationError` after printing it, so
+the full Python traceback appears underneath. Use it during
+development or when filing a bug report; users running normal scripts
+should leave it off so a single ``Error:`` line is all they see.
+
+:class:`~oaknut.exception.InternalError` is unaffected by
+``--debug``: tracebacks are always shown for it, because that *is*
+the signal a user should report.
+
+
+Mapping to library exceptions
+-----------------------------
 
 Every filesystem-level failure raises a subclass of
-:class:`oaknut.file.FSError` from the underlying library. The CLI
-catches those, maps the class to an :class:`ExitCode` via an MRO
-walk (so a subclass inherits its parent's code unless overridden),
-and emits the ``Error:`` line. The same exception type that drives
-the code on the CLI side is what library callers catch on the Python
-side — see :doc:`/api/patterns/errors`. The two surfaces stay
-consistent: if a script and an embedded Python program both wrap the
-same operation, the error classification is the same.
+:class:`oaknut.file.FSError`, which itself inherits from
+:class:`oaknut.exception.DataError`. Each subclass carries its own
+:class:`ExitCode` as a class attribute, so the CLI just reads
+``exc.exit_code`` and exits — no separate mapping table is needed.
 
-For embedded use, ``ExitCode`` is re-exported from
-``oaknut.disc.errors`` so the same enum that the CLI returns can be
-imported and compared from Python::
-
-   from exit_codes import ExitCode
-   from oaknut.disc.errors import exit_code_for
-
-   try:
-       do_something_with_fs()
-   except FSError as exc:
-       code = exit_code_for(exc)
-       if code is ExitCode.OS_FILE:
-           ...  # path not found case
-       else:
-           raise
+The same exception type that drives the code on the CLI side is what
+library callers catch on the Python side — see
+:doc:`/api/patterns/errors`. The two surfaces stay consistent: if a
+script and an embedded Python program both wrap the same operation,
+the error classification is the same.
 
 
 Composing in scripts
