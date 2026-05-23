@@ -69,7 +69,7 @@ There are two ways to write into the disc.
 
 .. code-block:: sh
 
-   echo 'Welcome to the GETSTARTED disc.' > readme.txt
+   printf 'Welcome to the GETSTARTED disc.\r' > readme.txt
    disc put 'hello.ssd:$.README' readme.txt
 
 **From standard input** (pipe a stream straight in):
@@ -78,9 +78,15 @@ There are two ways to write into the disc.
 
    printf 'Welcome to the GETSTARTED disc.\r' | disc put 'hello.ssd:$.README' -
 
-The trailing ``-`` is the convention every ``disc`` write-command
-follows for "read from stdin". Note the ``\r`` (carriage return): BBC
-text files terminate lines with ``CR``, not ``LF``. See
+Both forms use ``printf`` rather than ``echo`` because BBC text files
+terminate lines with ``\r`` (carriage return), not ``\n`` — and ``echo``
+on every common shell appends ``\n``. ``disc put`` writes whatever
+bytes it gets; the convention is yours to maintain. ``disc type``
+later translates ``\r`` back to your host's native line ending when
+reading the file out.
+
+The trailing ``-`` in the stdin form is the convention every ``disc``
+write-command follows for "read from stdin". See
 :doc:`conventions/quoting` for why the single quotes around
 ``'hello.ssd:$.README'`` matter — the ``$`` would otherwise be
 interpreted by your shell.
