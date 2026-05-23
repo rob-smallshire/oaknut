@@ -30,10 +30,10 @@ target partition:
 
 .. code-block:: sh
 
-   disc ls scsi0.dat              # default: ADFS root
-   disc ls scsi0.dat adfs:'$'     # explicit ADFS
-   disc ls scsi0.dat 'afs:$'      # AFS root
-   disc cat scsi0.dat 'afs:$.Library.Free'
+   disc ls scsi0.dat                 # default: ADFS root
+   disc ls 'scsi0.dat:adfs:$'        # explicit ADFS
+   disc ls 'scsi0.dat:afs:$'         # AFS root
+   disc cat 'scsi0.dat:afs:$.Library.Free'
 
 The prefix is case-insensitive (``afs:``, ``AFS:``, ``Afs:`` all work).
 When no prefix is given, the filing system is auto-detected from the
@@ -42,7 +42,7 @@ for ADFS).
 
 Mismatches are rejected immediately::
 
-   $ disc ls games.ssd 'adfs:$'
+   $ disc ls 'games.ssd:adfs:$'
    Error: image is DFS format; cannot access as ADFS
 
 
@@ -55,8 +55,8 @@ prefix — see :doc:`quoting` for the platform-specific forms.
 
 .. code-block:: sh
 
-   disc '*CAT' games.ssd              # same as: disc ls games.ssd
-   disc '*TYPE' games.ssd '$.HELLO'   # same as: disc cat
+   disc '*CAT' games.ssd                # same as: disc ls games.ssd
+   disc '*TYPE' 'games.ssd:$.HELLO'     # same as: disc cat 'games.ssd:$.HELLO'
 
 .. list-table::
    :header-rows: 1

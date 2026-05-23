@@ -186,43 +186,32 @@ def parse_image_path(text: str) -> tuple[Path, str] | None:
     return image_filepath, in_image_part
 
 
-def parse_image_arg(image_spec: str, path: str | None = None) -> tuple[Path, str]:
-    """Resolve an ``IMAGE_SPEC [PATH]`` positional pair into ``(image, in_image_path)``.
+def parse_image_arg(image_spec: str) -> tuple[Path, str]:
+    """Resolve a fused ``IMAGE[:PATH]`` argument into ``(image, in_image_path)``.
 
-    Accepts two equivalent shapes uniformly across every command:
+    Every command uses a single positional shape: the host image path
+    and, optionally, an in-image path joined by a colon. The colon
+    splits at the first non-Windows-drive colon. The in-image portion
+    may itself start with a filing-system prefix
+    (``adfs:``/``afs:``/``dfs:``) — that prefix is preserved on the
+    returned in-image string so :func:`resolve_path` can act on it.
 
-    - **Fused:** ``image_spec`` contains ``image:in-image-path``. The
-      colon splits at the first non-Windows-drive colon. The in-image
-      portion may itself start with a filing-system prefix
-      (``adfs:``/``afs:``/``dfs:``) — that prefix is preserved on the
-      returned in-image string so :func:`resolve_path` can act on it.
-      When the fused form is used, *path* must be ``None``; otherwise a
-      :class:`click.UsageError` is raised so the user notices the
-      contradiction rather than silently dropping one of the inputs.
-
-    - **Split:** ``image_spec`` is just the image file path. The
-      optional *path* is the in-image path (empty string when omitted).
-
-    A colon in *image_spec* is a hard signal of fused intent. If the
-    portion to its left does not exist as a file, the error message
-    quotes only that portion, not the whole string, so the user can
-    see immediately what was looked up.
+    The image part must exist as a file. When the spec carries a colon
+    and the part to its left does not exist, the error message quotes
+    only that part, not the whole string, so the user can see exactly
+    what was looked up.
 
     Examples::
 
-        >>> # Plain image (split form, no path)
-        >>> parse_image_arg("hd.dat")              # doctest: +SKIP
+        >>> # Plain image — no in-image path
+        >>> parse_image_arg("hd.dat")               # doctest: +SKIP
         (PosixPath('hd.dat'), '')
 
-        >>> # Split form with explicit path
-        >>> parse_image_arg("hd.dat", "$.Games")    # doctest: +SKIP
-        (PosixPath('hd.dat'), '$.Games')
-
-        >>> # Fused form
+        >>> # Fused image:path
         >>> parse_image_arg("hd.dat:$.Games")       # doctest: +SKIP
         (PosixPath('hd.dat'), '$.Games')
 
-        >>> # Fused form with filing-system prefix
+        >>> # Fused with filing-system prefix on the in-image path
         >>> parse_image_arg("hd.dat:afs:$.Library") # doctest: +SKIP
         (PosixPath('hd.dat'), 'afs:$.Library')
 
@@ -235,63 +224,12 @@ def parse_image_arg(image_spec: str, path: str | None = None) -> tuple[Path, str
         image_filepath = Path(image_part)
         if not image_filepath.is_file():
             raise click.UsageError(f"image not found: {image_part}")
-        if path is not None:
-            raise click.UsageError(
-                "PATH must not be given when IMAGE_SPEC uses image:path syntax; "
-                f"got IMAGE_SPEC={image_spec!r} and PATH={path!r}"
-            )
         return image_filepath, in_image_part
 
-    # No colon → image_spec is the bare image path.
+    # No colon → image_spec is the bare image path with no in-image
+    # component. Commands that *require* an in-image path validate
+    # that downstream.
     image_filepath = Path(image_spec)
     if not image_filepath.is_file():
         raise click.UsageError(f"image not found: {image_spec}")
-    return image_filepath, path or ""
-
-
-def parse_image_arg_with_trailing(
-    image_spec: str,
-    arg2: str | None,
-    arg3: str | None,
-) -> tuple[Path, str, str | None]:
-    """Like :func:`parse_image_arg` but for commands with a fixed-arity tail.
-
-    Many commands take a trailing positional *after* the in-image path
-    (``chmod IMAGE PATH ACCESS``, ``set-load IMAGE PATH ADDR``, ``get
-    IMAGE PATH [HOST_PATH]``, ``put IMAGE PATH [HOST_PATH]``). With the
-    fused IMAGE_SPEC shape those collapse to two positionals
-    (``IMAGE:PATH ACCESS``), so we can't just hand the first two args
-    to :func:`parse_image_arg` -- the trailing slot would steal what
-    was meant to be PATH.
-
-    This helper takes three positionals in declaration order
-    (image_spec, arg2, arg3) and returns ``(image, in_image_path,
-    trailing)``. The trailing slot is whichever of ``arg2``/``arg3``
-    isn't part of the image-path pair. Callers decide whether
-    ``trailing is None`` is acceptable (optional positional) or a
-    UsageError (required positional).
-
-    Shapes::
-
-        IMAGE PATH TRAIL    -> (image, path, trail)         # split
-        IMAGE PATH          -> (image, path, None)          # split, no trail
-        IMAGE:PATH TRAIL    -> (image, path, trail)         # fused
-        IMAGE:PATH          -> (image, path, None)          # fused, no trail
-        IMAGE:PATH PATH X   -> UsageError                   # rejected
-    """
-    split = _split_at_image_colon(image_spec)
-    if split is not None:
-        # Fused form: image_spec carries image:path. arg2 is the
-        # trailing value (or None); arg3 must be unbound.
-        image_filepath, in_image_path = parse_image_arg(image_spec, None)
-        if arg3 is not None:
-            raise click.UsageError(
-                f"too many arguments when IMAGE_SPEC uses image:path "
-                f"syntax; got {arg2!r} and {arg3!r}"
-            )
-        return image_filepath, in_image_path, arg2
-
-    # Split form: image_spec is the image, arg2 is the path, arg3 is
-    # the trailing value.
-    image_filepath, in_image_path = parse_image_arg(image_spec, arg2)
-    return image_filepath, in_image_path, arg3
+    return image_filepath, ""

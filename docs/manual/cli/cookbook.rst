@@ -21,22 +21,21 @@ reader's host platform on first visit.
 Cross-image copy
 ----------------
 
-The ``cp`` command uses ``image:path`` colon syntax for copying files
-between disc images of any format combination:
+``disc cp`` always takes two fused ``image:path`` arguments. Cross-image
+is the normal case; for an in-image copy, name the same image on both
+sides.
 
 .. code-block:: sh
 
+   # Between two images.
    disc cp source.ssd:'$.HELLO' target.dat:'$.HELLO'
+
+   # Within one image.
+   disc cp image.adl:'$.Original' image.adl:'$.Copy'
 
 Load and exec addresses are preserved. Access attributes are mapped
 as losslessly as the target format allows (e.g. DFS only has a
 locked bit, so public-read from ADFS is dropped).
-
-For within-image copies, use the three-argument form:
-
-.. code-block:: sh
-
-   disc cp image.adl '$.Original' '$.Copy'
 
 
 Creating a Level 3 File Server disc
@@ -53,7 +52,7 @@ A complete walkthrough for building a bootable L3FS hard disc image:
    disc cp FS3v126.ssd:'$.FS3v126' scsi0.dat:'$.FS3v126'
 
    # Create a !BOOT file and set the boot option
-   printf '*RUN $.FS3v126\r' | disc put scsi0.dat '$.!BOOT' -
+   printf '*RUN $.FS3v126\r' | disc put 'scsi0.dat:$.!BOOT' -
    disc opt scsi0.dat 3
 
    # Plan the AFS partition (shows geometry, free space, suggested command)

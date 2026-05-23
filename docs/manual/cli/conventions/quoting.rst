@@ -32,7 +32,7 @@ and star-aliases (``*CAT``) all collide with shell metacharacters.
 
       .. code-block:: bash
 
-         disc cat image.dat '$.!BOOT'     # single quotes: literal
+         disc cat 'image.dat:$.!BOOT'     # single quotes: literal
          disc \*CAT image.dat              # backslash-escape the *
 
    .. tab-item:: zsh
@@ -42,7 +42,7 @@ and star-aliases (``*CAT``) all collide with shell metacharacters.
 
          # zsh expands history references inside double quotes, so $.!BOOT
          # needs single quotes. Bash does the same with histexpand on.
-         disc cat image.dat '$.!BOOT'
+         disc cat 'image.dat:$.!BOOT'
          disc '*CAT' image.dat            # single-quote the *
 
    .. tab-item:: PowerShell
@@ -52,7 +52,7 @@ and star-aliases (``*CAT``) all collide with shell metacharacters.
 
          # PowerShell treats $ as a variable prefix inside double quotes,
          # so use single quotes to keep $.!BOOT literal.
-         disc cat image.dat '$.!BOOT'
+         disc cat 'image.dat:$.!BOOT'
          disc '*CAT' image.dat
 
 
@@ -67,21 +67,21 @@ Pass a single ``$.PATH`` argument
 
       .. code-block:: bash
 
-         disc ls image.dat '$.DIR.FILE'
+         disc ls 'image.dat:$.DIR.FILE'
 
    .. tab-item:: zsh
       :sync: zsh
 
       .. code-block:: zsh
 
-         disc ls image.dat '$.DIR.FILE'
+         disc ls 'image.dat:$.DIR.FILE'
 
    .. tab-item:: PowerShell
       :sync: powershell
 
       .. code-block:: powershell
 
-         disc ls image.dat '$.DIR.FILE'
+         disc ls 'image.dat:$.DIR.FILE'
 
 
 .. note::
