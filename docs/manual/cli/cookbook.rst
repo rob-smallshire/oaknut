@@ -131,8 +131,8 @@ scsi0.dat EXEC`` sets it. Symbolic names (``OFF`` / ``LOAD`` /
 (``0`` / ``1`` / ``2`` / ``3``); ``disc opt --help`` lists the full
 mapping. ``EXEC`` is the right choice here because ``!BOOT`` is a
 command file, not a binary — pressing :kbd:`SHIFT-BREAK` runs
-``*EXEC $.!BOOT``, which types the ``*RUN $.FS3v126`` line at the
-OS prompt.
+``*EXEC $.!BOOT``, which effectively types the ``*RUN $.FS3v126``
+line at the OS prompt.
 
 **4. Attach the AFS partition.**
 

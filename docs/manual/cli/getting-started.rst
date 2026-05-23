@@ -163,9 +163,10 @@ ROM images for the platform-specific build:
 Reading the output top to bottom:
 
 - The disc's **boot option** is ``EXEC``. Pressing :kbd:`SHIFT-BREAK`
-  on a real BBC types ``*EXEC $.!BOOT``, which runs the contents of
-  ``!BOOT`` as a sequence of commands typed at the OS prompt. The
-  ``disc opt IMAGE`` command reads or sets the boot option.
+  on a real BBC effectively types ``*EXEC $.!BOOT``, which runs the
+  contents of ``!BOOT`` as if each line had been typed at the OS
+  prompt. The ``disc opt IMAGE`` command reads or sets the boot
+  option.
 - The catalogue contains the **game** (``MENU``, ``GAME``, ``GAME2``,
   ``REPTON``, ``Screen``), the **editor suite** (``MapEdit``,
   ``DefEdit``, ``SprEdit``, ``Linker``) — Repton Infinity was a
