@@ -116,10 +116,12 @@ for the attribute-mapping table.
    :section: boot
 
 ``disc put`` writes a one-line ``!BOOT`` whose contents are
-``*RUN $.FS3v126`` followed by the Acorn ``\r`` line ending. The
-bytes come from ``boot.tmp``, which the recipe built off-stage with
-``printf '*RUN $.FS3v126\r' > boot.tmp`` — see :doc:`getting-started`
-for why ``printf`` rather than ``echo``.
+``*RUN $.FS3v126`` followed by the Acorn ``\r`` line ending.
+``printf`` builds those bytes on stdout, the shell pipes them into
+``disc put``, and the trailing ``-`` is the project-wide convention
+for "read the file body from stdin". The ``printf`` rather than
+``echo`` choice is forced by the ``\r`` — see :doc:`getting-started`
+for the line-ending rationale.
 
 ``disc opt scsi0.dat`` with no value reads the current boot option
 (``0`` / ``OFF`` on a freshly-created disc) and ``disc opt

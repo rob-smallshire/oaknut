@@ -41,10 +41,7 @@ with in_tmp_dir():
     show("disc cp 'FS3v126.ssd:$.FS3v126' 'scsi0.dat:$.FS3v126'")
 
     section("boot")
-    # Quote the !BOOT body once via printf so the literal CR is
-    # preserved across the pipe into disc put.
-    silent("printf '*RUN $.FS3v126\\r' > boot.tmp")
-    show("disc put 'scsi0.dat:$.!BOOT' boot.tmp")
+    show("printf '*RUN $.FS3v126\\r' | disc put 'scsi0.dat:$.!BOOT' -")
     show("disc opt scsi0.dat")
     show("disc opt scsi0.dat EXEC")
 
