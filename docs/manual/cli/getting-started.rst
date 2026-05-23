@@ -169,7 +169,7 @@ A note on the other filing systems
 ----------------------------------
 
 DFS images (``.ssd`` / ``.dsd``) have a flat catalogue with
-single-character directories (``$`` and ``A``..``Z``) that do not
+single-character directories (``$`` and ``A`` — ``Z``) that do not
 nest. ADFS images (``.adf`` / ``.adl`` / ``.dat``) and AFS
 partitions on top of ADFS have hierarchical directories, so paths
 nest naturally (``$.Games.Elite``).
