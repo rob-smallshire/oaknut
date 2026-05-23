@@ -24,9 +24,9 @@ repos:
           ships src/oaknut/__init__.py. Each package's code lives at
           src/oaknut/<name>/__init__.py instead.
 
-      - id: readmes-fresh
-        name: README.md and README-pypi.md are up to date
-        entry: uv run python scripts/render_readme.py --check
+      - id: render-readmes
+        name: Render README.md and README-pypi.md
+        entry: uv run python scripts/render_readme.py
         language: system
         pass_filenames: false
         files: ^(README\.md|README-pypi\.md|docs/README\.md\.j2|docs/README-pypi\.md\.j2|docs/readme_examples/.*\.py|scripts/render_readme\.py|packages/oaknut-[^/]+/pyproject\.toml)$
@@ -35,6 +35,7 @@ repos:
           scripts in docs/readme_examples/. README-pypi.md, the long
           description for the `oaknut` namespace placeholder distribution,
           is generated from docs/README-pypi.md.j2. Both are driven by
-          each oaknut-* sub-package's pyproject.toml — if any of those
-          change, regenerate with:
-              uv run python scripts/render_readme.py
+          each oaknut-* sub-package's pyproject.toml. This hook re-runs
+          the renderer on every commit that touches an input or output —
+          if either file changes on disk, pre-commit fails the commit
+          and you re-stage. The renderer also accepts --check for CI.
