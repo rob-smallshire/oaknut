@@ -191,17 +191,27 @@ Acorn File Server (AFS)
 .. oaknut-command:: oaknut.disc.cli:afs-plan
    :prog: disc afs-plan
 
+   .. cli-example:: cmd_afs_plan
+
 .. oaknut-command:: oaknut.disc.cli:afs-init
    :prog: disc afs-init
+
+   .. cli-example:: cmd_afs_init
 
 .. oaknut-command:: oaknut.disc.cli:afs-users
    :prog: disc afs-users
 
+   .. cli-example:: cmd_afs_users
+
 .. oaknut-command:: oaknut.disc.cli:afs-useradd
    :prog: disc afs-useradd
 
+   .. cli-example:: cmd_afs_useradd
+
 .. oaknut-command:: oaknut.disc.cli:afs-userdel
    :prog: disc afs-userdel
+
+   .. cli-example:: cmd_afs_userdel
 
 .. oaknut-command:: oaknut.disc.cli:afs-merge
    :prog: disc afs-merge
