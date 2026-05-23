@@ -14,18 +14,27 @@ with.
 First contact
 -------------
 
-Three commands cover the common case of "look at a disc and pull a
-file out":
+Three commands cover the common case of "look at a disc and read a
+file":
 
 .. code-block:: sh
 
    disc stat   image.ssd                  # what's on this disc?
    disc tree   image.ssd                  # show the contents
-   disc cat    'image.ssd:$.HELLO'        # dump a file to stdout
+   disc type   'image.ssd:$.HELLO'        # read a text file to the terminal
 
 If those work the way you expect, you already have enough of the
 mental model to compose ``disc`` with normal shell tools. The rest of
 this page fleshes out each step.
+
+.. note::
+
+   The Acorn-named alias for ``ls`` is ``*CAT`` — short for
+   *catalogue*. ``disc cat`` is the Unix ``cat`` and dumps raw bytes
+   to stdout; it is **not** an alias for the listing command. For
+   reading a text file at a terminal, prefer ``disc type`` (used in
+   the example above), which also translates Acorn line endings into
+   the host's native form.
 
 
 .. _first-disc:
