@@ -54,9 +54,10 @@ floppies, single- and double-sided), ``adfs-s`` / ``adfs-m`` /
 ``adfs-hard`` (ADFS hard discs — see :doc:`cookbook` for the
 walkthrough that builds a Level 3 File Server disc).
 
-The disc is empty but the catalogue, free-space map, and boot option
-are all in place. Three sectors are "used" already — those are the
-catalogue itself (sectors 0 and 1) and a reserved sector.
+The disc is empty but the catalogue and boot option are already in
+place. Two sectors of the 800 total are "used" — sectors 0 and 1
+hold the catalogue itself (the title, the boot option, and the file
+index).
 
 
 Put files in
