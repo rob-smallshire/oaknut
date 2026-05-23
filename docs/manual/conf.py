@@ -182,6 +182,13 @@ class CliExampleDirective(Directive):
                 ]
             display_text = sections[section_name]
 
+        # Some recipes legitimately emit tab characters — `ls -C` is
+        # the prototype, where BSD ls aligns columns with tabs. Expand
+        # them here so the rendered literal block aligns identically
+        # whatever tab-size the HTML/CSS layer picks. 8-stop matches
+        # the assumption every Unix tool that emits tabs makes.
+        display_text = display_text.expandtabs(8)
+
         block = nodes.literal_block(display_text, display_text)
         block["language"] = "console"
         return [block]

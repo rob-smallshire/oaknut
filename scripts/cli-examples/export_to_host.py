@@ -30,10 +30,9 @@ with in_tmp_dir():
     # the contents in column-wrapped form so the file/sidecar pairing
     # across the whole catalogue stays compact. `ls -C` forces
     # multi-column output even when stdout is captured (where ls
-    # would otherwise drop to single-column); `expand` converts the
-    # tabs ls uses as column separators into spaces, so the output
-    # aligns consistently regardless of the renderer's tab-size.
-    show("ls -C 'extracted/$' | expand")
+    # would otherwise drop to single-column). The directive expands
+    # the tab separators ls inserts to spaces at render time.
+    show("ls -C 'extracted/$'")
 
     # And one sidecar so the on-disc metadata format is visible.
     show("cat 'extracted/$/LOAD.inf'")
