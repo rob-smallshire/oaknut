@@ -110,15 +110,19 @@ Reading top to bottom:
 
 - **Attach the AFS partition** (``disc afs-plan`` / ``afs-init``).
   ``disc afs-plan`` is a dry-run that shows the disc's geometry,
-  how many sectors ADFS currently occupies, and a suggested
-  ``--cylinders`` value for the AFS region. Its *Suggested command*
-  line is intended to be copied verbatim into the next invocation.
-  ``disc afs-init`` then carves out the AFS partition, creates the
-  ``Syst`` (system) and ``RJS`` (regular) users, and ``--emplace``-s
-  two shipped library images. ``--emplace`` accepts a shipped name
-  (``Library``, ``Library1``, ``ArthurLib``) or a path to any ADFS
-  ``.adl``; the contents land in a directory of the same name on
-  the AFS partition.
+  how many sectors ADFS currently occupies, and what an AFS
+  partition built from the remaining free space would look like.
+  Reviewing the plan before committing is the polite habit;
+  ``afs-init`` then carves out the AFS partition for real,
+  creates the ``Syst`` (system) and ``RJS`` (regular) users, and
+  ``--emplace``-s two shipped library images. Note the absence of
+  ``--cylinders``: when omitted, ``afs-init`` claims the existing
+  free space, which is exactly what ``afs-plan`` would have
+  suggested. Pass an explicit value if you want a smaller AFS
+  region and ADFS retained beyond what is strictly necessary.
+  ``--emplace`` accepts a shipped name (``Library``, ``Library1``,
+  ``ArthurLib``) or a path to any ADFS ``.adl``; the contents land
+  in a directory of the same name on the AFS partition.
 
 - **Verify** (``disc stat``). The closing ``disc stat`` confirms the
   dual-partition shape — the same three-block layout

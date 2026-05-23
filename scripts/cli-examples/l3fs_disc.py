@@ -31,7 +31,7 @@ SOURCE = REPO_ROOT / "tests" / "data" / "images" / "cookbook" / "FS3v126.ssd"
 with in_tmp_dir():
     shutil.copy(SOURCE, "FS3v126.ssd")
 
-    show("disc create scsi0.dat --format adfs-hard --capacity 10MiB --title Server")
+    show("disc create scsi0.dat --format adfs-hard --capacity 10MB --title Server")
     show("disc cp 'FS3v126.ssd:$.FS3v126' 'scsi0.dat:$.FS3v126'")
 
     # Quote the !BOOT body once via printf so the literal CR is
@@ -44,8 +44,8 @@ with in_tmp_dir():
 
     show("disc afs-plan scsi0.dat")
     show(
-        "disc afs-init scsi0.dat --disc-name Server --cylinders 309"
-        " --user Syst:S --user RJS:2MiB"
+        "disc afs-init scsi0.dat --disc-name Server"
+        " --user Syst:S --user RJS:2MB"
         " --emplace Library --emplace Library1"
     )
 
