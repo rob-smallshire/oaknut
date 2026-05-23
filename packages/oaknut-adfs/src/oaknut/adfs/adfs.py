@@ -381,6 +381,11 @@ class ADFSPath:
         data = elite.read_bytes()
     """
 
+    # Identifies this class to oaknut.file.copy.copy_file so the
+    # source-stat -> destination-kwargs mapping can dispatch without
+    # the caller passing target_fs=.
+    _target_fs_kind: str = "adfs"
+
     def __init__(self, adfs: ADFS, path: str):
         self._adfs = adfs
         self._path = path
@@ -873,6 +878,18 @@ class ADFSPath:
         # the internal _write_file path, so a no-op chmod is harmless.
         if access is not None:
             self.chmod(access)
+
+    def copy_to(self, dst: object) -> None:
+        """Copy this file to *dst*, another oaknut path object.
+
+        Sugar for ``copy_file(self, dst)``: reads this file's bytes
+        and metadata and writes them to the destination, which may
+        live on any filesystem family (DFS, ADFS, or AFS). Access
+        attributes are mapped to the destination's native form.
+        """
+        from oaknut.file.copy import copy_file
+
+        copy_file(self, dst)
 
     # --- Protocols ---
 

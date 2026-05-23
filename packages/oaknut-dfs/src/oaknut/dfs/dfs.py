@@ -82,6 +82,11 @@ class DFSPath:
         dfs.root / "$" / "HELLO"    # → DFSPath("$.HELLO")
     """
 
+    # Identifies this class to oaknut.file.copy.copy_file so the
+    # source-stat -> destination-kwargs mapping can dispatch without
+    # the caller passing target_fs=.
+    _target_fs_kind: str = "dfs"
+
     def __init__(self, dfs: DFS, path: str):
         self._dfs = dfs
         self._path = path
@@ -446,6 +451,18 @@ class DFSPath:
             exec_address=exec_address,
             locked=locked,
         )
+
+    def copy_to(self, dst: object) -> None:
+        """Copy this file to *dst*, another oaknut path object.
+
+        Sugar for ``copy_file(self, dst)``: reads this file's bytes
+        and metadata and writes them to the destination, which may
+        live on any filesystem family (DFS, ADFS, or AFS). Access
+        attributes are mapped to the destination's native form.
+        """
+        from oaknut.file.copy import copy_file
+
+        copy_file(self, dst)
 
     # --- Protocols ---
 

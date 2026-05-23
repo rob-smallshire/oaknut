@@ -7,9 +7,11 @@ The :func:`copy_file` function copies a file between any two path
 objects using only this interface, so it works across DFS, ADFS,
 and AFS in any combination.
 
-Access attributes are mapped via :mod:`oaknut.file.access_mapping`
-so that each filesystem receives access information in its native
-form with sensible defaults for bits it cannot represent.
+The destination's filesystem family is read directly from its
+``_target_fs_kind`` class attribute — callers do not have to pass it
+in. Access attributes are mapped via :mod:`oaknut.file.access_mapping`
+so each filesystem receives access information in its native form
+with sensible defaults for bits it cannot represent.
 """
 
 from __future__ import annotations
@@ -19,13 +21,7 @@ from typing import Any
 from oaknut.file.access_mapping import access_from_stat, access_to_write_kwargs
 
 
-def copy_file(
-    src: Any,
-    dst: Any,
-    *,
-    target_fs: str | None = None,
-    **write_kwargs: Any,
-) -> None:
+def copy_file(src: Any, dst: Any, **write_kwargs: Any) -> None:
     """Copy a single file from *src* to *dst*.
 
     Reads data and metadata (load address, exec address, access
@@ -33,11 +29,14 @@ def copy_file(
     must be path-like objects supporting ``read_bytes()``, ``stat()``,
     ``exists()``, ``is_dir()``, and ``write_bytes(data, ...)``.
 
-    *target_fs* identifies the destination filesystem (``"dfs"``,
-    ``"adfs"``, or ``"afs"``) so access attributes can be mapped to
-    the correct ``write_bytes`` keyword arguments. When ``None``, the
-    access mapping is omitted — only ``load_address`` and
-    ``exec_address`` are passed through.
+    The destination's filesystem family is determined by its
+    ``_target_fs_kind`` class attribute (``"dfs"``, ``"adfs"``, or
+    ``"afs"``); access attributes are then mapped to the correct
+    ``write_bytes`` keyword arguments via
+    :func:`oaknut.file.access_mapping.access_to_write_kwargs`.
+    Destinations without ``_target_fs_kind`` skip the access mapping
+    and only ``load_address`` and ``exec_address`` are passed through —
+    useful for duck-typed test doubles.
 
     Additional keyword arguments override source metadata.
 
@@ -58,6 +57,7 @@ def copy_file(
         "exec_address": getattr(st, "exec_address", 0),
     }
 
+    target_fs = getattr(dst, "_target_fs_kind", None)
     if target_fs is not None:
         access = access_from_stat(st)
         kwargs.update(access_to_write_kwargs(access, target_fs))

@@ -110,5 +110,5 @@ def emplace_library(
                     from oaknut.afs.exceptions import AFSMergeConflictError
 
                     raise AFSMergeConflictError(f"'{entry.name}' already exists in $.{dirname}")
-            copy_file(entry, dest, target_fs="afs")
+            copy_file(entry, dest)
     return replaced

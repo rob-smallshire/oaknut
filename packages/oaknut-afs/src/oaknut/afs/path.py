@@ -25,7 +25,7 @@ from. This keeps path algebra clean.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Iterator, Sequence, Union
+from typing import TYPE_CHECKING, ClassVar, Iterator, Sequence, Union
 
 from oaknut.afs.directory import MAX_NAME_LENGTH
 from oaknut.afs.exceptions import AFSPathError
@@ -109,6 +109,12 @@ class AFSPath:
 
     parts: tuple[str, ...]
     afs: "AFS | None" = field(default=None, compare=False, repr=False, hash=False)
+
+    # Identifies this class to oaknut.file.copy.copy_file so the
+    # source-stat -> destination-kwargs mapping can dispatch without
+    # the caller passing target_fs=.  ClassVar so dataclass field
+    # generation does not pick it up.
+    _target_fs_kind: ClassVar[str] = "afs"
 
     # ------------------------------------------------------------------
     # Construction
@@ -692,6 +698,18 @@ class AFSPath:
         # Apply richer access bits via chmod if the source had them.
         if meta.access is not None:
             self.chmod(int(meta.access))
+
+    def copy_to(self, dst: object) -> None:
+        """Copy this file to *dst*, another oaknut path object.
+
+        Sugar for ``copy_file(self, dst)``: reads this file's bytes
+        and metadata and writes them to the destination, which may
+        live on any filesystem family (DFS, ADFS, or AFS). Access
+        attributes are mapped to the destination's native form.
+        """
+        from oaknut.file.copy import copy_file
+
+        copy_file(self, dst)
 
 
 # ---------------------------------------------------------------------------

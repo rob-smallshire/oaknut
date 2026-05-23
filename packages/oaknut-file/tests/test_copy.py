@@ -92,3 +92,47 @@ class TestCopyFile:
         dst = FakePath("Copy")
         with pytest.raises(FileNotFoundError):
             copy_file(src, dst)
+
+
+class TestPolymorphicDispatch:
+    """``copy_file`` now reads ``_target_fs_kind`` off the destination.
+
+    Cover for issue #24: callers no longer need to pass ``target_fs=``.
+    The dispatch via the class attribute means access bits map to the
+    right ``write_bytes`` kwarg shape automatically — DFS receives
+    ``locked=bool``, ADFS the same, AFS receives an ``AFSAccess``.
+    """
+
+    def test_dispatch_for_dfs_destination_passes_locked(self) -> None:
+        src = FakePath("Hello", b"data")
+        src.locked = True
+        dst = FakePath("Copy")
+        dst._target_fs_kind = "dfs"  # type: ignore[attr-defined]
+        captured: dict = {}
+
+        def capture(data: bytes, **kwargs):
+            captured.update(kwargs)
+            FakePath.write_bytes(dst, data, **{k: kwargs[k] for k in ("load_address", "exec_address")})
+
+        dst.write_bytes = capture  # type: ignore[assignment]
+        copy_file(src, dst)
+        assert captured.get("locked") is True
+
+    def test_dispatch_for_afs_destination_passes_access(self) -> None:
+        # AFS access_to_write_kwargs returns {access: AFSAccess(...)}.
+        src = FakePath("Hello", b"data")
+        src.locked = True
+        dst = FakePath("Copy")
+        dst._target_fs_kind = "afs"  # type: ignore[attr-defined]
+        captured: dict = {}
+
+        def capture(data: bytes, **kwargs):
+            captured.update(kwargs)
+            FakePath.write_bytes(dst, data, **{k: kwargs[k] for k in ("load_address", "exec_address")})
+
+        dst.write_bytes = capture  # type: ignore[assignment]
+        copy_file(src, dst)
+        # AFS write_kwargs ships an `access` integer-flag value, not a
+        # `locked` bool — that's the whole point of the dispatch.
+        assert "access" in captured
+        assert "locked" not in captured
