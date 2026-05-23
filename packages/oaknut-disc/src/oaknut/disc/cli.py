@@ -1019,6 +1019,12 @@ def freemap(file_spec: str) -> None:
     """Show free-space map with ASCII fragmentation bar.
 
     Accepts a ``FILE_SPEC`` (the in-image ``PATH_SPEC`` is optional and defaults to the root).
+
+    \f
+
+    **Example**
+
+    .. cli-example:: cmd_freemap
     """
     image, path = parse_file_spec(file_spec)
     fs, bare = resolve_path(image, path)
@@ -2306,6 +2312,25 @@ def opt(image: Path, boot_option: int | None):
       1 / LOAD  *LOAD $.!BOOT
       2 / RUN   *RUN $.!BOOT
       3 / EXEC  *EXEC $.!BOOT
+
+    \f
+
+    **Examples**
+
+    Reading the current value:
+
+    .. cli-example:: cmd_opt
+       :section: read
+
+    Setting numerically:
+
+    .. cli-example:: cmd_opt
+       :section: set_numeric
+
+    Setting with a symbolic name:
+
+    .. cli-example:: cmd_opt
+       :section: set_symbolic
     """
     from asyoulikeit.scalar_data import ScalarContent
     from asyoulikeit.tabular_data import Report, Reports
