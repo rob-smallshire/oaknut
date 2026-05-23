@@ -83,7 +83,16 @@ its own subdirectory named for the source.
 Three lines of shell — a ``for`` loop wrapping a single
 ``disc cp -r`` per SSD — do the work.
 
-**1. Look at the source filenames.**
+**1. Create an empty archive disc.**
+
+.. cli-example:: bulk_archive_ssds
+   :section: create
+
+A 10 MB ADFS hard-disc image is plenty for three DFS floppies-
+worth of content; ``--title Games`` sets the name that ``*CAT``
+will display.
+
+**2. Look at the source filenames.**
 
 .. cli-example:: bulk_archive_ssds
    :section: sources
@@ -93,7 +102,7 @@ followed by the game title. The loop in the next step pulls the
 title's first word out of each filename and uses it as the
 subdirectory name on the archive disc.
 
-**2. Loop the SSDs, copying each into its own subdirectory.**
+**3. Loop the SSDs, copying each into its own subdirectory.**
 
 .. cli-example:: bulk_archive_ssds
    :section: loop
@@ -115,7 +124,7 @@ The interesting moves:
 Note the silence: each successful ``disc cp -r`` writes nothing,
 so the 18-file copy across three SSDs produces no stdout chatter.
 
-**3. Verify the archive.**
+**4. Verify the archive.**
 
 .. cli-example:: bulk_archive_ssds
    :section: verify

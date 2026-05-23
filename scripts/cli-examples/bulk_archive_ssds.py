@@ -8,6 +8,8 @@ three lines of shell.
 
 Sections:
 
+  create      ``disc create`` — lay down the empty ADFS hard-disc
+              image that the loop will copy SSDs into.
   sources     ``ls *.ssd`` — show the host-side filenames the loop
               will iterate over.
   loop        The for-loop that walks the SSDs and bulk-copies.
@@ -31,7 +33,9 @@ with in_tmp_dir():
     # files to iterate over without dragging an absolute path into the
     # captured command line.
     silent(f"cp {GAMES_DIR}/Disc00*.ssd .")
-    silent("disc create archive.dat --format adfs-hard --capacity 10MB --title GamesArchive")
+
+    section("create")
+    show("disc create games.dat --format adfs-hard --capacity 10MB --title Games")
 
     section("sources")
     show("ls *.ssd")
@@ -49,10 +53,10 @@ with in_tmp_dir():
     show(
         'for ssd in *.ssd; do\n'
         '  name="$(basename "$ssd" .ssd | sed -E \'s/.*-([A-Z][a-z]+).*/\\1/\')"\n'
-        '  disc cp -r "$ssd:\\$" "archive.dat:\\$.$name"\n'
+        '  disc cp -r "$ssd:\\$" "games.dat:\\$.$name"\n'
         'done'
     )
 
     section("verify")
-    show("disc ls archive.dat")
-    show("disc tree archive.dat")
+    show("disc ls games.dat")
+    show("disc tree games.dat")
