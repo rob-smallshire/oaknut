@@ -113,15 +113,16 @@ golden" stance: every successful ``disc cp -r`` writes nothing to
 stdout, so an 18-file copy spread across three SSDs produces zero
 chatter, leaving the shell loop entirely to its own narrative.
 
-**2. Verify the archive's top level.**
+**2. Verify the archive.**
 
 .. cli-example:: bulk_archive_ssds
    :section: verify
 
-Three sibling directories, one per SSD, each containing the
-files extracted from that SSD's ``$``. Drill in with
-``disc ls 'archive.dat:$.Arcadians'`` to inspect any one of them —
-or ``disc tree archive.dat`` for the whole thing.
+``disc ls`` confirms the three sibling directories — one per SSD —
+sit at the top level of the archive. ``disc tree`` then walks the
+whole thing, showing each SSD's catalogue (the ``$.HELLO`` /
+``$.GAME`` files etc. that lived on each original DFS floppy) under
+the matching directory.
 
 
 Creating a Level 3 File Server disc
@@ -208,16 +209,23 @@ region and ADFS retained beyond what is strictly necessary.
 ``ArthurLib``) or a path to any ADFS ``.adl``; the contents land
 in a directory of the same name on the AFS partition.
 
-**5. Verify the dual-partition shape.**
+**5. Verify the dual-partition shape and walk the disc.**
 
 .. cli-example:: l3fs_disc
    :section: verify
 
-A final ``disc stat`` confirms the three-block layout — a ``Disc``
-envelope carrying the physical geometry, then ``Partition 1: ADFS``
-holding the boot configuration and the FS binary, then
-``Partition 2: AFS`` ready to serve files over Econet. The
-single-partition collapsed form documented in
-:doc:`conventions/output-formats` does not apply here because the
-two partitions genuinely carry different things; the envelope is
-the natural umbrella.
+``disc stat`` confirms the three-block layout — a ``Disc`` envelope
+carrying the physical geometry, then ``Partition 1: ADFS`` holding
+the boot configuration and the FS binary, then ``Partition 2: AFS``
+ready to serve files over Econet. The single-partition collapsed
+form documented in :doc:`conventions/output-formats` does not apply
+here because the two partitions genuinely carry different things;
+the envelope is the natural umbrella.
+
+``disc tree`` then walks the whole image. The ADFS half is tiny —
+just ``!BOOT`` and the FS3 binary, which is all the boot needs to
+load before handing off to AFS. The AFS half shows the two
+``--emplace``-d library trees in their full glory, with the BBC-
+era utilities (``LCAT``, ``NETMON``, ``PROT``, ``USERS``, …) that
+the Level 3 File Server's clients reach for via ``*<command>``
+once the server is up.

@@ -53,3 +53,4 @@ with in_tmp_dir():
 
     section("verify")
     show("disc ls archive.dat")
+    show("disc tree archive.dat")

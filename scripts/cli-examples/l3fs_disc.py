@@ -57,3 +57,4 @@ with in_tmp_dir():
 
     section("verify")
     show("disc stat scsi0.dat")
+    show("disc tree scsi0.dat")
