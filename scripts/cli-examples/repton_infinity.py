@@ -25,3 +25,4 @@ with in_tmp_dir():
     shutil.copy(SOURCE, "infinity.ssd")
     show("disc stat infinity.ssd")
     show("disc ls infinity.ssd")
+    show("disc type 'infinity.ssd:$.!BOOT'")

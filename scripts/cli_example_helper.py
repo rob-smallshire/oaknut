@@ -53,22 +53,24 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 CORPUS_ROOT = REPO_ROOT / "tests" / "data" / "images" / "cookbook"
 
 
-# disc subcommands that emit @report_output content and therefore
-# benefit from `--as display` at capture time.
+# disc subcommands that wear the @report_output decorator and
+# therefore benefit from `--as display` at capture time. Subcommands
+# not on this list (`cat`, `type`, `freemap`, `put`, `get`, `cp`,
+# `mv`, `rm`, `mkdir`, `chmod`, `lock`, `unlock`, `set-*`,
+# `validate`, `create`, `compact`, `expand`, `afs-init`, `afs-merge`,
+# etc.) reject `--as` — passing it would make the recipe fail.
 _REPORT_SUBCOMMANDS = frozenset(
     {
         "ls",
         "tree",
         "stat",
-        "cat",
-        "type",
         "find",
-        "freemap",
-        "afs-plan",
-        "afs-users",
-        "afs-merge",
+        "title",
+        "opt",
         "get-load",
         "get-exec",
+        "afs-plan",
+        "afs-users",
     }
 )
 

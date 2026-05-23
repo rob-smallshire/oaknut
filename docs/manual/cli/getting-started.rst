@@ -159,22 +159,33 @@ ROM images for the platform-specific build:
 
 .. cli-example:: repton_infinity
 
-A few things to notice on the way past:
+Reading the output top to bottom:
 
-- **Boot option ``EXEC``**. On a real BBC, typing ``*EXEC $.!BOOT``
-  runs whatever's in the ``!BOOT`` file as if you'd typed it at the
-  prompt — that's how this disc autoboots when you hit
-  :kbd:`SHIFT-BREAK`. ``disc opt image.ssd`` reads or sets this.
-- **The editor suite** — ``MapEdit``, ``DefEdit``, ``SprEdit``,
-  ``Linker``. Repton Infinity was a build-your-own-Repton kit as
-  much as a game, and these are the level / definition / sprite
-  editors plus the linker that stitches the parts back together.
-- **``MDROM4`` through ``MDROM7``** — sideways ROM images selected
-  by the loader to provide the right variant of the game for the
-  host machine (BBC Master vs BBC Micro etc.).
-- **Zero free sectors**. The disc is full to the byte, which is
-  what released DFS floppies of the era almost always were —
-  Superior Software wasn't going to ship empty space.
+- The disc's **boot option** is ``EXEC``. Pressing :kbd:`SHIFT-BREAK`
+  on a real BBC types ``*EXEC $.!BOOT``, which runs the contents of
+  ``!BOOT`` as a sequence of commands typed at the OS prompt. The
+  ``disc opt IMAGE`` command reads or sets the boot option.
+- The catalogue contains the **game** (``MENU``, ``GAME``, ``GAME2``,
+  ``REPTON``, ``Screen``), the **editor suite** (``MapEdit``,
+  ``DefEdit``, ``SprEdit``, ``Linker``) — Repton Infinity was a
+  build-your-own-Repton kit as much as a game — and the **sideways
+  ROM images** ``MDROM4`` through ``MDROM7`` that the loader
+  selects per host machine.
+- ``!BOOT`` itself is just two lines of text:
+
+  - ``*B.`` is the abbreviation for ``*BASIC``, the command that
+    enters the BBC's built-in BASIC interpreter from the OS prompt.
+  - ``CH."LOAD"`` is ``CHAIN "LOAD"``, BASIC for "load and run the
+    program named ``LOAD``".
+
+  So the full boot sequence on :kbd:`SHIFT-BREAK` is:
+  ``*EXEC`` the boot file → ``*BASIC`` enters BASIC →
+  ``CHAIN "LOAD"`` runs the program loader. Notice that ``disc
+  type`` rendered the ``\r`` line endings correctly — Acorn text
+  files use CR, modern terminals use LF, and ``type`` does the
+  translation.
+- The disc has **zero free sectors** — packed to the byte, which is
+  what released DFS floppies of the era almost always were.
 
 
 Acorn-style aliases
