@@ -91,8 +91,8 @@ Use British "disc" rather than "disk" for Acorn-era subject matter. The project 
 
 - Always use `uv` (not `pip` directly, not `poetry`).
 - Do **not** commit any `uv.lock` file at any level — these are libraries, not applications, and committed lockfiles over-constrain end-user dependency resolvers.
-- Dev dependencies live in `[dependency-groups]` at the workspace root (test, lint, dev). Per-package `pyproject.toml` files declare only their runtime dependencies.
-- Each package has its own `[tool.bumpversion]` config scoped to its own `src/oaknut/<name>/__init__.py` and a namespaced tag format (`oaknut-<name>-v{version}`).
+- Dev dependencies live in `[dependency-groups]` at the workspace root (test, lint, dev, workspace, docs). The `workspace` group lists every `oaknut-*` sibling so `uv sync` installs them all editable in dev — the bare `oaknut` distribution itself is a namespace placeholder with no runtime deps. Per-package `pyproject.toml` files declare only their own runtime dependencies.
+- Versioning is currently unified across the workspace. A single `[tool.bumpversion]` block in the root `pyproject.toml` rewrites every sub-package's `src/oaknut/<name>/__init__.py` in lockstep, with a single tag of the form `v{version}`. Per-package `[tool.bumpversion]` configs do not exist today; if independent versioning is needed in future, add them per package and drop the per-sub-package `[[tool.bumpversion.files]]` entries from the root config.
 
 ## Test-first preference
 
