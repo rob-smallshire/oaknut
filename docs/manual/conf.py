@@ -6,9 +6,11 @@ copyright = "2024-2026, Robert Smallshire"
 
 extensions = [
     "sphinx.ext.autodoc",
+    "sphinx.ext.doctest",
     "sphinx.ext.intersphinx",
     "sphinx_click",
     "sphinx_copybutton",
+    "sphinx_design",
 ]
 
 # Theme

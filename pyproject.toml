@@ -104,6 +104,7 @@ docs = [
     "sphinx-clarity-theme>=2.1",
     "sphinx-click>=6.0",
     "sphinx-copybutton>=0.5",
+    "sphinx-design>=0.6",
 ]
 
 [tool.bumpversion]
