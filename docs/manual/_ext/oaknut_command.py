@@ -117,21 +117,46 @@ def _is_hidden_report_output_option(opt: click.Option) -> bool:
 
 
 def _resolve_command(target: str) -> click.Command:
-    """Resolve ``module.path:attr.chain`` to a Click command."""
-    module_path, _, attr = target.partition(":")
-    if not module_path or not attr:
+    """Resolve ``module:name`` to a Click command.
+
+    *name* may be either:
+      - a Python attribute chain (``set_load``, ``cli.commands["ls"]``,
+        ``foo.bar``);
+      - or the Click command name as registered on the module's ``cli``
+        group (``set-load``, ``afs-plan``, …) — useful when the
+        underscore/hyphen rename means the Python attribute differs
+        from the user-facing command name.
+
+    The Python attribute path is tried first; if that fails, the module
+    is searched for a ``cli`` :class:`click.Group` and the name is
+    looked up via ``cli.commands[name]``.
+    """
+    module_path, _, name = target.partition(":")
+    if not module_path or not name:
         raise ValueError(
-            f"oaknut-command target must be 'module:attr', got {target!r}"
+            f"oaknut-command target must be 'module:name', got {target!r}"
         )
     module = importlib.import_module(module_path)
-    obj: Any = module
-    for part in attr.split("."):
-        obj = getattr(obj, part)
-    if not isinstance(obj, click.Command):
-        raise TypeError(
-            f"{target} resolved to {type(obj).__name__}, not click.Command"
-        )
-    return obj
+
+    try:
+        obj: Any = module
+        for part in name.split("."):
+            obj = getattr(obj, part)
+        if isinstance(obj, click.Command):
+            return obj
+    except AttributeError:
+        pass
+
+    cli_group = getattr(module, "cli", None)
+    if isinstance(cli_group, click.Group):
+        candidate = cli_group.commands.get(name)
+        if isinstance(candidate, click.Command):
+            return candidate
+
+    raise TypeError(
+        f"{target!r} did not resolve to a click.Command "
+        f"(neither attribute chain nor cli.commands[{name!r}])"
+    )
 
 
 def _strip_click_markers(text: str) -> str:
@@ -386,7 +411,7 @@ class OaknutCommandDirective(SphinxDirective):
             return [error]
 
         prog = self.options.get("prog") or command.name
-        title_text = self.options.get("title") or command.name
+        title_text = self.options.get("title") or prog
 
         section = nodes.section()
         section["ids"] = [
