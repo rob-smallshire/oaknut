@@ -1,17 +1,19 @@
 Installation
 ============
 
-The ``oaknut-*`` family is published to PyPI as a set of independent
-packages. Two questions decide which ones you install:
-
-1. **Are you running a command-line tool, writing Python code, or both?**
-   The CLI lives in its own package; library code lives in per-filesystem
-   packages.
-2. **Which Acorn filing system(s) do you need to work with?**
-   DFS floppies, ADFS hard discs, AFS server discs, ZIP archives — pick
-   the package whose name matches.
+The oaknut packages provide tools for querying and manipulating Acorn
+filesystem images. For interactive use and simple scripting, prefer
+the Command Line Interface (CLI) tools. For lower-level programmatic
+access, the Python API is likely to be more suitable. Pick the
+package that names the filing system you actually need to work with
+— DFS floppies, ADFS hard discs, AFS server discs, ZIP archives —
+and install just that.
 
 oaknut supports Python 3.11 and newer.
+
+
+Prerequisites
+-------------
 
 This guide leads with `uv <https://docs.astral.sh/uv/>`__ because
 that's how the project is developed and what every internal command
