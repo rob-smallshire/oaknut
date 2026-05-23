@@ -3015,7 +3015,28 @@ def afs_userdel(image: Path, name: str) -> None:
 )
 @click.option("--target-path", default=None, help="Target AFS path for merge root.")
 def afs_merge(image: Path, source: Path, target_path: str | None) -> None:
-    """Merge a source AFS tree into the target image."""
+    """Bulk-copy the AFS file tree from one image into another.
+
+    Walks the source AFS partition recursively and recreates every
+    directory and file under the target's AFS partition, preserving
+    each entry's access byte, load address, exec address, and date.
+    The source image is opened read-only; only the target is mutated.
+
+    Typical uses:
+
+    \b
+      - layering a shipped library image (``Library``, ``ArthurLib``,
+        ``Library1``) onto a server disc after the fact, when
+        ``afs-init --emplace`` was not used at creation time;
+      - consolidating two Level 3 File Server discs onto one image,
+        either at the AFS root or — with ``--target-path`` — under a
+        chosen subdirectory of the target's namespace.
+
+    The ``Passwords`` file is always excluded so the target's own
+    user records survive intact. Conflicts on any other path abort
+    the merge before any bytes are written, so a refused merge never
+    leaves partial state on disc.
+    """
     from oaknut.adfs import ADFS
     from oaknut.afs import merge
 

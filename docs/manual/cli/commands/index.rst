@@ -216,6 +216,13 @@ Acorn File Server (AFS)
 .. oaknut-command:: oaknut.disc.cli:afs-merge
    :prog: disc afs-merge
 
+   The recipe initialises a small source disc with an emplaced
+   ``Library``, then merges its AFS tree into a separate empty
+   target. The source's ``Library`` lands under the target's
+   ``$`` root; the target's own freshly-created ``Passwords``
+   file is left in place (it would have been excluded even if
+   the source had carried one).
+
    .. cli-example:: cmd_afs_merge
 
 
