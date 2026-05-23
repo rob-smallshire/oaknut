@@ -570,8 +570,18 @@ def _attach_children(dir_node, parent_tree_node) -> None:
 @click.argument("file_spec")
 @report_output(
     reports={
-        "disc": "Physical geometry and total size.",
-        "partition_1": "First partition (DFS, or ADFS on a partitioned hard disc).",
+        "disc": (
+            "Physical envelope (geometry + total size). Emitted only on "
+            "partitioned ADFS+AFS hard discs, where it carries information "
+            "distinct from each partition. Single-partition images fold "
+            "this content into ``partition_1``."
+        ),
+        "partition_1": (
+            "Filesystem summary. On a single-partition image (DFS floppy "
+            "or ADFS image with no AFS tail) this is the only block and "
+            "carries the disc-level geometry too; on a partitioned ADFS+AFS "
+            "disc this is the ADFS slice and ``disc`` carries the geometry."
+        ),
         "partition_2": (
             "Second partition (AFS, present only on ADFS+AFS hard discs; "
             "also the report name when an afs:-prefixed path scopes the "
@@ -633,14 +643,26 @@ _SECTOR_SIZE = 256
 def _stat_disc(image_filepath: Path, fs: FilingSystem):
     """Build the whole-disc summary as a Reports collection.
 
-    The layout is a disc-level block (physical geometry + total size,
-    both derived from the geometry so they stay self-consistent — see
-    issue #7) followed by one ``partition_N`` block per filing-system
-    partition on the image.
+    The shape varies with how the image is partitioned:
+
+    - Single-filesystem images (DFS floppies, ADFS images with no AFS
+      tail partition) get a single ``partition_1`` block carrying
+      everything — title, boot option, geometry (for ADFS), size,
+      free space, file count. There is no separate ``disc`` block
+      because it would duplicate values already in ``partition_1``.
+
+    - ADFS hard discs with an AFS partition get the full three-block
+      layout: a ``disc`` envelope (physical geometry + total size),
+      then ``partition_1`` for the ADFS slice, then ``partition_2``
+      for the AFS slice. Each block describes its own slice; the
+      envelope is the umbrella that makes the partitioning visible.
 
     When the user scopes the view with an ``afs:`` prefix, ``fs`` is
-    :data:`FilingSystem.AFS` and a flat single-partition report is
-    returned instead — the prefix is a deliberate drill-down.
+    :data:`FilingSystem.AFS` and a flat ``partition_2`` block is
+    returned — the prefix is a deliberate drill-down.
+
+    The byte/sector figures across blocks are derived from the geometry
+    so they stay self-consistent (see issue #7).
     """
     from asyoulikeit.tabular_data import Report, Reports
 
@@ -652,13 +674,18 @@ def _stat_disc(image_filepath: Path, fs: FilingSystem):
             # same physical partition across stat invocations.
             sections["partition_2"] = Report(data=_afs_partition_only_tc(handle))
         elif fs is FilingSystem.DFS:
-            sections["disc"] = Report(data=_disc_header_dfs_tc(handle))
-            sections["partition_1"] = Report(data=_dfs_partition_tc(handle))
+            sections["partition_1"] = Report(data=_dfs_partition_tc(handle, is_only=True))
         else:
-            sections["disc"] = Report(data=_disc_header_adfs_tc(handle))
-            sections["partition_1"] = Report(data=_adfs_partition_tc(handle))
             afs = handle.afs_partition
-            if afs is not None:
+            if afs is None:
+                # Single-partition ADFS image: fold disc-level info
+                # (geometry, total size) into the one partition block.
+                sections["partition_1"] = Report(data=_adfs_partition_tc(handle, is_only=True))
+            else:
+                # Partitioned ADFS+AFS: the three-block envelope makes
+                # the partitioning visible.
+                sections["disc"] = Report(data=_disc_header_adfs_tc(handle))
+                sections["partition_1"] = Report(data=_adfs_partition_tc(handle, is_only=False))
                 sections["partition_2"] = Report(data=_afs_partition_tc(handle, afs))
     return Reports(sections)
 
@@ -686,15 +713,12 @@ def _kv_table(title: str, pairs: list[tuple[str, str, str]]):
     return tc
 
 
-def _disc_header_dfs_tc(handle):
-    total_sectors = handle.info["total_sectors"]
-    return _kv_table(
-        "Disc",
-        [("size", "Size", _format_size(total_sectors))],
-    )
-
-
 def _disc_header_adfs_tc(handle):
+    """Disc-level envelope block — used only on partitioned ADFS+AFS hard discs.
+
+    On single-partition images the equivalent information is rolled
+    into the partition block; see :func:`_adfs_partition_tc`.
+    """
     geom = handle.geometry
     total_sectors = geom.cylinders * geom.heads * geom.sectors_per_track
     return _kv_table(
@@ -711,13 +735,20 @@ def _disc_header_adfs_tc(handle):
     )
 
 
-def _dfs_partition_tc(handle):
+def _dfs_partition_tc(handle, *, is_only: bool):
+    """DFS partition block.
+
+    ``is_only=True`` (every DFS image, since DFS doesn't carry a tail
+    partition) drops the ``Partition 1:`` prefix from the table title
+    so the single block reads as a plain "DFS" summary.
+    """
     from oaknut.file import BootOption
 
     info = handle.info
     boot = BootOption(handle.boot_option)
+    title = "DFS" if is_only else "Partition 1: DFS"
     return _kv_table(
-        "Partition 1: DFS",
+        title,
         [
             ("title", "Title", handle.title or ""),
             ("boot_option", "Boot option", f"{boot.name} ({boot.value})"),
@@ -728,23 +759,47 @@ def _dfs_partition_tc(handle):
     )
 
 
-def _adfs_partition_tc(handle):
+def _adfs_partition_tc(handle, *, is_only: bool):
+    """ADFS partition block.
+
+    ``is_only=True`` (an ADFS image with no AFS tail partition) drops
+    the ``Partition 1:`` prefix and prepends a ``Geometry`` row so the
+    one block carries the disc-level info that would otherwise live in
+    a separate ``Disc`` block.
+
+    ``is_only=False`` (an ADFS+AFS hard disc) emits the slice-only
+    block; the disc-level geometry is in the separate ``disc`` report
+    that the partitioned shape always carries.
+    """
     from oaknut.file import BootOption
 
     geom = handle.geometry
     adfs_sectors = handle.total_size // _SECTOR_SIZE
     adfs_cylinders = adfs_sectors // (geom.heads * geom.sectors_per_track)
     boot = BootOption(handle.boot_option)
-    pairs: list[tuple[str, str, str]] = [
-        ("title", "Title", handle.title or ""),
-        ("boot_option", "Boot option", f"{boot.name} ({boot.value})"),
-    ]
+    pairs: list[tuple[str, str, str]] = []
+    if is_only:
+        pairs.append(
+            (
+                "geometry",
+                "Geometry",
+                f"{geom.cylinders} cylinders, {geom.heads} heads, "
+                f"{geom.sectors_per_track} sectors/track",
+            )
+        )
+    pairs.extend(
+        [
+            ("title", "Title", handle.title or ""),
+            ("boot_option", "Boot option", f"{boot.name} ({boot.value})"),
+        ]
+    )
     if adfs_cylinders < geom.cylinders:
         pairs.append(("range", "Range", f"cylinders 0-{adfs_cylinders - 1}"))
     pairs.append(("size", "Size", _format_size(adfs_sectors)))
     free_sectors = handle.free_space // _SECTOR_SIZE
     pairs.append(("free", "Free", _format_size(free_sectors)))
-    return _kv_table("Partition 1: ADFS", pairs)
+    title = "ADFS" if is_only else "Partition 1: ADFS"
+    return _kv_table(title, pairs)
 
 
 def _afs_partition_tc(adfs_handle, afs):

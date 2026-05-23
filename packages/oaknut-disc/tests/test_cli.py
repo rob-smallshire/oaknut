@@ -611,42 +611,46 @@ def _extract_size_lines(output: str) -> list[tuple[int, int]]:
 class TestStatPartitionStructure:
     """Disc-level summary plus one block per partition."""
 
-    def test_dfs_disc_and_single_partition(
-        self, runner: CliRunner, dfs_image_filepath: Path
-    ) -> None:
-        # Display mode pins the human-readable layout so the section
-        # titles (Disc, Partition 1: DFS) appear as literal text.  TSV
-        # omits titles by design.
+    def test_dfs_single_block(self, runner: CliRunner, dfs_image_filepath: Path) -> None:
+        """DFS images emit a single ``DFS`` block — no separate ``Disc``
+        envelope, since it would only duplicate the partition's Size.
+        """
         result = runner.invoke(cli, ["stat", "--as", "display", str(dfs_image_filepath)])
         assert result.exit_code == 0, result.output
-        assert "Disc" in result.output
-        assert "Partition 1: DFS" in result.output
-        # Title / boot option live under the partition now, not the disc.
+        # Single-partition shape: no "Disc" envelope, no "Partition 1:" prefix.
+        assert "Partition 1: DFS" not in result.output
+        # The block header is plain "DFS"; the title sits inside.
+        assert "DFS" in result.output
         assert "TestDFS" in result.output
-        # Byte/sector pairs must be self-consistent (issue #7 regression).
         for bytes_value, sector_value in _extract_sizes(result.output):
             assert bytes_value == sector_value * 256, f"{bytes_value} bytes != {sector_value}*256"
 
-    def test_adfs_floppy_disc_and_single_partition(
-        self, runner: CliRunner, adfs_image_filepath: Path
-    ) -> None:
+    def test_adfs_floppy_single_block(self, runner: CliRunner, adfs_image_filepath: Path) -> None:
+        """Unpartitioned ADFS images emit a single ``ADFS`` block that
+        carries the disc-level geometry too — no separate envelope.
+        """
         result = runner.invoke(cli, ["stat", "--as", "display", str(adfs_image_filepath)])
         assert result.exit_code == 0, result.output
-        assert "Disc" in result.output
-        assert "Partition 1: ADFS" in result.output
+        assert "Partition 1: ADFS" not in result.output
+        assert "ADFS" in result.output
         assert "TestADFS" in result.output
-        # One partition — its size must equal the disc size.
+        # Geometry has been folded into the single block.
+        assert "cylinders" in result.output
         for bytes_value, sector_value in _extract_sizes(result.output):
             assert bytes_value == sector_value * 256
 
-    def test_adfs_hard_no_afs_single_partition(
+    def test_adfs_hard_no_afs_single_block(
         self, runner: CliRunner, adfs_hard_no_afs_filepath: Path
     ) -> None:
+        """An ADFS hard disc with no AFS tail is still single-partition —
+        same single-block shape as an ADFS floppy.
+        """
         result = runner.invoke(cli, ["stat", "--as", "display", str(adfs_hard_no_afs_filepath)])
         assert result.exit_code == 0, result.output
-        assert "Partition 1: ADFS" in result.output
-        # Without AFS there is no Partition 2.
+        assert "Partition 1" not in result.output
         assert "Partition 2" not in result.output
+        # Geometry must still appear (folded into the single block).
+        assert "cylinders" in result.output
         for bytes_value, sector_value in _extract_sizes(result.output):
             assert bytes_value == sector_value * 256
 
