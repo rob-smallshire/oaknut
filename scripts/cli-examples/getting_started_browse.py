@@ -21,4 +21,4 @@ with in_tmp_dir():
     silent("disc put 'hello.ssd:$.README' readme.txt")
 
     show("disc tree hello.ssd")
-    show("disc ls 'hello.ssd:$'")
+    show("disc ls hello.ssd")

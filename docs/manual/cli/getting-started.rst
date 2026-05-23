@@ -187,7 +187,7 @@ otherwise a glob:
 
 .. code-block:: sh
 
-   disc '*CAT'  'hello.ssd:$'             # same as: disc ls hello.ssd:$
+   disc '*CAT'  hello.ssd                 # same as: disc ls hello.ssd
    disc '*INFO' hello.ssd                 # same as: disc stat
    disc '*TYPE' 'hello.ssd:$.README'      # same as: disc type
 

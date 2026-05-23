@@ -48,21 +48,32 @@ class TestCLIBasics:
 
 
 class TestLs:
-    def test_ls_dfs_root(self, runner: CliRunner, dfs_image_filepath: Path) -> None:
+    def test_ls_dfs_bare_lists_dollar(self, runner: CliRunner, dfs_image_filepath: Path) -> None:
+        """Bare ``disc ls IMAGE`` on DFS lists the contents of ``$``.
+
+        Without this, the bare form yields a single ``$/`` placeholder
+        row, which surprises every user — the most useful default is
+        to descend into ``$`` directly. Files in other letter
+        directories remain listable via ``disc ls IMAGE:A``.
+        """
         # --as display pins the Rich renderer so the format-label in the
-        # table title ("DFS") is part of the output.  Default piped
+        # table title ("DFS") is part of the output. Default piped
         # output is TSV, which omits titles.
         result = runner.invoke(cli, ["ls", "--as", "display", str(dfs_image_filepath)])
         assert result.exit_code == 0
-        # Root shows the $ directory, not the files directly.
-        assert "$" in result.output
         assert "DFS" in result.output
-
-    def test_ls_dfs_dollar(self, runner: CliRunner, dfs_image_filepath: Path) -> None:
-        result = runner.invoke(cli, ["ls", f"{dfs_image_filepath}:$"])
-        assert result.exit_code == 0
+        # Files in $ appear directly (same as `disc ls IMAGE:$`).
         assert "HELLO" in result.output
         assert "DATA" in result.output
+
+    def test_ls_dfs_bare_equals_explicit_dollar(
+        self, runner: CliRunner, dfs_image_filepath: Path
+    ) -> None:
+        """Bare and ``IMAGE:$`` forms must produce identical output."""
+        bare = runner.invoke(cli, ["ls", str(dfs_image_filepath)])
+        explicit = runner.invoke(cli, ["ls", f"{dfs_image_filepath}:$"])
+        assert bare.exit_code == 0 and explicit.exit_code == 0
+        assert bare.output == explicit.output
 
     def test_ls_adfs_root(self, runner: CliRunner, adfs_image_filepath: Path) -> None:
         result = runner.invoke(cli, ["ls", "--as", "display", str(adfs_image_filepath)])

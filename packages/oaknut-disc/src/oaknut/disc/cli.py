@@ -404,6 +404,17 @@ def ls(file_spec: str, show_access_byte: bool):
     with open_image(image, fs) as handle:
         target = _navigate(handle, bare, fs)
 
+        # On DFS the natural "list this disc" target is ``$`` — the
+        # directory that actually holds files. The level above is a
+        # catalogue-wide view that yields only directory letters as
+        # placeholders, which surprises every user. Treat a bare
+        # ``disc ls IMAGE`` (no PATH_SPEC) as if the reader had typed
+        # ``disc ls IMAGE:$``. Files in non-$ letter directories are
+        # still reachable via ``disc ls IMAGE:A`` etc., or via the
+        # whole-disc recursive view ``disc tree IMAGE``.
+        if fs is FilingSystem.DFS and not bare:
+            target = handle.path("$")
+
         if not target.exists() and not target.is_dir():
             raise click.ClickException(f"path not found: {bare or '$'}")
 
