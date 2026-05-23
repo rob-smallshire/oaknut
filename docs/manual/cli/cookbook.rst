@@ -82,59 +82,92 @@ Creating a Level 3 File Server disc
 
 The full walkthrough builds a bootable L3FS hard disc from a fresh
 ADFS envelope plus the file-server executable shipped on
-``tests/data/images/cookbook/FS3v126.ssd``:
+``tests/data/images/cookbook/FS3v126.ssd``. The recipe runs as one
+coherent sequence — the same image is carried forward from step to
+step — but the captured transcript is sliced into named sections so
+each step's output can sit next to its own explanation.
+
+**1. Lay down an empty ADFS hard-disc envelope.**
 
 .. cli-example:: l3fs_disc
+   :section: envelope
 
-Reading top to bottom:
+``disc create`` reserves the file on the host and writes the ADFS
+catalogue + free-space map. ``--format adfs-hard`` picks the
+hard-disc geometry family; ``--capacity 10MB`` sizes it; ``--title``
+sets the on-disc title that ``*CAT`` will display. The command is
+silent on success — see :doc:`conventions/exit-codes` for the
+broader contract.
 
-- **Build the ADFS half** (``disc create`` / ``cp`` / ``put``).
-  ``disc create`` lays down a 10 MiB ADFS hard-disc envelope titled
-  ``Server``. ``disc cp`` pulls the file-server binary out of the
-  SSD it ships on and onto the new hard disc — a classic
-  cross-image copy. ``disc put`` writes a one-line ``!BOOT`` whose
-  contents are ``*RUN $.FS3v126`` followed by the Acorn ``\r`` line
-  ending (built with ``printf`` into a local file we then feed to
-  ``put`` — see :doc:`getting-started` for why ``printf`` rather
-  than ``echo``).
+**2. Install the file-server binary onto the new disc.**
 
-- **Configure auto-boot** (``disc opt``). ``disc opt scsi0.dat``
-  with no value reads the current boot option — ``0`` / ``OFF`` on
-  a freshly-created disc. ``disc opt scsi0.dat EXEC`` sets it.
-  Symbolic names (``OFF`` / ``LOAD`` / ``RUN`` / ``EXEC``) are
-  accepted alongside the numeric forms (``0`` / ``1`` / ``2`` /
-  ``3``); ``disc opt --help`` lists the full mapping. ``EXEC`` is
-  the right choice here because ``!BOOT`` is a command file, not a
-  binary — pressing :kbd:`SHIFT-BREAK` will run ``*EXEC $.!BOOT``,
-  which types the ``*RUN $.FS3v126`` line at the OS prompt.
+.. cli-example:: l3fs_disc
+   :section: install_fs
 
-- **Attach the AFS partition** (``disc afs-plan`` / ``afs-init`` /
-  ``afs-users``). ``disc afs-plan`` is a dry-run that shows the
-  disc's geometry, how many sectors ADFS currently occupies, and
-  what an AFS partition built from the remaining free space would
-  look like. Reviewing the plan before committing is the polite
-  habit; ``afs-init`` then carves out the AFS partition for real,
-  adds an ``RJS`` regular user, ``--omit-user``-s the built-in
-  ``Welcome`` account, and ``--emplace``-s two shipped library
-  images. The recipe does **not** create ``Syst`` or ``Boot``
-  explicitly — those are built-in accounts and arrive for free with
-  every freshly-initialised AFS partition (``Welcome`` would too,
-  hence the explicit omission). The follow-up ``disc afs-users``
-  confirms the user list: ``Syst``, ``Boot``, and ``RJS`` are
-  present; ``Welcome`` is not. To change a built-in's quota or
-  password instead of dropping it, supply ``--user NAME:...`` and
-  the spec overrides the default. Note also the absence of
-  ``--cylinders``: when omitted, ``afs-init`` claims the existing
-  free space, which is exactly what ``afs-plan`` would have
-  suggested. Pass an explicit value if you want a smaller AFS
-  region and ADFS retained beyond what is strictly necessary.
-  ``--emplace`` accepts a shipped name (``Library``, ``Library1``,
-  ``ArthurLib``) or a path to any ADFS ``.adl``; the contents land
-  in a directory of the same name on the AFS partition.
+A classic cross-format ``disc cp`` — the source ``$.FS3v126`` lives
+on a DFS floppy, the destination is the same name on the ADFS
+partition of the hard disc we just created. Load and exec
+addresses survive the crossing; see :doc:`/api/patterns/metadata`
+for the attribute-mapping table.
 
-- **Verify** (``disc stat``). The closing ``disc stat`` confirms the
-  dual-partition shape — the same three-block layout
-  (Disc envelope + Partition 1: ADFS + Partition 2: AFS) that
-  :doc:`conventions/output-formats` describes, with the
-  geometry block carrying information that is genuinely distinct
-  from either partition's own slice.
+**3. Write a ``!BOOT`` command file and turn on autoboot.**
+
+.. cli-example:: l3fs_disc
+   :section: boot
+
+``disc put`` writes a one-line ``!BOOT`` whose contents are
+``*RUN $.FS3v126`` followed by the Acorn ``\r`` line ending. The
+bytes come from ``boot.tmp``, which the recipe built off-stage with
+``printf '*RUN $.FS3v126\r' > boot.tmp`` — see :doc:`getting-started`
+for why ``printf`` rather than ``echo``.
+
+``disc opt scsi0.dat`` with no value reads the current boot option
+(``0`` / ``OFF`` on a freshly-created disc) and ``disc opt
+scsi0.dat EXEC`` sets it. Symbolic names (``OFF`` / ``LOAD`` /
+``RUN`` / ``EXEC``) are accepted alongside the numeric forms
+(``0`` / ``1`` / ``2`` / ``3``); ``disc opt --help`` lists the full
+mapping. ``EXEC`` is the right choice here because ``!BOOT`` is a
+command file, not a binary — pressing :kbd:`SHIFT-BREAK` runs
+``*EXEC $.!BOOT``, which types the ``*RUN $.FS3v126`` line at the
+OS prompt.
+
+**4. Attach the AFS partition.**
+
+.. cli-example:: l3fs_disc
+   :section: attach_afs
+
+``disc afs-plan`` is a dry-run that shows the disc's geometry, how
+many sectors ADFS currently occupies, and what an AFS partition
+built from the remaining free space would look like. Reviewing the
+plan before committing is the polite habit; ``afs-init`` then
+carves out the AFS partition for real, adds an ``RJS`` regular
+user, ``--omit-user``-s the built-in ``Welcome`` account, and
+``--emplace``-s two shipped library images. ``Syst`` and ``Boot``
+are not created explicitly — those are built-in accounts and arrive
+for free with every freshly-initialised AFS partition (``Welcome``
+would too, hence the explicit omission). The follow-up
+``disc afs-users`` confirms the resulting user list: ``Syst``,
+``Boot``, and ``RJS`` are present; ``Welcome`` is not. To change a
+built-in's quota or password instead of dropping it, supply
+``--user NAME:...`` and the spec overrides the default. Note also
+the absence of ``--cylinders``: when omitted, ``afs-init`` claims
+the existing free space, which is exactly what ``afs-plan`` would
+have suggested. Pass an explicit value if you want a smaller AFS
+region and ADFS retained beyond what is strictly necessary.
+``--emplace`` accepts a shipped name (``Library``, ``Library1``,
+``ArthurLib``) or a path to any ADFS ``.adl``; the contents land
+in a directory of the same name on the AFS partition.
+
+**5. Verify the dual-partition shape.**
+
+.. cli-example:: l3fs_disc
+   :section: verify
+
+A final ``disc stat`` confirms the three-block layout — a ``Disc``
+envelope carrying the physical geometry, then ``Partition 1: ADFS``
+holding the boot configuration and the FS binary, then
+``Partition 2: AFS`` ready to serve files over Econet. The
+single-partition collapsed form documented in
+:doc:`conventions/output-formats` does not apply here because the
+two partitions genuinely carry different things; the envelope is
+the natural umbrella.

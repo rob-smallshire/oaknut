@@ -66,16 +66,89 @@ suppress_warnings = ["docutils"]
 #   - `with in_tmp_dir():` — sandbox the recipe in a fresh temp directory.
 # ---------------------------------------------------------------------------
 
+import re
+
 _REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 _CLI_EXAMPLES_DIRPATH = _REPO_ROOT / "scripts" / "cli-examples"
 
+# Sentinel format kept in sync with scripts/cli_example_helper.section().
+# The leading \x1f (ASCII Unit Separator) keeps the marker out of the
+# way of any legitimate command output.
+_SECTION_MARKER_RE = re.compile(r"\x1f@@OAKNUT_SECTION@@(\S+)")
+
+# Recipe outputs are cached at module scope so a page with several
+# `.. cli-example:: NAME :section: ...` directives pointing at the
+# same recipe runs that recipe only once per docs build. The cache is
+# fresh on every `sphinx-build` invocation (the module is reimported).
+_RECIPE_CACHE: dict[Path, str] = {}
+
+
+def _run_recipe(script_filepath: Path) -> str:
+    cached = _RECIPE_CACHE.get(script_filepath)
+    if cached is not None:
+        return cached
+    result = subprocess.run(
+        [sys.executable, str(script_filepath)],
+        cwd=_REPO_ROOT,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"recipe failed: {script_filepath.name} (exit {result.returncode})\n"
+            f"--- stdout ---\n{result.stdout}\n"
+            f"--- stderr ---\n{result.stderr}"
+        )
+    _RECIPE_CACHE[script_filepath] = result.stdout
+    return result.stdout
+
+
+def _split_sections(raw: str) -> dict[str, str]:
+    """Parse `raw` into a {section_name: body} dict via the marker lines.
+
+    Content before the first marker is discarded — recipe authors who
+    want a head section should call ``section()`` first thing.
+    """
+    sections: dict[str, str] = {}
+    current_name: str | None = None
+    current_buf: list[str] = []
+    for line in raw.splitlines(keepends=True):
+        match = _SECTION_MARKER_RE.search(line)
+        if match is not None:
+            if current_name is not None:
+                sections[current_name] = "".join(current_buf)
+            current_name = match.group(1)
+            current_buf = []
+        else:
+            if current_name is not None:
+                current_buf.append(line)
+    if current_name is not None:
+        sections[current_name] = "".join(current_buf)
+    return sections
+
+
+def _strip_section_markers(raw: str) -> str:
+    """Drop the marker lines, leaving the rest of the transcript intact."""
+    return "".join(
+        line for line in raw.splitlines(keepends=True) if _SECTION_MARKER_RE.search(line) is None
+    )
+
 
 class CliExampleDirective(Directive):
-    """Run a recipe at scripts/cli-examples/<name>.py and embed its transcript."""
+    """Run a recipe at scripts/cli-examples/<name>.py and embed its transcript.
+
+    A bare ``.. cli-example:: name`` emits the whole captured stdout
+    (with any section markers stripped). Passing ``:section: foo``
+    emits just the body of the ``foo`` section — see
+    :func:`scripts.cli_example_helper.section`. The recipe runs at
+    most once per docs build, regardless of how many directives
+    target it.
+    """
 
     has_content = False
     required_arguments = 1
     final_argument_whitespace = False
+    option_spec = {"section": str}
 
     def run(self) -> list[nodes.Node]:
         name = self.arguments[0]
@@ -88,23 +161,28 @@ class CliExampleDirective(Directive):
                 )
             ]
 
-        result = subprocess.run(
-            [sys.executable, str(script_filepath)],
-            cwd=_REPO_ROOT,
-            capture_output=True,
-            text=True,
-        )
-        if result.returncode != 0:
-            return [
-                self.state.document.reporter.error(
-                    f"cli-example recipe failed: {name} (exit {result.returncode})\n"
-                    f"--- stdout ---\n{result.stdout}\n"
-                    f"--- stderr ---\n{result.stderr}",
-                    line=self.lineno,
-                )
-            ]
+        try:
+            raw_output = _run_recipe(script_filepath)
+        except RuntimeError as exc:
+            return [self.state.document.reporter.error(str(exc), line=self.lineno)]
 
-        block = nodes.literal_block(result.stdout, result.stdout)
+        section_name = self.options.get("section")
+        if section_name is None:
+            display_text = _strip_section_markers(raw_output)
+        else:
+            sections = _split_sections(raw_output)
+            if section_name not in sections:
+                available = ", ".join(sorted(sections)) or "(none)"
+                return [
+                    self.state.document.reporter.error(
+                        f"cli-example recipe {name!r} has no section "
+                        f"{section_name!r}; available: {available}",
+                        line=self.lineno,
+                    )
+                ]
+            display_text = sections[section_name]
+
+        block = nodes.literal_block(display_text, display_text)
         block["language"] = "console"
         return [block]
 

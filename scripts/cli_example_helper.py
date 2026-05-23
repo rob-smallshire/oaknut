@@ -44,9 +44,36 @@ from pathlib import Path
 __all__ = [
     "show",
     "silent",
+    "section",
     "in_tmp_dir",
     "copy_from_corpus",
 ]
+
+
+#: Sentinel emitted by :func:`section` and recognised by the
+#: ``cli-example`` Sphinx directive. ASCII Unit Separator + an
+#: unambiguous tag — neither component appears in normal command
+#: output, so the marker round-trips cleanly through stdout capture
+#: without colliding with anything a recipe might legitimately print.
+_SECTION_MARKER_PREFIX = "\x1f@@OAKNUT_SECTION@@"
+
+
+def section(name: str) -> None:
+    """Mark the start of a named section in the captured transcript.
+
+    The ``cli-example`` directive in ``docs/manual/conf.py``
+    recognises these markers and can extract just the named section
+    into a page block via ``:section: <name>``. This lets a long,
+    stateful recipe be interleaved with explanatory prose without
+    being rebuilt from scratch for each step — the recipe runs once
+    per docs build and its output is sliced on demand.
+
+    Sections are sequential: each call closes the previous section
+    and opens the new one. Content before the first call is
+    accessible only through the no-``:section:`` default (full
+    transcript with markers stripped).
+    """
+    print(f"{_SECTION_MARKER_PREFIX}{name}")
 
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
