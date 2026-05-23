@@ -86,23 +86,37 @@ Modification (within an image)
 .. oaknut-command:: oaknut.disc.cli:cp
    :prog: disc cp
 
+   .. cli-example:: cmd_cp
+
 .. oaknut-command:: oaknut.disc.cli:mv
    :prog: disc mv
+
+   .. cli-example:: cmd_mv
 
 .. oaknut-command:: oaknut.disc.cli:rm
    :prog: disc rm
 
+   .. cli-example:: cmd_rm
+
 .. oaknut-command:: oaknut.disc.cli:mkdir
    :prog: disc mkdir
+
+   .. cli-example:: cmd_mkdir
 
 .. oaknut-command:: oaknut.disc.cli:chmod
    :prog: disc chmod
 
+   .. cli-example:: cmd_chmod
+
 .. oaknut-command:: oaknut.disc.cli:lock
    :prog: disc lock
 
+   .. cli-example:: cmd_lock
+
 .. oaknut-command:: oaknut.disc.cli:unlock
    :prog: disc unlock
+
+   .. cli-example:: cmd_unlock
 
 
 Metadata
