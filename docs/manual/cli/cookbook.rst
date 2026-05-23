@@ -1,22 +1,19 @@
 CLI cookbook
 ============
 
-Recipes that compose ``disc`` with shell tooling to solve real
-end-to-end tasks. Each recipe is built around the Repton Infinity
-disc image shipped in the project's test fixtures, so every command
-shown is also runnable as-is against ``tests/data/images/games/``.
-
-The output blocks below come from running the recipes at docs-build
-time — they cannot drift from the actual binary's behaviour.
+Recipes that compose ``disc`` with shell tooling for real
+end-to-end tasks. Example data lives under
+``tests/data/images/`` in the project's test fixtures, so every
+recipe is runnable as-is.
 
 
 Finding files by pattern
 ------------------------
 
-``disc find`` walks a disc's catalogue and returns the entries whose
-path matches an Acorn wildcard pattern. The pattern lives in the
-``PATH_SPEC`` half of the ``FILE_SPEC`` so it is quoted the same way
-as any other in-image path:
+To locate files by name, walk the catalogue with ``disc find``. The
+pattern is an Acorn wildcard expression sitting in the ``PATH_SPEC``
+half of the ``FILE_SPEC``, so it is quoted the same way as any other
+in-image path:
 
 .. cli-example:: find_pattern
 
@@ -34,8 +31,8 @@ shell's hands, see :doc:`conventions/wildcards`.
 Bulk-export a disc to your host filesystem
 ------------------------------------------
 
-``disc export`` lifts every file out of a disc image and into a
-host directory tree, dropping an ``.inf`` sidecar next to each file
+To extract a whole disc to your host filesystem, use
+``disc export``. Each file is written alongside an ``.inf`` sidecar
 so the load / exec / length / attribute metadata survives the
 crossing.
 
@@ -44,22 +41,21 @@ crossing.
 The ``.inf`` file is the *traditional* Acorn metadata format: one
 line of five whitespace-separated fields — the Acorn filename, the
 load address, the exec address, the length in bytes, and the access
-byte. ``disc export`` defaults to ``--meta-format inf-trad``;
+byte. The default ``--meta-format inf-trad`` produces this form;
 modern alternatives (``xattr-acorn``, ``filename-riscos``, etc.) are
 documented in :doc:`/api/patterns/metadata`.
 
-The resulting host tree round-trips back onto a disc with
-``disc import``, preserving everything ``.inf`` captured. Inspect
-or edit on the host using your normal tools, then push the changes
-back.
+The host tree round-trips back onto a disc with ``disc import``,
+preserving everything ``.inf`` captured. Inspect or edit on the host
+using your normal tools, then push the changes back.
 
 
 Copying files across filing-system formats
 ------------------------------------------
 
-``disc cp`` works between any combination of DFS, ADFS, and AFS
-images. The source format does not have to match the destination
-format — the CLI maps Acorn metadata across the formats for you:
+Copies span any combination of DFS, ADFS, and AFS images: source
+and destination need not share a format because ``disc cp`` maps
+Acorn metadata across them for you.
 
 .. cli-example:: cross_format_cp
 
@@ -82,9 +78,10 @@ Archive a folder of SSDs to one ADFS hard disc
 
 You have a directory full of DFS ``.ssd`` floppies on your host
 and want them all sitting on a single ADFS hard disc, each under
-its own subdirectory named for the source. Three lines of shell —
-a ``for`` loop wrapping a single ``disc cp -r`` per SSD — does
-the work.
+its own subdirectory named for the source.
+
+Three lines of shell — a ``for`` loop wrapping a single
+``disc cp -r`` per SSD — do the work.
 
 **1. Look at the source filenames.**
 
@@ -115,21 +112,18 @@ The interesting moves:
   same convention as Unix ``cp -r SRC DEST`` when ``DEST`` does not
   exist. No explicit ``disc mkdir`` is required.
 
-The recipe is also a good demonstration of ``disc``'s "silence is
-golden" stance: every successful ``disc cp -r`` writes nothing to
-stdout, so an 18-file copy spread across three SSDs produces zero
-chatter, leaving the shell loop entirely to its own narrative.
+Note the silence: each successful ``disc cp -r`` writes nothing,
+so the 18-file copy across three SSDs produces no stdout chatter.
 
 **3. Verify the archive.**
 
 .. cli-example:: bulk_archive_ssds
    :section: verify
 
-``disc ls`` confirms the three sibling directories — one per SSD —
-sit at the top level of the archive. ``disc tree`` then walks the
-whole thing, showing each SSD's catalogue (the ``$.HELLO`` /
-``$.GAME`` files etc. that lived on each original DFS floppy) under
-the matching directory.
+The top level of the archive holds three sibling directories — one
+per SSD. Walking the whole thing with ``disc tree`` then exposes
+each SSD's catalogue (the ``$.HELLO`` / ``$.GAME`` files etc. that
+lived on each original DFS floppy) under the matching directory.
 
 
 Creating a Level 3 File Server disc
@@ -137,22 +131,20 @@ Creating a Level 3 File Server disc
 
 The full walkthrough builds a bootable L3FS hard disc from a fresh
 ADFS envelope plus the file-server executable shipped on
-``tests/data/images/cookbook/FS3v126.ssd``. The recipe runs as one
-coherent sequence — the same image is carried forward from step to
-step — but the captured transcript is sliced into named sections so
-each step's output can sit next to its own explanation.
+``tests/data/images/cookbook/FS3v126.ssd``.
 
 **1. Lay down an empty ADFS hard-disc envelope.**
 
 .. cli-example:: l3fs_disc
    :section: envelope
 
-``disc create`` reserves the file on the host and writes the ADFS
-catalogue + free-space map. ``--format adfs-hard`` picks the
-hard-disc geometry family; ``--capacity 10MB`` sizes it; ``--title``
-sets the on-disc title that ``*CAT`` will display. The command is
-silent on success — see :doc:`conventions/exit-codes` for the
-broader contract.
+Here ``disc create`` reserves the file on the host and writes the
+ADFS catalogue + free-space map. The ``--format adfs-hard`` option
+picks the hard-disc geometry family, ``--capacity 10MB`` sizes it,
+and ``--title`` sets the on-disc title that ``*CAT`` will display.
+
+The command is silent on success — see :doc:`conventions/exit-codes`
+for the broader contract.
 
 **2. Install the file-server binary onto the new disc.**
 
@@ -170,22 +162,23 @@ for the attribute-mapping table.
 .. cli-example:: l3fs_disc
    :section: boot
 
-``disc put`` writes a one-line ``!BOOT`` whose contents are
-``*RUN $.FS3v126`` followed by the Acorn ``\r`` line ending.
-``printf`` builds those bytes on stdout, the shell pipes them into
-``disc put``, and the trailing ``-`` is the long-standing Unix
-idiom for "read this argument from stdin" — codified as a guideline
-in POSIX's *Utility Conventions* and inherited unchanged here. The
-``printf`` rather than ``echo`` choice is forced by the ``\r`` —
-see :doc:`getting-started` for the line-ending rationale.
+A one-line ``!BOOT`` containing ``*RUN $.FS3v126`` followed by the
+Acorn ``\r`` line ending is what we want on disc. The ``printf``
+builds those bytes on stdout, the shell pipes them into ``disc put``,
+and the trailing ``-`` is the long-standing Unix idiom for "read this
+argument from stdin" — codified as a guideline in POSIX's *Utility
+Conventions* and inherited unchanged here. The choice of ``printf``
+rather than ``echo`` is forced by the ``\r`` — see
+:doc:`getting-started` for the line-ending rationale.
 
-``disc opt scsi0.dat`` with no value reads the current boot option
-(``0`` / ``OFF`` on a freshly-created disc) and ``disc opt
-scsi0.dat EXEC`` sets it. Symbolic names (``OFF`` / ``LOAD`` /
-``RUN`` / ``EXEC``) are accepted alongside the numeric forms
-(``0`` / ``1`` / ``2`` / ``3``); ``disc opt --help`` lists the full
-mapping. ``EXEC`` is the right choice here because ``!BOOT`` is a
-command file, not a binary — pressing :kbd:`SHIFT-BREAK` runs
+With no value, ``disc opt scsi0.dat`` reads the current boot option
+(``0`` / ``OFF`` on a freshly-created disc); passing ``EXEC`` sets
+it. Symbolic names (``OFF`` / ``LOAD`` / ``RUN`` / ``EXEC``) are
+accepted alongside the numeric forms (``0`` / ``1`` / ``2`` /
+``3``); ``disc opt --help`` lists the full mapping.
+
+``EXEC`` is the right choice here because ``!BOOT`` is a command
+file, not a binary — pressing :kbd:`SHIFT-BREAK` runs
 ``*EXEC $.!BOOT``, which effectively types the ``*RUN $.FS3v126``
 line at the OS prompt.
 
@@ -194,45 +187,53 @@ line at the OS prompt.
 .. cli-example:: l3fs_disc
    :section: attach_afs
 
-``disc afs-plan`` is a dry-run that shows the disc's geometry, how
-many sectors ADFS currently occupies, and what an AFS partition
-built from the remaining free space would look like. Reviewing the
-plan before committing is the polite habit; ``afs-init`` then
-carves out the AFS partition for real, adds an ``RJS`` regular
-user, ``--omit-user``-s the built-in ``Welcome`` account, and
-``--emplace``-s two shipped library images. ``Syst`` and ``Boot``
-are not created explicitly — those are built-in accounts and arrive
-for free with every freshly-initialised AFS partition (``Welcome``
-would too, hence the explicit omission). The follow-up
-``disc afs-users`` confirms the resulting user list: ``Syst``,
-``Boot``, and ``RJS`` are present; ``Welcome`` is not. To change a
-built-in's quota or password instead of dropping it, supply
-``--user NAME:...`` and the spec overrides the default. Note also
-the absence of ``--cylinders``: when omitted, ``afs-init`` claims
-the existing free space, which is exactly what ``afs-plan`` would
-have suggested. Pass an explicit value if you want a smaller AFS
-region and ADFS retained beyond what is strictly necessary.
-``--emplace`` accepts a shipped name (``Library``, ``Library1``,
-``ArthurLib``) or a path to any ADFS ``.adl``; the contents land
-in a directory of the same name on the AFS partition.
+The ``afs-plan`` subcommand is a dry-run that shows the disc's
+geometry, how many sectors ADFS currently occupies, and what an AFS
+partition built from the remaining free space would look like.
+Reviewing the plan before committing is the polite habit.
+
+After that, ``afs-init`` carves out the AFS partition for real,
+adds an ``RJS`` regular user, ``--omit-user``-s the built-in
+``Welcome`` account, and ``--emplace``-s two shipped library
+images.
+
+The ``Syst`` and ``Boot`` accounts are not created explicitly —
+those are built-ins and arrive for free with every freshly-
+initialised AFS partition (``Welcome`` would too, hence the explicit
+omission). To change a built-in's quota or password instead of
+dropping it, supply ``--user NAME:...`` and the spec overrides the
+default. Following up, ``disc afs-users`` confirms the resulting
+user list: ``Syst``, ``Boot``, and ``RJS`` are present; ``Welcome``
+is not.
+
+Note also the absence of ``--cylinders``: when omitted, ``afs-init``
+claims the existing free space, which is exactly what ``afs-plan``
+would have suggested. Pass an explicit value if you want a smaller
+AFS region and ADFS retained beyond what is strictly necessary.
+
+The ``--emplace`` option accepts a shipped name (``Library``,
+``Library1``, ``ArthurLib``) or a path to any ADFS ``.adl``; the
+contents land in a directory of the same name on the AFS partition.
 
 **5. Verify the dual-partition shape and walk the disc.**
 
 .. cli-example:: l3fs_disc
    :section: verify
 
-``disc stat`` confirms the three-block layout — a ``Disc`` envelope
-carrying the physical geometry, then ``Partition 1: ADFS`` holding
-the boot configuration and the FS binary, then ``Partition 2: AFS``
-ready to serve files over Econet. The single-partition collapsed
-form documented in :doc:`conventions/output-formats` does not apply
-here because the two partitions genuinely carry different things;
-the envelope is the natural umbrella.
+The ``stat`` report confirms the three-block layout — a ``Disc``
+envelope carrying the physical geometry, then ``Partition 1: ADFS``
+holding the boot configuration and the FS binary, then
+``Partition 2: AFS`` ready to serve files over Econet. The
+single-partition collapsed form documented in
+:doc:`conventions/output-formats` does not apply here because the
+two partitions genuinely carry different things; the envelope is
+the natural umbrella.
 
-``disc tree`` then walks the whole image. The ADFS half is tiny —
-just ``!BOOT`` and the FS3 binary, which is all the boot needs to
-load before handing off to AFS. The AFS half shows the two
-``--emplace``-d library trees in their full glory, with the BBC-
-era utilities (``LCAT``, ``NETMON``, ``PROT``, ``USERS``, …) that
-the Level 3 File Server's clients reach for via ``*<command>``
-once the server is up.
+Walking the whole image with ``disc tree`` then exposes both
+halves. The ADFS half is tiny — just ``!BOOT`` and the FS3 binary,
+which is all the boot needs to load before handing off to AFS.
+
+The AFS half shows the two ``--emplace``-d library trees in their
+full glory, with the BBC-era utilities (``LCAT``, ``NETMON``,
+``PROT``, ``USERS``, …) that the Level 3 File Server's clients
+reach for via ``*<command>`` once the server is up.
