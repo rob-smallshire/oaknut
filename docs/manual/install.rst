@@ -1,17 +1,188 @@
 Installation
 ============
 
-How to install oaknut and its sibling packages. The recommended path uses
-`uv <https://docs.astral.sh/uv/>`__, but ``pip`` works just as well, and
-``uvx`` / ``pipx`` cover zero-install execution of the ``disc`` CLI.
+The ``oaknut-*`` family is published to PyPI as a set of independent
+packages. Two questions decide which ones you install:
 
-.. note::
+1. **Are you running a command-line tool, writing Python code, or both?**
+   The CLI lives in its own package; library code lives in per-filesystem
+   packages.
+2. **Which Acorn filing system(s) do you need to work with?**
+   DFS floppies, ADFS hard discs, AFS server discs, ZIP archives — pick
+   the package whose name matches.
 
-   This page is a placeholder. Final content will cover:
+oaknut supports Python 3.11 and newer.
 
-   - per-package install (``uv add oaknut-disc`` and friends)
-   - the ``oaknut`` namespace placeholder and why ``pip install oaknut``
-     is *not* what most readers want
-   - zero-install execution: ``uvx oaknut-disc …`` and ``pipx run …``
-   - platform-tabbed install snippets where command syntax differs
-   - verifying the install (``disc --version``)
+This guide leads with `uv <https://docs.astral.sh/uv/>`__ because that's
+how the project is developed and what every internal command shows.
+``pip`` works identically; ``uvx`` and ``pipx`` cover zero-install
+execution of the CLIs. Substitute your preferred tool — the package
+names and behaviour are the same.
+
+
+.. _cli-centric-packages:
+
+CLI-centric packages
+--------------------
+
+These packages exist to provide a command-line tool. Installing one
+gives you executables on ``PATH``.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 25 25 50
+
+   * - Package
+     - Commands
+     - Purpose
+   * - ``oaknut-disc``
+     - ``disc``, ``oaknut-disc``
+     - The unified disc CLI — DFS, ADFS, and AFS in one tool.
+       Both command names are registered so you can use whichever you
+       prefer; on a system where ``disc`` collides with another tool,
+       ``oaknut-disc`` is unambiguous.
+   * - ``oaknut-zip``
+     - ``oaknut-zip``
+     - ZIP archives carrying Acorn metadata (SparkFS extras, INF
+       resolution, RISC OS filetypes). Also usable as a library — see
+       below.
+
+Most readers want ``oaknut-disc``. Install it into a project:
+
+.. code-block:: sh
+
+   uv add oaknut-disc                     # add to your uv project
+   pip install oaknut-disc                # or pip into the active venv
+
+…or install it globally with ``uv tool`` or ``pipx``:
+
+.. code-block:: sh
+
+   uv tool install oaknut-disc            # uv-managed isolated install
+   pipx install oaknut-disc               # pipx-managed isolated install
+
+Both put the ``disc`` command on your ``PATH`` while keeping its
+dependencies in a private environment that cannot collide with other
+Python tools.
+
+
+.. _library-packages:
+
+Library packages
+----------------
+
+These packages exist to be imported by your Python code.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 25 75
+
+   * - Install
+     - When you want to…
+   * - ``oaknut-dfs``
+     - Read or write Acorn DFS floppy images (SSD/DSD), including
+       Watford DDFS and Opus DDOS variants.
+   * - ``oaknut-adfs``
+     - Read or write ADFS floppy or hard-disc images — Archimedes,
+       RISC OS, BBC Master.
+   * - ``oaknut-afs``
+     - Read or write the Acorn Level 3 File Server's private on-disc
+       format. Sits on top of ``oaknut-adfs``.
+   * - ``oaknut-zip``
+     - Read or write ZIP archives that carry Acorn metadata. Includes
+       the ``oaknut-zip`` CLI as a bonus.
+   * - ``oaknut-basic``
+     - The BBC BASIC tokeniser and detokeniser, on its own — when you
+       want to work with ``.bas`` / ``.bbc`` files outside a disc
+       image.
+
+Pick the package that names what you actually want to do. The
+shared infrastructure (``oaknut-file``, ``oaknut-exception``,
+``oaknut-discimage``) is pulled in automatically as a transitive
+dependency — you do not normally install it directly.
+
+.. code-block:: sh
+
+   uv add oaknut-dfs                      # DFS floppies
+   uv add oaknut-adfs                     # ADFS floppies + hard discs
+   uv add oaknut-afs                      # AFS server discs (also pulls oaknut-adfs)
+
+A program that walks every filesystem family installs the relevant
+top-level packages and imports from each:
+
+.. code-block:: python
+
+   from oaknut.dfs import DFS
+   from oaknut.adfs import ADFS
+   from oaknut.afs import AFS
+   from oaknut.zip import extract_archive
+
+
+.. _zero-install-cli:
+
+Zero-install: running ``disc`` without committing
+-------------------------------------------------
+
+Both ``uv`` and ``pipx`` can execute a CLI from PyPI in a one-shot
+ephemeral environment — useful for try-before-you-add and for
+scripted use on machines where you do not want a long-lived install.
+
+.. code-block:: sh
+
+   # uv: builds the environment in a cache, reuses on subsequent runs.
+   uvx oaknut-disc ls image.ssd
+   uvx --from oaknut-disc disc ls image.ssd        # uses the shorter 'disc' name
+
+   # pipx: same idea, runs in an isolated transient venv.
+   pipx run oaknut-disc ls image.ssd
+   pipx run --spec oaknut-disc disc ls image.ssd
+
+The first invocation pays a one-time setup cost while the package is
+fetched and a venv is built; subsequent invocations within the cache
+window are quick. For tight loops (driving ``disc`` from a script
+that calls it hundreds of times) prefer an installed copy.
+
+
+The ``oaknut`` placeholder
+--------------------------
+
+There is a distribution called simply ``oaknut`` on PyPI. **It is a
+namespace placeholder** — it has no runtime code and no dependencies,
+and it exists only to own the name so that the namespace structure
+across all the ``oaknut-*`` packages stays coherent.
+
+.. code-block:: sh
+
+   pip install oaknut          # succeeds, installs nothing useful
+
+If you typed that hoping to "install everything", install the
+specific ``oaknut-*`` package(s) you want instead — see
+:ref:`cli-centric-packages` and :ref:`library-packages`.
+
+
+Verifying the install
+---------------------
+
+For the CLI:
+
+.. code-block:: sh
+
+   disc --version
+
+For the Python API, any installed package answers to ``__version__``:
+
+.. code-block:: python
+
+   >>> import oaknut.dfs
+   >>> oaknut.dfs.__version__
+   '10.7.0'
+
+
+Where to go next
+----------------
+
+- CLI users: continue with :doc:`cli/getting-started` for a guided
+  walk-through, then :doc:`cli/cookbook` for composed recipes.
+- Library users: jump into :doc:`api/cookbook` for worked examples,
+  with :doc:`api/patterns/index` for the cross-cutting concepts every
+  package shares.
