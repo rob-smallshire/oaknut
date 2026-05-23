@@ -18,48 +18,85 @@ all built from the same colon-joined grammar:
   root.
 
 Commands that operate on the disc as a whole (``disc create``,
-``disc validate``, ``disc afs-init`` …) take a plain ``IMAGE_SPEC``
+``disc validate``, ``disc afs-init``, …) take a plain ``IMAGE_SPEC``
 because a ``PATH_SPEC`` would be meaningless. Commands that operate
-on a specific entry (``disc cat``, ``disc cp``, ``disc chmod`` …)
+on a specific entry (``disc cat``, ``disc cp``, ``disc chmod``, …)
 take a ``FILE_SPEC``.
 
-.. note::
 
-   This page is still being filled out. The sections below capture what
-   was already documented; the gaps will be closed during the manual
-   overhaul.
+PATH_SPEC grammar
+-----------------
 
-   Anticipated additions:
+In-image paths are written in Acorn syntax, not Unix syntax. The
+component separator is ``.`` (a literal dot), not ``/``. A small set
+of single-character names are reserved for directory references:
 
-   - the ``PATH_SPEC`` grammar per filing system: ``$.DIR.FILE``
-     (DFS, ADFS, AFS), ``^.SIBLING`` for the parent directory, leaf
-     vs. fully-qualified forms
-   - auto-detection of the filing system from the image extension
-     and how to override it
-   - quoting (covered in :doc:`quoting`) — the colon, ``$``, ``.``,
-     and ``*`` characters all have shell meanings
+.. list-table::
+   :header-rows: 1
+
+   * - Symbol
+     - Meaning
+   * - ``$``
+     - The root directory of the filing system
+   * - ``^``
+     - The parent directory (one level up)
+   * - ``@``
+     - The current directory (rarely needed on the CLI — the *current*
+       is always the filing system's notional root for batch tools)
+
+A fully-qualified ``PATH_SPEC`` therefore starts with ``$.`` and walks
+down: ``$.Games.Elite`` is the file ``Elite`` inside the directory
+``Games`` at the root. ``^.Sib`` is the file ``Sib`` in the parent of
+whatever directory the command's earlier argument named.
+
+Filename component lengths vary by filing system: DFS allows up to 7
+characters per filename (and exactly one character for the directory
+prefix), while ADFS and AFS allow up to 10 characters per component
+in a hierarchical tree. See :doc:`wildcards` for the matching rules
+and length implications when patterns are involved.
 
 
-Filing-system prefixes
-----------------------
+Filing-system dispatch prefixes
+-------------------------------
 
-When a disc image carries multiple partitions (e.g. an ADFS hard disc
-with an AFS tail partition), prefix the in-image path to select the
-target partition:
+A single ADFS hard-disc image can carry an AFS partition in its tail
+cylinders. To tell ``disc`` which filing system to address, prefix
+the ``PATH_SPEC`` with a filing-system tag:
 
 .. code-block:: sh
 
-   disc ls scsi0.dat                 # default: ADFS root
-   disc ls 'scsi0.dat:adfs:$'        # explicit ADFS
-   disc ls 'scsi0.dat:afs:$'         # AFS root
+   disc ls scsi0.dat                       # default: ADFS root
+   disc ls 'scsi0.dat:adfs:$'              # explicit ADFS
+   disc ls 'scsi0.dat:afs:$'               # AFS partition root
    disc cat 'scsi0.dat:afs:$.Library.Free'
 
-The prefix is case-insensitive (``afs:``, ``AFS:``, ``Afs:`` all work).
-When no prefix is given, the filing system is auto-detected from the
-image extension (``.ssd``/``.dsd`` for DFS, ``.adf``/``.adl``/``.dat``
-for ADFS).
+The three supported prefixes are ``dfs:``, ``adfs:``, and ``afs:``,
+case-insensitive (``AFS:``, ``Afs:`` and ``afs:`` all work). The
+prefix sits between the ``IMAGE_SPEC`` colon and the bare in-image
+path, and is preserved through the parser so the routing decision
+travels all the way to the filing-system handle.
 
-Mismatches are rejected immediately::
+When no prefix is given, the filing system is auto-detected from the
+image filename:
+
+.. list-table::
+   :header-rows: 1
+
+   * - Extension
+     - Default filing system
+   * - ``.ssd``, ``.dsd``
+     - DFS
+   * - ``.adf``, ``.adl``, ``.dat``
+     - ADFS (which may then expose an AFS partition through ``afs:``)
+
+If the extension is unrecognised, ``disc`` refuses to guess::
+
+   $ disc ls some.image
+   Error: cannot detect filing system from extension '.image'; use an
+   explicit prefix (dfs:, adfs:, afs:)
+
+If you ask for a filing system the image cannot provide, the error is
+immediate and specific::
 
    $ disc ls 'games.ssd:adfs:$'
    Error: image is DFS format; cannot access as ADFS
@@ -68,14 +105,18 @@ Mismatches are rejected immediately::
 Acorn star-aliases
 ------------------
 
-Acorn-style aliases are accepted alongside the Unix command names.
-They must be quoted or escaped on POSIX shells because of the ``*``
-prefix — see :doc:`quoting` for the platform-specific forms.
+Most ``disc`` subcommands have an Acorn-style alias prefixed with a
+literal ``*`` so old muscle memory still works. The aliases route to
+exactly the same implementations as their Unix-flavoured primary
+names — they are not a separate command surface.
 
 .. code-block:: sh
 
    disc '*CAT' games.ssd                # same as: disc ls games.ssd
-   disc '*TYPE' 'games.ssd:$.HELLO'     # same as: disc cat 'games.ssd:$.HELLO'
+   disc '*TYPE' 'games.ssd:$.HELLO'     # same as: disc cat …
+
+Aliases must be quoted or escaped on POSIX shells because ``*`` is a
+glob character — see :doc:`quoting` for the platform-specific forms.
 
 .. list-table::
    :header-rows: 1
@@ -102,3 +143,24 @@ prefix — see :doc:`quoting` for the platform-specific forms.
      - ``*OPT4``
    * - ``stat``
      - ``*INFO``
+
+``*LOAD`` and ``*SAVE`` are deliberately absent: on the original BBC
+hardware they transferred bytes between memory and disc, which has no
+clean analogue for a host-side tool. Use ``disc get`` / ``disc put``
+instead.
+
+
+Windows path handling
+---------------------
+
+A Windows-style absolute path such as ``C:\\Discs\\disc.dat`` contains
+a colon — and so do ``FILE_SPEC``\ s. The parser disambiguates by
+recognising the drive-letter prefix (a single ASCII letter followed
+by ``:\`` or ``:/`` at the start of the spec) and skipping past it
+before looking for the ``IMAGE_SPEC``/``PATH_SPEC`` colon. So
+``C:\\Discs\\disc.dat:$.HELLO`` parses as the image
+``C:\\Discs\\disc.dat`` plus the path ``$.HELLO``, never as the image
+``C`` plus the path ``\\Discs\\disc.dat:$.HELLO``.
+
+On POSIX shells the same backslash that Windows would write needs
+quoting; see :doc:`quoting`.
