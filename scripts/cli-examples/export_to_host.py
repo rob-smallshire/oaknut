@@ -27,9 +27,13 @@ with in_tmp_dir():
     show("disc export infinity.ssd extracted")
 
     # The disc's `$` directory becomes `extracted/$/` on host. List
-    # the contents so the reader sees the file/sidecar pairing
-    # across the whole catalogue.
-    show("ls 'extracted/$'")
+    # the contents in column-wrapped form so the file/sidecar pairing
+    # across the whole catalogue stays compact. `ls -C` forces
+    # multi-column output even when stdout is captured (where ls
+    # would otherwise drop to single-column); `expand` converts the
+    # tabs ls uses as column separators into spaces, so the output
+    # aligns consistently regardless of the renderer's tab-size.
+    show("ls -C 'extracted/$' | expand")
 
     # And one sidecar so the on-disc metadata format is visible.
     show("cat 'extracted/$/LOAD.inf'")
