@@ -148,6 +148,35 @@ display|tsv|json`` — see :doc:`conventions/output-formats` for the
 details.
 
 
+A real Acorn disc: Repton Infinity
+----------------------------------
+
+Everything you just learned on the synthetic ``hello.ssd`` works
+unchanged on a real Acorn-era disc. The project's test fixtures
+include Superior Software's *Repton Infinity* (1988) — the game
+plus its build-your-own-Repton editor suite plus the BBC Master
+ROM images for the platform-specific build:
+
+.. cli-example:: repton_infinity
+
+A few things to notice on the way past:
+
+- **Boot option ``EXEC``**. On a real BBC, typing ``*EXEC $.!BOOT``
+  runs whatever's in the ``!BOOT`` file as if you'd typed it at the
+  prompt — that's how this disc autoboots when you hit
+  :kbd:`SHIFT-BREAK`. ``disc opt image.ssd`` reads or sets this.
+- **The editor suite** — ``MapEdit``, ``DefEdit``, ``SprEdit``,
+  ``Linker``. Repton Infinity was a build-your-own-Repton kit as
+  much as a game, and these are the level / definition / sprite
+  editors plus the linker that stitches the parts back together.
+- **``MDROM4`` through ``MDROM7``** — sideways ROM images selected
+  by the loader to provide the right variant of the game for the
+  host machine (BBC Master vs BBC Micro etc.).
+- **Zero free sectors**. The disc is full to the byte, which is
+  what released DFS floppies of the era almost always were —
+  Superior Software wasn't going to ship empty space.
+
+
 Acorn-style aliases
 -------------------
 
