@@ -68,7 +68,6 @@ with a concrete example invocation against an ``image.ssd``:
    .. code-block:: sh
 
       uvx oaknut-disc ls image.ssd
-      uvx --from oaknut-disc disc ls image.ssd        # the shorter 'disc' name
 
    For a persistent install that puts ``disc`` on your shell ``PATH``,
    use ``uv tool install oaknut-disc`` once, then ``disc ls image.ssd``
@@ -98,7 +97,6 @@ with a concrete example invocation against an ``image.ssd``:
    .. code-block:: sh
 
       pipx run oaknut-disc ls image.ssd
-      pipx run --spec oaknut-disc disc ls image.ssd   # the shorter 'disc' name
 
    For a persistent install via pipx, use ``pipx install oaknut-disc``
    once, then ``disc ls image.ssd``.
