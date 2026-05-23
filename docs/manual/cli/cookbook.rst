@@ -81,9 +81,9 @@ Creating a Level 3 File Server disc
 -----------------------------------
 
 A complete walkthrough for building a bootable L3FS hard disc image.
-This recipe needs the Acorn FS3 ROM binary, which is not shipped in
-the test fixtures; once the user supplies one, the sequence below
-runs end-to-end.
+This recipe needs an SSD containing the Level 3 File Server
+executable (e.g. ``FS3v126.ssd``); that image is not yet shipped in
+the test fixtures. Once it lands, the sequence below runs end-to-end.
 
 .. code-block:: sh
 
@@ -93,9 +93,15 @@ runs end-to-end.
    # Copy the file server binary from its DFS floppy
    disc cp FS3v126.ssd:'$.FS3v126' scsi0.dat:'$.FS3v126'
 
-   # Create a !BOOT file and set the boot option
+   # Write a !BOOT file that *RUNs the file server binary
    printf '*RUN $.FS3v126\r' | disc put 'scsi0.dat:$.!BOOT' -
-   disc opt scsi0.dat 3
+
+   # Confirm the current boot option (it is OFF on a freshly-created disc)
+   disc opt scsi0.dat
+
+   # Set the boot option to EXEC — pressing SHIFT-BREAK will then
+   # *EXEC $.!BOOT, running its contents as a sequence of commands.
+   disc opt scsi0.dat EXEC
 
    # Plan the AFS partition (shows geometry, free space, suggested command)
    disc afs-plan scsi0.dat
@@ -108,6 +114,13 @@ runs end-to-end.
    # Inspect the result
    disc tree scsi0.dat
 
+``disc opt`` accepts either the numeric form Acorn machines use
+(``0``, ``1``, ``2``, ``3``) or the symbolic name it represents
+(``OFF``, ``LOAD``, ``RUN``, ``EXEC``). The symbolic form is
+self-documenting and recommended in scripts. Run ``disc opt --help``
+to see the full table with the corresponding ``*LOAD`` / ``*RUN`` /
+``*EXEC`` behaviour for each.
+
 The ``--emplace`` option accepts either a shipped library name
 (``Library``, ``Library1``, ``ArthurLib``) or a path to any ADFS
 ``.adl`` image. Everything in the image is copied into a directory
@@ -115,7 +128,7 @@ of the same name on the AFS partition.
 
 .. note::
 
-   When the FS3 ROM is added to the test corpus, this recipe will
-   become a ``.. cli-example::`` block too — so the captured output
-   matches the live behaviour the same way the other recipes on
-   this page already do.
+   When the file-server SSD is added to the test corpus, this recipe
+   will become a ``.. cli-example::`` block too — so the captured
+   output matches the live behaviour the same way the other recipes
+   on this page already do.
