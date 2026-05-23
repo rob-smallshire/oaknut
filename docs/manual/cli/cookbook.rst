@@ -21,9 +21,9 @@ reader's host platform on first visit.
 Cross-image copy
 ----------------
 
-``disc cp`` always takes two fused ``image:path`` arguments. Cross-image
-is the normal case; for an in-image copy, name the same image on both
-sides.
+``disc cp`` takes two ``FILE_SPEC`` arguments (see :doc:`conventions/paths`).
+Cross-image is the normal case; for an in-image copy, name the same
+image on both sides.
 
 .. code-block:: sh
 

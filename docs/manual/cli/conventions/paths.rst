@@ -1,9 +1,27 @@
-Paths and image specifications
-==============================
+Paths and file specifications
+=============================
 
-Every ``disc`` command that touches an image takes an ``IMAGE_SPEC`` —
-the path to the host file plus, optionally, an in-image path. The two
-are joined with a colon: ``image.dat:$.DIR.FILE``.
+``disc`` has three closely-related names for the things it points at,
+all built from the same colon-joined grammar:
+
+.. code-block:: text
+
+   FILE_SPEC  =  IMAGE_SPEC  ":"  PATH_SPEC
+
+- ``IMAGE_SPEC`` — a host-OS path to a disc image file (``games.ssd``,
+  ``/var/discs/scsi0.dat``, ``C:\\Discs\\hd.dat``).
+- ``PATH_SPEC`` — an in-image Acorn path (``$.DIR.FILE``, ``^.SIB``,
+  ``afs:$.Library``). It may carry a filing-system dispatch prefix.
+- ``FILE_SPEC`` — the two joined with a colon: ``games.ssd:$.HELLO``.
+  This is what most commands accept; the colon (and the ``PATH_SPEC``
+  after it) is optional when the command can default to the disc's
+  root.
+
+Commands that operate on the disc as a whole (``disc create``,
+``disc validate``, ``disc afs-init`` …) take a plain ``IMAGE_SPEC``
+because a ``PATH_SPEC`` would be meaningless. Commands that operate
+on a specific entry (``disc cat``, ``disc cp``, ``disc chmod`` …)
+take a ``FILE_SPEC``.
 
 .. note::
 
@@ -13,12 +31,13 @@ are joined with a colon: ``image.dat:$.DIR.FILE``.
 
    Anticipated additions:
 
-   - the canonical ``IMAGE:PATH`` syntax (will become the only
-     supported form once the separate-arg form is removed)
-   - in-image path grammar per filing system: ``$.DIR.FILE`` (DFS,
-     ADFS, AFS), ``^.SIBLING`` for the parent directory
+   - the ``PATH_SPEC`` grammar per filing system: ``$.DIR.FILE``
+     (DFS, ADFS, AFS), ``^.SIBLING`` for the parent directory, leaf
+     vs. fully-qualified forms
    - auto-detection of the filing system from the image extension
      and how to override it
+   - quoting (covered in :doc:`quoting`) — the colon, ``$``, ``.``,
+     and ``*`` characters all have shell meanings
 
 
 Filing-system prefixes

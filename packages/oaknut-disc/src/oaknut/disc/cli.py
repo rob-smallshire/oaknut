@@ -27,7 +27,7 @@ from . import __version__
 from .cli_paths import (
     FilingSystem,
     detect_filing_system,
-    parse_image_arg,
+    parse_file_spec,
     parse_prefix,
     resolve_path,
 )
@@ -354,7 +354,7 @@ cli.add_command(describe_report_command(), name="describe-report")
 
 
 @cli.command()
-@click.argument("image_spec")
+@click.argument("file_spec")
 @click.option(
     "-H",
     "--access-byte",
@@ -364,14 +364,14 @@ cli.add_command(describe_report_command(), name="describe-report")
 )
 @report_output(reports={"entries": "Directory entries with load/exec/length/attributes."})
 @handles_fs_errors
-def ls(image_spec: str, show_access_byte: bool):
+def ls(file_spec: str, show_access_byte: bool):
     """List directory contents (Acorn alias: *CAT).
 
-    Accepts ``IMAGE`` or ``IMAGE:PATH``.
+    Accepts a ``FILE_SPEC`` (the in-image ``PATH_SPEC`` is optional and defaults to the root).
     """
     from asyoulikeit.tabular_data import Importance, Report, Reports, TableContent
 
-    image, in_image_path = parse_image_arg(image_spec)
+    image, in_image_path = parse_file_spec(file_spec)
     fs, bare = resolve_path(image, in_image_path)
     with open_image(image, fs) as handle:
         target = _navigate(handle, bare, fs)
@@ -471,18 +471,18 @@ _alias("*CAT", "ls")
 
 
 @cli.command()
-@click.argument("image_spec")
+@click.argument("file_spec")
 @report_output(reports={"tree": "Hierarchical directory listing."})
 @handles_fs_errors
-def tree(image_spec: str):
+def tree(file_spec: str):
     """Display recursive directory tree.
 
-    Accepts ``IMAGE`` or ``IMAGE:PATH``.
+    Accepts a ``FILE_SPEC`` (the in-image ``PATH_SPEC`` is optional and defaults to the root).
     """
     from asyoulikeit.tabular_data import Report, Reports
     from asyoulikeit.tree_data import TreeContent
 
-    image, path = parse_image_arg(image_spec)
+    image, path = parse_file_spec(file_spec)
 
     # The root node carries the image name visibly now that asyoulikeit
     # 0.5.1 drops the Rich-table chrome around single-column trees —
@@ -540,7 +540,7 @@ def _attach_children(dir_node, parent_tree_node) -> None:
 
 
 @cli.command()
-@click.argument("image_spec")
+@click.argument("file_spec")
 @report_output(
     reports={
         "disc": "Physical geometry and total size.",
@@ -554,14 +554,14 @@ def _attach_children(dir_node, parent_tree_node) -> None:
     }
 )
 @handles_fs_errors
-def stat(image_spec: str):
+def stat(file_spec: str):
     """Disc summary (no path) or file metadata (with path). Alias: *INFO.
 
-    Accepts ``IMAGE`` or ``IMAGE:PATH``.
+    Accepts a ``FILE_SPEC`` (the in-image ``PATH_SPEC`` is optional and defaults to the root).
     """
     from asyoulikeit.tabular_data import Report, Reports, TableContent
 
-    image, path = parse_image_arg(image_spec)
+    image, path = parse_file_spec(file_spec)
     fs, bare = resolve_path(image, path)
 
     if not bare:
@@ -757,18 +757,18 @@ def _afs_partition_only_tc(handle):
 
 
 @cli.command()
-@click.argument("image_spec")
+@click.argument("file_spec")
 @handles_fs_errors
-def cat(image_spec: str) -> None:
+def cat(file_spec: str) -> None:
     """Dump file contents to stdout as raw bytes.
 
-    Accepts ``IMAGE:PATH``.
+    Accepts a ``FILE_SPEC``.
 
     Use :command:`disc type` for Acorn text files — this command
     writes bytes verbatim, so files using Acorn ``\\r`` line endings
     will render unreadably on a Unix terminal.
     """
-    image, path = parse_image_arg(image_spec)
+    image, path = parse_file_spec(file_spec)
     if not path:
         raise click.UsageError("PATH is required")
     fs, bare = resolve_path(image, path)
@@ -810,7 +810,7 @@ def _translate_line_endings(data: bytes, mode: str) -> bytes:
 
 
 @cli.command(name="type")
-@click.argument("image_spec")
+@click.argument("file_spec")
 @click.option(
     "--line-endings",
     "-l",
@@ -823,10 +823,10 @@ def _translate_line_endings(data: bytes, mode: str) -> bytes:
     ),
 )
 @handles_fs_errors
-def type_(image_spec: str, line_endings: str) -> None:
+def type_(file_spec: str, line_endings: str) -> None:
     """Display a text file with line endings translated for the host.
 
-    Accepts ``IMAGE:PATH``.
+    Accepts a ``FILE_SPEC``.
 
     Acorn text files terminate lines with ``\\r`` (carriage return).
     Dumped raw to a Unix terminal each line overwrites the previous,
@@ -836,7 +836,7 @@ def type_(image_spec: str, line_endings: str) -> None:
 
     Acorn alias: *TYPE.
     """
-    image, path = parse_image_arg(image_spec)
+    image, path = parse_file_spec(file_spec)
     if not path:
         raise click.UsageError("PATH is required")
     fs, bare = resolve_path(image, path)
@@ -854,13 +854,14 @@ _alias("*TYPE", "type")
 
 
 @cli.command()
-@click.argument("image_spec")
+@click.argument("file_spec")
 @report_output(reports={"matches": "Paths matching the wildcard pattern."})
 @handles_fs_errors
-def find(image_spec: str):
+def find(file_spec: str):
     """Find files matching an Acorn wildcard pattern.
 
-    Accepts ``IMAGE`` (lists all files) or ``IMAGE:PATTERN``.
+    Accepts an ``IMAGE_SPEC`` (lists every file) or a ``FILE_SPEC``
+    whose ``PATH_SPEC`` is the wildcard pattern.
 
     Accepts the same ``adfs:`` / ``afs:`` / ``dfs:`` prefixes as
     every other command to scope the search to a single partition.
@@ -874,7 +875,7 @@ def find(image_spec: str):
 
     from .cli_paths import parse_prefix
 
-    image, pattern = parse_image_arg(image_spec)
+    image, pattern = parse_file_spec(file_spec)
     if not pattern:
         raise click.UsageError("PATTERN is required")
     prefix_present = parse_prefix(pattern)[0] is not None
@@ -924,14 +925,14 @@ def _find_recursive(node, pattern: str, prefix: str, rows: list[dict]) -> None:
 
 
 @cli.command()
-@click.argument("image_spec")
+@click.argument("file_spec")
 @handles_fs_errors
-def freemap(image_spec: str) -> None:
+def freemap(file_spec: str) -> None:
     """Show free-space map with ASCII fragmentation bar.
 
-    Accepts ``IMAGE`` or ``IMAGE:PATH``.
+    Accepts a ``FILE_SPEC`` (the in-image ``PATH_SPEC`` is optional and defaults to the root).
     """
-    image, path = parse_image_arg(image_spec)
+    image, path = parse_file_spec(file_spec)
     fs, bare = resolve_path(image, path)
 
     with open_image(image, fs) as handle:
@@ -1073,7 +1074,7 @@ def validate(image: Path) -> None:
 
 
 @cli.command()
-@click.argument("image_spec")
+@click.argument("file_spec")
 @click.argument("host_path", required=False, default=None)
 @click.option(
     "--meta-format",
@@ -1095,18 +1096,18 @@ def validate(image: Path) -> None:
 @click.option("--owner", type=int, default=0, help="Econet owner ID for PiEB formats.")
 @handles_fs_errors
 def get(
-    image_spec: str,
+    file_spec: str,
     host_path: str | None,
     meta_format: str,
     owner: int,
 ) -> None:
     """Export a file from the image.
 
-    Accepts ``IMAGE:PATH [HOST_PATH]``.
+    Accepts a ``FILE_SPEC`` and an optional ``HOST_PATH``.
     """
     from oaknut.file import AcornMeta, MetaFormat, export_with_metadata
 
-    image, path = parse_image_arg(image_spec)
+    image, path = parse_file_spec(file_spec)
     if not path:
         raise click.UsageError("PATH is required")
     host_path = Path(host_path) if host_path is not None else None
@@ -1155,7 +1156,7 @@ def get(
 
 
 @cli.command()
-@click.argument("image_spec")
+@click.argument("file_spec")
 @click.argument("host_path", required=False, default=None)
 @click.option("--load", "load_addr", type=str, default=None, help="Load address (hex).")
 @click.option("--exec", "exec_addr", type=str, default=None, help="Exec address (hex).")
@@ -1178,7 +1179,7 @@ def get(
 )
 @handles_fs_errors
 def put(
-    image_spec: str,
+    file_spec: str,
     host_path: str | None,
     load_addr: str | None,
     exec_addr: str | None,
@@ -1186,9 +1187,9 @@ def put(
 ) -> None:
     """Import a file into the image.
 
-    Accepts ``IMAGE:PATH [HOST_PATH]``.
+    Accepts a ``FILE_SPEC`` and an optional ``HOST_PATH``.
     """
-    image, path = parse_image_arg(image_spec)
+    image, path = parse_file_spec(file_spec)
     if not path:
         raise click.UsageError("PATH is required")
     host_path = Path(host_path) if host_path is not None else None
@@ -1240,14 +1241,14 @@ def put(
 
 
 @cli.command()
-@click.argument("image_spec")
+@click.argument("file_spec")
 @click.argument("paths", nargs=-1)
 @click.option("-f", "--force", is_flag=True, help="Ignore missing, override locks.")
 @click.option("-r", "--recursive", is_flag=True, help="Remove directories recursively.")
 @click.option("--dry-run", is_flag=True, help="Print what would be removed.")
 @handles_fs_errors
 def rm(
-    image_spec: str,
+    file_spec: str,
     paths: tuple[str, ...],
     force: bool,
     recursive: bool,
@@ -1255,11 +1256,11 @@ def rm(
 ) -> None:
     """Delete file(s) from the image (Acorn alias: *DELETE).
 
-    Accepts ``IMAGE:PATH [PATH...]``. The first path is the fused
-    in-image path; additional bare in-image paths may follow. Each
-    PATH may contain Acorn wildcards (``*``, ``#``); ``-r`` descends
-    into directory matches and removes children before the directory
-    itself.
+    Accepts a ``FILE_SPEC`` followed by zero or more bare ``PATH_SPEC``
+    arguments — the first entry to delete travels in the ``FILE_SPEC``,
+    additional in-image paths follow. Each path may contain Acorn
+    wildcards (``*``, ``#``); ``-r`` descends into directory matches
+    and removes children before the directory itself.
     """
     from oaknut.adfs.exceptions import ADFSFileLockedError
     from oaknut.afs.exceptions import AFSFileLockedError
@@ -1271,7 +1272,7 @@ def rm(
         DFSFileLocked,
     )
 
-    image, first_path = parse_image_arg(image_spec)
+    image, first_path = parse_file_spec(file_spec)
     all_paths: tuple[str, ...] = (first_path, *paths) if first_path else paths
     if not all_paths:
         raise click.UsageError("at least one PATH is required")
@@ -1342,13 +1343,13 @@ _alias("*DELETE", "rm")
 def mv(src: str, dst: str, force: bool) -> None:
     """Rename or move a file within the image (Acorn alias: *RENAME).
 
-    Shape: ``disc mv IMAGE:SRC IMAGE:DST`` — both arguments are fused
-    ``image:path`` specs, and both must name the same image file. mv
-    is single-image: the library renames a directory entry in place
-    and cannot move across filesystems.
+    Accepts two ``FILE_SPEC`` arguments — source and destination, both
+    of which must name the same image. mv is single-image: the library
+    renames a directory entry in place and cannot move across
+    filesystems.
     """
-    src_image, bare_src = parse_image_arg(src)
-    dst_image, bare_dst = parse_image_arg(dst)
+    src_image, bare_src = parse_file_spec(src)
+    dst_image, bare_dst = parse_file_spec(dst)
     if src_image.resolve() != dst_image.resolve():
         raise click.UsageError(
             f"mv source and destination must name the same image; got {src_image} and {dst_image}"
@@ -1389,9 +1390,9 @@ def cp(src: str, dst: str, force: bool, recursive: bool) -> None:
 
     Acorn alias: *COPY.
 
-    Shape: ``disc cp SRC.dat:$.A DST.dat:$.B`` — both arguments are
-    fused ``image:path`` specs. Cross-image copies are the normal
-    case; for an in-image copy, name the same image on both sides
+    Accepts two ``FILE_SPEC`` arguments — source and destination.
+    Cross-image copies are the normal case; for an in-image copy,
+    name the same image on both sides
     (``disc cp image.adl:$.Original image.adl:$.Copy``).
 
     Source paths may contain Acorn wildcards (``*`` = any sequence,
@@ -1404,8 +1405,8 @@ def cp(src: str, dst: str, force: bool, recursive: bool) -> None:
     access attributes are mapped best-effort (DFS only has the locked
     bit).
     """
-    src_image, src_path = parse_image_arg(src)
-    dst_image, dst_path = parse_image_arg(dst)
+    src_image, src_path = parse_file_spec(src)
+    dst_image, dst_path = parse_file_spec(dst)
     _cp_dispatch(
         src_image,
         src_path,
@@ -1872,18 +1873,18 @@ _alias("*COPY", "cp")
 
 
 @cli.command()
-@click.argument("image_spec")
+@click.argument("file_spec")
 @click.option("-p", is_flag=True, help="No error if directory already exists.")
 @handles_fs_errors
-def mkdir(image_spec: str, p: bool) -> None:
+def mkdir(file_spec: str, p: bool) -> None:
     """Create a directory (ADFS/AFS only). Alias: *CDIR.
 
-    Accepts ``IMAGE:PATH``.
+    Accepts a ``FILE_SPEC``.
     """
     from oaknut.adfs.exceptions import ADFSEntryExistsError
     from oaknut.afs.exceptions import AFSDirectoryEntryExistsError
 
-    image, path = parse_image_arg(image_spec)
+    image, path = parse_file_spec(file_spec)
     if not path:
         raise click.UsageError("PATH is required")
     fs, bare = resolve_path(image, path)
@@ -1905,7 +1906,7 @@ _alias("*CDIR", "mkdir")
 
 
 @cli.command()
-@click.argument("image_spec")
+@click.argument("file_spec")
 @click.argument("access")
 @click.option("-r", "--recursive", is_flag=True, help="Recurse into directory matches.")
 @click.option(
@@ -1913,14 +1914,14 @@ _alias("*CDIR", "mkdir")
 )
 @handles_fs_errors
 def chmod(
-    image_spec: str,
+    file_spec: str,
     access: str,
     recursive: bool,
     dry_run: bool,
 ) -> None:
     """Set file access permissions (Acorn alias: *ACCESS).
 
-    Accepts ``IMAGE:PATH ACCESS``.
+    Accepts a ``FILE_SPEC`` and an ``ACCESS``.
 
     ACCESS is symbolic (e.g. LWR/R, WR/WR) or hex (0x0B, 33).
     DFS only supports the L (locked) bit; other flags are ignored.
@@ -1929,7 +1930,7 @@ def chmod(
     same access to every matching file.  ``-r`` recurses into any
     directory match.
     """
-    image, path = parse_image_arg(image_spec)
+    image, path = parse_file_spec(file_spec)
     if not path:
         raise click.UsageError("PATH is required")
     from oaknut.file import Access, parse_access
@@ -1958,19 +1959,19 @@ _alias("*ACCESS", "chmod")
 
 
 @cli.command()
-@click.argument("image_spec")
+@click.argument("file_spec")
 @click.option("-r", "--recursive", is_flag=True, help="Recurse into directory matches.")
 @click.option(
     "--dry-run", is_flag=True, help="Print what would change without modifying the image."
 )
 @handles_fs_errors
-def lock(image_spec: str, recursive: bool, dry_run: bool) -> None:
+def lock(file_spec: str, recursive: bool, dry_run: bool) -> None:
     """Lock a file.
 
-    Accepts ``IMAGE:PATH``.
+    Accepts a ``FILE_SPEC``.
     PATH may be a wildcard; ``-r`` recurses.
     """
-    image, path = parse_image_arg(image_spec)
+    image, path = parse_file_spec(file_spec)
     if not path:
         raise click.UsageError("PATH is required")
     fs, bare = resolve_path(image, path)
@@ -1986,19 +1987,19 @@ def lock(image_spec: str, recursive: bool, dry_run: bool) -> None:
 
 
 @cli.command()
-@click.argument("image_spec")
+@click.argument("file_spec")
 @click.option("-r", "--recursive", is_flag=True, help="Recurse into directory matches.")
 @click.option(
     "--dry-run", is_flag=True, help="Print what would change without modifying the image."
 )
 @handles_fs_errors
-def unlock(image_spec: str, recursive: bool, dry_run: bool) -> None:
+def unlock(file_spec: str, recursive: bool, dry_run: bool) -> None:
     """Unlock a file.
 
-    Accepts ``IMAGE:PATH``.
+    Accepts a ``FILE_SPEC``.
     PATH may be a wildcard; ``-r`` recurses.
     """
-    image, path = parse_image_arg(image_spec)
+    image, path = parse_file_spec(file_spec)
     if not path:
         raise click.UsageError("PATH is required")
     fs, bare = resolve_path(image, path)
@@ -2014,7 +2015,7 @@ def unlock(image_spec: str, recursive: bool, dry_run: bool) -> None:
 
 
 @cli.command(name="set-load")
-@click.argument("image_spec")
+@click.argument("file_spec")
 @click.argument("addr")
 @click.option("-r", "--recursive", is_flag=True, help="Recurse into directory matches.")
 @click.option(
@@ -2022,20 +2023,20 @@ def unlock(image_spec: str, recursive: bool, dry_run: bool) -> None:
 )
 @handles_fs_errors
 def set_load(
-    image_spec: str,
+    file_spec: str,
     addr: str,
     recursive: bool,
     dry_run: bool,
 ) -> None:
     """Set a file's load address.
 
-    Accepts ``IMAGE:PATH ADDR``.
+    Accepts a ``FILE_SPEC`` and an ``ADDR``.
 
     PATH may contain Acorn wildcards; ``-r`` recurses into directory
     matches (directories themselves are skipped — they have no load
     address field).
     """
-    image, path = parse_image_arg(image_spec)
+    image, path = parse_file_spec(file_spec)
     if not path:
         raise click.UsageError("PATH is required")
     address = int(addr, 0)
@@ -2054,7 +2055,7 @@ def set_load(
 
 
 @cli.command(name="set-exec")
-@click.argument("image_spec")
+@click.argument("file_spec")
 @click.argument("addr")
 @click.option("-r", "--recursive", is_flag=True, help="Recurse into directory matches.")
 @click.option(
@@ -2062,20 +2063,20 @@ def set_load(
 )
 @handles_fs_errors
 def set_exec(
-    image_spec: str,
+    file_spec: str,
     addr: str,
     recursive: bool,
     dry_run: bool,
 ) -> None:
     """Set a file's exec address.
 
-    Accepts ``IMAGE:PATH ADDR``.
+    Accepts a ``FILE_SPEC`` and an ``ADDR``.
 
     PATH may contain Acorn wildcards; ``-r`` recurses into directory
     matches (directories themselves are skipped — they have no exec
     address field).
     """
-    image, path = parse_image_arg(image_spec)
+    image, path = parse_file_spec(file_spec)
     if not path:
         raise click.UsageError("PATH is required")
     address = int(addr, 0)
@@ -2094,18 +2095,18 @@ def set_exec(
 
 
 @cli.command(name="get-load")
-@click.argument("image_spec")
+@click.argument("file_spec")
 @report_output(reports={"load": "File load address as 8 hex digits."})
 @handles_fs_errors
-def get_load(image_spec: str):
+def get_load(file_spec: str):
     """Print a file's load address.
 
-    Accepts ``IMAGE:PATH``.
+    Accepts a ``FILE_SPEC``.
     """
     from asyoulikeit.scalar_data import ScalarContent
     from asyoulikeit.tabular_data import Report, Reports
 
-    image, path = parse_image_arg(image_spec)
+    image, path = parse_file_spec(file_spec)
     if not path:
         raise click.UsageError("PATH is required")
     fs, bare = resolve_path(image, path)
@@ -2122,18 +2123,18 @@ def get_load(image_spec: str):
 
 
 @cli.command(name="get-exec")
-@click.argument("image_spec")
+@click.argument("file_spec")
 @report_output(reports={"exec": "File exec address as 8 hex digits."})
 @handles_fs_errors
-def get_exec(image_spec: str):
+def get_exec(file_spec: str):
     """Print a file's exec address.
 
-    Accepts ``IMAGE:PATH``.
+    Accepts a ``FILE_SPEC``.
     """
     from asyoulikeit.scalar_data import ScalarContent
     from asyoulikeit.tabular_data import Report, Reports
 
-    image, path = parse_image_arg(image_spec)
+    image, path = parse_file_spec(file_spec)
     if not path:
         raise click.UsageError("PATH is required")
     fs, bare = resolve_path(image, path)

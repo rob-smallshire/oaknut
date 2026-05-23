@@ -186,15 +186,15 @@ def parse_image_path(text: str) -> tuple[Path, str] | None:
     return image_filepath, in_image_part
 
 
-def parse_image_arg(image_spec: str) -> tuple[Path, str]:
-    """Resolve a fused ``IMAGE[:PATH]`` argument into ``(image, in_image_path)``.
+def parse_file_spec(file_spec: str) -> tuple[Path, str]:
+    """Parse a ``FILE_SPEC`` into ``(image_filepath, path_spec)``.
 
-    Every command uses a single positional shape: the host image path
-    and, optionally, an in-image path joined by a colon. The colon
-    splits at the first non-Windows-drive colon. The in-image portion
-    may itself start with a filing-system prefix
+    A ``FILE_SPEC`` is the colon-joined compound ``IMAGE_SPEC:PATH_SPEC``
+    used by every command that addresses something inside a disc image.
+    The colon splits at the first non-Windows-drive colon; the
+    ``PATH_SPEC`` may itself start with a filing-system dispatch prefix
     (``adfs:``/``afs:``/``dfs:``) — that prefix is preserved on the
-    returned in-image string so :func:`resolve_path` can act on it.
+    returned string so :func:`resolve_path` can act on it.
 
     The image part must exist as a file. When the spec carries a colon
     and the part to its left does not exist, the error message quotes
@@ -204,21 +204,21 @@ def parse_image_arg(image_spec: str) -> tuple[Path, str]:
     Examples::
 
         >>> # Plain image — no in-image path
-        >>> parse_image_arg("hd.dat")               # doctest: +SKIP
+        >>> parse_file_spec("hd.dat")               # doctest: +SKIP
         (PosixPath('hd.dat'), '')
 
         >>> # Fused image:path
-        >>> parse_image_arg("hd.dat:$.Games")       # doctest: +SKIP
+        >>> parse_file_spec("hd.dat:$.Games")       # doctest: +SKIP
         (PosixPath('hd.dat'), '$.Games')
 
         >>> # Fused with filing-system prefix on the in-image path
-        >>> parse_image_arg("hd.dat:afs:$.Library") # doctest: +SKIP
+        >>> parse_file_spec("hd.dat:afs:$.Library") # doctest: +SKIP
         (PosixPath('hd.dat'), 'afs:$.Library')
 
     Returns ``(image_filepath, in_image_path)`` — *in_image_path* is
     always a string (empty when the user did not supply one).
     """
-    split = _split_at_image_colon(image_spec)
+    split = _split_at_image_colon(file_spec)
     if split is not None:
         image_part, in_image_part = split
         image_filepath = Path(image_part)
@@ -226,10 +226,10 @@ def parse_image_arg(image_spec: str) -> tuple[Path, str]:
             raise click.UsageError(f"image not found: {image_part}")
         return image_filepath, in_image_part
 
-    # No colon → image_spec is the bare image path with no in-image
+    # No colon → file_spec is the bare image path with no in-image
     # component. Commands that *require* an in-image path validate
     # that downstream.
-    image_filepath = Path(image_spec)
+    image_filepath = Path(file_spec)
     if not image_filepath.is_file():
-        raise click.UsageError(f"image not found: {image_spec}")
+        raise click.UsageError(f"image not found: {file_spec}")
     return image_filepath, ""
