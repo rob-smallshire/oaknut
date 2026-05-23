@@ -73,4 +73,13 @@ jobs:
         run: uv sync --group docs
 
       - name: Build Sphinx docs
+        # -W: warnings as errors. The cli-example directive runs each
+        # scripts/cli-examples/*.py recipe at HTML-build time, so a
+        # broken or stale example fails this step.
         run: uv run sphinx-build -b html docs/manual docs/manual/_build/html -W
+
+      - name: Run Sphinx doctests
+        # Any .. doctest:: blocks in the manual are executed against
+        # the real library here. Independent of the HTML build above
+        # so a doctest failure is reported with its own log.
+        run: uv run sphinx-build -b doctest docs/manual docs/manual/_build/doctest -W

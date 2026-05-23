@@ -35,35 +35,15 @@ Build a blank disc to follow along
 
 ``disc create`` makes a fresh image you can write into. We will use a
 single-sided BBC Micro floppy (SSD) — small, fast, and what most
-Acorn-era disc images out in the wild are::
+Acorn-era disc images out in the wild are.
 
-   $ disc create hello.ssd --format ssd --title GETSTARTED
-   Created hello.ssd
+.. cli-example:: getting_started
 
 The available ``--format`` values are ``ssd`` and ``dsd`` (DFS
 floppies, single- and double-sided), ``adfs-s`` / ``adfs-m`` /
 ``adfs-l`` (ADFS floppies of the three standard sizes), and
 ``adfs-hard`` (ADFS hard discs — see :doc:`cookbook` for the
 walkthrough that builds a Level 3 File Server disc).
-
-Inspect what you just made::
-
-   $ disc stat hello.ssd
-                    Disc
-   ┏━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
-   ┃ Size ┃ 204,800 bytes (800 sectors) ┃
-   ┡━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
-   └──────┴─────────────────────────────┘
-
-                 Partition 1: DFS
-   ┏━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
-   ┃ Title       ┃ GETSTARTED                  ┃
-   ┡━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
-   │ Boot option │ OFF (0)                     │
-   │ Size        │ 204,800 bytes (800 sectors) │
-   │ Free        │ 204,032 bytes (797 sectors) │
-   │ Files       │ 0                           │
-   └─────────────┴─────────────────────────────┘
 
 The disc is empty but the catalogue, free-space map, and boot option
 are all in place. Three sectors are "used" already — those are the
@@ -123,23 +103,9 @@ Browsing the catalogue
 ----------------------
 
 The display you get from ``disc tree`` is a hierarchical view that
-walks every partition::
+walks every partition. ``disc ls`` lists a single directory:
 
-   $ disc tree hello.ssd
-   hello.ssd
-   └── $
-       └── HELLO
-
-``disc ls`` is for single-directory listings::
-
-   $ disc ls 'hello.ssd:$'
-             hello.ssd — GETSTARTED [DFS]
-   ┏━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━┓
-   ┃ Name  ┃ Load     ┃ Exec     ┃ Length   ┃ Attr ┃
-   ┡━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━┩
-   │ HELLO │ 0000FFFF │ 0000FFFF │ 0000001A │      │
-   └───────┴──────────┴──────────┴──────────┴──────┘
-                   Free: 797 sectors
+.. cli-example:: getting_started_browse
 
 On a DFS image with files in the letter-prefixed "directories" you
 can list them individually too:

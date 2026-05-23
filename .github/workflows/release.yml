@@ -66,7 +66,15 @@ jobs:
       - name: Install workspace + docs dependencies
         run: uv sync --group docs
 
+      - name: Run Sphinx doctests
+        # Block release if any inline Python doctest in the manual
+        # disagrees with the installed library.
+        run: uv run sphinx-build -b doctest docs/manual docs/manual/_build/doctest -W
+
       - name: Build Sphinx docs
+        # -W: warnings as errors. The cli-example directive runs each
+        # scripts/cli-examples/*.py recipe at HTML-build time, so a
+        # broken or stale example fails this step.
         run: uv run sphinx-build -b html docs/manual docs/manual/_build/html -W
 
       - name: Upload Pages artifact
