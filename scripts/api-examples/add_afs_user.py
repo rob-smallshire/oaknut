@@ -39,7 +39,7 @@ def add_user(disc_filepath: Path, username: str, quota: str) -> None:
     """
     with (
         ADFS.from_file(disc_filepath) as adfs,
-        adfs.afs_partition as afs,
+        adfs.open_afs_partition() as afs,
     ):
         afs.add_user(username, quota=quota)
 
@@ -57,7 +57,7 @@ def main(workdir: Path) -> None:
 
     with (
         ADFS.from_file(filepath) as adfs,
-        adfs.afs_partition as afs,
+        adfs.open_afs_partition() as afs,
     ):
         alice = next(u for u in afs.users.active if u.name == "alice")
         print(f"Added user: {alice.name}  quota={alice.free_space:,} bytes")

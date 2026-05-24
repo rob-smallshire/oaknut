@@ -229,10 +229,17 @@ class TestFlush:
         afs = build_synthetic_adfs_with_afs().afs_partition
         afs.flush()
 
-    def test_context_manager(self) -> None:
+    def test_close_marks_handle_closed(self) -> None:
         afs = build_synthetic_adfs_with_afs().afs_partition
-        with afs as same:
-            assert same is afs
+        assert not afs.closed
+        afs.close()
+        assert afs.closed
+
+    def test_close_is_idempotent(self) -> None:
+        afs = build_synthetic_adfs_with_afs().afs_partition
+        afs.close()
+        afs.close()  # no exception
+        assert afs.closed
 
 
 class TestStartCylinderPassThrough:

@@ -101,28 +101,48 @@ class TestEmplaceLibrary:
 
 
 class TestAFSContextManager:
-    """Bug 3: AFS as a context manager should auto-flush on clean exit."""
+    """``ADFS.open_afs_partition`` flushes the AFS handle on clean
+    exit and discards pending writes on exception.
+    """
 
     def test_context_manager_flushes_on_exit(self) -> None:
         adfs = build_synthetic_adfs_with_afs()
-        afs = adfs.afs_partition
-        with afs:
+        with adfs.open_afs_partition() as afs:
             (afs.root / "NewFile").write_bytes(b"written inside with block")
 
         # Re-read: the file should be visible.
-        afs2 = adfs.afs_partition
-        assert (afs2.root / "NewFile").read_bytes() == b"written inside with block"
+        with adfs.open_afs_partition() as afs2:
+            assert (afs2.root / "NewFile").read_bytes() == b"written inside with block"
 
     def test_context_manager_discards_on_exception(self) -> None:
         adfs = build_synthetic_adfs_with_afs()
-        afs = adfs.afs_partition
 
         with pytest.raises(RuntimeError):
-            with afs:
+            with adfs.open_afs_partition() as afs:
                 (afs.root / "BadFile").write_bytes(b"will be discarded")
                 raise RuntimeError("oops")
 
         # Re-read: the file should NOT be visible (writes discarded).
-        afs2 = adfs.afs_partition
-        names = {c.name for c in afs2.root}
-        assert "BadFile" not in names
+        with adfs.open_afs_partition() as afs2:
+            names = {c.name for c in afs2.root}
+            assert "BadFile" not in names
+
+    def test_manual_close_after_use(self) -> None:
+        """Callers that need direct lifecycle control can use the raw
+        :attr:`afs_partition` property plus :meth:`AFS.close`.
+        """
+        adfs = build_synthetic_adfs_with_afs()
+        afs = adfs.afs_partition
+        (afs.root / "Manual").write_bytes(b"x")
+        afs.close()
+        assert afs.closed
+
+        with adfs.open_afs_partition() as afs2:
+            assert (afs2.root / "Manual").read_bytes() == b"x"
+
+    def test_close_is_idempotent(self) -> None:
+        adfs = build_synthetic_adfs_with_afs()
+        afs = adfs.afs_partition
+        afs.close()
+        afs.close()  # no exception
+        assert afs.closed

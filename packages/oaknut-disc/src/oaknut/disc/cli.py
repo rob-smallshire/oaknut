@@ -239,7 +239,7 @@ def _open_afs(image_filepath: Path) -> Iterator:
 
     with (
         ADFS.from_file(image_filepath) as adfs,
-        adfs.afs_partition as afs,
+        adfs.open_afs_partition() as afs,
     ):
         yield afs
 
@@ -271,7 +271,7 @@ def open_image_for_afs_write(image_filepath: Path) -> Iterator:
 
     with (
         ADFS.from_file(image_filepath) as adfs,
-        adfs.afs_partition as afs,
+        adfs.open_afs_partition() as afs,
     ):
         yield adfs, afs
 
@@ -2871,7 +2871,7 @@ def afs_init(
         if emplacements:
             from oaknut.afs.libraries import emplace_library
 
-            with adfs.afs_partition as afs:
+            with adfs.open_afs_partition() as afs:
                 for name in emplacements:
                     try:
                         replaced = emplace_library(afs, name)
@@ -3029,9 +3029,9 @@ def afs_merge(
 
     with (
         ADFS.from_file(image) as target_adfs,
-        target_adfs.afs_partition as target_afs,
+        target_adfs.open_afs_partition() as target_afs,
         ADFS.from_file(source) as source_adfs,
-        source_adfs.afs_partition as source_afs,
+        source_adfs.open_afs_partition() as source_afs,
     ):
         target_root = target_afs.root
         if target_path:

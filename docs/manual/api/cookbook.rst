@@ -145,14 +145,16 @@ Adding a user to an existing AFS image
 The :meth:`AFS.add_user <oaknut.afs.AFS.add_user>` method appends
 an account to the passwords file. An AFS file server always lives
 in the tail of an ADFS hard-disc image, so the recipe opens the
-disc as ADFS and reaches into the partition via
-:attr:`ADFS.afs_partition <oaknut.adfs.ADFS.afs_partition>`.
+disc as ADFS and reaches the partition through
+:meth:`ADFS.open_afs_partition <oaknut.adfs.ADFS.open_afs_partition>`,
+which yields the :class:`AFS` handle and calls :meth:`AFS.close` on
+clean exit (or :meth:`AFS.discard` if the body raises).
 
-Buffered writes on the AFS side flush automatically when the
-``with`` block exits cleanly; an exception inside the block discards
-them, leaving the on-disc passwords file untouched. The image is
-opened writable when the host filesystem permits — no Python
-``open()`` mode strings to remember.
+Buffered writes on the AFS side commit when the inner ``with``
+block exits cleanly; an exception inside the block discards them,
+leaving the on-disc passwords file untouched. The image is opened
+writable when the host filesystem permits — no Python ``open()``
+mode strings to remember.
 
 .. literalinclude:: ../../../scripts/api-examples/add_afs_user.py
    :language: python
