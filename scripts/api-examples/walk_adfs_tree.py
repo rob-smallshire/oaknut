@@ -14,14 +14,15 @@ from pathlib import Path
 from oaknut.adfs import ADFS, ADFS_L
 
 
-def walk_tree(start) -> None:
+def walk_tree(start_dirpath) -> None:
     """Print an ADFS subtree with two-space indentation per level.
 
     Args:
-        start: Path to walk from. Usually adfs.root for the whole tree.
+        start_dirpath: Path to walk from. Usually ``adfs.root`` for
+            the whole tree.
     """
-    root_depth = len(start.parts)
-    for dirpath, dirnames, filenames in start.walk():
+    root_depth = len(start_dirpath.parts)
+    for dirpath, dirnames, filenames in start_dirpath.walk():
         indent = "  " * (len(dirpath.parts) - root_depth)
         print(f"{indent}{dirpath.name}/")
         for filename in filenames:
