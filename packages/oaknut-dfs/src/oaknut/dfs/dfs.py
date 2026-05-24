@@ -169,8 +169,7 @@ class DFSPath(AcornPath):
 
     # --- Navigation ---
 
-    def __truediv__(self, name: str) -> DFSPath:
-        """Join path components."""
+    def _join_name(self, name: str) -> DFSPath:
         if self._path == "":
             return DFSPath(self._dfs, name)
         return DFSPath(self._dfs, f"{self._path}.{name}")

@@ -45,7 +45,44 @@ class AcornPath:
     # ------------------------------------------------------------------
 
     def __truediv__(self, name: str) -> "AcornPath":
-        """Join a child component, returning a new path."""
+        """Slash-join a path fragment, returning a new path.
+
+        Splits *name* on ``.`` and walks each component in turn.
+        A component that consists entirely of carets (``^``,
+        ``^^``, ``^^^`` …) walks one level up the directory tree
+        per caret, matching Acorn shell syntax — dots between
+        consecutive hats are optional. Any other component is
+        passed to :meth:`_join_name` for filesystem-specific
+        appending.
+
+        Examples::
+
+            p / "Games" / "Elite"      # join two names
+            p / "Games.Elite"          # equivalent, single string
+            p / "^"                    # parent of p
+            p / "^^"                   # grandparent (two levels up)
+            p / "^.^"                  # equivalent to ^^
+            p / "^^.Docs.ReadMe"       # up two, then into Docs/ReadMe
+        """
+        path: "AcornPath" = self
+        for component in name.split("."):
+            if not component:
+                continue
+            if set(component) == {"^"}:
+                for _ in component:
+                    path = path.parent
+            else:
+                path = path._join_name(component)
+        return path
+
+    def _join_name(self, name: str) -> "AcornPath":
+        """Append a single non-caret name component.
+
+        Subclasses implement this with their filesystem-specific
+        path-string construction. The default :meth:`__truediv__`
+        delegates here once it has stripped out any leading
+        carets, so subclasses never have to think about ``^``.
+        """
         raise NotImplementedError
 
     @property

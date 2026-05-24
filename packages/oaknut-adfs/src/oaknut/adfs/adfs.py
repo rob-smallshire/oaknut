@@ -404,8 +404,7 @@ class ADFSPath(AcornPath):
 
     # --- Navigation ---
 
-    def __truediv__(self, name: str) -> ADFSPath:
-        """Join path components: ``root / "Games" / "Elite"``."""
+    def _join_name(self, name: str) -> ADFSPath:
         if self._path == "$":
             return ADFSPath(self._adfs, f"$.{name}")
         return ADFSPath(self._adfs, f"{self._path}.{name}")

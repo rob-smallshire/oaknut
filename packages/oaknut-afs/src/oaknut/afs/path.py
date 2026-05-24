@@ -161,8 +161,12 @@ class AFSPath(AcornPath):
             return AFSPath(self.parts + other.parts, afs=self.afs)
         if not isinstance(other, str):
             return NotImplemented
-        _validate_part(other)
-        return AFSPath(self.parts + (other,), afs=self.afs)
+        # Delegate string joining (including ^ parent syntax) to AcornPath.
+        return AcornPath.__truediv__(self, other)
+
+    def _join_name(self, name: str) -> AFSPath:
+        _validate_part(name)
+        return AFSPath(self.parts + (name,), afs=self.afs)
 
     # ------------------------------------------------------------------
     # Queries
