@@ -253,7 +253,7 @@ Walking the whole image with ``disc tree`` then exposes both
 halves. The ADFS half is tiny — just ``!BOOT`` and the FS3 binary,
 which is all the boot needs to load before handing off to AFS.
 
-The AFS half shows the two ``--emplace``-d library trees in their
-full glory, with the BBC-era utilities (``LCAT``, ``NETMON``,
-``PROT``, ``USERS``, …) that the Level 3 File Server's clients
-reach for via ``*<command>`` once the server is up.
+The AFS half shows the two emplaced library trees in full, with
+the BBC-era utilities (``LCAT``, ``NETMON``, ``PROT``, ``USERS``,
+…) that the Level 3 File Server's clients reach for via
+``*<command>`` once the server is up.
