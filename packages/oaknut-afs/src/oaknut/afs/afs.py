@@ -150,14 +150,8 @@ class AFS:
         # between oaknut-afs and oaknut-adfs during test collection.
         from oaknut.adfs import ADFS
 
-        with ADFS.from_file(filepath, mode=mode) as adfs:
-            afs = adfs.afs_partition
-            if afs is None:
-                raise AFSNotPresentError(
-                    f"{filepath} has no AFS partition (no info-sector pointers)"
-                )
-            with afs:
-                yield afs
+        with ADFS.from_file(filepath, mode=mode) as adfs, adfs.afs_partition as afs:
+            yield afs
 
     @staticmethod
     @contextmanager
@@ -236,10 +230,9 @@ class AFS:
                     omit_builtins=frozenset(omit_users),
                 ),
             )
-            afs = adfs.afs_partition
-            for name_or_path in emplacements:
-                emplace_library(afs, name_or_path)
-            with afs:
+            with adfs.afs_partition as afs:
+                for name_or_path in emplacements:
+                    emplace_library(afs, name_or_path)
                 yield afs
 
     # ------------------------------------------------------------------

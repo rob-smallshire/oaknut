@@ -231,15 +231,13 @@ def _open_adfs(image_filepath: Path, mode: str = "rb") -> Iterator:
 def _open_afs(image_filepath: Path, mode: str = "rb") -> Iterator:
     """Open image as ADFS, grab the AFS partition, yield it.
 
-    Raises :class:`click.ClickException` if no AFS partition is
-    present.
+    Raises :class:`AFSNotPresentError` if no AFS partition is
+    installed; the CLI :func:`handled_errors` boundary translates
+    that to a user-facing message and exit code.
     """
     from oaknut.adfs import ADFS
 
-    with ADFS.from_file(image_filepath, mode=mode) as adfs:
-        afs = adfs.afs_partition
-        if afs is None:
-            raise click.ClickException("no AFS partition found on this disc")
+    with ADFS.from_file(image_filepath, mode=mode) as adfs, adfs.afs_partition as afs:
         yield afs
 
 
@@ -266,13 +264,10 @@ def open_image(
 
 @contextmanager
 def open_image_for_afs_write(image_filepath: Path) -> Iterator:
-    """Open for AFS write: yields (adfs, afs) so the caller can flush."""
+    """Open for AFS write: yields (adfs, afs) with auto-flush on clean exit."""
     from oaknut.adfs import ADFS
 
-    with ADFS.from_file(image_filepath, mode="r+b") as adfs:
-        afs = adfs.afs_partition
-        if afs is None:
-            raise click.ClickException("no AFS partition found on this disc")
+    with ADFS.from_file(image_filepath, mode="r+b") as adfs, adfs.afs_partition as afs:
         yield adfs, afs
 
 
@@ -316,7 +311,7 @@ def _image_has_afs(image_filepath: "Path") -> bool:
     if fs is not FilingSystem.ADFS:
         return False
     with _open_adfs(image_filepath) as adfs:
-        return adfs.afs_partition is not None
+        return adfs.has_afs_partition
 
 
 def _iter_search_partitions(
@@ -553,10 +548,10 @@ def _build_tree_whole_image(image_filepath: Path, tc) -> None:
         return
 
     with _open_adfs(image_filepath) as adfs:
-        afs = adfs.afs_partition
-        if afs is None:
+        if not adfs.has_afs_partition:
             _attach_node(adfs.root, image_root)
         else:
+            afs = adfs.afs_partition
             adfs_label = image_root.add_child(name="ADFS")
             _attach_node(adfs.root, adfs_label)
             afs_label = image_root.add_child(name="AFS")
@@ -686,14 +681,14 @@ def _stat_disc(image_filepath: Path, fs: FilingSystem):
         elif fs is FilingSystem.DFS:
             sections["partition_1"] = Report(data=_dfs_partition_tc(handle, is_only=True))
         else:
-            afs = handle.afs_partition
-            if afs is None:
+            if not handle.has_afs_partition:
                 # Single-partition ADFS image: fold disc-level info
                 # (geometry, total size) into the one partition block.
                 sections["partition_1"] = Report(data=_adfs_partition_tc(handle, is_only=True))
             else:
                 # Partitioned ADFS+AFS: the three-block envelope makes
                 # the partitioning visible.
+                afs = handle.afs_partition
                 sections["disc"] = Report(data=_disc_header_adfs_tc(handle))
                 sections["partition_1"] = Report(data=_adfs_partition_tc(handle, is_only=False))
                 sections["partition_2"] = Report(data=_afs_partition_tc(handle, afs))
@@ -2679,8 +2674,8 @@ def afs_plan(
         sec1, sec2 = adfs._fsm.afs_info_pointers
         if sec1 != 0 or sec2 != 0:
             existing: dict = {"present": True}
-            afs = adfs.afs_partition
-            if afs is not None:
+            if adfs.has_afs_partition:
+                afs = adfs.afs_partition
                 existing["disc_name"] = afs.disc_name
                 existing["start_cylinder"] = afs.start_cylinder
             document["existing_afs"] = existing
@@ -2897,8 +2892,7 @@ def afs_init(
         if emplacements:
             from oaknut.afs.libraries import emplace_library
 
-            afs = adfs.afs_partition
-            with afs:
+            with adfs.afs_partition as afs:
                 for name in emplacements:
                     try:
                         replaced = emplace_library(afs, name)
@@ -2988,7 +2982,6 @@ def afs_useradd(
             password=password,
             quota=quota or 0,
         )
-        afs.flush()
 
 
 @cli.command(name="afs-userdel")
@@ -2998,7 +2991,6 @@ def afs_userdel(image: Path, name: str) -> None:
     """Remove a user from the AFS passwords file."""
     with open_image_for_afs_write(image) as (adfs, afs):
         afs.remove_user(name)
-        afs.flush()
 
 
 @cli.command(name="afs-merge")
@@ -3056,27 +3048,22 @@ def afs_merge(
     from oaknut.adfs import ADFS
     from oaknut.afs import merge
 
-    with ADFS.from_file(image, mode="r+b") as target_adfs:
-        target_afs = target_adfs.afs_partition
-        if target_afs is None:
-            raise click.ClickException("no AFS partition found on target disc")
+    with (
+        ADFS.from_file(image, mode="r+b") as target_adfs,
+        target_adfs.afs_partition as target_afs,
+        ADFS.from_file(source) as source_adfs,
+        source_adfs.afs_partition as source_afs,
+    ):
+        target_root = target_afs.root
+        if target_path:
+            target_root = _navigate_afs(target_afs, target_path)
 
-        with ADFS.from_file(source) as source_adfs:
-            source_afs = source_adfs.afs_partition
-            if source_afs is None:
-                raise click.ClickException("no AFS partition found on source disc")
-
-            target_root = target_afs.root
-            if target_path:
-                target_root = _navigate_afs(target_afs, target_path)
-
-            merge(
-                target_afs,
-                source_afs,
-                target_path=target_root,
-                conflict=on_conflict.lower(),
-            )
-            target_afs.flush()
+        merge(
+            target_afs,
+            source_afs,
+            target_path=target_root,
+            conflict=on_conflict.lower(),
+        )
 
 
 # ---------------------------------------------------------------------------

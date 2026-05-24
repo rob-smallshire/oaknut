@@ -25,7 +25,7 @@ class TestAFSPartitionDetection:
         from oaknut.adfs import ADFS
 
         adfs = ADFS.create(ADFS_L)
-        assert adfs.afs_partition is None
+        assert not adfs.has_afs_partition
 
     def test_patched_disc_has_afs(self) -> None:
         adfs = build_synthetic_adfs_with_afs()

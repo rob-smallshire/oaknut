@@ -26,9 +26,9 @@ class TestAfsInfoPointers:
         # validate() returns [] on a well-formed map (checksums OK).
         assert adfs._fsm.validate() == []
 
-    def test_afs_partition_none_when_not_installed(self) -> None:
+    def test_afs_partition_absent_when_not_installed(self) -> None:
         adfs = ADFS.create(ADFS_L)
-        assert adfs.afs_partition is None
+        assert not adfs.has_afs_partition
 
     def test_install_rejects_out_of_range(self) -> None:
         adfs = ADFS.create(ADFS_L)

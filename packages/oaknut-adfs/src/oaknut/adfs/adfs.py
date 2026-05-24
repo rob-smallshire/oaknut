@@ -1234,6 +1234,7 @@ class ADFS:
         self._dir_format = dir_format
         self._fsm = fsm
         self._geometry = geometry
+        self._afs_partition_cache = None
 
     # --- Named constructors ---
 
@@ -1561,33 +1562,56 @@ class ADFS:
         return self._fsm.disc_name
 
     @property
+    def has_afs_partition(self) -> bool:
+        """Whether this disc carries Level 3 File Server pointers.
+
+        ``True`` when an AFS partition is installed in the tail of
+        this old-map ADFS disc (info-sector pointers at ``&F6`` /
+        ``&1F6`` of the old map are non-zero and parse cleanly).
+        Cheap to call — does not construct an AFS handle.
+        """
+        from oaknut.afs.afs import AFS, AFSNotPresentError
+
+        sec1, sec2 = self._fsm.afs_info_pointers
+        if sec1 == 0 and sec2 == 0:
+            return False
+        try:
+            AFS(self._disc, sec1, sec2)
+        except AFSNotPresentError:
+            return False
+        return True
+
+    @property
     def afs_partition(self):  # type: ignore[override]
-        """Open the AFS partition on this disc, if one is installed.
+        """Open the AFS partition on this disc.
 
         Returns an :class:`oaknut.afs.AFS` handle sharing this disc's
-        :class:`~oaknut.discimage.UnifiedDisc`, or ``None`` if no AFS
-        info-sector pointers are present (i.e. the tail of the disc
-        has not been partitioned for the Level 3 File Server). The
-        returned handle does not own the underlying file — the caller
-        must keep this ADFS context manager alive for as long as the
-        AFS handle is in use.
+        :class:`~oaknut.discimage.UnifiedDisc`. Cached on first access
+        so repeated reads return the same instance — letting callers
+        write ``with adfs.afs_partition as afs: ...`` to compose the
+        AFS lifecycle into the surrounding ``with``.
 
-        Only old-map ADFS discs carry AFS partitions. The read path
-        goes through :attr:`OldFreeSpaceMap.afs_info_pointers`, which
-        reads the 4-byte little-endian sector addresses installed by
-        WFSINIT at ``&F6`` and ``&1F6`` of the old map.
+        The returned handle does not own the underlying file — keep
+        this ADFS context manager alive for as long as the AFS handle
+        is in use.
+
+        Raises:
+            AFSNotPresentError: If the disc has no AFS pointers.
+                Use :attr:`has_afs_partition` to test for presence
+                without provoking the exception.
         """
         # Deferred import — oaknut-afs depends on oaknut-adfs, so we
         # cannot import it at module load without a cycle.
         from oaknut.afs.afs import AFS, AFSNotPresentError
 
-        sec1, sec2 = self._fsm.afs_info_pointers
-        if sec1 == 0 and sec2 == 0:
-            return None
-        try:
-            return AFS(self._disc, sec1, sec2)
-        except AFSNotPresentError:
-            return None
+        if self._afs_partition_cache is None:
+            sec1, sec2 = self._fsm.afs_info_pointers
+            if sec1 == 0 and sec2 == 0:
+                raise AFSNotPresentError(
+                    "disc has no AFS partition (no info-sector pointers)"
+                )
+            self._afs_partition_cache = AFS(self._disc, sec1, sec2)
+        return self._afs_partition_cache
 
     def validate(self) -> list[str]:
         """Validate filesystem integrity. Returns list of error messages."""
