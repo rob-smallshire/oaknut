@@ -17,8 +17,8 @@ section below builds a blank one to follow along with.
 First contact
 -------------
 
-Three lines cover the common case of "open a disc, look at what is
-on it, read one file":
+Three operations cover the common case of "look at one directory,
+look at the whole disc, read one file":
 
 .. code-block:: python
 
@@ -26,15 +26,25 @@ on it, read one file":
 
    with DFS.from_file("Disc003-Zalaga.ssd") as dfs:
        print(dfs.title)
+
+       # The contents of the default directory, $.
        for entry in (dfs.root / "$").iterdir():
            print(entry.name)
+
+       # Every file on the disc, across every populated letter.
+       for dirpath, _dirs, filenames in dfs.root.walk():
+           for filename in filenames:
+               print(f"{dirpath.path}.{filename}")
+
+       # Read one file's bytes.
        data = (dfs.root / "$" / "ZALAGA").read_bytes()
 
 Every filesystem class follows the same shape: ``from_file`` is a
 named-constructor context manager, ``.root`` is the catalogue handle,
-:meth:`iterdir` yields children, and the slash operator joins path
-components. Swap ``DFS`` for :class:`oaknut.adfs.ADFS` or
-:class:`oaknut.afs.AFS` and the rest of the code reads identically.
+:meth:`iterdir` yields children, :meth:`walk` recurses, and the
+slash operator joins path components. Swap ``DFS`` for
+:class:`oaknut.adfs.ADFS` or :class:`oaknut.afs.AFS` and the rest of
+the code reads identically.
 
 On DFS specifically, ``$`` is a child of the nameless root, just
 like any other single-character directory name. On a real BBC Micro
