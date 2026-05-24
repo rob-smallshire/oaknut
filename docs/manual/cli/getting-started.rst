@@ -154,17 +154,18 @@ Three commands depending on what you want:
 Browsing the catalogue
 ----------------------
 
-The display you get from ``disc tree`` is a recursive view of every
-entry on the disc. ``disc ls`` lists a single directory:
+The display you get from ``disc tree`` is a recursive view of
+every entry on the disc:
 
 .. cli-example:: getting_started_browse
 
 DFS files can sit under any of the single-character directories
-``$`` (the root) and ``A`` through ``Z`` — pick whichever you like:
+``$`` and ``A``–``Z``, all siblings under the nameless root. To
+list one specifically, name it after the colon:
 
 .. code-block:: sh
 
-   disc ls 'hello.ssd:$.D'                # list the D directory
+   disc ls 'hello.ssd:D'                  # files in directory D
 
 Both commands default to a human-readable display when stdout is a
 terminal, and switch to a tab-separated, headers-on-the-first-line
