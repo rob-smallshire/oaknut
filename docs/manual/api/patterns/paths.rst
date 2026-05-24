@@ -95,6 +95,20 @@ the grandparent, and dots between consecutive hats are optional
     elite / "^.^.Docs.ReadMe"         # up two, then into Docs.ReadMe
     elite / "^^.Docs.ReadMe"          # same, no dot between hats
 
+.. note::
+
+   This is one place where oaknut diverges from
+   :class:`pathlib.PurePath`. pathlib stores ``..`` as a literal
+   component on join (``PurePosixPath("/foo") / ".."`` keeps the
+   ``..`` and you opt into normalisation via :meth:`pathlib.Path.resolve`),
+   whereas oaknut resolves ``^`` immediately during the slash-join.
+   The reasons are practical: ``^`` is reserved Acorn syntax that
+   no real directory can be named, so storing it as a literal
+   component would only produce a path that fails at I/O time; and
+   the Acorn shell itself resolves ``^`` eagerly at the ``*DIR``
+   prompt rather than lazily. Eager resolution keeps oaknut paths
+   consistent with the Acorn semantics they exist to describe.
+
 **DFS — single-character directories under a nameless root.**
 A DFS catalogue holds up to 31 file entries (62 on Watford DDFS).
 Each lives in one of 27 directories — ``$`` and ``A``–``Z`` — and
