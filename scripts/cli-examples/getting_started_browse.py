@@ -16,7 +16,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from cli_example_helper import in_tmp_dir, show, silent  # noqa: E402
 
 with in_tmp_dir():
-    silent("disc create hello.ssd --format ssd --title GETSTARTED")
+    silent("disc create hello.ssd --title GETSTARTED")
     silent("printf 'Welcome to the GETSTARTED disc.\\r' > readme.txt")
     silent("disc put 'hello.ssd:$.README' readme.txt")
 

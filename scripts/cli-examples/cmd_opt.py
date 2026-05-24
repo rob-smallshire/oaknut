@@ -20,7 +20,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from cli_example_helper import in_tmp_dir, section, show, silent  # noqa: E402
 
 with in_tmp_dir():
-    silent("disc create boot.ssd --format ssd --title BOOTDEMO")
+    silent("disc create boot.ssd --title BOOTDEMO")
 
     section("read")
     show("disc opt boot.ssd")

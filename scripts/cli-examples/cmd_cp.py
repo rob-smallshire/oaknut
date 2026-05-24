@@ -15,6 +15,6 @@ SOURCE = REPO_ROOT / "tests" / "data" / "images" / "games" / "Disc002-Arcadians.
 
 with in_tmp_dir():
     shutil.copy(SOURCE, "arcadians.ssd")
-    silent("disc create archive.adl --format adfs-m --title Archive")
+    silent("disc create archive.adl --title Archive")
     show("disc cp 'arcadians.ssd:$.!BOOT' 'archive.adl:$.!BOOT'")
     show("disc ls archive.adl")

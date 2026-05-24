@@ -35,7 +35,7 @@ with in_tmp_dir():
     silent(f"cp {GAMES_DIR}/Disc00*.ssd .")
 
     section("create")
-    show("disc create games.dat --format adfs-hard --capacity 10MB --title Games")
+    show("disc create games.dat --capacity 10MB --title Games")
 
     section("sources")
     show("ls *.ssd")

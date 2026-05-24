@@ -63,11 +63,14 @@ Acorn-era disc images out in the wild are.
 
 .. cli-example:: getting_started
 
-The available ``--format`` values are ``ssd`` and ``dsd`` (DFS
-floppies, single- and double-sided), ``adfs-s`` / ``adfs-m`` /
-``adfs-l`` (ADFS floppies of the three standard sizes), and
-``adfs-hard`` (ADFS hard discs — see :doc:`cookbook` for the
-walkthrough that builds a Level 3 File Server disc).
+The ``.ssd`` extension is enough for ``disc create`` to pick the
+right format — the same is true of ``.dsd`` (DFS double-sided),
+``.ads`` / ``.adm`` / ``.adl`` (ADFS floppies, small / medium /
+large), and ``.dat`` (ADFS hard discs, which also need
+``--capacity 10MB`` or similar — see :doc:`cookbook` for the
+walkthrough that builds a Level 3 File Server disc). Pass
+``--format`` explicitly only when the extension is unconventional
+or ambiguous.
 
 The disc is empty but the catalogue and boot option are already in
 place. Two sectors of the 800 total are "used" — sectors 0 and 1

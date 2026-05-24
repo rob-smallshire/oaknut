@@ -2309,6 +2309,16 @@ _alias("*OPT4", "opt")
 # ---------------------------------------------------------------------------
 
 
+_FORMAT_BY_EXTENSION = {
+    ".ssd": "ssd",
+    ".dsd": "dsd",
+    ".ads": "adfs-s",
+    ".adm": "adfs-m",
+    ".adl": "adfs-l",
+    ".dat": "adfs-hard",
+}
+
+
 @cli.command()
 @click.argument("host_path", type=click.Path(path_type=Path))
 @click.option(
@@ -2318,8 +2328,11 @@ _alias("*OPT4", "opt")
         ["ssd", "dsd", "adfs-s", "adfs-m", "adfs-l", "adfs-hard"],
         case_sensitive=False,
     ),
-    required=True,
-    help="Disc image format.",
+    default=None,
+    help=(
+        "Disc image format. Inferred from the filename extension when "
+        "omitted: .ssd, .dsd, .ads, .adm, .adl, or .dat (adfs-hard)."
+    ),
 )
 @click.option("--title", "disc_title", default="", help="Disc title.")
 @click.option(
@@ -2327,8 +2340,16 @@ _alias("*OPT4", "opt")
     default=None,
     help="Capacity (hard disc). Accepts e.g. 10MB, 40MiB, 1024kB, or plain bytes.",
 )
-def create(host_path: Path, fmt: str, disc_title: str, capacity: str | None) -> None:
+def create(host_path: Path, fmt: str | None, disc_title: str, capacity: str | None) -> None:
     """Create a new empty disc image."""
+    if fmt is None:
+        ext = host_path.suffix.lower()
+        fmt = _FORMAT_BY_EXTENSION.get(ext)
+        if fmt is None:
+            raise click.ClickException(
+                f"cannot infer disc format from extension {ext!r}; "
+                "pass --format explicitly"
+            )
     if fmt == "ssd":
         from oaknut.dfs import ACORN_DFS_80T_SINGLE_SIDED, DFS
 

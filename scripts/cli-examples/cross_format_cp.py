@@ -22,7 +22,7 @@ SOURCE = REPO_ROOT / "tests" / "data" / "images" / "games" / "Disc999-ReptonInfi
 
 with in_tmp_dir():
     shutil.copy(SOURCE, "infinity.ssd")
-    silent("disc create stash.adl --format adfs-l --title STASH")
+    silent("disc create stash.adl --title STASH")
 
     show("disc cp 'infinity.ssd:$.MENU' 'stash.adl:$.Menu'")
     show("disc cp 'infinity.ssd:$.REPTON' 'stash.adl:$.Repton'")
