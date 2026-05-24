@@ -50,10 +50,10 @@ class CataloguedSurface:
         if entry is None:
             raise FileNotFoundError(f"File not found: {filename}")
 
-        # Read file sectors using Surface
-        file_sectors = self._surface.sector_range(entry.start_sector, entry.sectors_required)
+        if entry.length == 0:
+            return b""
 
-        # Return exact file length (trim sector padding)
+        file_sectors = self._surface.sector_range(entry.start_sector, entry.sectors_required)
         return file_sectors.tobytes()[: entry.length]
 
     def write_file(
@@ -66,17 +66,14 @@ class CataloguedSurface:
         locked: bool = False,
     ) -> None:
         """Write a new file."""
-        # Find free space using First Fit algorithm
         start_sector = self._first_fit(len(data))
 
-        # Write data to sectors (pad to sector boundary)
-        sectors_needed = (len(data) + 255) // 256
-        padded_data = data.ljust(sectors_needed * 256, b"\x00")
+        if len(data) > 0:
+            sectors_needed = (len(data) + 255) // 256
+            padded_data = data.ljust(sectors_needed * 256, b"\x00")
+            file_sectors = self._surface.sector_range(start_sector, sectors_needed)
+            file_sectors[:] = padded_data
 
-        file_sectors = self._surface.sector_range(start_sector, sectors_needed)
-        file_sectors[:] = padded_data
-
-        # Add catalog entry
         self._catalogue.add_file_entry(
             filename=filename,
             directory=directory,
