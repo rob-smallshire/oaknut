@@ -91,6 +91,18 @@ class TestDetectFilingSystem:
         p.write_bytes(b"\x00" * 100)
         assert detect_filing_system(p) is FilingSystem.ADFS
 
+    def test_ads_is_adfs(self, tmp_path: Path) -> None:
+        # ADFS-S floppy; disc create produces these, so detection must
+        # recognise them too.
+        p = tmp_path / "test.ads"
+        p.write_bytes(b"\x00" * 100)
+        assert detect_filing_system(p) is FilingSystem.ADFS
+
+    def test_adm_is_adfs(self, tmp_path: Path) -> None:
+        p = tmp_path / "test.adm"
+        p.write_bytes(b"\x00" * 100)
+        assert detect_filing_system(p) is FilingSystem.ADFS
+
     def test_unknown_extension_raises(self, tmp_path: Path) -> None:
         import click
 

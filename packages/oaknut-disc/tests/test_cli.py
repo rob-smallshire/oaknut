@@ -2334,6 +2334,38 @@ class TestCreate:
         )
         assert result.exit_code != 0
 
+    def test_create_ads_infers_adfs_s(self, runner: CliRunner, tmp_path: Path) -> None:
+        """`.ads` infers ADFS-S (640 sectors) without an explicit --format."""
+        out = tmp_path / "small.ads"
+        result = runner.invoke(cli, ["create", str(out)])
+        assert result.exit_code == 0
+        assert out.stat().st_size == 163840  # ADFS-S = 640 × 256
+
+    def test_create_adm_infers_adfs_m(self, runner: CliRunner, tmp_path: Path) -> None:
+        out = tmp_path / "medium.adm"
+        result = runner.invoke(cli, ["create", str(out)])
+        assert result.exit_code == 0
+        assert out.stat().st_size == 327680  # ADFS-M = 1280 × 256
+
+    def test_create_then_operate_round_trips_for_ads(
+        self, runner: CliRunner, tmp_path: Path
+    ) -> None:
+        """Regression: an extension `disc create` accepts must also be
+        recognised by the filing-system detection the other commands use."""
+        out = tmp_path / "small.ads"
+        assert runner.invoke(cli, ["create", str(out)]).exit_code == 0
+        result = runner.invoke(cli, ["freemap", str(out)])
+        assert result.exit_code == 0
+        assert "Traceback" not in result.output
+
+    def test_create_adf_is_ambiguous(self, runner: CliRunner, tmp_path: Path) -> None:
+        """`.adf` is recognised as ADFS for reading but its size is
+        ambiguous, so creating one needs an explicit --format."""
+        out = tmp_path / "amb.adf"
+        result = runner.invoke(cli, ["create", str(out)])
+        assert result.exit_code != 0
+        assert "infer" in result.output.lower()
+
 
 # ---------------------------------------------------------------------------
 # Whole-image: compact

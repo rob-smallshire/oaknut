@@ -2520,14 +2520,9 @@ _alias("*OPT4", "opt")
 # ---------------------------------------------------------------------------
 
 
-_FORMAT_BY_EXTENSION = {
-    ".ssd": "ssd",
-    ".dsd": "dsd",
-    ".ads": "adfs-s",
-    ".adm": "adfs-m",
-    ".adl": "adfs-l",
-    ".dat": "adfs-hard",
-}
+# Sentinel for "an ADFS hard disc", whose size comes from --capacity
+# rather than a fixed-geometry format constant.
+_ADFS_HARD_DISC = object()
 
 
 @cli.command()
@@ -2568,64 +2563,56 @@ def create(
     capacity: str | None,
 ) -> None:
     """Create a new empty disc image."""
-    if fmt is None:
+    from oaknut.adfs import ADFS, ADFS_L, ADFS_M, ADFS_S, ADFSFormat
+    from oaknut.adfs import IMAGE_FORMAT_BY_EXTENSION as _ADFS_BY_EXT
+    from oaknut.dfs import (
+        ACORN_DFS_40T_DOUBLE_SIDED_INTERLEAVED,
+        ACORN_DFS_40T_SINGLE_SIDED,
+        ACORN_DFS_80T_DOUBLE_SIDED_INTERLEAVED,
+        ACORN_DFS_80T_SINGLE_SIDED,
+        DFS,
+        DiscFormat,
+    )
+    from oaknut.dfs import IMAGE_FORMAT_BY_EXTENSION as _DFS_BY_EXT
+
+    # Resolve a concrete target: a DFS DiscFormat, an ADFS ADFSFormat,
+    # or the _ADFS_HARD_DISC sentinel. --format (CLI vocabulary) wins;
+    # otherwise infer from the extension using the library mappings.
+    if fmt is not None:
+        target = {
+            "ssd": ACORN_DFS_80T_SINGLE_SIDED,
+            "dsd": ACORN_DFS_80T_DOUBLE_SIDED_INTERLEAVED,
+            "adfs-s": ADFS_S,
+            "adfs-m": ADFS_M,
+            "adfs-l": ADFS_L,
+            "adfs-hard": _ADFS_HARD_DISC,
+        }[fmt]
+    else:
         ext = host_path.suffix.lower()
-        fmt = _FORMAT_BY_EXTENSION.get(ext)
-        if fmt is None:
+        if ext in _DFS_BY_EXT:
+            target = _DFS_BY_EXT[ext]
+        elif ext == ".dat":
+            target = _ADFS_HARD_DISC
+        elif _ADFS_BY_EXT.get(ext) is not None:
+            target = _ADFS_BY_EXT[ext]
+        else:
+            # Unrecognised, or recognised-but-ambiguous (.adf).
             raise click.ClickException(
                 f"cannot infer disc format from extension {ext!r}; "
                 "pass --format explicitly"
             )
-    if tracks is not None and fmt not in ("ssd", "dsd"):
-        raise click.ClickException(
-            f"--tracks applies only to ssd/dsd formats (got --format={fmt})"
-        )
-    tracks_int = int(tracks) if tracks is not None else 80
-    if fmt == "ssd":
-        from oaknut.dfs import (
-            ACORN_DFS_40T_SINGLE_SIDED,
-            ACORN_DFS_80T_SINGLE_SIDED,
-            DFS,
-        )
 
-        disc_format = (
-            ACORN_DFS_40T_SINGLE_SIDED
-            if tracks_int == 40
-            else ACORN_DFS_80T_SINGLE_SIDED
-        )
-        with DFS.create_file(host_path, disc_format, title=disc_title):
-            pass
-    elif fmt == "dsd":
-        from oaknut.dfs import (
-            ACORN_DFS_40T_DOUBLE_SIDED_INTERLEAVED,
-            ACORN_DFS_80T_DOUBLE_SIDED_INTERLEAVED,
-            DFS,
-        )
+    # --tracks only applies to DFS floppies; for those, --tracks 40
+    # selects the 40-track variant of the same shape.
+    if tracks is not None and not isinstance(target, DiscFormat):
+        raise click.ClickException("--tracks applies only to ssd/dsd formats")
+    if tracks == "40":
+        if target is ACORN_DFS_80T_SINGLE_SIDED:
+            target = ACORN_DFS_40T_SINGLE_SIDED
+        elif target is ACORN_DFS_80T_DOUBLE_SIDED_INTERLEAVED:
+            target = ACORN_DFS_40T_DOUBLE_SIDED_INTERLEAVED
 
-        disc_format = (
-            ACORN_DFS_40T_DOUBLE_SIDED_INTERLEAVED
-            if tracks_int == 40
-            else ACORN_DFS_80T_DOUBLE_SIDED_INTERLEAVED
-        )
-        with DFS.create_file(host_path, disc_format, title=disc_title):
-            pass
-    elif fmt == "adfs-s":
-        from oaknut.adfs import ADFS, ADFS_S
-
-        with ADFS.create_file(host_path, ADFS_S, title=disc_title):
-            pass
-    elif fmt == "adfs-m":
-        from oaknut.adfs import ADFS, ADFS_M
-
-        with ADFS.create_file(host_path, ADFS_M, title=disc_title):
-            pass
-    elif fmt == "adfs-l":
-        from oaknut.adfs import ADFS, ADFS_L
-
-        with ADFS.create_file(host_path, ADFS_L, title=disc_title):
-            pass
-    elif fmt == "adfs-hard":
-        from oaknut.adfs import ADFS
+    if target is _ADFS_HARD_DISC:
         from oaknut.file.capacity import parse_capacity
 
         if capacity is None:
@@ -2635,6 +2622,12 @@ def create(
         except ValueError as exc:
             raise click.ClickException(str(exc))
         with ADFS.create_file(host_path, capacity=capacity_bytes, title=disc_title):
+            pass
+    elif isinstance(target, DiscFormat):
+        with DFS.create_file(host_path, target, title=disc_title):
+            pass
+    elif isinstance(target, ADFSFormat):
+        with ADFS.create_file(host_path, target, title=disc_title):
             pass
 
 

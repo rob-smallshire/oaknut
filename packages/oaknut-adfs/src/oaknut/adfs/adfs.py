@@ -140,6 +140,23 @@ _ADFS_FORMATS_BY_SIZE = {
 }
 
 
+# The disc-image filename extensions ADFS owns. Floppy extensions map
+# to a fixed ADFSFormat that ``disc create`` lays down directly; the
+# ``None`` entries are recognised as ADFS for reading but cannot be
+# created from the extension alone — ``.adf`` because its size is
+# ambiguous (S / M / L), ``.dat`` because a hard disc needs an
+# explicit capacity. This is the single source of truth for "which
+# extensions mean ADFS"; the CLI's filing-system detection derives
+# its ADFS extension set from these keys.
+IMAGE_FORMAT_BY_EXTENSION: dict[str, "ADFSFormat | None"] = {
+    ".adf": None,
+    ".ads": ADFS_S,
+    ".adm": ADFS_M,
+    ".adl": ADFS_L,
+    ".dat": None,
+}
+
+
 # --- Hard disc (.dat/.dsc) support ---
 
 _DSC_SIZE = 22

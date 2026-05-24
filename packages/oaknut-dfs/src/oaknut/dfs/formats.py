@@ -98,6 +98,18 @@ WATFORD_DFS_80T_DOUBLE_SIDED_SEQUENTIAL = DiscFormat(
 )
 
 
+# The disc-image filename extensions DFS owns, each mapped to the
+# DiscFormat ``disc create`` lays down by default. ``disc create
+# --tracks 40`` selects the 40-track variant of the same shape. This
+# is the single source of truth for "which extensions mean DFS" —
+# the CLI's filing-system detection derives its DFS extension set
+# from this mapping's keys rather than repeating the list.
+IMAGE_FORMAT_BY_EXTENSION: dict[str, DiscFormat] = {
+    ".ssd": ACORN_DFS_80T_SINGLE_SIDED,
+    ".dsd": ACORN_DFS_80T_DOUBLE_SIDED_INTERLEAVED,
+}
+
+
 __all__ = [
     "ACORN_DFS_40T_DOUBLE_SIDED_INTERLEAVED",
     "ACORN_DFS_40T_DOUBLE_SIDED_SEQUENTIAL",
@@ -108,6 +120,7 @@ __all__ = [
     "ACORN_DFS_CATALOGUE_NAME",
     "ACORN_DFS_SECTORS_PER_TRACK",
     "DiscFormat",
+    "IMAGE_FORMAT_BY_EXTENSION",
     "WATFORD_DFS_40T_DOUBLE_SIDED_INTERLEAVED",
     "WATFORD_DFS_40T_DOUBLE_SIDED_SEQUENTIAL",
     "WATFORD_DFS_40T_SINGLE_SIDED",

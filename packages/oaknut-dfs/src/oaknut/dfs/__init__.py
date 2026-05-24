@@ -15,6 +15,7 @@ from oaknut.dfs.formats import (
     ACORN_DFS_80T_DOUBLE_SIDED_INTERLEAVED,
     ACORN_DFS_80T_DOUBLE_SIDED_SEQUENTIAL,
     ACORN_DFS_80T_SINGLE_SIDED,
+    IMAGE_FORMAT_BY_EXTENSION,
     DiscFormat,
 )
 from oaknut.file import (
@@ -54,6 +55,7 @@ __all__ = [
     "ACORN_DFS_80T_SINGLE_SIDED",
     "ACORN_DFS_80T_DOUBLE_SIDED_INTERLEAVED",
     "ACORN_DFS_80T_DOUBLE_SIDED_SEQUENTIAL",
+    "IMAGE_FORMAT_BY_EXTENSION",
     "BootOption",
     "DiscInfo",
     "FSError",

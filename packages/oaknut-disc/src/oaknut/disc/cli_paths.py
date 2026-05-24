@@ -23,13 +23,17 @@ from pathlib import Path
 
 import click
 
+# The recognised disc-image extensions are owned by the filesystem
+# packages — each declares which extensions denote its format — so the
+# CLI never repeats (and cannot drift from) that knowledge.
+from oaknut.adfs import IMAGE_FORMAT_BY_EXTENSION as _ADFS_IMAGE_FORMATS
+from oaknut.dfs import IMAGE_FORMAT_BY_EXTENSION as _DFS_IMAGE_FORMATS
+
 _FS_PREFIX_RE = re.compile(r"^(dfs|adfs|afs):", re.IGNORECASE)
 
-# File extensions strongly associated with DFS images.
-_DFS_EXTENSIONS = frozenset({".ssd", ".dsd"})
-
-# File extensions strongly associated with ADFS images (floppy and hard disc).
-_ADFS_EXTENSIONS = frozenset({".adf", ".adl", ".dat"})
+# Map the package-declared extensions onto the routing enum.
+_DFS_EXTENSIONS = frozenset(_DFS_IMAGE_FORMATS)
+_ADFS_EXTENSIONS = frozenset(_ADFS_IMAGE_FORMATS)
 
 
 class FilingSystem(Enum):
