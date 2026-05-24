@@ -1,4 +1,4 @@
-"""Archive a folder of DFS ``.ssd`` floppies onto one ADFS hard disc.
+"""Archive a folder of DFS .ssd floppies onto one ADFS hard disc.
 
 Python counterpart to the bulk-archive CLI recipe. The shape is the
 same — for each SSD on the host, create a like-named subdirectory on
@@ -24,8 +24,14 @@ def archive_floppies(ssd_filepaths: list[Path], archive_filepath: Path) -> None:
     """Copy every file from each SSD into its own ADFS subdirectory.
 
     The subdirectory name comes from the first PascalCase word in the
-    SSD filename — ``Disc001-PlanetoidAKADefender.ssd`` becomes
-    ``Planetoid``, well within ADFS's 10-character filename limit.
+    SSD filename — Disc001-PlanetoidAKADefender.ssd becomes Planetoid,
+    well within ADFS's 10-character filename limit.
+
+    Args:
+        ssd_filepaths: DFS floppies to archive, in the order they
+            should appear on the destination disc.
+        archive_filepath: Pre-existing ADFS hard-disc image opened
+            read-write for the duration of the archive.
     """
     with ADFS.from_file(archive_filepath, mode="r+b") as archive:
         for ssd in ssd_filepaths:

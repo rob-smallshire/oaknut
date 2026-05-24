@@ -1,8 +1,8 @@
 """Create a DFS floppy with several entries and varied metadata.
 
-Shows ``DFS.create_file`` (format defaulted from the ``.ssd`` extension),
-``write_bytes`` and ``write_text``, varied load/exec addresses, and
-the canonical locked-file pattern (``access=Access.LWR``).
+Shows DFS.create_file (format defaulted from the .ssd extension),
+write_bytes and write_text, varied load/exec addresses, and the
+canonical locked-file pattern (access=Access.LWR).
 """
 
 from __future__ import annotations
@@ -17,13 +17,15 @@ from oaknut.file import Access, BootOption
 def populate_disc(filepath: Path) -> None:
     """Lay down four entries that exercise the write surfaces.
 
-    - ``$.README`` — plain text, Acorn-encoded by ``write_text``.
-      The default load/exec of 0 is fine for data files.
-    - ``$.PROG`` — raw program bytes loaded at the BBC's canonical
-      ``0x1900``, auto-running on ``*RUN``.
-    - ``$.DATA`` — arbitrary bytes at a non-default load address.
-    - ``$.LOCKED`` — small file, locked via the named composite
-      :attr:`Access.LWR` (locked + owner R+W).
+    The entries:
+
+    - $.README — plain text, Acorn-encoded by write_text. The default
+      load/exec of 0 is fine for data files.
+    - $.PROG — raw program bytes loaded at the BBC's canonical 0x1900,
+      auto-running on *RUN.
+    - $.DATA — arbitrary bytes at a non-default load address.
+    - $.LOCKED — small file, locked via the named composite Access.LWR
+      (locked + owner R+W).
     """
     with DFS.create_file(filepath, title="MyDisc", boot_option=2) as dfs:
         (dfs.root / "$.README").write_text(

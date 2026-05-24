@@ -1,10 +1,10 @@
 """Round-trip a file through the host filesystem and back.
 
-The symmetric :meth:`export_file` / :meth:`import_file` methods live
-on every path class (DFSPath, ADFSPath, AFSPath). Together with one
-of the metadata formats they preserve load address, exec address,
-and access bits across the host crossing without the caller having
-to assemble or disassemble an :class:`oaknut.file.AcornMeta` by hand.
+The symmetric export_file and import_file methods live on every path
+class (DFSPath, ADFSPath, AFSPath). Together with one of the metadata
+formats they preserve load address, exec address, and access bits
+across the host crossing without the caller having to assemble or
+disassemble an AcornMeta by hand.
 """
 
 from __future__ import annotations
@@ -21,13 +21,19 @@ def round_trip(image_filepath: Path, host_dirpath: Path) -> None:
 
     The pattern reads:
 
-      ``source.export_file(host_path, meta_format=...)`` — pull bytes
+      source.export_file(host_path, meta_format=...) pulls bytes
       and metadata onto the host, dropping an INF sidecar so nothing
       is lost.
 
-      ``destination.import_file(host_path, meta_formats=[...])`` —
-      pick the sidecar back up at the destination, applying load /
-      exec / access in one call.
+      destination.import_file(host_path, meta_formats=[...]) picks
+      the sidecar back up at the destination, applying load, exec,
+      and access in one call.
+
+    Args:
+        image_filepath: Source ADFS image to round-trip.
+        host_dirpath: Directory on the host where the intermediate
+            file plus INF sidecar are written, and where the fresh
+            image is created.
     """
     fresh_filepath = host_dirpath / "round_trip.adl"
     with (

@@ -1,9 +1,9 @@
 """Add a user account to an existing AFS image.
 
-Demonstrates :meth:`AFS.add_user` — the public counterpart to the CLI's
-``disc afs-useradd``. The ``quota`` keyword takes the same
-capacity-string form as :meth:`AFS.create_file` (``"2MB"``, ``"512KiB"``)
-so a setup script doesn't have to hand-compute byte counts.
+Demonstrates AFS.add_user — the public counterpart to the CLI's
+disc afs-useradd. The quota keyword takes the same capacity-string
+form as AFS.create_file ("2MB", "512KiB") so a setup script doesn't
+have to hand-compute byte counts.
 
 The recipe builds an AFS disc with just the built-in accounts, then
 opens it read-write and tacks on a fresh user.
@@ -18,11 +18,18 @@ from oaknut.afs import AFS
 
 
 def add_user(image_filepath: Path, username: str, quota: str) -> None:
-    """Open *image_filepath* read-write and add *username* with *quota*.
+    """Add username with quota to the AFS image at image_filepath.
 
-    Composes :meth:`AFS.add_user` with the read-write
-    :meth:`AFS.from_file` context manager. The flush on context exit
-    propagates the new passwords record to disc.
+    Composes AFS.add_user with the read-write AFS.from_file context
+    manager. The flush on context exit propagates the new passwords
+    record to disc.
+
+    Args:
+        image_filepath: Existing ADFS hard-disc image carrying an AFS
+            partition.
+        username: Name of the account to add. Must not already exist.
+        quota: Capacity string ("2MB", "512KiB", ...) or raw int byte
+            count.
     """
     with AFS.from_file(image_filepath, mode="r+b") as afs:
         afs.add_user(username, quota=quota)

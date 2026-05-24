@@ -1,10 +1,9 @@
 """Copy a file from a DFS floppy onto an ADFS hard disc.
 
-Demonstrates :meth:`copy_to`, the sugar over
-:func:`oaknut.file.copy_file`. The source path knows how to read
-itself and the destination path knows how to write its native
-metadata, so the caller writes one line and the access bits map
-across the filesystem boundary automatically.
+Demonstrates copy_to, the sugar over oaknut.file.copy_file. The
+source path knows how to read itself and the destination path knows
+how to write its native metadata, so the caller writes one line and
+the access bits map across the filesystem boundary automatically.
 """
 
 from __future__ import annotations
@@ -21,8 +20,13 @@ def cross_copy(source_filepath: Path, target_filepath: Path) -> None:
     """Copy every file from a DFS floppy into the root of an ADFS image.
 
     The DFS catalogue is flat (single-character directory tags), the
-    ADFS root is a real directory; ``copy_to`` does the right thing
-    on both ends without the caller spelling out the conversion.
+    ADFS root is a real directory; copy_to does the right thing on
+    both ends without the caller spelling out the conversion.
+
+    Args:
+        source_filepath: DFS .ssd or .dsd image to copy from.
+        target_filepath: ADFS image (.dat or .adl) to copy into.
+            Opened read-write; the source is opened read-only.
     """
     with DFS.from_file(source_filepath) as dfs, ADFS.from_file(target_filepath, mode="r+b") as adfs:
         for letter in dfs.root.iterdir():

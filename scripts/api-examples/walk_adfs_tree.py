@@ -1,9 +1,9 @@
 """Walk an ADFS directory tree recursively.
 
 ADFS is hierarchical — unlike DFS's flat catalogue — so the natural
-read pattern is recursive iteration. The :func:`walk_tree` function
-below is the equivalent of ``os.walk`` for an ADFS image and works
-identically against AFS via :class:`oaknut.afs.AFSPath`.
+read pattern is recursive iteration. walk_tree below is the
+equivalent of os.walk for an ADFS image and works identically against
+AFS via AFSPath.
 """
 
 from __future__ import annotations
@@ -18,10 +18,14 @@ from oaknut.adfs import ADFS, ADFS_L
 def walk_tree(start: "ADFSPath", indent: str = "") -> None:  # noqa: F821
     """Print an ADFS subtree with two-space indentation per level.
 
-    Demonstrates :meth:`ADFSPath.iterdir`, :meth:`is_dir` for branch
-    selection, and the natural recursion the hierarchical model
-    invites. The same code works against :class:`oaknut.afs.AFSPath`
-    without modification.
+    Demonstrates ADFSPath.iterdir, is_dir for branch selection, and
+    the natural recursion the hierarchical model invites. The same
+    code works against AFSPath without modification.
+
+    Args:
+        start: Path to walk from. Usually adfs.root for the whole tree.
+        indent: Current indentation prefix. Used by the recursive call;
+            callers typically leave it at the default empty string.
     """
     print(f"{indent}{start.name}/")
     for child in sorted(start.iterdir(), key=lambda p: (not p.is_dir(), p.name)):

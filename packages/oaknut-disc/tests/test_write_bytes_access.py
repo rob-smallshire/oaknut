@@ -1,19 +1,13 @@
-"""Cross-filesystem write_bytes(access=) conformance (#25).
+"""Cross-filesystem write_bytes(access=) conformance.
 
-Asserts that every path class accepts the documented forms on the
-``access`` keyword: ``None`` (filesystem default),
-:class:`oaknut.file.Access` (canonical wire-form), and the
-filesystem's native access type (``AFSAccess`` on AFS, an int on
-DFS/ADFS treated as Access bits). The bool shortcut that used to
-exist was dropped — ``access=True`` reads as "more access" but
-meant the opposite — so callers spell the canonical patterns
-explicitly: ``access=Access.LWR`` for locked owner R+W,
-``access=Access.WR`` for unlocked owner R+W (the default, so it
-can also be omitted entirely).
+Every path class accepts the same access forms: None (filesystem
+default), an Access flag combination, and on AFS also the native
+AFSAccess or a raw int byte. The canonical patterns are
+access=Access.LWR (locked owner R+W) and access=Access.WR (the
+unlocked default).
 
-The resulting on-disc state is checked via the unified
-:class:`oaknut.file.Stat` protocol so the test is itself
-filesystem-agnostic.
+On-disc state is checked via the unified oaknut.file.Stat protocol
+so the test is itself filesystem-agnostic.
 """
 
 from __future__ import annotations

@@ -18,11 +18,19 @@ extensions = [
     "sphinx.ext.autodoc",
     "sphinx.ext.doctest",
     "sphinx.ext.intersphinx",
+    "sphinx.ext.napoleon",
     "sphinx_click",
     "sphinx_copybutton",
     "sphinx_design",
     "oaknut_command",
 ]
+
+# Google-style docstrings — Args:/Returns:/Raises: sections.
+napoleon_google_docstring = True
+napoleon_numpy_docstring = False
+napoleon_include_init_with_doc = False
+napoleon_use_rtype = False
+napoleon_use_param = False
 
 # Theme
 html_theme = "sphinx_clarity_theme"
