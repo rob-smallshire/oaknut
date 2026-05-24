@@ -140,8 +140,9 @@ Adding a user to an existing AFS image
 an existing AFS image and writes the change back to disc.
 
 The image must be opened with ``mode="r+b"`` — the default ``"rb"``
-gives a read-only handle. :meth:`AFS.flush` at the end of the block
-guarantees the new record is on disc before the context exits.
+gives a read-only handle. Buffered writes are flushed automatically
+when the ``with`` block exits cleanly; an exception inside the block
+discards them, leaving the on-disc passwords file untouched.
 
 .. literalinclude:: ../../../scripts/api-examples/add_afs_user.py
    :language: python

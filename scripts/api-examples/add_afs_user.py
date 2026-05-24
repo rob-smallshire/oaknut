@@ -21,8 +21,9 @@ def add_user(image_filepath: Path, username: str, quota: str) -> None:
     """Add username with quota to the AFS image at image_filepath.
 
     Composes AFS.add_user with the read-write AFS.from_file context
-    manager. The flush on context exit propagates the new passwords
-    record to disc.
+    manager. Buffered writes are flushed when the context exits
+    cleanly; if the block raises they are discarded instead, leaving
+    the on-disc passwords file untouched.
 
     Args:
         image_filepath: Existing ADFS hard-disc image carrying an AFS
@@ -33,7 +34,6 @@ def add_user(image_filepath: Path, username: str, quota: str) -> None:
     """
     with AFS.from_file(image_filepath, mode="r+b") as afs:
         afs.add_user(username, quota=quota)
-        afs.flush()
 
 
 def _build_empty_server(workdir: Path) -> Path:
