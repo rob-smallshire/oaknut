@@ -203,12 +203,31 @@ class CliExampleDirective(Directive):
         display_text = display_text.expandtabs(8)
 
         block = nodes.literal_block(display_text, display_text)
-        block["language"] = "console"
+        block["language"] = "disc-session"
         return [block]
+
+
+# Pygments' BashSessionLexer only treats ``>`` continuation lines as
+# part of a command when the previous line ended with a backslash.
+# Our cli-example transcripts use bare ``>`` continuations for shell
+# constructs like ``for`` loops, where the multi-line input is
+# implicit. Enabling ``_bare_continuation`` makes the lexer treat any
+# ``>`` line after a ``$`` prompt as still belonging to the command,
+# so syntax highlighting carries across the whole multi-line input.
+def _register_disc_session_lexer(app):
+    from pygments.lexers.shell import BashSessionLexer
+
+    class DiscSessionLexer(BashSessionLexer):
+        name = "Disc Session"
+        aliases = ["disc-session"]
+        _bare_continuation = True
+
+    app.add_lexer("disc-session", DiscSessionLexer)
 
 
 def setup(app):
     app.add_directive("cli-example", CliExampleDirective)
+    _register_disc_session_lexer(app)
     return {
         "version": "1.0",
         "parallel_read_safe": True,
