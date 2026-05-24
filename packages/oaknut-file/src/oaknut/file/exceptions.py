@@ -48,3 +48,14 @@ class FilesystemClosedError(FSError):
     manipulation (slash-join, ``parent``, ``name``, ``parts``,
     ``path``, equality) does not raise this.
     """
+
+
+class TitleNotSupportedError(FSError):
+    """The target entity cannot carry a title.
+
+    A *title* is a human-readable label distinct from a name. Only
+    some Acorn entities have a slot for one: the disc (every
+    filesystem) and — on ADFS only — every directory. DFS and AFS
+    directories have no title field, and files never do. Attempting
+    to read or set a title on such an entity raises this.
+    """

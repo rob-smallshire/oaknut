@@ -264,6 +264,27 @@ class AFS:
         return self._info.disc_name
 
     @property
+    def title(self) -> str:
+        """The partition's disc-level title — its info-sector disc name.
+
+        AFS directories have no individual title (unlike ADFS); the
+        info-sector disc name is the only title-like field, so this
+        is what ``disc title`` reads and writes for an AFS partition.
+        """
+        return self._info.disc_name
+
+    @title.setter
+    def title(self, value: str) -> None:
+        import dataclasses
+
+        updated = dataclasses.replace(self._info, disc_name=value)
+        encoded = updated.to_bytes()
+        # Both info-sector copies (sec1/sec2) must stay in agreement.
+        self._write_sector(self._sec1, encoded)
+        self._write_sector(self._sec2, encoded)
+        self._info = updated
+
+    @property
     def geometry(self) -> Geometry:
         return Geometry(
             cylinders=self._info.cylinders,

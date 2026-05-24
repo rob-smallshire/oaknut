@@ -24,7 +24,7 @@ from. This keeps path algebra clean.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Iterator, Sequence, Union
 
 from oaknut.afs.directory import MAX_NAME_LENGTH
@@ -92,11 +92,7 @@ def _validate_part(part: str) -> None:
             raise AFSPathError(f"path component {part!r} contains forbidden character {ch!r}")
 
 
-@dataclass(frozen=True, slots=True)
 class AFSPath(AcornPath):
-    EntryExistsError = AFSDirectoryEntryExistsError
-    DirectoryError = AFSPathError
-
     """An absolute path within an AFS directory tree.
 
     Paths always start at the root ``$`` and accumulate named
@@ -107,19 +103,39 @@ class AFSPath(AcornPath):
         fs_tool = library / "Fs"
         str(fs_tool)  # "$.Library.Fs"
 
-    ``AFSPath`` values are immutable; ``/`` returns a new path.
+    ``AFSPath`` values are treated as immutable: ``/`` returns a new
+    path and the components are exposed through the read-only
+    :attr:`parts`. It is a plain class (not a dataclass) because the
+    inherited :class:`~oaknut.file.path.AcornPath` carries properties
+    — ``title``, ``name``, ``parent`` — and a frozen dataclass's
+    generated ``__setattr__`` masks inherited property setters,
+    turning ``path.title = ...`` into a confusing ``super()`` error.
+
+    The ``afs`` handle is bound at construction and excluded from
+    equality and hashing — two paths denoting the same location are
+    equal regardless of which (if any) handle they carry.
     """
 
-    parts: tuple[str, ...]
-    afs: "AFS | None" = field(default=None, compare=False, repr=False, hash=False)
+    EntryExistsError = AFSDirectoryEntryExistsError
+    DirectoryError = AFSPathError
 
     # ------------------------------------------------------------------
     # Construction
     # ------------------------------------------------------------------
 
-    def __post_init__(self) -> None:
-        for part in self.parts:
+    def __init__(self, parts: tuple[str, ...], afs: "AFS | None" = None) -> None:
+        for part in parts:
             _validate_part(part)
+        self._parts: tuple[str, ...] = tuple(parts)
+        self.afs = afs
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, AFSPath):
+            return NotImplemented
+        return self._parts == other._parts
+
+    def __hash__(self) -> int:
+        return hash(self._parts)
 
     @classmethod
     def root(cls) -> AFSPath:
@@ -177,6 +193,11 @@ class AFSPath(AcornPath):
     # ------------------------------------------------------------------
     # Queries
     # ------------------------------------------------------------------
+
+    @property
+    def parts(self) -> tuple[str, ...]:
+        """The path components, root-first. Read-only."""
+        return self._parts
 
     @property
     def name(self) -> str:

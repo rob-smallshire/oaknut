@@ -954,6 +954,90 @@ class TestTranslateLineEndings:
 # ---------------------------------------------------------------------------
 
 
+class TestTitleCapability:
+    """The title capability matrix: disc titles work everywhere; directory
+    titles are ADFS-only. EX_DATAERR (65) is the failure code."""
+
+    # --- Disc-level titles: supported on all three filesystems ---
+
+    def test_disc_title_dfs(self, runner: CliRunner, dfs_image_filepath: Path) -> None:
+        set_result = runner.invoke(cli, ["title", str(dfs_image_filepath), "NewName"])
+        assert set_result.exit_code == 0
+        read_result = runner.invoke(cli, ["title", str(dfs_image_filepath)])
+        assert read_result.exit_code == 0
+        assert "NewName" in read_result.output
+
+    def test_disc_title_adfs(self, runner: CliRunner, adfs_image_filepath: Path) -> None:
+        set_result = runner.invoke(cli, ["title", str(adfs_image_filepath), "NewName"])
+        assert set_result.exit_code == 0
+        read_result = runner.invoke(cli, ["title", str(adfs_image_filepath)])
+        assert read_result.exit_code == 0
+        assert "NewName" in read_result.output
+
+    def test_disc_title_afs(self, runner: CliRunner, afs_image_filepath: Path) -> None:
+        spec = f"{afs_image_filepath}:afs:"
+        set_result = runner.invoke(cli, ["title", spec, "AfsRenamed"])
+        assert set_result.exit_code == 0
+        read_result = runner.invoke(cli, ["title", spec])
+        assert read_result.exit_code == 0
+        assert "AfsRenamed" in read_result.output
+
+    # --- Directory titles: ADFS only ---
+
+    def test_directory_title_adfs(
+        self, runner: CliRunner, adfs_image_filepath: Path
+    ) -> None:
+        runner.invoke(cli, ["mkdir", f"{adfs_image_filepath}:$.Games"])
+        set_result = runner.invoke(
+            cli, ["title", f"{adfs_image_filepath}:$.Games", "Game Collection"]
+        )
+        assert set_result.exit_code == 0
+        read_result = runner.invoke(cli, ["title", f"{adfs_image_filepath}:$.Games"])
+        assert read_result.exit_code == 0
+        assert "Game Collection" in read_result.output
+
+    def test_directory_title_dfs_rejected(
+        self, runner: CliRunner, dfs_image_filepath: Path
+    ) -> None:
+        result = runner.invoke(cli, ["title", f"{dfs_image_filepath}:$", "Nope"])
+        assert result.exit_code == 65
+        assert "title" in result.output.lower()
+
+    def test_directory_title_afs_rejected(
+        self, runner: CliRunner, afs_image_filepath: Path
+    ) -> None:
+        # Create the directory first so the error is purely about the
+        # title capability, not a missing path.
+        runner.invoke(cli, ["mkdir", f"{afs_image_filepath}:afs:$.Lib"])
+        result = runner.invoke(cli, ["title", f"{afs_image_filepath}:afs:$.Lib", "Nope"])
+        assert result.exit_code == 65
+        assert "title" in result.output.lower()
+
+    # --- mkdir --title ---
+
+    def test_mkdir_title_adfs(
+        self, runner: CliRunner, adfs_image_filepath: Path
+    ) -> None:
+        result = runner.invoke(
+            cli, ["mkdir", f"{adfs_image_filepath}:$.Docs", "--title", "Documents"]
+        )
+        assert result.exit_code == 0
+        read_result = runner.invoke(cli, ["title", f"{adfs_image_filepath}:$.Docs"])
+        assert "Documents" in read_result.output
+
+    def test_mkdir_title_afs_rejected_without_orphan(
+        self, runner: CliRunner, afs_image_filepath: Path
+    ) -> None:
+        result = runner.invoke(
+            cli, ["mkdir", f"{afs_image_filepath}:afs:$.Lib", "--title", "Nope"]
+        )
+        assert result.exit_code == 65
+        assert "title" in result.output.lower()
+        # The directory must not have been created (atomic failure).
+        listing = runner.invoke(cli, ["ls", f"{afs_image_filepath}:afs:$"])
+        assert "Lib" not in listing.output
+
+
 class TestValidate:
     def test_validate_clean_adfs_is_silent(
         self, runner: CliRunner, adfs_image_filepath: Path

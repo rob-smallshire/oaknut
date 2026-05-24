@@ -2080,11 +2080,21 @@ _alias("*COPY", "cp")
     is_flag=True,
     help="Create missing parents and do not error if the directory already exists.",
 )
-def mkdir(file_spec: str, p: bool) -> None:
+@click.option(
+    "--title",
+    "dir_title",
+    default=None,
+    help="Set the new directory's title (ADFS only; DFS/AFS directories have none).",
+)
+def mkdir(file_spec: str, p: bool, dir_title: str | None) -> None:
     """Create a directory (ADFS/AFS only). Alias: *CDIR.
 
-    Accepts a ``FILE_SPEC``.
+    Accepts a ``FILE_SPEC``. ``--title`` additionally sets the new
+    directory's title, which only ADFS supports — passing it for an
+    AFS directory is an error (DFS has no directories at all).
     """
+    from oaknut.file import TitleNotSupportedError
+
     image, path = parse_file_spec(file_spec)
     if not path:
         raise click.UsageError("PATH is required")
@@ -2093,7 +2103,16 @@ def mkdir(file_spec: str, p: bool) -> None:
         raise click.ClickException("mkdir is not supported for DFS images")
     with open_image(image, fs) as handle:
         target = _navigate(handle, bare, fs)
+        # Reject an unsupported --title before creating anything, so a
+        # failed title doesn't leave an untitled directory behind.
+        if dir_title is not None and not target.supports_title:
+            raise TitleNotSupportedError(
+                f"'{bare}' cannot have a title: "
+                "only ADFS directories carry one"
+            )
         target.mkdir(parents=p, exist_ok=p)
+        if dir_title is not None:
+            target.title = dir_title
         if fs is FilingSystem.AFS:
             handle.flush()
 
@@ -2335,25 +2354,49 @@ def get_exec(file_spec: str):
 
 
 @cli.command()
-@click.argument("image", type=click.Path(exists=True, path_type=Path))
+@click.argument("file_spec")
 @click.argument("new_title", required=False, default=None)
-@report_output(reports={"title": "Current disc title (when no new title is supplied)."})
-def title(image: Path, new_title: str | None):
-    """Read or set disc title (Acorn alias: *TITLE)."""
+@report_output(reports={"title": "Current title (when no new title is supplied)."})
+def title(file_spec: str, new_title: str | None):
+    """Read or set a disc or directory title (Acorn alias: *TITLE).
+
+    Accepts a ``FILE_SPEC``. With no in-image path it reads or sets
+    the disc-level title (the DFS disc title, the ADFS root title, or
+    the AFS partition's disc name). With a directory path it reads or
+    sets that directory's title — an ADFS-only capability, since DFS
+    and AFS directories have no title field. Targeting a DFS or AFS
+    directory fails with a "no title" error.
+    """
     from asyoulikeit.scalar_data import ScalarContent
     from asyoulikeit.tabular_data import Report, Reports
+    from oaknut.file import TitleNotSupportedError
 
-    fs = detect_filing_system(image)
-    if new_title is None:
-        with open_image(image, fs) as handle:
-            current = handle.title
-        return Reports(
-            title=Report(
-                data=ScalarContent(value=current, title="Title"),
-            ),
-        )
+    image, path = parse_file_spec(file_spec)
+    fs, bare = resolve_path(image, path)
     with open_image(image, fs) as handle:
-        handle.title = new_title
+        # No in-image path → the disc/partition title (handle.title,
+        # supported on every filesystem). A path → that directory's
+        # title, which only ADFS directories carry.
+        target_is_directory = bool(bare)
+        entity = _navigate(handle, bare, fs) if target_is_directory else handle
+
+        if new_title is None:
+            current = entity.title
+            return Reports(
+                title=Report(
+                    data=ScalarContent(value=current, title="Title"),
+                ),
+            )
+
+        # Fail before mutating when the directory can't carry a title.
+        if target_is_directory and not entity.supports_title:
+            raise TitleNotSupportedError(
+                f"'{bare}' cannot have a title: "
+                "only ADFS directories carry one"
+            )
+        entity.title = new_title
+        if fs is FilingSystem.AFS:
+            handle.flush()
     return None
 
 

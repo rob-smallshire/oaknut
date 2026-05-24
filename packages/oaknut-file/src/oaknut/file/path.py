@@ -69,6 +69,14 @@ class AcornPath:
     EntryExistsError: "type[FSError]"
     DirectoryError: "type[FSError]"
 
+    #: Whether this path type can carry a directory *title* (a
+    #: human-readable label distinct from the name). Only ADFS
+    #: directories can; DFS and AFS directories cannot. Callers that
+    #: want to fail before mutating (e.g. ``mkdir --title``) check
+    #: this flag rather than catching :class:`TitleNotSupportedError`
+    #: after the fact.
+    supports_title: bool = False
+
     # ------------------------------------------------------------------
     # Abstract navigation primitives
     # ------------------------------------------------------------------
@@ -174,6 +182,31 @@ class AcornPath:
     def path(self) -> str:
         """The full path string."""
         raise NotImplementedError
+
+    @property
+    def title(self) -> str:
+        """The directory's human-readable title.
+
+        A title is distinct from the :attr:`name`: the name is the
+        structural component used in paths, the title is a label
+        stored inside the directory. Only ADFS directories have one,
+        so the base implementation raises
+        :class:`~oaknut.file.exceptions.TitleNotSupportedError`;
+        :class:`oaknut.adfs.ADFSPath` overrides it.
+        """
+        from oaknut.file.exceptions import TitleNotSupportedError
+
+        raise TitleNotSupportedError(
+            "this filesystem's directories do not have a title"
+        )
+
+    @title.setter
+    def title(self, value: str) -> None:
+        from oaknut.file.exceptions import TitleNotSupportedError
+
+        raise TitleNotSupportedError(
+            "this filesystem's directories do not have a title"
+        )
 
     # ------------------------------------------------------------------
     # Abstract querying primitives

@@ -375,6 +375,7 @@ def _entry_to_stat(entry: _ADFSDirectoryEntry) -> ADFSStat:
 class ADFSPath(AcornPath):
     EntryExistsError = ADFSEntryExistsError
     DirectoryError = ADFSPathError
+    supports_title = True
 
     """A path within an ADFS filesystem, inspired by pathlib.Path.
 
