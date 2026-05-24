@@ -19,4 +19,4 @@ SOURCE = REPO_ROOT / "tests" / "data" / "images" / "games" / "Disc002-Arcadians.
 
 with in_tmp_dir():
     shutil.copy(SOURCE, "arcadians.ssd")
-    show("disc ls arcadians.ssd")
+    show("disc ls 'arcadians.ssd:$'")
