@@ -43,6 +43,7 @@ from oaknut.file.inf import (
 )
 from oaknut.file.meta import AcornMeta
 from oaknut.file.stat import Stat
+from oaknut.file.text_io import decode_text, encode_text
 from oaknut.file.xattr import (
     read_acorn_xattrs,
     read_econet_xattrs,
@@ -67,6 +68,8 @@ __all__ = [
     "SOURCE_XATTR_ACORN",
     "SOURCE_XATTR_PIEB",
     "Stat",
+    "decode_text",
+    "encode_text",
     "export_with_metadata",
     "import_with_metadata",
     "build_filename_suffix",
