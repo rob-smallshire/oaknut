@@ -45,22 +45,27 @@ class AcornPath:
     # ------------------------------------------------------------------
 
     def __truediv__(self, name: str) -> "AcornPath":
+        """Join a child component, returning a new path."""
         raise NotImplementedError
 
     @property
     def parent(self) -> "AcornPath":
+        """The containing path. The root's parent is the root itself."""
         raise NotImplementedError
 
     @property
     def name(self) -> str:
+        """The final path component."""
         raise NotImplementedError
 
     @property
     def parts(self) -> tuple[str, ...]:
+        """Path components as a tuple."""
         raise NotImplementedError
 
     @property
     def path(self) -> str:
+        """The full path string."""
         raise NotImplementedError
 
     # ------------------------------------------------------------------
@@ -68,15 +73,19 @@ class AcornPath:
     # ------------------------------------------------------------------
 
     def exists(self) -> bool:
+        """Whether something exists at this path."""
         raise NotImplementedError
 
     def is_dir(self) -> bool:
+        """Whether this path resolves to a directory."""
         raise NotImplementedError
 
     def is_file(self) -> bool:
+        """Whether this path resolves to a file."""
         raise NotImplementedError
 
     def stat(self) -> "Stat":
+        """Return file metadata as an :class:`oaknut.file.Stat`."""
         raise NotImplementedError
 
     # ------------------------------------------------------------------
@@ -84,6 +93,7 @@ class AcornPath:
     # ------------------------------------------------------------------
 
     def iterdir(self) -> "Iterator[AcornPath]":
+        """Yield the immediate children of this directory."""
         raise NotImplementedError
 
     # ------------------------------------------------------------------
@@ -91,6 +101,7 @@ class AcornPath:
     # ------------------------------------------------------------------
 
     def read_bytes(self) -> bytes:
+        """Read this file's raw bytes."""
         raise NotImplementedError
 
     def write_bytes(
@@ -102,24 +113,31 @@ class AcornPath:
         access: "Access | None" = None,
         date: object = None,
     ) -> None:
+        """Write *data* to this path with the given metadata."""
         raise NotImplementedError
 
     def rename(self, target: "str | AcornPath") -> "AcornPath":
+        """Rename this entry; return the new path."""
         raise NotImplementedError
 
     def unlink(self) -> None:
+        """Delete the file (or empty directory) at this path."""
         raise NotImplementedError
 
     def lock(self) -> None:
+        """Set the locked bit on this entry."""
         raise NotImplementedError
 
     def unlock(self) -> None:
+        """Clear the locked bit on this entry."""
         raise NotImplementedError
 
     def set_load_address(self, address: int) -> None:
+        """Set the load address of this file."""
         raise NotImplementedError
 
     def set_exec_address(self, address: int) -> None:
+        """Set the execution address of this file."""
         raise NotImplementedError
 
     # ------------------------------------------------------------------

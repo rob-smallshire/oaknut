@@ -36,69 +36,33 @@ for it later.
 Shared shape
 ------------
 
-Every path class implements the same surface, so a function that
-takes "a path on any Acorn filesystem" can be written without
-caring which family produced it.
+Every concrete path class inherits the surface below from
+:class:`oaknut.file.AcornPath`, so a function that takes "a path on
+any Acorn filesystem" can be written without caring which family
+produced it. The methods fall into seven groups: **navigation**
+(slash-join and the path properties), **querying** (``exists`` /
+``is_dir`` / ``is_file`` / ``stat``), **iteration** (``iterdir``,
+``__iter__``, ``walk``), **read** (``read_bytes`` / ``read_text``),
+**write** (``write_bytes`` / ``write_text`` / ``touch``), **mutate**
+(``rename``, ``unlink``, ``lock`` / ``unlock``, the address
+setters), and **host-side round-trip** (``export_file`` /
+``import_file`` / ``copy_to``).
 
-**Navigation** (slash-join, properties):
+The shape mirrors :mod:`pathlib`'s own division:
+:class:`AcornPath` plays the role :class:`pathlib.PurePath` and
+:class:`pathlib.Path` play in the standard library — a concrete
+base with abstract-by-``NotImplementedError`` filesystem primitives
+and default implementations for everything that can be expressed in
+terms of those primitives.
 
-- ``p / "name"`` — slash-join a child component
-- ``parent`` — the containing path
-- ``name`` — the final component
-- ``parts`` — a tuple of components
-- ``path`` — the full path string
-
-**Querying:**
-
-- ``exists()`` / ``is_dir()`` / ``is_file()``
-- ``stat() -> oaknut.file.Stat`` (the unified :class:`Stat` protocol —
-  ``length``, ``load_address``, ``exec_address``, ``access`` as a
-  canonical :class:`oaknut.file.Access`, ``is_directory``, ``date``)
-
-**Iteration:**
-
-- ``iterdir()`` and ``__iter__`` — direct children of a directory
-- ``walk()`` — :meth:`pathlib.Path.walk`-shaped pre-order traversal
-  yielding ``(dirpath, dirnames, filenames)``
-
-**Read:**
-
-- ``read_bytes()``
-- ``read_text(*, encoding="acorn", newline=None)`` — applies
-  Python's universal-newline translation by default
-
-**Write:**
-
-- ``write_bytes(data, *, load_address=0, exec_address=0,
-  access=None, date=None)``
-- ``write_text(text, *, encoding="acorn", newline="\r", ...)`` —
-  translates Python ``"\n"`` to the Acorn-native ``"\r"`` by default
-- ``touch(*, access=None, exist_ok=True)`` —
-  :meth:`pathlib.Path.touch`-shaped
-
-**Mutate:**
-
-- ``rename(target) -> Path``
-- ``unlink()``
-- ``lock()`` / ``unlock()``
-- ``set_load_address(addr)`` / ``set_exec_address(addr)``
-
-**Host-side round-trip:**
-
-- ``export_file(host_path, *, meta_format=, owner=)`` /
-  ``import_file(source_filepath, *, meta_formats=)``
-- ``copy_to(dst)`` — sugar for :func:`oaknut.file.copy_file`
+.. autoclass:: oaknut.file.AcornPath
+   :members:
+   :special-members: __truediv__, __iter__
+   :member-order: bysource
 
 The cookbook recipes lean on this uniformity: code that walks a
 directory and prints its contents looks the same on DFS, ADFS, and
 AFS.
-
-The shape mirrors :mod:`pathlib`'s own division: :class:`AcornPath`
-plays the role :class:`pathlib.PurePath` and :class:`pathlib.Path`
-play in the standard library — a concrete base with abstract-by-
-``NotImplementedError`` filesystem primitives and default
-implementations for everything that can be expressed in terms of
-those primitives.
 
 
 Where the path models diverge
