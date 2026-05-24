@@ -217,6 +217,36 @@ class TestDFSPathWalk:
         assert dirs == []
         assert files == []
 
+    def test_walk_from_nameless_root_visits_every_populated_letter(self):
+        """``dfs.root.walk()`` yields the nameless root followed by one
+        tuple per populated directory letter, in pre-order, with files
+        attached to the letter that hosts them.
+
+        DFS has no real subdirectories, but the catalogue does have
+        multiple directory letters; walk is the canonical way to see
+        every file on the disc without knowing which letters are in
+        use ahead of time.
+        """
+        dfs = _make_empty_dfs()
+        (dfs.root / "$" / "ROOT").write_bytes(b"r")
+        (dfs.root / "A" / "ALPHA").write_bytes(b"a")
+        (dfs.root / "Z" / "ZULU").write_bytes(b"z")
+
+        steps = list(dfs.root.walk())
+
+        nameless_step = steps[0]
+        nameless_path, nameless_dirs, nameless_files = nameless_step
+        assert nameless_path.path == ""
+        assert nameless_dirs == ["$", "A", "Z"]
+        assert nameless_files == []
+
+        letter_steps = steps[1:]
+        by_letter = {p.path: (dirs, files) for p, dirs, files in letter_steps}
+        assert set(by_letter) == {"$", "A", "Z"}
+        assert by_letter["$"] == ([], ["ROOT"])
+        assert by_letter["A"] == ([], ["ALPHA"])
+        assert by_letter["Z"] == ([], ["ZULU"])
+
 
 class TestDFSPathFileOperations:
     def test_read_bytes(self):

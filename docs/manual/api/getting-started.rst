@@ -171,9 +171,12 @@ exists, as long as the existing entry is itself a directory).
 
 DFS images do not nest. The catalogue is flat and the
 single-character directory names (``$``, ``A``–``Z``) all sit as
-siblings under the nameless root, so :meth:`mkdir` and recursive
-:meth:`walk` are not meaningful operations there. See
-:doc:`patterns/paths` for the full model.
+siblings under the nameless root, so :meth:`mkdir` does not exist
+on :class:`DFSPath`. :meth:`walk` does work: starting from
+``dfs.root`` it visits the nameless root once, then yields one
+tuple per populated directory letter — the canonical way to see
+every file on the disc without first knowing which letters are in
+use. See :doc:`patterns/paths` for the full model.
 
 
 A real Acorn disc: Repton Infinity
