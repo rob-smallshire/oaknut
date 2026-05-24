@@ -79,9 +79,9 @@ assume Unix or ADFS shape when reading DFS code.
     adfs.root / "Games"             # $.Games (a directory)
     adfs.root / "Games" / "Elite"   # $.Games.Elite (a file)
 
-``mkdir()`` works on ADFSPath / AFSPath. ``^`` is meaningful (the
-parent path). ``iterdir()`` on a subdirectory yields its
-immediate children.
+:meth:`mkdir` works on ADFSPath / AFSPath. :attr:`parent` walks up
+the tree as far as the root (the root's parent is itself).
+:meth:`iterdir` on a subdirectory yields its immediate children.
 
 **DFS — single-character directories under a nameless root.**
 A DFS catalogue holds up to 31 file entries (62 on Watford DDFS).
@@ -97,9 +97,12 @@ with one extra job::
 
 Empty directories cannot exist on DFS — a directory comes into
 being the first time you write a file under it and disappears
-again when its last file is deleted. There is no ``mkdir`` and no
-:meth:`DFSPath.mkdir`. ``^`` carries no meaning, since there is no
-tree to walk up. :meth:`iterdir` on the nameless root yields one
+again when its last file is deleted. There is no
+:meth:`DFSPath.mkdir`. :attr:`parent` does walk up: a file's
+parent is its single-character directory, whose parent is the
+nameless root, whose parent is itself — so you can climb to the
+root and slash back down into a sibling directory the same way
+you would on ADFS. :meth:`iterdir` on the nameless root yields one
 entry per populated directory letter; :meth:`iterdir` on a
 single-letter directory yields the files filed under it.
 
