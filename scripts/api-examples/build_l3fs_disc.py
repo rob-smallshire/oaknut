@@ -21,19 +21,21 @@ def build_server_disc(filepath: Path) -> None:
         filepath: Destination .dat path. The companion .dsc sidecar
             is written automatically.
     """
-    username = "Herman"
+    herman_username = "Herman"
     with AFS.create_file(
         filepath,
         capacity="10MB",
         disc_name="MyServer",
-        users=[UserSpec(username, quota="2MB")],
+        users=[UserSpec(herman_username, quota="2MB")],
         omit_users=["Welcome"],
         emplacements=["Library"],
     ) as afs:
         # initialise() laid down a User Root Directory for Herman as
         # part of account creation, so we can write straight into it.
-        home = afs.root / username
-        (home / "Notes").write_text("server built via AFS.create_file\n")
+        herman_user_root_dirpath = afs.root / herman_username
+        (herman_user_root_dirpath / "Notes").write_text(
+            "server built via AFS.create_file\n",
+        )
 
 
 def main(workdir: Path) -> None:
