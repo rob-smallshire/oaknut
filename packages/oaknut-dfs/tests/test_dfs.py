@@ -553,6 +553,51 @@ class TestDFSConvenienceMethods:
             (dfs.root / "$" / "TEST").write_bytes(data)
 
 
+class TestDFSTouch:
+    """``touch()`` creates an empty file at the path.
+
+    Mirrors :meth:`pathlib.Path.touch`. DFS has no per-file mtime;
+    touching an existing file with the default ``exist_ok=True`` is
+    a no-op rather than a date-stamp refresh.
+    """
+
+    def _empty_disc(self, tmp_path):
+        filepath = tmp_path / "demo.ssd"
+        with DFS.create_file(filepath, ACORN_DFS_40T_SINGLE_SIDED, title="Demo"):
+            pass
+        return filepath
+
+    def test_touch_creates_empty_file(self, tmp_path):
+        filepath = self._empty_disc(tmp_path)
+        with DFS.from_file(filepath, ACORN_DFS_40T_SINGLE_SIDED) as dfs:
+            (dfs.root / "$.HELLO").touch()
+            assert (dfs.root / "$.HELLO").exists()
+            assert (dfs.root / "$.HELLO").read_bytes() == b""
+
+    def test_touch_applies_access_on_create(self, tmp_path):
+        filepath = self._empty_disc(tmp_path)
+        with DFS.from_file(filepath, ACORN_DFS_40T_SINGLE_SIDED) as dfs:
+            (dfs.root / "$.LOCKED").touch(access=Access.LWR)
+            st = (dfs.root / "$.LOCKED").stat()
+            assert st.access & Access.L
+
+    def test_touch_default_exist_ok_is_true(self, tmp_path):
+        filepath = self._empty_disc(tmp_path)
+        with DFS.from_file(filepath, ACORN_DFS_40T_SINGLE_SIDED) as dfs:
+            (dfs.root / "$.HELLO").write_bytes(b"keep")
+            (dfs.root / "$.HELLO").touch()
+            assert (dfs.root / "$.HELLO").read_bytes() == b"keep"
+
+    def test_touch_exist_ok_false_raises_when_file_exists(self, tmp_path):
+        from oaknut.dfs.exceptions import FileExistsError as DFSFileExistsError
+
+        filepath = self._empty_disc(tmp_path)
+        with DFS.from_file(filepath, ACORN_DFS_40T_SINGLE_SIDED) as dfs:
+            (dfs.root / "$.HELLO").write_bytes(b"x")
+            with pytest.raises(DFSFileExistsError):
+                (dfs.root / "$.HELLO").touch(exist_ok=False)
+
+
 class TestDFSDirectoryNavigation:
     """Tests for directory navigation (current_directory, change_directory, list_directory)."""
 

@@ -678,6 +678,41 @@ class ADFSPath:
             access=access,
         )
 
+    def touch(
+        self,
+        *,
+        access: "Access | None" = None,
+        exist_ok: bool = True,
+    ) -> None:
+        """Create an empty file at this path, mirroring :meth:`pathlib.Path.touch`.
+
+        ADFS catalogue entries carry no modification time, so touching
+        an existing file is a no-op when ``exist_ok`` is ``True``.
+
+        Args:
+            access: Access flags for the new file. Ignored on existing
+                files (the access is not rewritten).
+            exist_ok: Default ``True`` matches pathlib. When ``False``,
+                an existing file or directory at the path raises.
+
+        Raises:
+            ADFSPathError: If this path is the root, or already exists
+                as a directory (with or without ``exist_ok``).
+            ADFSEntryExistsError: If a file already exists at the path
+                and ``exist_ok`` is ``False``.
+        """
+        if self._path == "$":
+            raise ADFSPathError("Cannot touch root directory")
+        if self.exists():
+            if self.is_dir():
+                raise ADFSPathError(
+                    f"'{self._path}' is a directory, cannot touch"
+                )
+            if exist_ok:
+                return
+            raise ADFSEntryExistsError(f"'{self._path}' already exists")
+        self.write_bytes(b"", access=access)
+
     def write_basic(
         self,
         source: str,

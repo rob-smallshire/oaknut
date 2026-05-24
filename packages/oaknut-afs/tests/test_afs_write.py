@@ -194,6 +194,58 @@ class TestMkdirParents:
         assert (afs.root / "A" / "B" / "C").is_dir()
 
 
+class TestTouch:
+    """``touch()`` creates an empty file at the path.
+
+    Mirrors :meth:`pathlib.Path.touch`.
+    """
+
+    def test_touch_creates_empty_file(self) -> None:
+        from oaknut.file import Access
+
+        adfs = build_synthetic_adfs_with_afs()
+        afs = adfs.afs_partition
+        (afs.root / "Fresh").touch()
+        assert (afs.root / "Fresh").exists()
+        assert (afs.root / "Fresh").read_bytes() == b""
+        assert not (afs.root / "Fresh").stat().access & Access.L
+
+    def test_touch_applies_access_on_create(self) -> None:
+        from oaknut.file import Access
+
+        adfs = build_synthetic_adfs_with_afs()
+        afs = adfs.afs_partition
+        (afs.root / "Locked").touch(access=AFSAccess.from_string("LR/"))
+        assert (afs.root / "Locked").stat().access & Access.L
+
+    def test_touch_default_exist_ok_is_true(self) -> None:
+        adfs = build_synthetic_adfs_with_afs()
+        afs = adfs.afs_partition
+        (afs.root / "Hello").write_bytes(b"keep")
+        (afs.root / "Hello").touch()
+        assert (afs.root / "Hello").read_bytes() == b"keep"
+
+    def test_touch_exist_ok_false_raises_when_file_exists(self) -> None:
+        adfs = build_synthetic_adfs_with_afs()
+        afs = adfs.afs_partition
+        (afs.root / "Hello").write_bytes(b"x")
+        with pytest.raises(AFSDirectoryEntryExistsError):
+            (afs.root / "Hello").touch(exist_ok=False)
+
+    def test_touch_raises_when_path_is_existing_directory(self) -> None:
+        adfs = build_synthetic_adfs_with_afs()
+        afs = adfs.afs_partition
+        (afs.root / "Dir").mkdir()
+        with pytest.raises(AFSPathError):
+            (afs.root / "Dir").touch()
+
+    def test_touch_root_raises(self) -> None:
+        adfs = build_synthetic_adfs_with_afs()
+        afs = adfs.afs_partition
+        with pytest.raises(AFSPathError):
+            afs.root.touch()
+
+
 class TestUnlink:
     def test_delete_file(self) -> None:
         adfs = build_synthetic_adfs_with_afs()

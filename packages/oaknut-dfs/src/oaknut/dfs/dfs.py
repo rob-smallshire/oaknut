@@ -441,6 +441,38 @@ class DFSPath:
             access=access,
         )
 
+    def touch(
+        self,
+        *,
+        access: "Access | None" = None,
+        exist_ok: bool = True,
+    ) -> None:
+        """Create an empty file at this path, mirroring :meth:`pathlib.Path.touch`.
+
+        DFS catalogue entries carry no modification time, so touching
+        an existing file is a no-op when ``exist_ok`` is ``True``.
+
+        Args:
+            access: Access flags for the new file. Ignored on existing
+                files (the access is not rewritten).
+            exist_ok: Default ``True`` matches pathlib. When ``False``,
+                an existing file or directory at the path raises.
+
+        Raises:
+            ValueError: If this path is a DFS directory letter.
+            FileExistsError: If something already exists at the path
+                and ``exist_ok`` is ``False``.
+        """
+        if not self._path or self._is_directory_path():
+            raise ValueError(f"Cannot touch a directory: '{self._path}'")
+        if self.exists():
+            if exist_ok:
+                return
+            from oaknut.dfs.exceptions import FileExistsError as DFSFileExistsError
+
+            raise DFSFileExistsError(f"'{self._path}' already exists")
+        self.write_bytes(b"", access=access)
+
     # --- Modification ---
 
     def rename(self, target: Union[str, DFSPath]) -> DFSPath:
