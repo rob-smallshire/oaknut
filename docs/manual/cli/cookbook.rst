@@ -166,7 +166,7 @@ partition of the hard disc we just created. Load and exec
 addresses survive the crossing; see :doc:`/api/patterns/metadata`
 for the attribute-mapping table.
 
-**3. Write a ``!BOOT`` command file and turn on autoboot.**
+**3. Write a !BOOT command file and turn on autoboot.**
 
 .. cli-example:: l3fs_disc
    :section: boot
