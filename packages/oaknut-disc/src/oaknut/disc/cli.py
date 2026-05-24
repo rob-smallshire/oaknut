@@ -1360,8 +1360,20 @@ def get(
 @cli.command()
 @click.argument("file_spec")
 @click.argument("host_path", required=False, default=None)
-@click.option("--load", "load_address", type=str, default=None, help="Load address (hex).")
-@click.option("--exec", "exec_address", type=str, default=None, help="Exec address (hex).")
+@click.option(
+    "--load",
+    "load_address",
+    type=str,
+    default=None,
+    help="Load address; base from prefix (0x hex e.g. 0x1900, else decimal).",
+)
+@click.option(
+    "--exec",
+    "exec_address",
+    type=str,
+    default=None,
+    help="Exec address; base from prefix (0x hex e.g. 0x8023, else decimal).",
+)
 @click.option(
     "--meta-format",
     type=click.Choice(
@@ -1404,9 +1416,11 @@ def put(
     omitted, the default cascade tries — in order — a traditional
     ``HOST_PATH.inf`` sidecar, then host extended attributes, then a
     RISC-OS filename suffix, stopping at the first hit. ``--load``
-    and ``--exec`` always win over what the cascade finds. See
-    :doc:`/cli/conventions/metadata` for the full mapping and
-    trade-offs.
+    and ``--exec`` always win over what the cascade finds; their
+    number base comes from the value's prefix (``0x`` for hex —
+    e.g. ``0x1900`` — otherwise decimal), so a bare ``1900`` is
+    decimal, not hex. See :doc:`/cli/conventions/metadata` for the
+    full mapping and trade-offs.
     """
     image, path = parse_file_spec(file_spec)
     if not path:
@@ -2240,6 +2254,12 @@ def set_load(
 
     Accepts a ``FILE_SPEC`` and an ``ADDR``.
 
+    ``ADDR``'s number base comes from its prefix: ``0x`` for hex
+    (the usual form for Acorn addresses — e.g. ``0x1900``), ``0o``
+    for octal, ``0b`` for binary, or no prefix for decimal. A bare
+    ``1900`` is therefore decimal, *not* hex; write ``0x1900`` for
+    the hex value. The Acorn ``&1900`` notation is not accepted.
+
     PATH may contain Acorn wildcards; ``-r`` recurses into directory
     matches (directories themselves are skipped — they have no load
     address field).
@@ -2277,6 +2297,12 @@ def set_exec(
     """Set a file's exec address.
 
     Accepts a ``FILE_SPEC`` and an ``ADDR``.
+
+    ``ADDR``'s number base comes from its prefix: ``0x`` for hex
+    (the usual form for Acorn addresses — e.g. ``0x8023``), ``0o``
+    for octal, ``0b`` for binary, or no prefix for decimal. A bare
+    ``8023`` is therefore decimal, *not* hex; write ``0x8023`` for
+    the hex value. The Acorn ``&8023`` notation is not accepted.
 
     PATH may contain Acorn wildcards; ``-r`` recurses into directory
     matches (directories themselves are skipped — they have no exec
