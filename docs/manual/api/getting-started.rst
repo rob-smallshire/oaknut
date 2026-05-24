@@ -202,13 +202,13 @@ Open Superior Software's *Repton Infinity* (1988):
 .. code-block:: python
 
    from oaknut.dfs import DFS
-   from oaknut.dfs.formats import ACORN_DFS_80T_SINGLE_SIDED
 
-   with DFS.from_file("Disc999-ReptonInfinity.ssd",
-                      ACORN_DFS_80T_SINGLE_SIDED) as dfs:
+   with DFS.from_file("Disc999-ReptonInfinity.ssd") as dfs:
        print(f"Title:       {dfs.title}")
        print(f"Boot option: {dfs.boot_option.name}")
-       for entry in dfs.root.iterdir():
+
+       # Every file on the disc lives in $, the default directory.
+       for entry in (dfs.root / "$").iterdir():
            st = entry.stat()
            print(f"  {entry.path:14s}  load={st.load_address:#010x}  "
                  f"size={st.length:>5d}")
