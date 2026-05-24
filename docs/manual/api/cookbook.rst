@@ -18,23 +18,16 @@ guaranteed to match the live API.
 Opening a disc and listing its contents
 ---------------------------------------
 
-The simplest read pattern: hand a disc-image path to ``DFS.from_file``
-inside a ``with`` block, then iterate the catalogue. The recipe below
-loops through every directory letter (``$``, ``A``, ``B``, …) and
-prints each entry's metadata via the unified :class:`oaknut.file.Stat`
-protocol — the same ``.access``, ``.length``, ``.load_address`` work
-without per-filesystem branching.
+``DFS.from_file`` opens an image as a context manager. ``dfs.root``
+is the catalogue handle; iterating it yields one path per populated
+directory letter (``$``, ``A``–``Z``), and iterating each of those
+yields the files carrying that letter. Per-entry metadata is read
+via :meth:`stat`, which returns a :class:`oaknut.file.Stat` with
+``.length``, ``.load_address`` and ``.access``.
 
-Two things to notice:
-
-- ``DFS.from_file(filepath)`` auto-detects the format from the file's
-  extension and size — no explicit ``ACORN_DFS_80T_SINGLE_SIDED``
-  argument is needed for ``.ssd`` / ``.dsd`` images of standard
-  sizes. Pass ``disk_format=`` if you have an oddball image.
-- DFS's *flat* catalogue means iteration is two levels: each
-  ``dfs.root`` child is a populated directory letter, and each of
-  those iterates as its files. See :doc:`/cli/conventions/paths` for
-  the model in full.
+DFS images are flat: the directory letters are siblings, not
+parents and children. See :doc:`/cli/conventions/paths` for the
+full model.
 
 .. literalinclude:: ../../../scripts/api-examples/list_dfs_disc.py
    :language: python
@@ -44,13 +37,14 @@ Two things to notice:
 Walking an ADFS tree recursively
 --------------------------------
 
-ADFS (and AFS, with the same API) is hierarchical: ``$`` contains
-named subdirectories, which contain further files and directories.
-The natural read pattern is recursion. The function below is
-``os.walk`` in spirit but built from oaknut primitives —
-:meth:`ADFSPath.iterdir` for descending and :meth:`ADFSPath.is_dir`
-to decide whether to recurse. The same function works unchanged on
-an :class:`oaknut.afs.AFSPath`.
+ADFS (and AFS) is hierarchical: ``$`` contains named subdirectories
+which contain further files and directories. :meth:`iterdir` yields
+the immediate children of a path; :meth:`is_dir` says whether each
+child is itself a directory to descend into.
+
+The function below recurses depth-first and prints the tree in
+filesystem order. The same code runs against an
+:class:`oaknut.afs.AFSPath` without modification.
 
 .. literalinclude:: ../../../scripts/api-examples/walk_adfs_tree.py
    :language: python
@@ -60,19 +54,12 @@ an :class:`oaknut.afs.AFSPath`.
 Creating a disc with varied entries
 -----------------------------------
 
-The write side mirrors the read side: a context-manager constructor
-plus per-path methods to put bytes on disc. ``write_text`` accepts
-arbitrary strings and Acorn-encodes them; ``write_bytes`` takes raw
-data plus load/exec addresses and the unified ``access`` keyword.
-
-``access`` accepts a canonical :class:`oaknut.file.Access` flag
-combination — or ``None`` for the filesystem's default (unlocked
-owner R+W). Two named composites cover the cases that come up most:
-:attr:`Access.WR` (the unlocked default, equivalent to omitting
-``access``) and :attr:`Access.LWR` (locked owner R+W, the
-"do-not-delete" pattern). Fine-grained control — owner-execute,
-public-read, public-write — comes from combining the individual
-flags with ``|``.
+:meth:`write_bytes` writes a single file with optional ``load_address``,
+``exec_address``, and ``access`` keyword arguments. :meth:`write_text`
+encodes a string as Acorn bytes first. ``access`` is an
+:class:`oaknut.file.Access` flag combination: :attr:`Access.LWR` is
+the canonical "locked owner R+W"; :attr:`Access.WR` (or omitting
+``access`` entirely) gives unlocked owner R+W.
 
 .. literalinclude:: ../../../scripts/api-examples/create_dfs_disc.py
    :language: python
@@ -82,15 +69,15 @@ flags with ``|``.
 Round-tripping a file through the host filesystem
 -------------------------------------------------
 
-The symmetric :meth:`export_file` / :meth:`import_file` methods live
-on every path class. Combined with a :class:`oaknut.file.MetaFormat`
-they preserve load address, exec address, and access bits across the
-host crossing — no manual :class:`oaknut.file.AcornMeta` assembly,
-no per-format glue in the caller.
+:meth:`export_file` writes a file's bytes plus a metadata sidecar
+(in the chosen :class:`oaknut.file.MetaFormat`) to a host path.
+:meth:`import_file` reads them back. Both methods live on every
+path class.
 
-The recipe walks the source disc, drops every file plus its INF
-sidecar onto the host, then re-imports each into a fresh disc — and
-finally asserts the bytes and metadata round-tripped intact.
+The recipe walks the source disc, exports each file with an INF
+sidecar, and re-imports the lot into a fresh disc. The closing
+assertions confirm the bytes and metadata are byte-identical on
+both sides.
 
 .. literalinclude:: ../../../scripts/api-examples/round_trip_via_host.py
    :language: python
@@ -100,17 +87,13 @@ finally asserts the bytes and metadata round-tripped intact.
 Copying files across filesystems
 --------------------------------
 
-A path's :meth:`copy_to` is sugar over :func:`oaknut.file.copy_file`.
-Because every path class shares the unified ``write_bytes`` signature
-(including the ``access`` translation), a single call works regardless
-of which filesystem the source and destination live on — DFS-to-ADFS
-here, but any cross-FS pair is equivalent.
+:meth:`copy_to` writes the source file's bytes and metadata to a
+destination path. The destination's filesystem decides how to
+encode the access bits; the call is identical whether the source
+and destination share a filesystem family or not.
 
-The recipe loops a flat DFS catalogue's entries into the root of an
-ADFS hard disc. Each ``entry.copy_to(destination)`` reads the source's
-bytes and metadata, maps the locked-bit-only DFS access to the
-canonical wire-form ``Access`` flags ADFS understands, and writes
-through in one step.
+The recipe copies every file from a DFS catalogue into the root of
+an ADFS hard disc.
 
 .. literalinclude:: ../../../scripts/api-examples/copy_across_filesystems.py
    :language: python
@@ -120,15 +103,11 @@ through in one step.
 Bulk-archiving a folder of floppies onto one hard disc
 ------------------------------------------------------
 
-The Python counterpart to the CLI cookbook's bulk-archive recipe.
-Same shape — one subdirectory on the archive per source SSD, every
-file copied across — but inline naming, filtering, or progress hooks
-can be wired in as the loop body without going through shell.
-
-The ADFS hard-disc image is sized via ``capacity="10MB"`` —
-:func:`oaknut.file.capacity.parse_capacity` parses the string the
-same way ``disc create --capacity`` does, so there's no need to
-multiply by 1024 by hand.
+The recipe creates one ADFS subdirectory per source SSD and copies
+every file across. The subdirectory name is the first PascalCase
+word of the SSD filename — for ``Disc001-PlanetoidAKADefender.ssd``
+the chosen name is ``Planetoid`` — and falls back to a truncated
+stem when the regex does not match.
 
 .. literalinclude:: ../../../scripts/api-examples/bulk_archive_ssds.py
    :language: python
@@ -138,16 +117,16 @@ multiply by 1024 by hand.
 Building a Level 3 File Server disc from scratch
 ------------------------------------------------
 
-:meth:`AFS.create_file` is the top-level orchestrator that composes
-:meth:`ADFS.create_file` + :func:`oaknut.afs.initialise` +
-:func:`oaknut.afs.emplace_library` into a single named constructor.
-The same configuration through the lower-level building blocks would
-be twenty lines of composition; this is six.
+:meth:`AFS.create_file` creates an ADFS hard-disc envelope and
+initialises an AFS partition inside it. ``users`` adds accounts on
+top of the built-in ``Syst`` / ``Boot`` / ``Welcome`` set;
+``omit_users`` removes named built-ins from that set;
+``emplacements`` lays down a shipped library image (``"Library"``,
+``"Library1"``, ``"ArthurLib"``) or any ``.adl`` path.
 
-Inside the yielded ``with`` block the AFS handle is open and
-writable, so the recipe finishes by carving a personal directory for
-the new user and dropping a note into it — the kind of thing a real
-provisioning script does.
+The yielded AFS handle is open and writable for the duration of
+the ``with`` block, so the recipe finishes by creating a personal
+directory for the new user and writing a note into it.
 
 .. literalinclude:: ../../../scripts/api-examples/build_l3fs_disc.py
    :language: python
@@ -157,15 +136,11 @@ provisioning script does.
 Adding a user to an existing AFS image
 --------------------------------------
 
-:meth:`AFS.add_user` is the public counterpart to
-``disc afs-useradd`` on the CLI. The ``quota`` keyword takes the
-same capacity-string form as :meth:`AFS.create_file`, so a setup
-script can read user/quota lines from a config file without
-translating them into bytes first.
+:meth:`AFS.add_user` appends an account to the passwords file on
+an existing AFS image and writes the change back to disc.
 
-Note the ``mode="r+b"`` on :meth:`AFS.from_file` — the default is
-read-only; opening for mutation requires the explicit mode, matching
-:meth:`ADFS.from_file`. ``afs.flush()`` at the end of the block
+The image must be opened with ``mode="r+b"`` — the default ``"rb"``
+gives a read-only handle. :meth:`AFS.flush` at the end of the block
 guarantees the new record is on disc before the context exits.
 
 .. literalinclude:: ../../../scripts/api-examples/add_afs_user.py
