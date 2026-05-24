@@ -122,7 +122,11 @@ class AFS:
 
     @staticmethod
     @contextmanager
-    def from_file(filepath: Union[str, PathLike]) -> Iterator[AFS]:
+    def from_file(
+        filepath: Union[str, PathLike],
+        *,
+        mode: str = "rb",
+    ) -> Iterator[AFS]:
         """Open a disc image and yield the AFS partition as a context manager.
 
         Opens the image first as ADFS (reusing its sector-access and
@@ -133,12 +137,20 @@ class AFS:
         The host ADFS context manager stays active for the duration
         of the yielded block; on exit, any mutations flush through
         the same :class:`UnifiedDisc` the ADFS handle owns.
+
+        Args:
+            filepath: Path to the ADFS hard-disc image carrying the
+                AFS partition.
+            mode: ``"rb"`` for read-only (default), ``"r+b"`` for
+                read-write — required for mutation methods like
+                :meth:`add_user`, :meth:`remove_user`, or
+                :meth:`AFSPath.write_bytes`.
         """
         # Deferred import to avoid a hard module-level import cycle
         # between oaknut-afs and oaknut-adfs during test collection.
         from oaknut.adfs import ADFS
 
-        with ADFS.from_file(filepath) as adfs:
+        with ADFS.from_file(filepath, mode=mode) as adfs:
             afs = adfs.afs_partition
             if afs is None:
                 raise AFSNotPresentError(
@@ -265,6 +277,59 @@ class AFS:
         if self._passwords_cache is None:
             self._passwords_cache = self._load_passwords()
         return self._passwords_cache
+
+    def add_user(
+        self,
+        name: str,
+        *,
+        password: str = "",
+        quota: "int | str" = 0,
+        system: bool = False,
+        privileges_locked: bool = False,
+        boot_option: "BootOption | None" = None,
+    ) -> None:
+        """Add a user account to the AFS passwords file.
+
+        Equivalent to ``disc afs-useradd`` on the CLI side. Composes
+        :meth:`PasswordsFile.with_added` with the on-disc write so
+        callers do not have to know the serialised passwords-file
+        layout. ``quota`` accepts either an integer byte count or a
+        capacity string (``\"2MB\"``, ``\"512KiB\"``, …) via
+        :func:`oaknut.file.capacity.parse_capacity`.
+
+        Raises :class:`AFSUserExistsError` if the name is taken.
+        """
+        from oaknut.file.boot_option import BootOption
+        from oaknut.file.capacity import parse_capacity
+
+        quota_bytes = parse_capacity(quota) if isinstance(quota, str) else quota
+        if boot_option is None:
+            boot_option = BootOption.OFF
+
+        new_passwords = self.users.with_added(
+            name,
+            password=password,
+            quota=quota_bytes,
+            system=system,
+            privileges_locked=privileges_locked,
+            boot_option=boot_option,
+        )
+        self._update_passwords_on_disc(new_passwords)
+
+    def remove_user(self, name: str) -> None:
+        """Remove ``name`` from the AFS passwords file.
+
+        Equivalent to ``disc afs-userdel`` on the CLI side. The
+        record is tombstoned in place so other users' slots and
+        directory references remain stable; subsequent
+        :meth:`add_user` calls reuse the tombstoned slot if one is
+        available.
+
+        Raises :class:`AFSUserNotFoundError` if ``name`` is not
+        present.
+        """
+        new_passwords = self.users.with_removed(name)
+        self._update_passwords_on_disc(new_passwords)
 
     @property
     def free_sectors(self) -> int:

@@ -2982,13 +2982,12 @@ def afs_useradd(
 ) -> None:
     """Add a user to the AFS passwords file."""
     with open_image_for_afs_write(image) as (adfs, afs):
-        new_passwords = afs.users.with_added(
+        afs.add_user(
             name,
             system=system,
             password=password,
             quota=quota or 0,
         )
-        afs._update_passwords_on_disc(new_passwords)
         afs.flush()
 
 
@@ -2998,8 +2997,7 @@ def afs_useradd(
 def afs_userdel(image: Path, name: str) -> None:
     """Remove a user from the AFS passwords file."""
     with open_image_for_afs_write(image) as (adfs, afs):
-        new_passwords = afs.users.with_removed(name)
-        afs._update_passwords_on_disc(new_passwords)
+        afs.remove_user(name)
         afs.flush()
 
 
