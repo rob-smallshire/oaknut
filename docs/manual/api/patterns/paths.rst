@@ -125,15 +125,29 @@ explanation.
 Binding to a filesystem handle
 ------------------------------
 
-A path holds a reference to the filesystem handle it came from. The
-handle owns the underlying mmap / file descriptor and flushes on
-exit. A path that outlives its handle's ``with`` block is a stale
-view onto a closed disc image — reading from it raises::
+Path objects split into two layers of operation:
+
+**Pure path manipulation** — slash-join, :attr:`parent`,
+:attr:`name`, :attr:`parts`, :attr:`path`, equality, ``str()``,
+``repr()`` — only inspects the path string. These work whether or
+not the underlying image is open, the same way
+:class:`pathlib.PurePath` operations work on a string that doesn't
+correspond to any file on disc::
 
     with ADFS.from_file("disc.adl") as adfs:
         elite = adfs.root / "Games" / "Elite"
-    # adfs is closed now
-    elite.read_bytes()      # raises — handle gone
+    # adfs is closed; pure ops still work.
+    print(elite.path)                       # '$.Games.Elite'
+    sibling = elite.parent / "Manic"        # ADFSPath at $.Games.Manic
 
-Keep path use inside the ``with`` block, or pull the bytes you need
-out before exiting.
+**I/O** — :meth:`read_bytes`, :meth:`write_bytes`, :meth:`stat`,
+:meth:`iterdir`, :meth:`walk`, :meth:`exists`, and friends — needs
+the filesystem handle to be open. Calling them after the
+``with`` block has exited raises a clear error::
+
+    with ADFS.from_file("disc.adl") as adfs:
+        elite = adfs.root / "Games" / "Elite"
+    elite.read_bytes()                      # raises: filesystem closed
+
+Pull the bytes you need before exiting if you want to use them
+later. Pure path objects are safe to keep around indefinitely.
