@@ -209,26 +209,26 @@ def _detect_dfs_format(image_filepath: Path):
 
 
 @contextmanager
-def _open_dfs(image_filepath: Path, mode: str = "rb") -> Iterator:
+def _open_dfs(image_filepath: Path) -> Iterator:
     """Open image as DFS, yielding the DFS handle."""
     from oaknut.dfs import DFS
 
     disk_format = _detect_dfs_format(image_filepath)
-    with DFS.from_file(image_filepath, disk_format, mode=mode) as dfs:
+    with DFS.from_file(image_filepath, disk_format) as dfs:
         yield dfs
 
 
 @contextmanager
-def _open_adfs(image_filepath: Path, mode: str = "rb") -> Iterator:
+def _open_adfs(image_filepath: Path) -> Iterator:
     """Open image as ADFS, yielding the ADFS handle."""
     from oaknut.adfs import ADFS
 
-    with ADFS.from_file(image_filepath, mode=mode) as adfs:
+    with ADFS.from_file(image_filepath) as adfs:
         yield adfs
 
 
 @contextmanager
-def _open_afs(image_filepath: Path, mode: str = "rb") -> Iterator:
+def _open_afs(image_filepath: Path) -> Iterator:
     """Open image as ADFS, grab the AFS partition, yield it.
 
     Raises :class:`AFSNotPresentError` if no AFS partition is
@@ -237,7 +237,7 @@ def _open_afs(image_filepath: Path, mode: str = "rb") -> Iterator:
     """
     from oaknut.adfs import ADFS
 
-    with ADFS.from_file(image_filepath, mode=mode) as adfs, adfs.afs_partition as afs:
+    with ADFS.from_file(image_filepath) as adfs, adfs.afs_partition as afs:
         yield afs
 
 
@@ -245,20 +245,19 @@ def _open_afs(image_filepath: Path, mode: str = "rb") -> Iterator:
 def open_image(
     image_filepath: Path,
     fs: FilingSystem,
-    mode: str = "rb",
 ) -> Iterator:
     """Open an image for the given filing system.
 
     Yields the appropriate handle (DFS, ADFS, or AFS).
     """
     if fs is FilingSystem.DFS:
-        with _open_dfs(image_filepath, mode) as handle:
+        with _open_dfs(image_filepath) as handle:
             yield handle
     elif fs is FilingSystem.ADFS:
-        with _open_adfs(image_filepath, mode) as handle:
+        with _open_adfs(image_filepath) as handle:
             yield handle
     elif fs is FilingSystem.AFS:
-        with _open_afs(image_filepath, mode) as handle:
+        with _open_afs(image_filepath) as handle:
             yield handle
 
 
@@ -267,7 +266,7 @@ def open_image_for_afs_write(image_filepath: Path) -> Iterator:
     """Open for AFS write: yields (adfs, afs) with auto-flush on clean exit."""
     from oaknut.adfs import ADFS
 
-    with ADFS.from_file(image_filepath, mode="r+b") as adfs, adfs.afs_partition as afs:
+    with ADFS.from_file(image_filepath) as adfs, adfs.afs_partition as afs:
         yield adfs, afs
 
 
@@ -1302,8 +1301,7 @@ def put(
     else:
         raise click.ClickException("HOST_PATH is required (or use - for stdin)")
 
-    mode = "r+b"
-    with open_image(image, fs, mode=mode) as handle:
+    with open_image(image, fs) as handle:
         target = _navigate(handle, bare, fs)
         target.write_bytes(
             data,
@@ -1364,9 +1362,8 @@ def rm(
             first_prefix = fs
         per_path.append((fs, bare))
 
-    mode = "rb" if dry_run else "r+b"
     fs = first_prefix or fs_type
-    with open_image(image, fs, mode=mode) as handle:
+    with open_image(image, fs) as handle:
         for path_fs, bare in per_path:
             # --force downgrades "no matches" to a no-op.
             try:
@@ -1436,7 +1433,7 @@ def mv(src: str, dst: str, force: bool) -> None:
     fs, bare_src = resolve_path(image, bare_src)
     _, bare_dst = parse_prefix(bare_dst)
 
-    with open_image(image, fs, mode="r+b") as handle:
+    with open_image(image, fs) as handle:
         source = _navigate(handle, bare_src, fs)
         # Pre-check existence so the "path not found" diagnostic
         # carries the user's original input rather than whatever the
@@ -1632,7 +1629,7 @@ def _cp_dispatch(
         )
 
     # --- Write phase: open destination, apply each item. ---
-    with open_image(dst_image, dst_fs, mode="r+b") as dst_handle:
+    with open_image(dst_image, dst_fs) as dst_handle:
         for item in items:
             kind = item["kind"]
             dst_path = item["dst"]
@@ -1964,7 +1961,7 @@ def mkdir(file_spec: str, p: bool) -> None:
     fs, bare = resolve_path(image, path)
     if fs is FilingSystem.DFS:
         raise click.ClickException("mkdir is not supported for DFS images")
-    with open_image(image, fs, mode="r+b") as handle:
+    with open_image(image, fs) as handle:
         target = _navigate(handle, bare, fs)
         try:
             target.mkdir()
@@ -2010,8 +2007,7 @@ def chmod(
 
     flags = parse_access(access)
     fs, bare = resolve_path(image, path)
-    mode = "rb" if dry_run else "r+b"
-    with open_image(image, fs, mode=mode) as handle:
+    with open_image(image, fs) as handle:
         for target in _iter_targets(handle, bare, fs, recursive=recursive):
             if dry_run:
                 click.echo(f"would chmod {target.path} {access}")
@@ -2047,8 +2043,7 @@ def lock(file_spec: str, recursive: bool, dry_run: bool) -> None:
     if not path:
         raise click.UsageError("PATH is required")
     fs, bare = resolve_path(image, path)
-    mode = "rb" if dry_run else "r+b"
-    with open_image(image, fs, mode=mode) as handle:
+    with open_image(image, fs) as handle:
         for target in _iter_targets(handle, bare, fs, recursive=recursive):
             if dry_run:
                 click.echo(f"would lock {target.path}")
@@ -2074,8 +2069,7 @@ def unlock(file_spec: str, recursive: bool, dry_run: bool) -> None:
     if not path:
         raise click.UsageError("PATH is required")
     fs, bare = resolve_path(image, path)
-    mode = "rb" if dry_run else "r+b"
-    with open_image(image, fs, mode=mode) as handle:
+    with open_image(image, fs) as handle:
         for target in _iter_targets(handle, bare, fs, recursive=recursive):
             if dry_run:
                 click.echo(f"would unlock {target.path}")
@@ -2111,8 +2105,7 @@ def set_load(
         raise click.UsageError("PATH is required")
     address = int(addr, 0)
     fs, bare = resolve_path(image, path)
-    mode = "rb" if dry_run else "r+b"
-    with open_image(image, fs, mode=mode) as handle:
+    with open_image(image, fs) as handle:
         for target in _iter_targets(handle, bare, fs, recursive=recursive):
             if target.is_dir():
                 continue  # load address is meaningless for a directory
@@ -2150,8 +2143,7 @@ def set_exec(
         raise click.UsageError("PATH is required")
     address = int(addr, 0)
     fs, bare = resolve_path(image, path)
-    mode = "rb" if dry_run else "r+b"
-    with open_image(image, fs, mode=mode) as handle:
+    with open_image(image, fs) as handle:
         for target in _iter_targets(handle, bare, fs, recursive=recursive):
             if target.is_dir():
                 continue
@@ -2235,7 +2227,7 @@ def title(image: Path, new_title: str | None):
                 data=ScalarContent(value=current, title="Title"),
             ),
         )
-    with open_image(image, fs, mode="r+b") as handle:
+    with open_image(image, fs) as handle:
         handle.title = new_title
     return None
 
@@ -2316,7 +2308,7 @@ def opt(image: Path, boot_option: int | None):
                 ),
             ),
         )
-    with open_image(image, fs, mode="r+b") as handle:
+    with open_image(image, fs) as handle:
         handle.boot_option = boot_option
     return None
 
@@ -2393,7 +2385,7 @@ def create(host_path: Path, fmt: str, disc_title: str, capacity: str | None) -> 
 def compact(image: Path) -> None:
     """Defragment a disc image, consolidating free space."""
     fs = detect_filing_system(image)
-    with open_image(image, fs, mode="r+b") as handle:
+    with open_image(image, fs) as handle:
         try:
             handle.compact()
         except NotImplementedError as exc:
@@ -2563,7 +2555,7 @@ def import_cmd(
         meta_formats = DEFAULT_IMPORT_META_FORMATS
 
     fs = detect_filing_system(image)
-    with open_image(image, fs, mode="r+b") as handle:
+    with open_image(image, fs) as handle:
         _import_host_dir(handle, handle.root, host_dir, meta_formats, verbose, fs)
         if fs is FilingSystem.AFS:
             handle.flush()
@@ -2884,7 +2876,7 @@ def afs_init(
     except AFSInitSpecError as exc:
         raise click.ClickException(str(exc))
 
-    with ADFS.from_file(image, mode="r+b") as adfs:
+    with ADFS.from_file(image) as adfs:
         initialise(adfs, spec=spec)
 
         # Emplace libraries after initialisation so we can report
@@ -3049,7 +3041,7 @@ def afs_merge(
     from oaknut.afs import merge
 
     with (
-        ADFS.from_file(image, mode="r+b") as target_adfs,
+        ADFS.from_file(image) as target_adfs,
         target_adfs.afs_partition as target_afs,
         ADFS.from_file(source) as source_adfs,
         source_adfs.afs_partition as source_afs,

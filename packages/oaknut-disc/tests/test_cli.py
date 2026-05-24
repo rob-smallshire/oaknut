@@ -2379,7 +2379,7 @@ class TestAfsMerge:
         filepath = dirpath / "source.adl"
         with ADFS.create_file(filepath, ADFS_L) as _adfs:
             pass
-        with ADFS.from_file(filepath, mode="r+b") as adfs:
+        with ADFS.from_file(filepath) as adfs:
             initialise(
                 adfs,
                 spec=InitSpec(
@@ -2388,7 +2388,7 @@ class TestAfsMerge:
                     users=[],
                 ),
             )
-        with ADFS.from_file(filepath, mode="r+b") as adfs:
+        with ADFS.from_file(filepath) as adfs:
             afs = adfs.afs_partition
             (afs.root / "FromSource").write_bytes(
                 b"Hello from source",
@@ -2406,7 +2406,7 @@ class TestAfsMerge:
         filepath = dirpath / "conflict.adl"
         with ADFS.create_file(filepath, ADFS_L) as _adfs:
             pass
-        with ADFS.from_file(filepath, mode="r+b") as adfs:
+        with ADFS.from_file(filepath) as adfs:
             initialise(
                 adfs,
                 spec=InitSpec(
@@ -2415,7 +2415,7 @@ class TestAfsMerge:
                     users=[],
                 ),
             )
-        with ADFS.from_file(filepath, mode="r+b") as adfs:
+        with ADFS.from_file(filepath) as adfs:
             afs = adfs.afs_partition
             (afs.root / "Greeting").write_bytes(
                 b"Replacement greeting",

@@ -21,7 +21,7 @@ from oaknut.file import Access
 
 
 def _open_dfs(filepath: Path):
-    return DFS.from_file(filepath, ACORN_DFS_80T_SINGLE_SIDED, mode="r+b")
+    return DFS.from_file(filepath, ACORN_DFS_80T_SINGLE_SIDED)
 
 
 class TestUnifiedAccessAcceptance:
@@ -50,19 +50,19 @@ class TestUnifiedAccessAcceptance:
             assert (dfs.root / "$.ACC").stat().access & Access.L
 
     def test_adfs_accepts_lwr_constant(self, adfs_image_filepath: Path) -> None:
-        with ADFS.from_file(adfs_image_filepath, mode="r+b") as adfs:
+        with ADFS.from_file(adfs_image_filepath) as adfs:
             (adfs.root / "Locked").write_bytes(b"x", access=Access.LWR)
             assert (adfs.root / "Locked").stat().access & Access.L
 
     def test_adfs_accepts_explicit_flag_combination(
         self, adfs_image_filepath: Path
     ) -> None:
-        with ADFS.from_file(adfs_image_filepath, mode="r+b") as adfs:
+        with ADFS.from_file(adfs_image_filepath) as adfs:
             (adfs.root / "Acc").write_bytes(b"x", access=Access.L | Access.R)
             assert (adfs.root / "Acc").stat().access & Access.L
 
     def test_afs_accepts_lwr_constant(self, afs_image_filepath: Path) -> None:
-        with ADFS.from_file(afs_image_filepath, mode="r+b") as adfs:
+        with ADFS.from_file(afs_image_filepath) as adfs:
             afs = adfs.afs_partition
             (afs.root / "Locked").write_bytes(b"x", access=Access.LWR)
             from oaknut.afs import AFSAccess
@@ -72,7 +72,7 @@ class TestUnifiedAccessAcceptance:
     def test_afs_accepts_explicit_flag_combination(
         self, afs_image_filepath: Path
     ) -> None:
-        with ADFS.from_file(afs_image_filepath, mode="r+b") as adfs:
+        with ADFS.from_file(afs_image_filepath) as adfs:
             afs = adfs.afs_partition
             (afs.root / "Acc").write_bytes(b"x", access=Access.L | Access.PR)
             from oaknut.afs import AFSAccess

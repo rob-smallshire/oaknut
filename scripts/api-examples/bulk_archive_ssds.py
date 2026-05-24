@@ -33,7 +33,7 @@ def archive_floppies(ssd_filepaths: list[Path], archive_filepath: Path) -> None:
         archive_filepath: Pre-existing ADFS hard-disc image opened
             read-write for the duration of the archive.
     """
-    with ADFS.from_file(archive_filepath, mode="r+b") as archive:
+    with ADFS.from_file(archive_filepath) as archive:
         for ssd in ssd_filepaths:
             name = _subdir_name_for(ssd)
             subdir = archive.root / name

@@ -116,7 +116,7 @@ def afs_image_filepath(tmp_path: Path) -> Path:
     filepath = tmp_path / "scsi0.adl"
     with ADFS.create_file(filepath, ADFS_L) as _adfs:
         pass
-    with ADFS.from_file(filepath, mode="r+b") as adfs:
+    with ADFS.from_file(filepath) as adfs:
         initialise(
             adfs,
             spec=InitSpec(
@@ -126,7 +126,7 @@ def afs_image_filepath(tmp_path: Path) -> Path:
             ),
         )
     # Put a test file into the AFS partition.
-    with ADFS.from_file(filepath, mode="r+b") as adfs:
+    with ADFS.from_file(filepath) as adfs:
         afs = adfs.afs_partition
         (afs.root / "Greeting").write_bytes(
             b"Hello AFS",
@@ -147,7 +147,7 @@ def afs_image_with_spare_slot(tmp_path: Path) -> Path:
     filepath = tmp_path / "spare.adl"
     with ADFS.create_file(filepath, ADFS_L) as _adfs:
         pass
-    with ADFS.from_file(filepath, mode="r+b") as adfs:
+    with ADFS.from_file(filepath) as adfs:
         initialise(
             adfs,
             spec=InitSpec(
@@ -265,10 +265,10 @@ def partitioned_image_with_files(tmp_path: Path) -> Path:
     filepath = tmp_path / "mixed.dat"
     with ADFS.create_file(filepath, capacity=1_000_000, title="Mixed"):
         pass
-    with ADFS.from_file(filepath, mode="r+b") as adfs:
+    with ADFS.from_file(filepath) as adfs:
         (adfs.root / "adfsA").write_bytes(b"aa")
         (adfs.root / "adfsB").write_bytes(b"bb")
-    with ADFS.from_file(filepath, mode="r+b") as adfs:
+    with ADFS.from_file(filepath) as adfs:
         initialise(
             adfs,
             spec=InitSpec(
@@ -277,7 +277,7 @@ def partitioned_image_with_files(tmp_path: Path) -> Path:
                 users=[],
             ),
         )
-    with ADFS.from_file(filepath, mode="r+b") as adfs:
+    with ADFS.from_file(filepath) as adfs:
         afs = adfs.afs_partition
         (afs.root / "afsA").write_bytes(b"A")
         (afs.root / "GAMES").mkdir()
@@ -293,7 +293,7 @@ def adfs_hard_with_afs_filepath(tmp_path: Path) -> Path:
     filepath = tmp_path / "hard_with_afs.dat"
     with ADFS.create_file(filepath, capacity=10_000_000, title="Split"):
         pass
-    with ADFS.from_file(filepath, mode="r+b") as adfs:
+    with ADFS.from_file(filepath) as adfs:
         initialise(
             adfs,
             spec=InitSpec(
@@ -317,7 +317,7 @@ def afs_image_with_access_bytes(tmp_path: Path) -> Path:
     filepath = tmp_path / "access_bytes.adl"
     with ADFS.create_file(filepath, ADFS_L) as _adfs:
         pass
-    with ADFS.from_file(filepath, mode="r+b") as adfs:
+    with ADFS.from_file(filepath) as adfs:
         initialise(
             adfs,
             spec=InitSpec(
@@ -326,7 +326,7 @@ def afs_image_with_access_bytes(tmp_path: Path) -> Path:
                 users=[],
             ),
         )
-    with ADFS.from_file(filepath, mode="r+b") as adfs:
+    with ADFS.from_file(filepath) as adfs:
         afs = adfs.afs_partition
         (afs.root / "alpha").write_bytes(b"a", access=AFSAccess.from_string("WR/R"))
         (afs.root / "bravo").write_bytes(b"b", access=AFSAccess.from_string("LWR/R"))
