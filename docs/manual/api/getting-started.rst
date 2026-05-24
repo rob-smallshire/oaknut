@@ -36,12 +36,13 @@ named-constructor context manager, ``.root`` is the catalogue handle,
 components. Swap ``DFS`` for :class:`oaknut.adfs.ADFS` or
 :class:`oaknut.afs.AFS` and the rest of the code reads identically.
 
-On DFS specifically, the root yields the populated *directory
-letters* (``$``, ``A``–``Z``) rather than files directly — DFS has
-a flat catalogue where each letter is a sibling bucket. The
-``dfs.root / "$"`` step descends into the ``$`` bucket so that
-``iterdir`` then lists files. ADFS and AFS are hierarchical, so
-``adfs.root.iterdir()`` yields the children of ``$`` directly.
+On DFS specifically, ``$`` is a child of the nameless root, just
+like any other single-character directory name. On a real BBC Micro
+it is the default current directory after boot. ``dfs.root /
+"$"`` selects that child, and iterating it yields the files filed
+under ``$``. ADFS and AFS differ: on those filesystems ``$``
+*is* the root, so ``adfs.root.iterdir()`` yields the children of
+``$`` directly.
 
 
 .. _api-first-disc:
@@ -168,10 +169,11 @@ including ``parents=True`` (create missing intermediates) and
 ``exist_ok=True`` (suppress the error when the directory already
 exists, as long as the existing entry is itself a directory).
 
-DFS images do not have real subdirectories — the catalogue is flat
-and "directory letters" (``$``, ``A``–``Z``) are sibling buckets
-rather than nested paths. See :doc:`patterns/paths` for the full
-model.
+DFS images do not nest. The catalogue is flat and the
+single-character directory names (``$``, ``A``–``Z``) all sit as
+siblings under the nameless root, so :meth:`mkdir` and recursive
+:meth:`walk` are not meaningful operations there. See
+:doc:`patterns/paths` for the full model.
 
 
 A real Acorn disc: Repton Infinity
