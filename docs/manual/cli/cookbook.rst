@@ -171,14 +171,12 @@ for the attribute-mapping table.
 .. cli-example:: l3fs_disc
    :section: boot
 
-A one-line ``!BOOT`` containing ``*RUN $.FS3v126`` followed by the
-Acorn ``\r`` line ending is what we want on disc. The ``printf``
-builds those bytes on stdout, the shell pipes them into ``disc put``,
-and the trailing ``-`` is the long-standing Unix idiom for "read this
-argument from stdin" — codified as a guideline in POSIX's *Utility
-Conventions* and inherited unchanged here. The choice of ``printf``
-rather than ``echo`` is forced by the ``\r`` — see
-:doc:`getting-started` for the line-ending rationale.
+The disc-side ``!BOOT`` is ``*RUN $.FS3v126`` followed by an Acorn
+``\r`` line ending. printf builds those bytes on stdout, the shell
+pipes them in, and the trailing ``-`` tells disc put to read from
+stdin (the standard Unix convention). printf rather than echo
+because echo appends ``\n`` on every common shell, and we need
+``\r`` — see :doc:`getting-started` for the line-ending rationale.
 
 With no value, ``disc opt scsi0.dat`` reads the current boot option
 (``0`` / ``OFF`` on a freshly-created disc); passing ``EXEC`` sets
@@ -208,7 +206,7 @@ images.
 
 The ``Syst`` and ``Boot`` accounts are not created explicitly —
 those are built-ins and arrive for free with every freshly-
-initialised AFS partition (``Welcome`` would too, hence the explicit
+initialised AFS partition (``Welcome`` would too, but for the explicit
 omission). To change a built-in's quota or password instead of
 dropping it, supply ``--user NAME:...`` and the spec overrides the
 default. Following up, ``disc afs-users`` confirms the resulting
