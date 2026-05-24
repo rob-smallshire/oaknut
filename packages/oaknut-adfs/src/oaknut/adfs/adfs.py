@@ -20,7 +20,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from os import PathLike
 from pathlib import Path
-from typing import Iterator, Union
+from typing import TYPE_CHECKING, Iterator, Union
 
 import oaknut.basic as basic
 from oaknut.adfs.directory import (
@@ -39,6 +39,7 @@ from oaknut.adfs.exceptions import (
     ADFSFileLockedError,
     ADFSFormatError,
     ADFSPathError,
+    ADFSValidationError,
 )
 from oaknut.adfs.free_space_map import OldFreeSpaceMap
 from oaknut.discimage.surface import DiscImage, SurfaceSpec
@@ -50,6 +51,9 @@ from oaknut.file.host_bridge import (
     export_with_metadata,
     import_with_metadata,
 )
+
+if TYPE_CHECKING:
+    from oaknut.file import BootOption
 
 _ADFS_SECTORS_PER_TRACK = 16
 _ADFS_BYTES_PER_SECTOR = 256
@@ -1693,8 +1697,6 @@ class ADFS:
         instances — empty when the image is clean. Callers iterate the
         list to present every defect rather than aborting on the first.
         """
-        from oaknut.adfs.exceptions import ADFSError, ADFSValidationError
-
         errors: list[ADFSValidationError] = []
         errors.extend(self._fsm.validate())
 

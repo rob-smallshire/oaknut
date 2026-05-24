@@ -2,9 +2,12 @@
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 from oaknut.discimage.surface import Surface
+
+if TYPE_CHECKING:
+    from oaknut.dfs.exceptions import DFSValidationError
 
 
 @dataclass(frozen=True)

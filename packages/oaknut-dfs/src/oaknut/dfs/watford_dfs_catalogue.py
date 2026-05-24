@@ -3,7 +3,7 @@
 from typing import Optional
 
 from oaknut.dfs.catalogue import Catalogue, DiscInfo, FileEntry, ParsedFilename
-from oaknut.dfs.exceptions import CatalogFullError
+from oaknut.dfs.exceptions import CatalogFullError, DFSValidationError
 from oaknut.discimage.surface import Surface
 
 
@@ -894,8 +894,6 @@ class WatfordDFSCatalogue(Catalogue):
         Returns a list of :class:`DFSValidationError` instances — empty
         when the catalogue is consistent.
         """
-        from oaknut.dfs.exceptions import DFSValidationError
-
         errors: list[DFSValidationError] = []
 
         disc_info = self.get_disc_info()

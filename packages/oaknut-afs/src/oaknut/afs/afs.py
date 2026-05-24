@@ -74,6 +74,7 @@ if TYPE_CHECKING:
 
     from oaknut.afs.wfsinit import UserSpec
     from oaknut.discimage.unified_disc import UnifiedDisc
+    from oaknut.file import BootOption
 
 
 class AFSNotPresentError(AFSError):

@@ -5,7 +5,7 @@ Parses the old-format free space map (ADFS S/M/L/D) from sectors 0–1.
 
 from __future__ import annotations
 
-from oaknut.adfs.exceptions import ADFSDiscFullError, ADFSMapError
+from oaknut.adfs.exceptions import ADFSDiscFullError, ADFSMapError, ADFSValidationError
 from oaknut.discimage.sectors_view import SectorsView
 
 # Old map layout constants
@@ -128,8 +128,6 @@ class OldFreeSpaceMap:
         Returns a list of :class:`oaknut.adfs.exceptions.ADFSValidationError`
         instances — empty when the map is consistent.
         """
-        from oaknut.adfs.exceptions import ADFSValidationError
-
         errors = [ADFSValidationError(msg) for msg in self._check_checksums()]
 
         free_end = self._data[_FREE_END_OFFSET]

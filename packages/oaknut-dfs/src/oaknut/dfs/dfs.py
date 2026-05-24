@@ -8,7 +8,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from os import PathLike
 from pathlib import Path
-from typing import Iterator, Union
+from typing import TYPE_CHECKING, Iterator, Union
 
 import oaknut.basic as basic
 from oaknut.dfs.catalogue import FileEntry
@@ -22,6 +22,10 @@ from oaknut.file.host_bridge import (
     export_with_metadata,
     import_with_metadata,
 )
+
+if TYPE_CHECKING:
+    from oaknut.dfs.exceptions import DFSValidationError
+    from oaknut.file import BootOption
 
 # Valid DFS directory characters
 _DFS_DIRECTORY_CHARS = frozenset("$ABCDEFGHIJKLMNOPQRSTUVWXYZ")

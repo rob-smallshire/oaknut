@@ -1,7 +1,7 @@
 """Acorn DFS catalog implementation."""
 
 from oaknut.dfs.catalogue import Catalogue, DiscInfo, FileEntry, ParsedFilename
-from oaknut.dfs.exceptions import CatalogFullError
+from oaknut.dfs.exceptions import CatalogFullError, DFSValidationError
 from oaknut.discimage.surface import Surface
 
 
@@ -655,8 +655,6 @@ class AcornDFSCatalogue(Catalogue):
         when the catalogue is consistent. Callers iterate the list to
         present every defect rather than aborting on the first.
         """
-        from oaknut.dfs.exceptions import DFSValidationError
-
         errors: list[DFSValidationError] = []
 
         disc_info = self.get_disc_info()
