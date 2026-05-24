@@ -18,17 +18,29 @@ First contact
 -------------
 
 Three commands cover the common case of "look at a disc and read a
-file":
+file". Here they are against Acornsoft's *Planetoid* (1982), a
+small BBC Micro arcade port of Defender that ships in oaknut's
+test fixtures:
 
-.. code-block:: sh
+.. cli-example:: first_contact_planetoid
 
-   disc ls     image.ssd                  # what's on this disc?
-   disc tree   image.ssd                  # the same, recursive
-   disc type   'image.ssd:$.README'       # read a text file to the terminal
+Five files: the BASIC loader ``PLANET``, two binary blobs
+``Planet1`` and ``Planet2``, the cassette-launcher ``PLANETO``,
+and the ``!BOOT`` file that pressing :kbd:`SHIFT-BREAK` runs.
+``disc ls`` shows the catalogue with load and exec addresses;
+``disc tree`` shows the catalogue's two-level structure (DFS has
+``$`` as the default directory; see :ref:`dfs-flat-catalogue`);
+``disc type`` reads ``!BOOT`` as text and translates the Acorn
+``\r`` line terminator to the host's newline so the four BASIC
+lines render cleanly.
 
-If those work the way you expect, you already have enough of the
-mental model to compose ``disc`` with normal shell tools. The rest of
-this page fleshes out each step.
+If those work the way you expect, you have the mental model for
+the rest of the page. To compose ``disc`` with shell pipelines —
+``awk``, ``cut``, ``xargs`` — you will also need to know what the
+TSV output mode looks like, since the boxed table above is the
+human-readable mode that hides when stdout is a pipe; see
+:doc:`conventions/output-formats` for the ``--as tsv`` and
+``--as json`` forms.
 
 .. note::
 
