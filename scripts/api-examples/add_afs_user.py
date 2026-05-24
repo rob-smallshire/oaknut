@@ -1,12 +1,16 @@
-"""Add a user account to an existing AFS image.
+"""Add a user account to the AFS partition of an ADFS hard-disc image.
 
-Demonstrates AFS.add_user — the public counterpart to the CLI's
-disc afs-useradd. The quota keyword takes the same capacity-string
-form as AFS.create_file ("2MB", "512KiB") so a setup script doesn't
-have to hand-compute byte counts.
+An AFS file server lives in the tail of an ADFS hard-disc image —
+there is no standalone AFS image — so the recipe opens the disc as
+ADFS and reaches into the AFS partition through
+:attr:`oaknut.adfs.ADFS.afs_partition`. The two contexts compose so
+the AFS handle's pending writes flush on clean exit and roll back on
+exception, all inside the surrounding ADFS lifetime.
 
-The recipe builds an AFS disc with just the built-in accounts, then
-opens it read-write and tacks on a fresh user.
+:meth:`AFS.add_user` mirrors the CLI's ``disc afs-useradd``. The
+``quota`` keyword takes the same capacity-string form as
+:meth:`AFS.create_file` (``"2MB"``, ``"512KiB"``) so a setup script
+does not have to hand-compute byte counts.
 """
 
 from __future__ import annotations
@@ -14,25 +18,26 @@ from __future__ import annotations
 import tempfile
 from pathlib import Path
 
+from oaknut.adfs import ADFS
 from oaknut.afs import AFS
 
 
-def add_user(image_filepath: Path, username: str, quota: str) -> None:
-    """Add username with quota to the AFS image at image_filepath.
+def add_user(disc_filepath: Path, username: str, quota: str) -> None:
+    """Add username with quota to the AFS partition on the given disc.
 
-    Composes AFS.add_user with the read-write AFS.from_file context
-    manager. Buffered writes are flushed when the context exits
-    cleanly; if the block raises they are discarded instead, leaving
-    the on-disc passwords file untouched.
+    The disc is opened as ADFS; ``adfs.afs_partition`` yields the AFS
+    handle. Writes are buffered on the AFS side and flushed when the
+    ``with`` block exits cleanly; an exception inside the block
+    discards them, leaving the on-disc passwords file untouched.
 
     Args:
-        image_filepath: Existing ADFS hard-disc image carrying an AFS
-            partition.
+        disc_filepath: ADFS hard-disc image (``.dat`` + ``.dsc``
+            sidecar) whose tail carries the AFS partition.
         username: Name of the account to add. Must not already exist.
-        quota: Capacity string ("2MB", "512KiB", ...) or raw int byte
-            count.
+        quota: Capacity string (``"2MB"``, ``"512KiB"``, ...) or raw
+            int byte count.
     """
-    with AFS.from_file(image_filepath, mode="r+b") as afs:
+    with ADFS.from_file(disc_filepath) as adfs, adfs.afs_partition as afs:
         afs.add_user(username, quota=quota)
 
 
@@ -47,8 +52,7 @@ def main(workdir: Path) -> None:
     filepath = _build_empty_server(workdir)
     add_user(filepath, "alice", quota="2MB")
 
-    # Confirm the user appeared with the right quota.
-    with AFS.from_file(filepath) as afs:
+    with ADFS.from_file(filepath) as adfs, adfs.afs_partition as afs:
         alice = next(u for u in afs.users.active if u.name == "alice")
         print(f"Added user: {alice.name}  quota={alice.free_space:,} bytes")
 
