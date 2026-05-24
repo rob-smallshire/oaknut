@@ -29,8 +29,8 @@ def populate_disc(filepath: Path) -> None:
     """
     with DFS.create_file(filepath, title="MyDisc", boot_option=2) as dfs:
         (dfs.root / "$.README").write_text(
-            "Welcome to MyDisc.\r"
-            "Run *EXEC $.README at the prompt.\r",
+            "Welcome to MyDisc.\n"
+            "Run *EXEC $.README at the prompt.\n",
         )
         (dfs.root / "$.PROG").write_bytes(
             b"\xa9\x41\x20\xee\xff\x60",   # LDA #'A' : JSR &FFEE : RTS
@@ -42,7 +42,7 @@ def populate_disc(filepath: Path) -> None:
             load_address=0x3000,
         )
         (dfs.root / "$.LOCKED").write_text(
-            "do not delete\r",
+            "do not delete\n",
             access=Access.LWR,
         )
 

@@ -66,13 +66,13 @@ def _build_source_disc(workdir: Path) -> Path:
     """A small ADFS source disc to round-trip from."""
     filepath = workdir / "source.adl"
     with ADFS.create_file(filepath, ADFS_L, title="Source") as adfs:
-        (adfs.root / "ReadMe").write_text("Hello!", load_address=0xFFFFFD00)
+        (adfs.root / "ReadMe").write_text("Hello!\n", load_address=0xFFFFFD00)
         (adfs.root / "Code").write_bytes(
             b"\xa9\x41\x60",
             load_address=0x1900,
             exec_address=0x1900,
         )
-        (adfs.root / "Locked").write_text("static", access=Access.LWR)
+        (adfs.root / "Locked").write_text("static\n", access=Access.LWR)
     return filepath
 
 

@@ -37,7 +37,7 @@ def build_server_disc(filepath: Path) -> None:
         # boot file into the new RJS user's home directory equivalent.
         (afs.root / "RJS").mkdir()
         (afs.root / "RJS" / "Notes").write_text(
-            "server built via AFS.create_file",
+            "server built via AFS.create_file\n",
         )
 
 

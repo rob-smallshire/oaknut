@@ -42,7 +42,7 @@ def _build_demo_disc(workdir: Path) -> Path:
     filepath = workdir / "demo.ssd"
     with DFS.create_file(filepath, title="Demo") as dfs:
         (dfs.root / "$.HELLO").write_text(
-            '10 PRINT "Hello"\r20 END\r',
+            '10 PRINT "Hello"\n20 END\n',
             load_address=0x1900,
             exec_address=0x1900,
         )
