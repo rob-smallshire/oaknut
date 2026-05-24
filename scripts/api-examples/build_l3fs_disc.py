@@ -30,10 +30,9 @@ def build_server_disc(filepath: Path) -> None:
         omit_users=["Welcome"],
         emplacements=["Library"],
     ) as afs:
-        # The yielded AFS handle is open and writable — drop a personal
-        # boot file into the new user's home directory equivalent.
+        # initialise() laid down a User Root Directory for Herman as
+        # part of account creation, so we can write straight into it.
         home = afs.root / username
-        home.mkdir()
         (home / "Notes").write_text("server built via AFS.create_file\n")
 
 
