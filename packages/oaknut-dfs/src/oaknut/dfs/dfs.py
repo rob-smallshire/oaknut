@@ -1067,14 +1067,13 @@ class DFS:
             "boot_option": disc_info.boot_option,
         }
 
-    def validate(self) -> list[str]:
-        """
-        Validate disk integrity.
+    def validate(self) -> list["DFSValidationError"]:
+        """Validate disc-image integrity.
 
-        Delegates to catalogue for catalogue-specific validation.
-
-        Returns:
-            List of error messages (empty if valid)
+        Delegates to the underlying catalogue, which checks file
+        extents, overlaps, duplicate names, and so on. Returns a list
+        of :class:`oaknut.dfs.exceptions.DFSValidationError` — empty
+        when the image is clean.
         """
         return self._catalogued_surface.catalogue.validate()
 

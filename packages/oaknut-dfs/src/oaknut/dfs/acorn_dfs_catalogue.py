@@ -648,47 +648,55 @@ class AcornDFSCatalogue(Catalogue):
         disc_info = self.get_disc_info()
         sector1[4] = (disc_info.cycle_number + 1) & 0xFF
 
-    def validate(self) -> list[str]:
-        """
-        Validate Acorn DFS catalogue integrity.
+    def validate(self) -> list["DFSValidationError"]:
+        """Validate Acorn DFS catalogue integrity.
 
-        Returns:
-            List of error messages (empty if valid)
+        Returns a list of :class:`DFSValidationError` instances — empty
+        when the catalogue is consistent. Callers iterate the list to
+        present every defect rather than aborting on the first.
         """
-        errors = []
+        from oaknut.dfs.exceptions import DFSValidationError
 
-        # Check catalog structure
+        errors: list[DFSValidationError] = []
+
         disc_info = self.get_disc_info()
         if disc_info.num_files > self.MAX_FILES:
-            errors.append(f"Too many files: {disc_info.num_files} > {self.MAX_FILES}")
+            errors.append(
+                DFSValidationError(
+                    f"Too many files: {disc_info.num_files} > {self.MAX_FILES}"
+                )
+            )
 
-        # Check for overlapping files
         files = self.list_files()
-        sector_map = {}
-
+        sector_map: dict[int, str] = {}
         for entry in files:
             for sector in range(entry.start_sector, entry.start_sector + entry.sectors_required):
                 if sector in sector_map:
                     errors.append(
-                        f"Sector {sector} used by both {sector_map[sector]} and {entry.path}"
+                        DFSValidationError(
+                            f"Sector {sector} used by both {sector_map[sector]} and {entry.path}"
+                        )
                     )
                 else:
                     sector_map[sector] = entry.path
 
-        # Check files don't exceed disk bounds
         total_sectors = self._surface.num_sectors
         for entry in files:
             end_sector = entry.start_sector + entry.sectors_required
             if end_sector > total_sectors:
                 errors.append(
-                    f"File {entry.path} extends beyond disk: sector {end_sector} > {total_sectors}"
+                    DFSValidationError(
+                        f"File {entry.path} extends beyond disk: "
+                        f"sector {end_sector} > {total_sectors}"
+                    )
                 )
 
-        # Check for duplicate filenames
         names = [f.path.upper() for f in files]
         duplicates = [name for name in set(names) if names.count(name) > 1]
         if duplicates:
-            errors.append(f"Duplicate filenames: {', '.join(duplicates)}")
+            errors.append(
+                DFSValidationError(f"Duplicate filenames: {', '.join(duplicates)}")
+            )
 
         return errors
 

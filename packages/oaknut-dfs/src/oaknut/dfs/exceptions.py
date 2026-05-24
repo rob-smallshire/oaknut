@@ -104,3 +104,16 @@ class DFSFormatError(DFSError):
     does not uniquely identify a format and no explicit
     :class:`DiscFormat` argument was supplied.
     """
+
+
+class DFSValidationError(DFSError):
+    """A problem detected by disc-image validation.
+
+    :meth:`DFS.validate` returns a list of these (empty when the image
+    is clean) rather than raising — callers typically want to enumerate
+    every defect, not abort on the first one. Each instance carries a
+    human-readable description as its message; the CLI renders these
+    via the standard error pipeline.
+    """
+
+    _exit_code = ExitCode.DATA_ERR

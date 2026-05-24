@@ -888,66 +888,77 @@ class WatfordDFSCatalogue(Catalogue):
         """Maximum files supported."""
         return self.MAX_FILES
 
-    def validate(self) -> list[str]:
-        """
-        Validate catalog integrity.
+    def validate(self) -> list["DFSValidationError"]:
+        """Validate Watford DDFS catalogue integrity.
 
-        Returns:
-            List of error messages (empty if valid)
+        Returns a list of :class:`DFSValidationError` instances — empty
+        when the catalogue is consistent.
         """
-        errors = []
+        from oaknut.dfs.exceptions import DFSValidationError
 
-        # Check catalog structure
+        errors: list[DFSValidationError] = []
+
         disc_info = self.get_disc_info()
         if disc_info.num_files > self.MAX_FILES:
-            errors.append(f"Too many files: {disc_info.num_files} > {self.MAX_FILES}")
+            errors.append(
+                DFSValidationError(
+                    f"Too many files: {disc_info.num_files} > {self.MAX_FILES}"
+                )
+            )
 
-        # Check for 0xAA marker in sector 2
         sector2 = self._surface.sector_range(2, 1)
         if not all(sector2[i] == 0xAA for i in range(12)):
-            errors.append("Missing Watford DFS marker in sector 2")
+            errors.append(
+                DFSValidationError("Missing Watford DFS marker in sector 2")
+            )
 
-        # Check metadata sync between sections
         sector1 = self._surface.sector_range(1, 1)
         sector3 = self._surface.sector_range(3, 1)
-
-        # Cycle number should match
         if sector1[4] != sector3[4]:
-            errors.append("Cycle number mismatch between catalog sections")
-
-        # Boot option and sector count should match
+            errors.append(
+                DFSValidationError("Cycle number mismatch between catalog sections")
+            )
         if sector1[6] != sector3[6]:
-            errors.append("Boot option/sector count mismatch between catalog sections")
+            errors.append(
+                DFSValidationError(
+                    "Boot option/sector count mismatch between catalog sections"
+                )
+            )
         if sector1[7] != sector3[7]:
-            errors.append("Sector count mismatch between catalog sections")
+            errors.append(
+                DFSValidationError("Sector count mismatch between catalog sections")
+            )
 
-        # Check for overlapping files
         files = self.list_files()
-        sector_map = {}
-
+        sector_map: dict[int, str] = {}
         for entry in files:
             for sector in range(entry.start_sector, entry.start_sector + entry.sectors_required):
                 if sector in sector_map:
                     errors.append(
-                        f"Sector {sector} used by both {sector_map[sector]} and {entry.path}"
+                        DFSValidationError(
+                            f"Sector {sector} used by both {sector_map[sector]} and {entry.path}"
+                        )
                     )
                 else:
                     sector_map[sector] = entry.path
 
-        # Check files don't exceed disk bounds
         total_sectors = self._surface.num_sectors
         for entry in files:
             end_sector = entry.start_sector + entry.sectors_required
             if end_sector > total_sectors:
                 errors.append(
-                    f"File {entry.path} extends beyond disk: sector {end_sector} > {total_sectors}"
+                    DFSValidationError(
+                        f"File {entry.path} extends beyond disk: "
+                        f"sector {end_sector} > {total_sectors}"
+                    )
                 )
 
-        # Check for duplicate filenames
         names = [f.path.upper() for f in files]
         duplicates = [name for name in set(names) if names.count(name) > 1]
         if duplicates:
-            errors.append(f"Duplicate filenames: {', '.join(duplicates)}")
+            errors.append(
+                DFSValidationError(f"Duplicate filenames: {', '.join(duplicates)}")
+            )
 
         return errors
 

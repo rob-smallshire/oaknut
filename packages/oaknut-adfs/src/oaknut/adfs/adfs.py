@@ -1685,16 +1685,22 @@ class ADFS:
         else:
             afs.close()
 
-    def validate(self) -> list[str]:
-        """Validate filesystem integrity. Returns list of error messages."""
-        errors = []
+    def validate(self) -> list["ADFSValidationError"]:
+        """Validate filesystem integrity.
+
+        Returns a list of :class:`oaknut.adfs.exceptions.ADFSValidationError`
+        instances — empty when the image is clean. Callers iterate the
+        list to present every defect rather than aborting on the first.
+        """
+        from oaknut.adfs.exceptions import ADFSError, ADFSValidationError
+
+        errors: list[ADFSValidationError] = []
         errors.extend(self._fsm.validate())
 
-        # Validate root directory is readable
         try:
             self._read_root_directory()
-        except Exception as e:
-            errors.append(f"Root directory: {e}")
+        except ADFSError as exc:
+            errors.append(ADFSValidationError(f"Root directory: {exc}"))
 
         return errors
 

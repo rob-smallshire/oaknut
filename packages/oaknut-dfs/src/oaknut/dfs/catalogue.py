@@ -280,15 +280,13 @@ class Catalogue(ABC):
         pass
 
     @abstractmethod
-    def validate(self) -> list[str]:
-        """
-        Validate catalogue structure and integrity.
+    def validate(self) -> list["DFSValidationError"]:
+        """Validate catalogue structure and integrity.
 
-        Checks catalogue-specific constraints like max files, duplicate names,
-        overlapping sectors, file bounds, etc.
-
-        Returns:
-            List of error messages (empty if valid)
+        Checks catalogue-specific constraints — max files, duplicate
+        names, overlapping sectors, files exceeding disc bounds, and so
+        on — and returns one :class:`oaknut.dfs.exceptions.DFSValidationError`
+        per defect detected. An empty list means the catalogue is consistent.
         """
         pass
 

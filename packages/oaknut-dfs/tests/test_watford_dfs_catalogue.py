@@ -211,7 +211,7 @@ class TestWatfordDFSCatalogueValidation:
         catalogue = WatfordDFSCatalogue(watford_dfs_surface)
         errors = catalogue.validate()
 
-        assert any("marker" in err.lower() for err in errors)
+        assert any("marker" in str(err).lower() for err in errors)
 
     def test_validate_detects_metadata_mismatch(self, watford_dfs_surface):
         """Test validate() detects metadata synchronization issues."""
@@ -221,7 +221,7 @@ class TestWatfordDFSCatalogueValidation:
         catalogue = WatfordDFSCatalogue(watford_dfs_surface)
         errors = catalogue.validate()
 
-        assert any("mismatch" in err.lower() for err in errors)
+        assert any("mismatch" in str(err).lower() for err in errors)
 
 
 class TestWatfordDFSCatalogueMaxFiles:

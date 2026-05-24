@@ -122,20 +122,30 @@ class OldFreeSpaceMap:
 
         return errors
 
-    def validate(self) -> list[str]:
-        """Validate the free space map. Returns list of error messages."""
-        errors = self._check_checksums()
+    def validate(self) -> list["ADFSValidationError"]:
+        """Validate the free space map.
 
-        # Check FreeEnd is a multiple of 3
+        Returns a list of :class:`oaknut.adfs.exceptions.ADFSValidationError`
+        instances — empty when the map is consistent.
+        """
+        from oaknut.adfs.exceptions import ADFSValidationError
+
+        errors = [ADFSValidationError(msg) for msg in self._check_checksums()]
+
         free_end = self._data[_FREE_END_OFFSET]
         if free_end % 3 != 0:
-            errors.append(f"FreeEnd pointer ({free_end}) is not a multiple of 3")
+            errors.append(
+                ADFSValidationError(
+                    f"FreeEnd pointer ({free_end}) is not a multiple of 3"
+                )
+            )
 
-        # Check FreeEnd doesn't exceed maximum
         if free_end > _MAX_FREE_ENTRIES * _BYTES_PER_ENTRY:
             errors.append(
-                f"FreeEnd pointer ({free_end}) exceeds maximum "
-                f"({_MAX_FREE_ENTRIES * _BYTES_PER_ENTRY})"
+                ADFSValidationError(
+                    f"FreeEnd pointer ({free_end}) exceeds maximum "
+                    f"({_MAX_FREE_ENTRIES * _BYTES_PER_ENTRY})"
+                )
             )
 
         return errors

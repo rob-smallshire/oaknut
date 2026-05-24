@@ -123,3 +123,16 @@ class ADFSFileLockedError(ADFSError):
     """
 
     _exit_code = ExitCode.NO_PERM
+
+
+class ADFSValidationError(ADFSError):
+    """A problem detected by disc-image validation.
+
+    :meth:`ADFS.validate` returns a list of these (empty when the
+    image is clean) rather than raising — callers typically want to
+    enumerate every defect, not abort on the first one. Each instance
+    carries a human-readable description as its message; the CLI
+    renders these via the standard error pipeline.
+    """
+
+    _exit_code = ExitCode.DATA_ERR

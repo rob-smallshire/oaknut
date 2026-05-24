@@ -214,8 +214,8 @@ class TestValidation:
 
         errors = dfs.validate()
         assert len(errors) == 1
-        assert "Duplicate" in errors[0]
-        assert "$.TEST" in errors[0]
+        assert "Duplicate" in str(errors[0])
+        assert "$.TEST" in str(errors[0])
 
 
 class TestCompaction:
