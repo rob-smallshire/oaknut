@@ -16,7 +16,7 @@ size. Each theme calls out which package(s) it touches.
 | 3: drop copy_file target_fs | [#24](https://github.com/rob-smallshire/oaknut/issues/24) |
 | 4: unify write_bytes access surface | [#25](https://github.com/rob-smallshire/oaknut/issues/25) |
 | 5: unified Stat protocol | [#26](https://github.com/rob-smallshire/oaknut/issues/26) |
-| 6: dfs.root should be `$` | [#27](https://github.com/rob-smallshire/oaknut/issues/27) |
+| 6: dfs.root should be `$` | [#27](https://github.com/rob-smallshire/oaknut/issues/27) — **closed as won't-fix**, see correction at the end of theme 6 below |
 | 7: DFS.from_file format auto-detect | [#28](https://github.com/rob-smallshire/oaknut/issues/28) |
 | 8: AFS.create_file orchestrator | [#29](https://github.com/rob-smallshire/oaknut/issues/29) |
 | 9: capacity strings on create_file / UserSpec | [#30](https://github.com/rob-smallshire/oaknut/issues/30) |
@@ -130,6 +130,18 @@ The current `__truediv__` blindly concatenates with `.`, leaving the caller resp
 - `DFSPath / "HELLO"` produces `"$.HELLO"` automatically.
 - Existing `dfs.root / "$.HELLO"` usages must be migrated to `dfs.root / "HELLO"`.
 
+> **Correction** (closed as won't-fix in [#27](https://github.com/rob-smallshire/oaknut/issues/27)):
+> the analogy with ADFS is wrong. DFS is a *flat catalogue* whose
+> per-file "directory" is a single-character namespace tag; `$`,
+> `A`, `B`, … are **siblings**, not parent-and-children. `$` is the
+> *default directory* DFS assumes when a path omits it, per the Acorn
+> DFS User Guide. The current empty-string `dfs.root` correctly
+> represents "the whole catalogue, no directory constraint", and
+> `dfs.root / "A.GAME"` correctly produces `A.GAME`. Making `dfs.root`
+> be `$` would silently lose that ability without admitting it. If
+> sugar for the common `$` case is wanted, an explicit factory like
+> `dfs.default_directory / "HELLO"` would be the honest spelling.
+
 ## 7. `DFS.from_file` requires explicit `disk_format`; `ADFS.from_file` auto-detects
 
 **Where**:
@@ -198,7 +210,7 @@ These changes are not all the same size; some are 10 lines, others touch several
 2. **Symmetric path methods** (themes 1 & 2): add `AFSPath.export_file`, `DFSPath.import_file`, `AFSPath.import_file`. Pure additions.
 3. **Polymorphic copy** (theme 3): drop `target_fs` from `copy_file`; have each path supply its own access mapping.
 4. **Unified write_bytes signature** (theme 4): broaden `access` to accept `bool | Access | None` on every path class.
-5. **Root consistency** (theme 6): DFS root becomes `$`. Migration touches a handful of internal callers + tests.
+5. ~~**Root consistency** (theme 6): DFS root becomes `$`.~~ *Skipped — theme 6 was based on a misreading of DFS's flat catalogue; see the correction at the end of theme 6.*
 6. **DFS auto-detect** (theme 7): make `disk_format` optional on `DFS.from_file` and `DFS.create_file`.
 7. **AFS create + capacity strings** (themes 8, 9): new `AFS.create_file`; accept capacity strings on ADFS / AFS / UserSpec quota.
 8. **AFS top-level re-exports** (theme 10): `oaknut.afs` exposes `initialise`, `InitSpec`, etc. directly.
