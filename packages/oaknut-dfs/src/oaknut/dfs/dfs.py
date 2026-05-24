@@ -307,17 +307,23 @@ class DFSPath:
             raise ValueError(f"Cannot read directory as file: '{self._path}'")
         return self._dfs._catalogued_surface.read_file(self._path)
 
-    def read_text(self, *, encoding: str = "acorn") -> str:
-        """Read file contents as text using the specified encoding.
+    def read_text(
+        self,
+        *,
+        encoding: str = "acorn",
+        newline: str | None = None,
+    ) -> str:
+        """Read file contents as text via :func:`oaknut.file.decode_text`.
 
-        Args:
-            encoding: Text encoding (default ``"acorn"``).
+        See that function for the encoding and newline-translation rules.
 
         Raises:
             ValueError: If this path is a directory.
             FileNotFoundError: If the file does not exist.
         """
-        return self.read_bytes().decode(encoding)
+        from oaknut.file import decode_text
+
+        return decode_text(self.read_bytes(), encoding=encoding, newline=newline)
 
     def write_bytes(
         self,
@@ -407,21 +413,29 @@ class DFSPath:
         text: str,
         *,
         encoding: str = "acorn",
+        newline: str | None = "\r",
         load_address: int = 0,
         exec_address: int = 0,
         access: "Access | None" = None,
     ) -> None:
-        """Write text contents using the specified encoding.
+        """Write text to this path via :func:`oaknut.file.encode_text`.
+
+        See that function for the encoding and newline-translation
+        rules; in particular the default ``newline="\\r"`` translates
+        Python ``"\\n"`` line endings to the Acorn-native ``"\\r"``.
 
         Args:
             text: Text to write.
             encoding: Text encoding (default ``"acorn"``).
+            newline: Line-ending translation policy.
             load_address: Load address (default 0).
             exec_address: Execution address (default 0).
             access: Access flags (see :meth:`write_bytes`).
         """
+        from oaknut.file import encode_text
+
         self.write_bytes(
-            text.encode(encoding),
+            encode_text(text, encoding=encoding, newline=newline),
             load_address=load_address,
             exec_address=exec_address,
             access=access,

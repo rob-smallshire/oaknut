@@ -564,16 +564,22 @@ class ADFSPath:
             raise ADFSPathError(f"'{self._path}' is a directory, not a file")
         return self._adfs._read_file_data(entry)
 
-    def read_text(self, *, encoding: str = "acorn") -> str:
-        """Read file contents as text using the specified encoding.
+    def read_text(
+        self,
+        *,
+        encoding: str = "acorn",
+        newline: str | None = None,
+    ) -> str:
+        """Read file contents as text via :func:`oaknut.file.decode_text`.
 
-        Args:
-            encoding: Text encoding (default ``"acorn"``).
+        See that function for the encoding and newline-translation rules.
 
         Raises:
             ADFSPathError: If the path doesn't exist or is a directory.
         """
-        return self.read_bytes().decode(encoding)
+        from oaknut.file import decode_text
+
+        return decode_text(self.read_bytes(), encoding=encoding, newline=newline)
 
     def read_basic(self) -> str:
         """Read a BBC BASIC program and return its detokenised source.
@@ -601,14 +607,11 @@ class ADFSPath:
     ) -> None:
         """Write file contents, creating or overwriting the file.
 
-        ``access`` accepts the canonical :class:`oaknut.file.Access`
-        flags, a plain ``bool`` (``True`` => locked, ``False`` =>
-        unlocked), or ``None`` to use the filesystem default
-        (unlocked + owner R+W). The directory entry's "locked"
-        attribute is set from the bit; richer flags (owner R/W/E,
-        public R/W) must be applied via :meth:`chmod` after the
-        write — :meth:`write_bytes` itself only honours the locked
-        bit through the underlying ``_write_file`` path.
+        ``access`` accepts a :class:`oaknut.file.Access` value, or
+        ``None`` for the filesystem default (unlocked + owner R+W).
+        Only the locked bit is honoured at the catalogue-write layer;
+        richer flags (owner R/W/E, public R/W) must be applied via
+        :meth:`chmod` after the write.
 
         ``date`` is accepted for cross-filesystem signature uniformity
         but silently ignored at this layer.
@@ -647,21 +650,29 @@ class ADFSPath:
         text: str,
         *,
         encoding: str = "acorn",
+        newline: str | None = "\r",
         load_address: int = 0,
         exec_address: int = 0,
         access: "Access | None" = None,
     ) -> None:
-        """Write text contents using the specified encoding.
+        """Write text to this path via :func:`oaknut.file.encode_text`.
+
+        See that function for the encoding and newline-translation
+        rules; in particular the default ``newline="\\r"`` translates
+        Python ``"\\n"`` line endings to the Acorn-native ``"\\r"``.
 
         Args:
             text: Text to write.
             encoding: Text encoding (default ``"acorn"``).
+            newline: Line-ending translation policy.
             load_address: Load address (default 0).
             exec_address: Execution address (default 0).
             access: Access flags (see :meth:`write_bytes`).
         """
+        from oaknut.file import encode_text
+
         self.write_bytes(
-            text.encode(encoding),
+            encode_text(text, encoding=encoding, newline=newline),
             load_address=load_address,
             exec_address=exec_address,
             access=access,

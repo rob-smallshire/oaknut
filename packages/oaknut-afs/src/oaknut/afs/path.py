@@ -319,6 +319,24 @@ class AFSPath:
         return self.iterdir()
 
     # ------------------------------------------------------------------
+    # Read sugar
+    # ------------------------------------------------------------------
+
+    def read_text(
+        self,
+        *,
+        encoding: str = "acorn",
+        newline: str | None = None,
+    ) -> str:
+        """Read file contents as text via :func:`oaknut.file.decode_text`.
+
+        See that function for the encoding and newline-translation rules.
+        """
+        from oaknut.file import decode_text
+
+        return decode_text(self.read_bytes(), encoding=encoding, newline=newline)
+
+    # ------------------------------------------------------------------
     # Write path — phases 11-13
     # ------------------------------------------------------------------
 
@@ -381,6 +399,42 @@ class AFSPath:
             parent_sin,
             name,
             data,
+            load_address=load_address,
+            exec_address=exec_address,
+            access=access,
+            date=date,
+        )
+
+    def write_text(
+        self,
+        text: str,
+        *,
+        encoding: str = "acorn",
+        newline: str | None = "\r",
+        load_address: int = 0,
+        exec_address: int = 0,
+        access: "Access | AFSAccess | int | None" = None,
+        date=None,
+    ) -> None:
+        """Write text to this path via :func:`oaknut.file.encode_text`.
+
+        See that function for the encoding and newline-translation
+        rules; in particular the default ``newline="\\r"`` translates
+        Python ``"\\n"`` line endings to the Acorn-native ``"\\r"``.
+
+        Args:
+            text: String to write.
+            encoding: Text encoding (default ``"acorn"``).
+            newline: Line-ending translation policy.
+            load_address: Load address (default 0).
+            exec_address: Exec address (default 0).
+            access: Access flags (see :meth:`write_bytes`).
+            date: Acorn date stamp; defaults to today's date.
+        """
+        from oaknut.file import encode_text
+
+        self.write_bytes(
+            encode_text(text, encoding=encoding, newline=newline),
             load_address=load_address,
             exec_address=exec_address,
             access=access,
