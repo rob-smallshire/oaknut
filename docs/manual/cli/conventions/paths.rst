@@ -99,12 +99,17 @@ What this means in practice on the CLI:
 
 .. code-block:: sh
 
-   disc ls games.ssd                 # lists every directory's entries
-   disc ls 'games.ssd:$'             # lists only files in $
-   disc ls 'games.ssd:A'             # lists only files in directory A
+   disc ls games.ssd                 # files in $ (disc ls treats a
+                                     # bare DFS image as IMAGE:$, since
+                                     # the level above $ would otherwise
+                                     # yield only directory letters)
+   disc ls 'games.ssd:$'             # equivalent: explicit $
+   disc ls 'games.ssd:A'             # files in directory A
    disc cat 'games.ssd:$.HELLO'      # the file HELLO in directory $
    disc cat 'games.ssd:A.HELLO'      # the file HELLO in directory A — different
                                      # from $.HELLO; not the same file
+   disc cat 'games.ssd:HELLO'        # error: PATH_SPEC needs a directory
+                                     # letter; disc cat does not assume $
 
 No DFS command will recurse into siblings the way ADFS commands
 recurse into subdirectories, because there are no subdirectories to
