@@ -13,4 +13,4 @@ with in_tmp_dir():
     silent("disc create demo.ssd --title Demo")
     silent("printf 'Hello from the host.\\r' > greeting.txt")
     show("disc put 'demo.ssd:$.GREET' greeting.txt")
-    show("disc ls demo.ssd")
+    show("disc ls 'demo.ssd:$'")

@@ -1386,9 +1386,27 @@ def put(
     exec_address: str | None,
     meta_format: str | None,
 ) -> None:
-    """Import a file into the image.
+    """Import a host file into the image.
 
-    Accepts a ``FILE_SPEC`` and an optional ``HOST_PATH``.
+    Accepts a ``FILE_SPEC`` (the in-image destination) and a
+    ``HOST_PATH``.
+
+    ``HOST_PATH`` is required. When it is ``-``, the raw bytes are
+    read from stdin with no metadata-sidecar lookup; supply
+    ``--load`` / ``--exec`` to set the addresses, otherwise they
+    default to ``0xFFFF`` (the Acorn "address not meaningful"
+    sentinel). Otherwise ``HOST_PATH`` names the host file to
+    import.
+
+    When reading from a host file, Acorn metadata (load address,
+    exec address, access bits) is sourced from the surroundings of
+    the data file according to ``--meta-format``. With ``--meta-format``
+    omitted, the default cascade tries — in order — a traditional
+    ``HOST_PATH.inf`` sidecar, then host extended attributes, then a
+    RISC-OS filename suffix, stopping at the first hit. ``--load``
+    and ``--exec`` always win over what the cascade finds. See
+    :doc:`/cli/conventions/metadata` for the full mapping and
+    trade-offs.
     """
     image, path = parse_file_spec(file_spec)
     if not path:
