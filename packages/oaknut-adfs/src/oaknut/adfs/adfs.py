@@ -1081,7 +1081,7 @@ def _create_image_file(
         try:
             yield adfs
         finally:
-            adfs._closed = True
+            adfs.close()
             mm.flush()
 
 
@@ -1207,6 +1207,27 @@ class ADFS:
         self._geometry = geometry
         self._afs_partition_cache = None
 
+    @property
+    def closed(self) -> bool:
+        """Whether this handle has been closed.
+
+        Once closed, any I/O operation raises
+        :class:`oaknut.file.FilesystemClosedError`. Pure path
+        manipulation on path objects bound to this handle continues
+        to work.
+        """
+        return self._closed
+
+    def close(self) -> None:
+        """Mark this handle as closed; idempotent.
+
+        Normally invoked automatically when the
+        :meth:`from_file` / :meth:`create_file` ``with`` block exits.
+        """
+        if self._closed:
+            return
+        self._closed = True
+
     def _require_open(self) -> None:
         """Raise :class:`FilesystemClosedError` if this handle is closed."""
         if self._closed:
@@ -1282,14 +1303,14 @@ class ADFS:
                 try:
                     yield adfs
                 finally:
-                    adfs._closed = True
+                    adfs.close()
         else:
             with open_image_mmap(p) as (mm, _writable):
                 adfs = ADFS.from_buffer(memoryview(mm))
                 try:
                     yield adfs
                 finally:
-                    adfs._closed = True
+                    adfs.close()
 
     @classmethod
     def from_buffer(cls, buffer: memoryview) -> ADFS:
@@ -1580,17 +1601,19 @@ class ADFS:
 
     @property
     def afs_partition(self):  # type: ignore[override]
-        """Open the AFS partition on this disc.
+        """Return the AFS partition handle for this disc.
 
         Returns an :class:`oaknut.afs.AFS` handle sharing this disc's
         :class:`~oaknut.discimage.UnifiedDisc`. Cached on first access
-        so repeated reads return the same instance — letting callers
-        write ``with adfs.afs_partition as afs: ...`` to compose the
-        AFS lifecycle into the surrounding ``with``.
+        so repeated reads return the same instance until that
+        instance is closed.
 
         The returned handle does not own the underlying file — keep
         this ADFS context manager alive for as long as the AFS handle
-        is in use.
+        is in use. The caller is responsible for the AFS handle's
+        lifecycle: either call :meth:`AFS.close` explicitly or use
+        :meth:`open_afs_partition` which yields the same handle as a
+        context manager.
 
         Raises:
             AFSNotPresentError: If the disc has no AFS pointers.
@@ -1602,9 +1625,8 @@ class ADFS:
         from oaknut.afs.afs import AFS, AFSNotPresentError
 
         # Invalidate the cache if the previously-returned AFS handle
-        # has been closed (its own ``with`` block exited). The user
-        # asking for ``adfs.afs_partition`` again wants a fresh handle.
-        if self._afs_partition_cache is not None and self._afs_partition_cache._closed:
+        # has been closed. The next caller wants a fresh handle.
+        if self._afs_partition_cache is not None and self._afs_partition_cache.closed:
             self._afs_partition_cache = None
         if self._afs_partition_cache is None:
             sec1, sec2 = self._fsm.afs_info_pointers
@@ -1614,6 +1636,29 @@ class ADFS:
                 )
             self._afs_partition_cache = AFS(self._disc, sec1, sec2)
         return self._afs_partition_cache
+
+    @contextmanager
+    def open_afs_partition(self):
+        """Open the AFS partition as a context manager.
+
+        Yields the :attr:`afs_partition` handle and calls
+        :meth:`AFS.close` on clean exit or :meth:`AFS.discard` if the
+        body raises — so the in-flight writes survive only when the
+        ``with`` block completes successfully. This is the preferred
+        idiom for AFS operations that need a lifecycle bound to a
+        scope.
+
+        Raises:
+            AFSNotPresentError: If the disc has no AFS partition.
+        """
+        afs = self.afs_partition
+        try:
+            yield afs
+        except BaseException:
+            afs.discard()
+            raise
+        else:
+            afs.close()
 
     def validate(self) -> list[str]:
         """Validate filesystem integrity. Returns list of error messages."""

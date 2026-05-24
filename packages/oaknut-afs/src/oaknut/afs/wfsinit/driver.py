@@ -398,9 +398,15 @@ def initialise(adfs: "ADFS", *, spec: InitSpec) -> None:
     if spec.libraries:
         from oaknut.afs.libraries import emplace_library
 
-        with AFS(disc, sec1, sec2) as afs:
+        afs = AFS(disc, sec1, sec2)
+        try:
             for library_name in spec.libraries:
                 emplace_library(afs, library_name, conflict="overwrite")
+        except BaseException:
+            afs.discard()
+            raise
+        else:
+            afs.close()
 
 
 def _dir_entry(*, name, sin, access, date):

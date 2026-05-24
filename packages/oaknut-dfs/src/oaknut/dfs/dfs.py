@@ -586,6 +586,29 @@ class DFS:
         self._cs = catalogued_surface
         self._current_directory = "$"  # Default directory
 
+    @property
+    def closed(self) -> bool:
+        """Whether this handle has been closed.
+
+        Once closed, any I/O operation raises
+        :class:`oaknut.file.FilesystemClosedError`. Pure path
+        manipulation on path objects bound to this handle continues
+        to work.
+        """
+        return self._closed
+
+    def close(self) -> None:
+        """Mark this handle as closed; idempotent.
+
+        Normally invoked automatically when the
+        :meth:`from_file` / :meth:`create_file` ``with`` block exits.
+        Callers that build a :class:`DFS` from a buffer directly can
+        call ``close()`` to mark the lifecycle ended.
+        """
+        if self._closed:
+            return
+        self._closed = True
+
     def _require_open(self) -> None:
         """Raise :class:`FilesystemClosedError` if this handle is closed."""
         if self._closed:
@@ -670,7 +693,7 @@ class DFS:
             try:
                 yield dfs
             finally:
-                dfs._closed = True
+                dfs.close()
             return
 
         with open_image_mmap(filepath) as (mm, _writable):
@@ -678,7 +701,7 @@ class DFS:
             try:
                 yield dfs
             finally:
-                dfs._closed = True
+                dfs.close()
 
     @classmethod
     def from_buffer(cls, buffer: memoryview, disc_format: DiscFormat, side: int = 0) -> "DFS":
@@ -898,7 +921,7 @@ class DFS:
             try:
                 yield dfs
             finally:
-                dfs._closed = True
+                dfs.close()
                 mm.flush()
 
     # Path API

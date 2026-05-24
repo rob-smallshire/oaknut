@@ -164,7 +164,7 @@ class AFS:
 
         with (
             ADFS.from_file(filepath) as adfs,
-            adfs.afs_partition as afs,
+            adfs.open_afs_partition() as afs,
         ):
             yield afs
 
@@ -245,7 +245,7 @@ class AFS:
                     omit_builtins=frozenset(omit_users),
                 ),
             )
-            with adfs.afs_partition as afs:
+            with adfs.open_afs_partition() as afs:
                 for name_or_path in emplacements:
                     emplace_library(afs, name_or_path)
                 yield afs
@@ -948,26 +948,46 @@ class AFS:
     def discard(self) -> None:
         """Drop all buffered writes without touching the disc.
 
-        Called on exception exit. Also invalidates the bitmap shadow
-        and allocator caches so they don't carry stale state from
-        the discarded session.
+        Closes the handle. The caches are invalidated so they don't
+        carry stale state from the discarded session. Idempotent —
+        a discard on an already-closed handle is a no-op.
+
+        Use this when an error path makes the in-flight changes
+        invalid; the factory :meth:`from_file` / :meth:`create_file`
+        call this automatically when their ``with`` block exits via
+        an exception.
         """
+        if self._closed:
+            return
         self._pending_writes.clear()
         self._bitmap_shadow_cache = None
         self._allocator_cache = None
         self._passwords_cache = None
+        self._closed = True
 
-    def __enter__(self) -> AFS:
-        return self
+    def close(self) -> None:
+        """Commit any pending writes and mark this handle closed.
 
-    def __exit__(self, exc_type, exc, tb) -> None:
+        Idempotent. Normally invoked automatically when the
+        :meth:`from_file` / :meth:`create_file` ``with`` block exits
+        normally; call manually if you build an :class:`AFS` directly
+        and need to control its lifecycle.
+        """
+        if self._closed:
+            return
         try:
-            if exc_type is None:
-                self.flush()
-            else:
-                self.discard()
+            self.flush()
         finally:
             self._closed = True
+
+    @property
+    def closed(self) -> bool:
+        """Whether this handle has been closed via :meth:`close` or
+        :meth:`discard`. Pure path manipulation on bound paths still
+        works after close; I/O raises
+        :class:`oaknut.file.FilesystemClosedError`.
+        """
+        return self._closed
 
     def __repr__(self) -> str:
         return (
