@@ -2,13 +2,13 @@
 
 ## Changes Made
 
-### 1. Introduced `DiskFormat` Class
+### 1. Introduced `DiscFormat` Class
 
-The `DiskFormat` dataclass bundles together the sector image class and catalog class that define a disk format:
+The `DiscFormat` dataclass bundles together the sector image class and catalog class that define a disk format:
 
 ```python
 @dataclass
-class DiskFormat:
+class DiscFormat:
     name: str
     sector_image_class: Type[SectorImage]
     catalog_class: Type[Catalog]
@@ -64,7 +64,7 @@ Title length validation moved from `DFSImage` to `AcornDFSCatalog`:
 class AcornDFSCatalog(Catalog):
     MAX_TITLE_LENGTH = 12
 
-    def write_disk_info(self, info: DiskInfo) -> None:
+    def write_disk_info(self, info: DiscInfo) -> None:
         if len(info.title) > self.MAX_TITLE_LENGTH:
             raise ValueError(f"Title too long (max {self.MAX_TITLE_LENGTH} chars)")
         # ... write catalog
@@ -104,11 +104,11 @@ class WatfordDFSCatalog(Catalog):
     MAX_FILES = 62
     MAX_TITLE_LENGTH = 12  # Or different if Watford allows longer
 
-    def read_disk_info(self) -> DiskInfo:
+    def read_disk_info(self) -> DiscInfo:
         # Parse Watford catalog structure (sectors 0-2)
         pass
 
-    def write_disk_info(self, info: DiskInfo) -> None:
+    def write_disk_info(self, info: DiscInfo) -> None:
         if len(info.title) > self.MAX_TITLE_LENGTH:
             raise ValueError(f"Title too long (max {self.MAX_TITLE_LENGTH} chars)")
         # Write Watford catalog structure
@@ -120,7 +120,7 @@ class WatfordDFSCatalog(Catalog):
 ### 3. Create Format Constant
 
 ```python
-WATFORD_DDFS = DiskFormat(
+WATFORD_DDFS = DiscFormat(
     name="Watford DDFS",
     sector_image_class=WatfordDSDSectorImage,
     catalog_class=WatfordDFSCatalog,

@@ -1,6 +1,6 @@
 """Acorn DFS catalog implementation."""
 
-from oaknut.dfs.catalogue import Catalogue, DiskInfo, FileEntry, ParsedFilename
+from oaknut.dfs.catalogue import Catalogue, DiscInfo, FileEntry, ParsedFilename
 from oaknut.dfs.exceptions import CatalogFullError
 from oaknut.discimage.surface import Surface
 
@@ -155,7 +155,7 @@ class AcornDFSCatalogue(Catalogue):
     def max_files(self) -> int:
         return self.MAX_FILES
 
-    def get_disk_info(self) -> DiskInfo:
+    def get_disc_info(self) -> DiscInfo:
         """Read disk info from sectors 0-1."""
         sector0 = self._surface.sector_range(0, 1)
         sector1 = self._surface.sector_range(1, 1)
@@ -174,7 +174,7 @@ class AcornDFSCatalogue(Catalogue):
         total_sectors = sector_count_low | ((extra_byte & 0x03) << 8)
         boot_option = (extra_byte >> 4) & 0x03
 
-        return DiskInfo(
+        return DiscInfo(
             title=title,
             cycle_number=cycle_number,
             num_files=num_files,
@@ -184,15 +184,15 @@ class AcornDFSCatalogue(Catalogue):
 
     def list_files(self) -> list[FileEntry]:
         """List all files from catalog sectors 0-1."""
-        disk_info = self.get_disk_info()
-        if disk_info.num_files == 0:
+        disc_info = self.get_disc_info()
+        if disc_info.num_files == 0:
             return []
 
         sector0 = self._surface.sector_range(0, 1)
         sector1 = self._surface.sector_range(1, 1)
 
         files = []
-        for i in range(disk_info.num_files):
+        for i in range(disc_info.num_files):
             # Each file entry spans both sectors
             entry_offset = 8 + (i * 8)
 
@@ -357,9 +357,9 @@ class AcornDFSCatalogue(Catalogue):
         directory = directory.upper()
 
         # Read current state
-        disk_info = self.get_disk_info()
+        disc_info = self.get_disc_info()
 
-        if disk_info.num_files >= self.MAX_FILES:
+        if disc_info.num_files >= self.MAX_FILES:
             raise CatalogFullError(f"Catalog full (max {self.MAX_FILES} files)")
 
         # Get catalog sectors individually
@@ -367,7 +367,7 @@ class AcornDFSCatalogue(Catalogue):
         sector1 = self._surface.sector_range(1, 1)
 
         # Write to next available entry slot
-        entry_offset = 8 + (disk_info.num_files * 8)
+        entry_offset = 8 + (disc_info.num_files * 8)
 
         # Write filename and directory to sector 0
         filename_padded = filename.ljust(7)
@@ -397,8 +397,8 @@ class AcornDFSCatalogue(Catalogue):
         sector1[sector1_offset + 7] = start_sector & 0xFF
 
         # Update metadata: increment file count and cycle number
-        sector1[5] = (disk_info.num_files + 1) * 8
-        sector1[4] = (disk_info.cycle_number + 1) & 0xFF
+        sector1[5] = (disc_info.num_files + 1) * 8
+        sector1[4] = (disc_info.cycle_number + 1) & 0xFF
 
         # Sectors are already writable memoryviews - changes are persisted
 
@@ -425,15 +425,15 @@ class AcornDFSCatalogue(Catalogue):
         sector1 = self._surface.sector_range(1, 1)
 
         # Get current disk info to preserve title and sector count
-        disk_info = self.get_disk_info()
+        disc_info = self.get_disc_info()
 
         # Clear everything
         sector0[:] = b"\x00" * 256
         sector1[:] = b"\x00" * 256
 
         # Restore title
-        title_part1 = disk_info.title[:8].ljust(8)
-        title_part2 = disk_info.title[8:12].ljust(4)
+        title_part1 = disc_info.title[:8].ljust(8)
+        title_part2 = disc_info.title[8:12].ljust(4)
         sector0[0:8] = title_part1.encode("acorn")
         sector1[0:4] = title_part2.encode("acorn")
 
@@ -469,12 +469,12 @@ class AcornDFSCatalogue(Catalogue):
             sector1[sector1_offset + 7] = entry.start_sector & 0xFF
 
         # Update metadata
-        sector1[4] = (disk_info.cycle_number + 1) & 0xFF  # Increment cycle number
+        sector1[4] = (disc_info.cycle_number + 1) & 0xFF  # Increment cycle number
         sector1[5] = len(files) * 8  # Number of files
-        sector1[6] = ((disk_info.total_sectors >> 8) & 0x03) | (
-            disk_info.boot_option << 4
+        sector1[6] = ((disc_info.total_sectors >> 8) & 0x03) | (
+            disc_info.boot_option << 4
         )  # Extra byte
-        sector1[7] = disk_info.total_sectors & 0xFF  # Sector count low
+        sector1[7] = disc_info.total_sectors & 0xFF  # Sector count low
 
     def set_title(self, title: str) -> None:
         """Set disk title (max 12 chars)."""
@@ -492,8 +492,8 @@ class AcornDFSCatalogue(Catalogue):
         sector1[0:4] = title[8:12].encode("acorn")
 
         # Increment cycle number
-        disk_info = self.get_disk_info()
-        sector1[4] = (disk_info.cycle_number + 1) & 0xFF
+        disc_info = self.get_disc_info()
+        sector1[4] = (disc_info.cycle_number + 1) & 0xFF
 
     def set_boot_option(self, option: int) -> None:
         """Set boot option (0-3)."""
@@ -501,7 +501,7 @@ class AcornDFSCatalogue(Catalogue):
             raise ValueError(f"Boot option must be 0-3, got {option}")
 
         sector1 = self._surface.sector_range(1, 1)
-        disk_info = self.get_disk_info()
+        disc_info = self.get_disc_info()
 
         # Update boot option in extra byte (bits 4-5)
         extra_byte = sector1[6]
@@ -509,7 +509,7 @@ class AcornDFSCatalogue(Catalogue):
         sector1[6] = extra_byte
 
         # Increment cycle number
-        sector1[4] = (disk_info.cycle_number + 1) & 0xFF
+        sector1[4] = (disc_info.cycle_number + 1) & 0xFF
 
     def lock_file(self, filename: str) -> None:
         """Lock file to prevent deletion."""
@@ -552,8 +552,8 @@ class AcornDFSCatalogue(Catalogue):
         sector0[entry_offset + 7] = dir_byte
 
         # Increment cycle number
-        disk_info = self.get_disk_info()
-        sector1[4] = (disk_info.cycle_number + 1) & 0xFF
+        disc_info = self.get_disc_info()
+        sector1[4] = (disc_info.cycle_number + 1) & 0xFF
 
     def _find_file_index(self, filename: str) -> int:
         """Return the catalogue index for *filename*, or raise."""
@@ -581,8 +581,8 @@ class AcornDFSCatalogue(Catalogue):
         sector1[sector1_offset + 6] = extra_byte
 
         # Increment cycle number.
-        disk_info = self.get_disk_info()
-        sector1[4] = (disk_info.cycle_number + 1) & 0xFF
+        disc_info = self.get_disc_info()
+        sector1[4] = (disc_info.cycle_number + 1) & 0xFF
 
     def set_exec_address(self, filename: str, address: int) -> None:
         """Set exec address for a file in the catalogue."""
@@ -602,8 +602,8 @@ class AcornDFSCatalogue(Catalogue):
         sector1[sector1_offset + 6] = extra_byte
 
         # Increment cycle number.
-        disk_info = self.get_disk_info()
-        sector1[4] = (disk_info.cycle_number + 1) & 0xFF
+        disc_info = self.get_disc_info()
+        sector1[4] = (disc_info.cycle_number + 1) & 0xFF
 
     def rename_file(self, old_name: str, new_name: str) -> None:
         """Rename file preserving all metadata and location."""
@@ -645,8 +645,8 @@ class AcornDFSCatalogue(Catalogue):
         sector0[entry_offset + 7] = dir_byte
 
         # Increment cycle number
-        disk_info = self.get_disk_info()
-        sector1[4] = (disk_info.cycle_number + 1) & 0xFF
+        disc_info = self.get_disc_info()
+        sector1[4] = (disc_info.cycle_number + 1) & 0xFF
 
     def validate(self) -> list[str]:
         """
@@ -658,9 +658,9 @@ class AcornDFSCatalogue(Catalogue):
         errors = []
 
         # Check catalog structure
-        disk_info = self.get_disk_info()
-        if disk_info.num_files > self.MAX_FILES:
-            errors.append(f"Too many files: {disk_info.num_files} > {self.MAX_FILES}")
+        disc_info = self.get_disc_info()
+        if disc_info.num_files > self.MAX_FILES:
+            errors.append(f"Too many files: {disc_info.num_files} > {self.MAX_FILES}")
 
         # Check for overlapping files
         files = self.list_files()

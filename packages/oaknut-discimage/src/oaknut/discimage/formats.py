@@ -1,6 +1,6 @@
 """Generic disk-format machinery shared by oaknut filesystem packages.
 
-Defines the ``DiskFormat`` dataclass and helpers for constructing
+Defines the ``DiscFormat`` dataclass and helpers for constructing
 ``SurfaceSpec`` lists for common disc-image layouts (single-sided,
 interleaved double-sided, sequential double-sided). Filesystem
 packages compose these into concrete format constants — e.g.
@@ -16,7 +16,7 @@ BYTES_PER_SECTOR = 256
 
 
 @dataclass(frozen=True)
-class DiskFormat:
+class DiscFormat:
     """Complete disk format specification including all surfaces and catalogue type."""
 
     surface_specs: list[SurfaceSpec]
@@ -109,7 +109,7 @@ def sequential_double_sided_specs(
 
 __all__ = [
     "BYTES_PER_SECTOR",
-    "DiskFormat",
+    "DiscFormat",
     "single_sided_spec",
     "interleaved_double_sided_specs",
     "sequential_double_sided_specs",

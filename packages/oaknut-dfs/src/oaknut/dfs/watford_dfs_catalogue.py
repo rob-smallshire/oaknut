@@ -2,7 +2,7 @@
 
 from typing import Optional
 
-from oaknut.dfs.catalogue import Catalogue, DiskInfo, FileEntry, ParsedFilename
+from oaknut.dfs.catalogue import Catalogue, DiscInfo, FileEntry, ParsedFilename
 from oaknut.dfs.exceptions import CatalogFullError
 from oaknut.discimage.surface import Surface
 
@@ -160,14 +160,14 @@ class WatfordDFSCatalogue(Catalogue):
             return False
         return True
 
-    def get_disk_info(self) -> DiskInfo:
+    def get_disc_info(self) -> DiscInfo:
         """
         Read disk information from catalog.
 
         Returns metadata from section 1, with file count summed from both sections.
 
         Returns:
-            DiskInfo with title, num_files, total_sectors, boot_option, cycle_number
+            DiscInfo with title, num_files, total_sectors, boot_option, cycle_number
         """
         sector0 = self._surface.sector_range(0, 1)
         sector1 = self._surface.sector_range(1, 1)
@@ -192,7 +192,7 @@ class WatfordDFSCatalogue(Catalogue):
         # Total sectors (10-bit: 2 bits from 0x106 + 8 bits from 0x107)
         total_sectors = ((sector1[6] & 0x03) << 8) | sector1[7]
 
-        return DiskInfo(
+        return DiscInfo(
             title=title,
             cycle_number=cycle_number,
             num_files=num_files,
@@ -315,18 +315,18 @@ class WatfordDFSCatalogue(Catalogue):
         directory = directory.upper()
 
         # Read current state
-        disk_info = self.get_disk_info()
+        disc_info = self.get_disc_info()
 
-        if disk_info.num_files >= self.MAX_FILES:
+        if disc_info.num_files >= self.MAX_FILES:
             raise CatalogFullError(f"Catalog full (max {self.MAX_FILES} files)")
 
         # Determine which section to add to
-        if disk_info.num_files < 31:
+        if disc_info.num_files < 31:
             # Add to section 1 (sectors 0-1)
             self._add_entry_to_section(
                 0,
                 1,
-                disk_info.num_files,
+                disc_info.num_files,
                 filename,
                 directory,
                 load_address,
@@ -338,7 +338,7 @@ class WatfordDFSCatalogue(Catalogue):
         else:
             # Add to section 2 (sectors 2-3)
             # File index within section 2 is (num_files - 31)
-            section2_index = disk_info.num_files - 31
+            section2_index = disc_info.num_files - 31
             self._add_entry_to_section(
                 2,
                 3,
@@ -407,8 +407,8 @@ class WatfordDFSCatalogue(Catalogue):
         sector1[5] = (current_count + 1) * 8
 
         # Increment cycle number
-        disk_info = self.get_disk_info()
-        sector1[4] = (disk_info.cycle_number + 1) & 0xFF
+        disc_info = self.get_disc_info()
+        sector1[4] = (disc_info.cycle_number + 1) & 0xFF
 
     def _sync_metadata(self) -> None:
         """Ensure metadata is synchronized between both sections."""
@@ -451,21 +451,21 @@ class WatfordDFSCatalogue(Catalogue):
     def _rebuild_catalog(self, files: list[FileEntry]) -> None:
         """Rebuild both catalog sections from file list."""
         # Get current disk info to preserve title and sector count
-        disk_info = self.get_disk_info()
+        disc_info = self.get_disc_info()
 
         # Section 1: Files 0-30 (max 31 files)
         section1_files = files[:31]
-        self._rebuild_section(0, 1, section1_files, disk_info)
+        self._rebuild_section(0, 1, section1_files, disc_info)
 
         # Section 2: Files 31-61 (max 31 more files)
         section2_files = files[31:62]
-        self._rebuild_section(2, 3, section2_files, disk_info)
+        self._rebuild_section(2, 3, section2_files, disc_info)
 
         # Sync metadata
         self._sync_metadata()
 
     def _rebuild_section(
-        self, sector0_num: int, sector1_num: int, files: list[FileEntry], disk_info: DiskInfo
+        self, sector0_num: int, sector1_num: int, files: list[FileEntry], disc_info: DiscInfo
     ) -> None:
         """Rebuild one catalog section."""
         # Get writable sector views
@@ -479,7 +479,7 @@ class WatfordDFSCatalogue(Catalogue):
         # Write title (or 0xAA marker for section 2)
         if sector0_num == 0:
             # Section 1: write actual title (bytes 0-9 of sector 0)
-            title_padded = disk_info.title[:10].ljust(10)
+            title_padded = disc_info.title[:10].ljust(10)
             sector0[0:10] = title_padded.encode("acorn")
             sector0[10:12] = b"\x00\x00"  # Reserved bytes 10-11 for catalog chaining
             # Sector 1 bytes 0-3 not used for title in Watford DFS
@@ -519,10 +519,10 @@ class WatfordDFSCatalogue(Catalogue):
             sector1[sector1_offset + 7] = entry.start_sector & 0xFF
 
         # Write metadata
-        sector1[4] = (disk_info.cycle_number + 1) & 0xFF  # Increment cycle number
+        sector1[4] = (disc_info.cycle_number + 1) & 0xFF  # Increment cycle number
         sector1[5] = len(files) * 8  # File count
-        sector1[6] = ((disk_info.total_sectors >> 8) & 0x03) | (disk_info.boot_option << 4)
-        sector1[7] = disk_info.total_sectors & 0xFF
+        sector1[6] = ((disc_info.total_sectors >> 8) & 0x03) | (disc_info.boot_option << 4)
+        sector1[7] = disc_info.total_sectors & 0xFF
 
         # Changes to sectors are persisted automatically (writable memoryviews)
 
@@ -898,9 +898,9 @@ class WatfordDFSCatalogue(Catalogue):
         errors = []
 
         # Check catalog structure
-        disk_info = self.get_disk_info()
-        if disk_info.num_files > self.MAX_FILES:
-            errors.append(f"Too many files: {disk_info.num_files} > {self.MAX_FILES}")
+        disc_info = self.get_disc_info()
+        if disc_info.num_files > self.MAX_FILES:
+            errors.append(f"Too many files: {disc_info.num_files} > {self.MAX_FILES}")
 
         # Check for 0xAA marker in sector 2
         sector2 = self._surface.sector_range(2, 1)

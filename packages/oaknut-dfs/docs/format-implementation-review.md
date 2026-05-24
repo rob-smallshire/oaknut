@@ -2,7 +2,7 @@
 
 ## Executive Summary
 
-This document evaluates the feasibility of adding support for Watford DFS, Watford DDFS, Solidisk DDFS, and Opus DDOS to the oaknut-dfs library. The current architecture is **well-suited** for extension, primarily requiring new `Catalogue` subclasses and `DiskFormat` constants. The sector abstraction layer (`Surface`) already supports variable sectors-per-track through parameterization, eliminating the need for low-level geometry changes.
+This document evaluates the feasibility of adding support for Watford DFS, Watford DDFS, Solidisk DDFS, and Opus DDOS to the oaknut-dfs library. The current architecture is **well-suited** for extension, primarily requiring new `Catalogue` subclasses and `DiscFormat` constants. The sector abstraction layer (`Surface`) already supports variable sectors-per-track through parameterization, eliminating the need for low-level geometry changes.
 
 **Overall Assessment:** The three-layer architecture (Surface → Catalogue → High-level API) provides excellent separation of concerns and is sufficiently flexible to accommodate all four format variants with varying degrees of implementation complexity.
 
@@ -175,12 +175,12 @@ class WatfordDFSCatalogue(Catalogue):
 WATFORD_DFS_CATALOGUE_NAME = "watford-dfs"
 
 # Add format constants (same geometry as Acorn DFS)
-WATFORD_DFS_40T_SINGLE_SIDED = DiskFormat(
+WATFORD_DFS_40T_SINGLE_SIDED = DiscFormat(
     surface_specs=[_single_sided_spec(TRACKS_40, 10, BYTES_PER_SECTOR)],
     catalogue_name=WATFORD_DFS_CATALOGUE_NAME,
 )
 
-WATFORD_DFS_40T_DOUBLE_SIDED_INTERLEAVED = DiskFormat(
+WATFORD_DFS_40T_DOUBLE_SIDED_INTERLEAVED = DiscFormat(
     surface_specs=_interleaved_double_sided_specs(TRACKS_40, 10, BYTES_PER_SECTOR),
     catalogue_name=WATFORD_DFS_CATALOGUE_NAME,
 )
@@ -409,23 +409,23 @@ WATFORD_DDFS_CATALOGUE_NAME = "watford-ddfs"
 WATFORD_DDFS_SECTORS_PER_TRACK = 18
 
 # 40-track Watford DDFS
-WATFORD_DDFS_40T_SINGLE_SIDED = DiskFormat(
+WATFORD_DDFS_40T_SINGLE_SIDED = DiscFormat(
     surface_specs=[_single_sided_spec(TRACKS_40, 18, BYTES_PER_SECTOR)],
     catalogue_name=WATFORD_DDFS_CATALOGUE_NAME,
 )
 
-WATFORD_DDFS_40T_DOUBLE_SIDED_INTERLEAVED = DiskFormat(
+WATFORD_DDFS_40T_DOUBLE_SIDED_INTERLEAVED = DiscFormat(
     surface_specs=_interleaved_double_sided_specs(TRACKS_40, 18, BYTES_PER_SECTOR),
     catalogue_name=WATFORD_DDFS_CATALOGUE_NAME,
 )
 
 # 80-track Watford DDFS (most common)
-WATFORD_DDFS_80T_SINGLE_SIDED = DiskFormat(
+WATFORD_DDFS_80T_SINGLE_SIDED = DiscFormat(
     surface_specs=[_single_sided_spec(TRACKS_80, 18, BYTES_PER_SECTOR)],
     catalogue_name=WATFORD_DDFS_CATALOGUE_NAME,
 )
 
-WATFORD_DDFS_80T_DOUBLE_SIDED_INTERLEAVED = DiskFormat(
+WATFORD_DDFS_80T_DOUBLE_SIDED_INTERLEAVED = DiscFormat(
     surface_specs=_interleaved_double_sided_specs(TRACKS_80, 18, BYTES_PER_SECTOR),
     catalogue_name=WATFORD_DDFS_CATALOGUE_NAME,
 )
@@ -742,12 +742,12 @@ SOLIDISK_DDFS_CATALOGUE_NAME = "solidisk-ddfs"
 SOLIDISK_DDFS_SECTORS_PER_TRACK = 16
 
 # Solidisk DDFS formats
-SOLIDISK_DDFS_40T_SINGLE_SIDED = DiskFormat(
+SOLIDISK_DDFS_40T_SINGLE_SIDED = DiscFormat(
     surface_specs=[_single_sided_spec(TRACKS_40, 16, BYTES_PER_SECTOR)],
     catalogue_name=SOLIDISK_DDFS_CATALOGUE_NAME,
 )
 
-SOLIDISK_DDFS_80T_DOUBLE_SIDED_INTERLEAVED = DiskFormat(
+SOLIDISK_DDFS_80T_DOUBLE_SIDED_INTERLEAVED = DiscFormat(
     surface_specs=_interleaved_double_sided_specs(TRACKS_80, 16, BYTES_PER_SECTOR),
     catalogue_name=SOLIDISK_DDFS_CATALOGUE_NAME,
 )
@@ -1119,12 +1119,12 @@ OPUS_DDOS_CATALOGUE_NAME = "opus-ddos"
 OPUS_DDOS_SECTORS_PER_TRACK = 18
 
 # Opus DDOS formats (usually 80-track)
-OPUS_DDOS_80T_SINGLE_SIDED = DiskFormat(
+OPUS_DDOS_80T_SINGLE_SIDED = DiscFormat(
     surface_specs=[_single_sided_spec(TRACKS_80, 18, BYTES_PER_SECTOR)],
     catalogue_name=OPUS_DDOS_CATALOGUE_NAME,
 )
 
-OPUS_DDOS_80T_DOUBLE_SIDED_INTERLEAVED = DiskFormat(
+OPUS_DDOS_80T_DOUBLE_SIDED_INTERLEAVED = DiscFormat(
     surface_specs=_interleaved_double_sided_specs(TRACKS_80, 18, BYTES_PER_SECTOR),
     catalogue_name=OPUS_DDOS_CATALOGUE_NAME,
 )

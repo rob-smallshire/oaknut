@@ -120,7 +120,7 @@ def read_disk_info(self):
     title_part2 = sector1[0:4].decode("acorn")
     title = (title_part1 + title_part2).rstrip()
 
-    return DiskInfo(title=title, ...)
+    return DiscInfo(title=title, ...)
 
 def write_disk_info(self, info):
     # Encode using Acorn encoding

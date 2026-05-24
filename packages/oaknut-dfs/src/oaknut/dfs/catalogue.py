@@ -31,7 +31,7 @@ class FileEntry:
 
 
 @dataclass(frozen=True)
-class DiskInfo:
+class DiscInfo:
     """Disk catalog metadata."""
 
     title: str
@@ -137,7 +137,7 @@ class Catalogue(ABC):
         pass
 
     @abstractmethod
-    def get_disk_info(self) -> DiskInfo:
+    def get_disc_info(self) -> DiscInfo:
         """Read disk metadata from catalog."""
         pass
 

@@ -76,8 +76,8 @@ The end-state package set is layered, not flat. Beyond the packages that already
 | Package | Scope | Used by |
 |---|---|---|
 | `oaknut-file` | Acorn file metadata sidecar formats: INF (trad + PiEconetBridge), `user.acorn.*` / `user.econet_*` xattrs, RISC OS / MOS filename encoding, `Access` flags, `AcornMeta`, `MetaFormat`, **and the host bridge** (the `host_bridge.py` module currently inside `oaknut-dfs` moves here, since it's a natural extension of oaknut-file's I/O surface) | `oaknut-dfs`, `oaknut-adfs`, `oaknut-zip`, anything that touches host metadata |
-| `oaknut-fs` *(new)* | **Universal filesystem abstractions** — anything an Acorn filesystem needs that isn't filesystem-specific: the abstract `Catalogue` ABC, `FileEntry`, `DiskInfo`, `ParsedFilename`, the `acorn` text codec, `BootOption`, `FSError` base | `oaknut-dfs`, `oaknut-adfs`, future `oaknut-nfs`, future `oaknut-afs` |
-| `oaknut-discimage` *(new)* | **Disc-image abstractions** for filesystems backed by sectors on a disc image: `Surface`, `SectorImage`, `SectorsView`, `DiskFormat`, geometry helpers, `UnifiedDisc`, `CataloguedSurface` | `oaknut-dfs`, `oaknut-adfs` only — *not* `oaknut-nfs`/`oaknut-afs`, neither of which is disc-based |
+| `oaknut-fs` *(new)* | **Universal filesystem abstractions** — anything an Acorn filesystem needs that isn't filesystem-specific: the abstract `Catalogue` ABC, `FileEntry`, `DiscInfo`, `ParsedFilename`, the `acorn` text codec, `BootOption`, `FSError` base | `oaknut-dfs`, `oaknut-adfs`, future `oaknut-nfs`, future `oaknut-afs` |
+| `oaknut-discimage` *(new)* | **Disc-image abstractions** for filesystems backed by sectors on a disc image: `Surface`, `SectorImage`, `SectorsView`, `DiscFormat`, geometry helpers, `UnifiedDisc`, `CataloguedSurface` | `oaknut-dfs`, `oaknut-adfs` only — *not* `oaknut-nfs`/`oaknut-afs`, neither of which is disc-based |
 | `oaknut-dfs` | DFS / Watford DDFS / Opus DDOS only — the catalogue implementations and `DFSPath` / `DFS` types | downstream consumers |
 | `oaknut-adfs` | ADFS only — directory format, free space map, `ADFSPath` / `ADFS` types | downstream consumers |
 | `oaknut-basic` | BBC BASIC tokeniser/detokeniser, language constants. Self-contained, no internal deps | downstream consumers |
@@ -92,11 +92,11 @@ The end-state package set is layered, not flat. Beyond the packages that already
 |---|---|---|
 | `acorn_encoding.py` | `oaknut-fs` | `oaknut.fs.encoding` |
 | `boot_option.py` | `oaknut-fs` | `oaknut.fs.boot_option` |
-| `catalogue.py` (`Catalogue` ABC, `FileEntry`, `DiskInfo`, `ParsedFilename`) | `oaknut-fs` | `oaknut.fs.catalogue` |
+| `catalogue.py` (`Catalogue` ABC, `FileEntry`, `DiscInfo`, `ParsedFilename`) | `oaknut-fs` | `oaknut.fs.catalogue` |
 | `exceptions.py` (`FSError` base; format-specific subclasses follow their format) | `oaknut-fs` (base) + `oaknut-dfs`/`oaknut-adfs` (subclasses) | `oaknut.fs.exceptions` + `oaknut.dfs.exceptions` etc. |
 | `host_bridge.py` | `oaknut-file` | `oaknut.file.host_bridge` |
 | `sectors_view.py`, `surface.py`, `catalogued_surface.py` | `oaknut-discimage` | `oaknut.discimage.{sectors_view,surface,catalogued_surface}` |
-| `formats.py` (`DiskFormat` and the `ACORN_DFS_*` constants) | `oaknut-discimage` (base) + `oaknut-dfs` (DFS-specific constants) | `oaknut.discimage.formats` + `oaknut.dfs.formats` |
+| `formats.py` (`DiscFormat` and the `ACORN_DFS_*` constants) | `oaknut-discimage` (base) + `oaknut-dfs` (DFS-specific constants) | `oaknut.discimage.formats` + `oaknut.dfs.formats` |
 | `unified_disc.py` | `oaknut-discimage` | `oaknut.discimage.unified_disc` |
 | `acorn_dfs_catalogue.py`, `watford_dfs_catalogue.py`, `dfs.py` | `oaknut-dfs` | `oaknut.dfs.*` |
 | `adfs.py`, `adfs_directory.py`, `adfs_free_space_map.py` | `oaknut-adfs` | `oaknut.adfs.*` |

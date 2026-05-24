@@ -34,9 +34,9 @@ class CataloguedSurface:
         return self._catalogue.find_file(filename)
 
     @property
-    def disk_info(self):
+    def disc_info(self):
         """Get disk info."""
-        return self._catalogue.get_disk_info()
+        return self._catalogue.get_disc_info()
 
     @property
     def catalogue(self) -> Catalogue:

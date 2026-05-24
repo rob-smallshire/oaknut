@@ -165,7 +165,7 @@ def _detect_dfs_format(image_filepath: Path):
         ACORN_DFS_40T_SINGLE_SIDED,
         ACORN_DFS_80T_DOUBLE_SIDED_INTERLEAVED,
         ACORN_DFS_80T_SINGLE_SIDED,
-        DiskFormat,
+        DiscFormat,
     )
     from oaknut.discimage.formats import SurfaceSpec
 
@@ -183,7 +183,7 @@ def _detect_dfs_format(image_filepath: Path):
         if size % 256 != 0:
             raise click.ClickException(f"SSD image size ({size}) is not a multiple of 256 bytes")
         total_sectors = size // 256
-        return DiskFormat(
+        return DiscFormat(
             surface_specs=[
                 SurfaceSpec(
                     num_tracks=1,
@@ -213,8 +213,8 @@ def _open_dfs(image_filepath: Path) -> Iterator:
     """Open image as DFS, yielding the DFS handle."""
     from oaknut.dfs import DFS
 
-    disk_format = _detect_dfs_format(image_filepath)
-    with DFS.from_file(image_filepath, disk_format) as dfs:
+    disc_format = _detect_dfs_format(image_filepath)
+    with DFS.from_file(image_filepath, disc_format) as dfs:
         yield dfs
 
 
@@ -1062,8 +1062,8 @@ def _sector_bar(total: int, free_regions: list[tuple[int, int]], width: int = 64
 def _freemap_dfs(handle) -> None:
     """DFS free-space map."""
     regions = handle._catalogued_surface.get_free_map()
-    disk_info = handle._catalogued_surface.catalogue.get_disk_info()
-    total = disk_info.total_sectors
+    disc_info = handle._catalogued_surface.catalogue.get_disc_info()
+    total = disc_info.total_sectors
     free = handle.free_sectors
 
     bar = _sector_bar(total, regions)
@@ -2415,12 +2415,12 @@ def expand(image: Path, fmt: str | None) -> None:
             )
 
     if fmt == "ssd":
-        disk_format = ACORN_DFS_80T_SINGLE_SIDED
+        disc_format = ACORN_DFS_80T_SINGLE_SIDED
     else:
-        disk_format = ACORN_DFS_80T_DOUBLE_SIDED_INTERLEAVED
+        disc_format = ACORN_DFS_80T_DOUBLE_SIDED_INTERLEAVED
 
     try:
-        dfs_expand(image, disk_format)
+        dfs_expand(image, disc_format)
     except ValueError as exc:
         raise click.ClickException(str(exc))
 

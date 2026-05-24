@@ -15,7 +15,7 @@ from oaknut.dfs.exceptions import (
     CatalogFullError,
     CatalogReadError,
     DFSError,
-    DiskFullError,
+    DiscFullError,
     FileExistsError,
     FileLocked,
     InvalidFormatError,
@@ -45,7 +45,7 @@ class TestExceptionHierarchy:
             CatalogReadError,
             CatalogFullError,
             FileExistsError,
-            DiskFullError,
+            DiscFullError,
             FileLocked,
             InvalidFormatError,
         ]
@@ -60,7 +60,7 @@ class TestExceptionHierarchy:
             CatalogReadError,
             CatalogFullError,
             FileExistsError,
-            DiskFullError,
+            DiscFullError,
             FileLocked,
             InvalidFormatError,
         ]
@@ -145,7 +145,7 @@ class TestExceptionCatching:
         exceptions = [
             CatalogReadError("read error"),
             CatalogFullError("full"),
-            DiskFullError("no space"),
+            DiscFullError("no space"),
             FileLocked("locked"),
             InvalidFormatError("bad format"),
         ]
@@ -174,7 +174,7 @@ class TestExceptionCatching:
         exceptions = [
             DFSError("dfs"),
             CatalogReadError("read error"),
-            DiskFullError("no space"),
+            DiscFullError("no space"),
             ADFSError("adfs"),
             ADFSDirectoryError("bad dir"),
             ADFSDiscFullError("no space"),
@@ -207,10 +207,10 @@ class TestExceptionMessages:
             raise CatalogReadError(msg)
 
     def test_disk_full_error_with_message(self):
-        """DiskFullError preserves error message."""
+        """DiscFullError preserves error message."""
         msg = "Cannot save file: needs 10 sectors, only 5 free"
-        with pytest.raises(DiskFullError, match=msg):
-            raise DiskFullError(msg)
+        with pytest.raises(DiscFullError, match=msg):
+            raise DiscFullError(msg)
 
     def test_adfs_disc_full_error_with_message(self):
         """ADFSDiscFullError preserves error message."""

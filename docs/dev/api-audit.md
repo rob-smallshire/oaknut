@@ -142,17 +142,17 @@ The current `__truediv__` blindly concatenates with `.`, leaving the caller resp
 > sugar for the common `$` case is wanted, an explicit factory like
 > `dfs.default_directory / "HELLO"` would be the honest spelling.
 
-## 7. `DFS.from_file` requires explicit `disk_format`; `ADFS.from_file` auto-detects
+## 7. `DFS.from_file` requires explicit `disc_format`; `ADFS.from_file` auto-detects
 
 **Where**:
-- `DFS.from_file(filepath, disk_format, side=0)`
+- `DFS.from_file(filepath, disc_format, side=0)`
 - `ADFS.from_file(filepath, *)`
 
 DFS hosts the same kind of "is this `.ssd` or `.dsd` and 40T or 80T?" question that ADFS solves automatically — file size and extension are usually conclusive.
 
 **Proposed fix**
 
-- `DFS.from_file(filepath, *, disk_format=None, side=0)` — auto-detect when `disk_format is None`, otherwise honour the caller's choice.
+- `DFS.from_file(filepath, *, disc_format=None, side=0)` — auto-detect when `disc_format is None`, otherwise honour the caller's choice.
 - Detection rule: `.dsd` ⇒ double-sided; size ⇒ `80T`-or-`40T`; the existing `formats` module already encodes both.
 
 ## 8. `AFS.create_file` does not exist — `AFS.from_file` does
@@ -211,7 +211,7 @@ These changes are not all the same size; some are 10 lines, others touch several
 3. **Polymorphic copy** (theme 3): drop `target_fs` from `copy_file`; have each path supply its own access mapping.
 4. **Unified write_bytes signature** (theme 4): broaden `access` to accept `bool | Access | None` on every path class.
 5. ~~**Root consistency** (theme 6): DFS root becomes `$`.~~ *Skipped — theme 6 was based on a misreading of DFS's flat catalogue; see the correction at the end of theme 6.*
-6. **DFS auto-detect** (theme 7): make `disk_format` optional on `DFS.from_file` and `DFS.create_file`.
+6. **DFS auto-detect** (theme 7): make `disc_format` optional on `DFS.from_file` and `DFS.create_file`.
 7. **AFS create + capacity strings** (themes 8, 9): new `AFS.create_file`; accept capacity strings on ADFS / AFS / UserSpec quota.
 8. **AFS top-level re-exports** (theme 10): `oaknut.afs` exposes `initialise`, `InitSpec`, etc. directly.
 

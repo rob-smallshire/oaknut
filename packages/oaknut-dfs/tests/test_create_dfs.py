@@ -48,66 +48,66 @@ ALL_FORMATS = ACORN_FORMATS + WATFORD_FORMATS
 class TestDFSCreateInMemory:
     """Test DFS.create() for in-memory disc images."""
 
-    @pytest.mark.parametrize("disk_format,expected_total_sectors,catalogue_sectors", ALL_FORMATS)
-    def test_empty_catalogue(self, disk_format, expected_total_sectors, catalogue_sectors):
-        dfs = DFS.create(disk_format)
+    @pytest.mark.parametrize("disc_format,expected_total_sectors,catalogue_sectors", ALL_FORMATS)
+    def test_empty_catalogue(self, disc_format, expected_total_sectors, catalogue_sectors):
+        dfs = DFS.create(disc_format)
         assert len(dfs.files) == 0
 
-    @pytest.mark.parametrize("disk_format,expected_total_sectors,catalogue_sectors", ALL_FORMATS)
-    def test_total_sectors(self, disk_format, expected_total_sectors, catalogue_sectors):
-        dfs = DFS.create(disk_format)
-        disk_info = dfs._catalogued_surface.disk_info
-        assert disk_info.total_sectors == expected_total_sectors
+    @pytest.mark.parametrize("disc_format,expected_total_sectors,catalogue_sectors", ALL_FORMATS)
+    def test_total_sectors(self, disc_format, expected_total_sectors, catalogue_sectors):
+        dfs = DFS.create(disc_format)
+        disc_info = dfs._catalogued_surface.disc_info
+        assert disc_info.total_sectors == expected_total_sectors
 
-    @pytest.mark.parametrize("disk_format,expected_total_sectors,catalogue_sectors", ALL_FORMATS)
-    def test_free_sectors(self, disk_format, expected_total_sectors, catalogue_sectors):
-        dfs = DFS.create(disk_format)
+    @pytest.mark.parametrize("disc_format,expected_total_sectors,catalogue_sectors", ALL_FORMATS)
+    def test_free_sectors(self, disc_format, expected_total_sectors, catalogue_sectors):
+        dfs = DFS.create(disc_format)
         assert dfs.free_sectors == expected_total_sectors - catalogue_sectors
 
-    @pytest.mark.parametrize("disk_format,expected_total_sectors,catalogue_sectors", ALL_FORMATS)
-    def test_default_title_is_empty(self, disk_format, expected_total_sectors, catalogue_sectors):
-        dfs = DFS.create(disk_format)
+    @pytest.mark.parametrize("disc_format,expected_total_sectors,catalogue_sectors", ALL_FORMATS)
+    def test_default_title_is_empty(self, disc_format, expected_total_sectors, catalogue_sectors):
+        dfs = DFS.create(disc_format)
         assert dfs.title.strip("\x00 ") == ""
 
-    @pytest.mark.parametrize("disk_format,expected_total_sectors,catalogue_sectors", ALL_FORMATS)
-    def test_custom_title(self, disk_format, expected_total_sectors, catalogue_sectors):
-        dfs = DFS.create(disk_format, title="TestDisc")
+    @pytest.mark.parametrize("disc_format,expected_total_sectors,catalogue_sectors", ALL_FORMATS)
+    def test_custom_title(self, disc_format, expected_total_sectors, catalogue_sectors):
+        dfs = DFS.create(disc_format, title="TestDisc")
         assert dfs.title.strip("\x00 ") == "TestDisc"
 
-    @pytest.mark.parametrize("disk_format,expected_total_sectors,catalogue_sectors", ALL_FORMATS)
-    def test_default_boot_option(self, disk_format, expected_total_sectors, catalogue_sectors):
-        dfs = DFS.create(disk_format)
+    @pytest.mark.parametrize("disc_format,expected_total_sectors,catalogue_sectors", ALL_FORMATS)
+    def test_default_boot_option(self, disc_format, expected_total_sectors, catalogue_sectors):
+        dfs = DFS.create(disc_format)
         assert dfs.boot_option == 0
 
-    @pytest.mark.parametrize("disk_format,expected_total_sectors,catalogue_sectors", ALL_FORMATS)
-    def test_custom_boot_option(self, disk_format, expected_total_sectors, catalogue_sectors):
-        dfs = DFS.create(disk_format, boot_option=3)
+    @pytest.mark.parametrize("disc_format,expected_total_sectors,catalogue_sectors", ALL_FORMATS)
+    def test_custom_boot_option(self, disc_format, expected_total_sectors, catalogue_sectors):
+        dfs = DFS.create(disc_format, boot_option=3)
         assert dfs.boot_option == 3
 
-    @pytest.mark.parametrize("disk_format,expected_total_sectors,catalogue_sectors", ALL_FORMATS)
-    def test_root_is_empty(self, disk_format, expected_total_sectors, catalogue_sectors):
-        dfs = DFS.create(disk_format)
+    @pytest.mark.parametrize("disc_format,expected_total_sectors,catalogue_sectors", ALL_FORMATS)
+    def test_root_is_empty(self, disc_format, expected_total_sectors, catalogue_sectors):
+        dfs = DFS.create(disc_format)
         assert list(dfs.root) == []
 
-    @pytest.mark.parametrize("disk_format,expected_total_sectors,catalogue_sectors", ALL_FORMATS)
-    def test_validate_clean(self, disk_format, expected_total_sectors, catalogue_sectors):
-        dfs = DFS.create(disk_format)
+    @pytest.mark.parametrize("disc_format,expected_total_sectors,catalogue_sectors", ALL_FORMATS)
+    def test_validate_clean(self, disc_format, expected_total_sectors, catalogue_sectors):
+        dfs = DFS.create(disc_format)
         assert dfs.validate() == []
 
 
 class TestDFSCreateRoundTrip:
     """Test writing files to created images and reading them back."""
 
-    @pytest.mark.parametrize("disk_format,expected_total_sectors,catalogue_sectors", ALL_FORMATS)
-    def test_save_and_load(self, disk_format, expected_total_sectors, catalogue_sectors):
-        dfs = DFS.create(disk_format)
+    @pytest.mark.parametrize("disc_format,expected_total_sectors,catalogue_sectors", ALL_FORMATS)
+    def test_save_and_load(self, disc_format, expected_total_sectors, catalogue_sectors):
+        dfs = DFS.create(disc_format)
         (dfs.root / "$" / "HELLO").write_bytes(b"Hello, World!", load_address=0x1900)
         assert len(dfs.files) == 1
         assert (dfs.root / "$" / "HELLO").read_bytes() == b"Hello, World!"
 
-    @pytest.mark.parametrize("disk_format,expected_total_sectors,catalogue_sectors", ALL_FORMATS)
+    @pytest.mark.parametrize("disc_format,expected_total_sectors,catalogue_sectors", ALL_FORMATS)
     def test_catalogue_high_bits_round_trip(
-        self, disk_format, expected_total_sectors, catalogue_sectors
+        self, disc_format, expected_total_sectors, catalogue_sectors
     ):
         """Verify that the high bits (16-17) of load, exec, and length
         are packed and unpacked correctly in the catalogue extra byte.
@@ -116,7 +116,7 @@ class TestDFSCreateRoundTrip:
         (>> 14, >> 12, >> 10 instead of >> 16), causing values with
         non-zero bits 12-15 but zero bits 16-17 to be stored incorrectly.
         """
-        dfs = DFS.create(disk_format)
+        dfs = DFS.create(disc_format)
         # 15053 bytes — bits 12-13 of length are non-zero, bits 16-17 are zero
         data = b"x" * 15053
         (dfs.root / "$" / "PROG").write_bytes(data, load_address=0x0800, exec_address=0x8023)
@@ -126,25 +126,25 @@ class TestDFSCreateRoundTrip:
         assert stat.exec_address == 0x8023
         assert (dfs.root / "$" / "PROG").read_bytes() == data
 
-    @pytest.mark.parametrize("disk_format,expected_total_sectors,catalogue_sectors", ALL_FORMATS)
-    def test_save_and_load_via_path(self, disk_format, expected_total_sectors, catalogue_sectors):
-        dfs = DFS.create(disk_format)
+    @pytest.mark.parametrize("disc_format,expected_total_sectors,catalogue_sectors", ALL_FORMATS)
+    def test_save_and_load_via_path(self, disc_format, expected_total_sectors, catalogue_sectors):
+        dfs = DFS.create(disc_format)
         (dfs.root / "$" / "DATA").write_bytes(b"test data", load_address=0x2000)
         data = (dfs.root / "$" / "DATA").read_bytes()
         assert data == b"test data"
 
-    @pytest.mark.parametrize("disk_format,expected_total_sectors,catalogue_sectors", ALL_FORMATS)
+    @pytest.mark.parametrize("disc_format,expected_total_sectors,catalogue_sectors", ALL_FORMATS)
     def test_free_sectors_decrease_after_save(
-        self, disk_format, expected_total_sectors, catalogue_sectors
+        self, disc_format, expected_total_sectors, catalogue_sectors
     ):
-        dfs = DFS.create(disk_format)
+        dfs = DFS.create(disc_format)
         initial_free = dfs.free_sectors
         (dfs.root / "$" / "FILE").write_bytes(b"x" * 512)  # 2 sectors
         assert dfs.free_sectors == initial_free - 2
 
-    @pytest.mark.parametrize("disk_format,expected_total_sectors,catalogue_sectors", ALL_FORMATS)
-    def test_save_delete_roundtrip(self, disk_format, expected_total_sectors, catalogue_sectors):
-        dfs = DFS.create(disk_format)
+    @pytest.mark.parametrize("disc_format,expected_total_sectors,catalogue_sectors", ALL_FORMATS)
+    def test_save_delete_roundtrip(self, disc_format, expected_total_sectors, catalogue_sectors):
+        dfs = DFS.create(disc_format)
         initial_free = dfs.free_sectors
         (dfs.root / "$" / "TEMP").write_bytes(b"temporary")
         (dfs.root / "$" / "TEMP").unlink()
@@ -157,41 +157,41 @@ class TestDFSCreateRoundTrip:
 class TestDFSCreateFile:
     """Test DFS.create_file() for file-backed disc images."""
 
-    @pytest.mark.parametrize("disk_format,expected_total_sectors,catalogue_sectors", ALL_FORMATS)
+    @pytest.mark.parametrize("disc_format,expected_total_sectors,catalogue_sectors", ALL_FORMATS)
     def test_create_file_empty_and_reopen(
-        self, disk_format, expected_total_sectors, catalogue_sectors, tmp_path
+        self, disc_format, expected_total_sectors, catalogue_sectors, tmp_path
     ):
         filepath = tmp_path / "test.ssd"
-        with DFS.create_file(filepath, disk_format, title="Persist") as dfs:
+        with DFS.create_file(filepath, disc_format, title="Persist") as dfs:
             pass
 
         # Reopen read-only and verify title persisted
-        with DFS.from_file(filepath, disk_format) as dfs:
+        with DFS.from_file(filepath, disc_format) as dfs:
             assert dfs.title.strip("\x00 ") == "Persist"
             assert len(dfs.files) == 0
 
-    @pytest.mark.parametrize("disk_format,expected_total_sectors,catalogue_sectors", ALL_FORMATS)
+    @pytest.mark.parametrize("disc_format,expected_total_sectors,catalogue_sectors", ALL_FORMATS)
     def test_create_file_with_data(
-        self, disk_format, expected_total_sectors, catalogue_sectors, tmp_path
+        self, disc_format, expected_total_sectors, catalogue_sectors, tmp_path
     ):
         filepath = tmp_path / "test.ssd"
-        with DFS.create_file(filepath, disk_format) as dfs:
+        with DFS.create_file(filepath, disc_format) as dfs:
             (dfs.root / "$" / "HELLO").write_bytes(b"Hello!")
 
         # Reopen and verify file data
-        with DFS.from_file(filepath, disk_format) as dfs:
+        with DFS.from_file(filepath, disc_format) as dfs:
             assert (dfs.root / "$" / "HELLO").read_bytes() == b"Hello!"
 
-    @pytest.mark.parametrize("disk_format,expected_total_sectors,catalogue_sectors", ALL_FORMATS)
+    @pytest.mark.parametrize("disc_format,expected_total_sectors,catalogue_sectors", ALL_FORMATS)
     def test_created_file_size(
-        self, disk_format, expected_total_sectors, catalogue_sectors, tmp_path
+        self, disc_format, expected_total_sectors, catalogue_sectors, tmp_path
     ):
         filepath = tmp_path / "test.ssd"
-        with DFS.create_file(filepath, disk_format):
+        with DFS.create_file(filepath, disc_format):
             pass  # Just create
         # File should cover all surfaces
         expected_size = 0
-        for spec in disk_format.surface_specs:
+        for spec in disc_format.surface_specs:
             end = (
                 spec.track_zero_offset_bytes
                 + (spec.num_tracks - 1) * spec.track_stride_bytes

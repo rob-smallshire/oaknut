@@ -7,19 +7,19 @@ covering both DFS (SSD/DSD) and ADFS (ADL) formats.
 import pytest
 from oaknut.adfs import ADFS
 from oaknut.dfs.dfs import DFS
-from oaknut.dfs.formats import DiskFormat
+from oaknut.dfs.formats import DiscFormat
 from oaknut.discimage.surface import SurfaceSpec
 
 from tests.fixtures import BEEBEM_IMAGES_DIRPATH as IMAGES_DIR
 
 
-def _ssd_format(size: int) -> DiskFormat:
-    """Create a DiskFormat for an SSD image of any size."""
+def _ssd_format(size: int) -> DiscFormat:
+    """Create a DiscFormat for an SSD image of any size."""
     sectors_per_track = 10
     bytes_per_sector = 256
     track_size = sectors_per_track * bytes_per_sector
     num_tracks = size // track_size
-    return DiskFormat(
+    return DiscFormat(
         surface_specs=[
             SurfaceSpec(
                 num_tracks=num_tracks,
@@ -33,13 +33,13 @@ def _ssd_format(size: int) -> DiskFormat:
     )
 
 
-def _dsd_format(size: int) -> DiskFormat:
-    """Create a DiskFormat for an interleaved DSD image of any size."""
+def _dsd_format(size: int) -> DiscFormat:
+    """Create a DiscFormat for an interleaved DSD image of any size."""
     sectors_per_track = 10
     bytes_per_sector = 256
     track_size = sectors_per_track * bytes_per_sector
     num_tracks = size // (2 * track_size)
-    return DiskFormat(
+    return DiscFormat(
         surface_specs=[
             SurfaceSpec(
                 num_tracks=num_tracks,

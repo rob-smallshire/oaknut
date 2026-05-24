@@ -30,13 +30,13 @@ from oaknut.dfs.formats import (  # noqa: E402
     ACORN_DFS_40T_SINGLE_SIDED,
     ACORN_DFS_80T_DOUBLE_SIDED_INTERLEAVED,
     ACORN_DFS_80T_SINGLE_SIDED,
-    DiskFormat,
+    DiscFormat,
 )
 
 from tests.fixtures import REFERENCE_IMAGES_DIRPATH  # noqa: E402
 
 
-def _detect_disk_format(filepath: Path) -> DiskFormat:
+def _detect_disc_format(filepath: Path) -> DiscFormat:
     """Detect disk format from file extension and size."""
     size = filepath.stat().st_size
     ext = filepath.suffix.lower()
@@ -98,8 +98,8 @@ def reference_image(tmp_path):
         buffer = tmp_copy.read_bytes()
 
         # Detect format and create DFS
-        disk_format = _detect_disk_format(src_path)
-        return DFS.from_buffer(memoryview(buffer), disk_format, side=side)
+        disc_format = _detect_disc_format(src_path)
+        return DFS.from_buffer(memoryview(buffer), disc_format, side=side)
 
     return _open
 
@@ -138,8 +138,8 @@ def writable_copy(tmp_path):
         buffer = bytearray(dst_path.read_bytes())
 
         # Detect format and create DFS
-        disk_format = _detect_disk_format(src_path)
-        dfs = DFS.from_buffer(memoryview(buffer), disk_format, side=side)
+        disc_format = _detect_disc_format(src_path)
+        dfs = DFS.from_buffer(memoryview(buffer), disc_format, side=side)
 
         return dfs, dst_path
 

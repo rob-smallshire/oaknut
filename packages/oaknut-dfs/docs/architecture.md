@@ -214,10 +214,10 @@ class FileEntry:
         return (self.length + 255) // 256
 ```
 
-**`DiskInfo` (Data Class)**
+**`DiscInfo` (Data Class)**
 ```python
 @dataclass
-class DiskInfo:
+class DiscInfo:
     title: str             # 12 chars max
     cycle_number: int      # Sequence counter
     num_files: int
@@ -232,11 +232,11 @@ class Catalog(ABC):
         self._sector_image = sector_image
 
     @abstractmethod
-    def read_disk_info(self) -> DiskInfo:
+    def read_disk_info(self) -> DiscInfo:
         """Read catalog metadata."""
 
     @abstractmethod
-    def write_disk_info(self, info: DiskInfo) -> None:
+    def write_disk_info(self, info: DiscInfo) -> None:
         """Write catalog metadata."""
 
     @abstractmethod
@@ -266,7 +266,7 @@ class AcornDFSCatalog(Catalog):
     MAX_FILES = 31
     CATALOG_SECTORS = [0, 1]
 
-    def read_disk_info(self) -> DiskInfo:
+    def read_disk_info(self) -> DiscInfo:
         sector0 = self._sector_image.read_sector(0)
         sector1 = self._sector_image.read_sector(1)
 
@@ -283,7 +283,7 @@ class AcornDFSCatalog(Catalog):
         total_sectors = sectors_low | ((extra & 0x03) << 8)
         boot_option = (extra >> 4) & 0x03
 
-        return DiskInfo(
+        return DiscInfo(
             title=title,
             cycle_number=cycle,
             num_files=num_files,
@@ -363,7 +363,7 @@ class DFSImage:
         """*CAT - List all files."""
         return self._catalog.list_files()
 
-    def info(self) -> DiskInfo:
+    def info(self) -> DiscInfo:
         """*INFO - Get disk information."""
         return self._catalog.read_disk_info()
 

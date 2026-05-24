@@ -327,7 +327,7 @@ class TestCataloguedSurfaceIntegration:
         assert files[0].filename == "TEST"
 
     def test_disk_info_delegation(self):
-        """Test that disk_info delegates to catalog."""
+        """Test that disc_info delegates to catalog."""
         buffer = bytearray(102400)
 
         buffer[0:8] = b"MYDISC  "
@@ -348,7 +348,7 @@ class TestCataloguedSurfaceIntegration:
         surface = disc.surface(0)
 
         catalogued = CataloguedSurface(surface, AcornDFSCatalogue)
-        info = catalogued.disk_info
+        info = catalogued.disc_info
 
         assert info.title == "MYDISC"
         assert info.cycle_number == 5

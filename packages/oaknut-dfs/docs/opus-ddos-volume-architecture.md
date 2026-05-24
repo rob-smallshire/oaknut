@@ -338,14 +338,14 @@ class DFS:
             catalogued_surface.catalogue.set_current_volume(volume)
 
     @classmethod
-    def from_buffer(cls, buffer: memoryview, disk_format: DiskFormat,
+    def from_buffer(cls, buffer: memoryview, disc_format: DiscFormat,
                     side: int = 0, volume: str = 'A') -> "DFS":
         """
         Create DFS from buffer.
 
         Args:
             buffer: Disk image buffer
-            disk_format: Format specification
+            disc_format: Format specification
             side: Which surface to use (0 or 1 for double-sided)
             volume: Default volume (A-H) for Opus DDOS, 'A' for other formats
 

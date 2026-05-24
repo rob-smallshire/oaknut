@@ -70,7 +70,7 @@ class TestCatalogueRegistry:
                 def matches(cls, surface):
                     return False
 
-                def get_disk_info(self):
+                def get_disc_info(self):
                     pass
 
                 def list_files(self):
@@ -121,7 +121,7 @@ class TestCatalogueRegistry:
 
 
 class TestAcornDFSCatalogueGetDiskInfo:
-    """Tests for get_disk_info()."""
+    """Tests for get_disc_info()."""
 
     def test_get_disk_info_empty_disk(self):
         """Test reading disk info from an empty formatted disk."""
@@ -152,7 +152,7 @@ class TestAcornDFSCatalogueGetDiskInfo:
 
         # Create catalog and read disk info
         catalogue = AcornDFSCatalogue(surface)
-        info = catalogue.get_disk_info()
+        info = catalogue.get_disc_info()
 
         assert info.title == "TEST    DISK"
         assert info.cycle_number == 0
@@ -185,7 +185,7 @@ class TestAcornDFSCatalogueGetDiskInfo:
         surface = disc.surface(0)
 
         catalogue = AcornDFSCatalogue(surface)
-        info = catalogue.get_disk_info()
+        info = catalogue.get_disc_info()
 
         assert info.title == "MYDISC"
         assert info.cycle_number == 5
@@ -323,7 +323,7 @@ class TestAcornDFSCatalogueAddFileEntry:
         assert files[0].start_sector == 2
 
         # Verify cycle number was incremented
-        info = catalogue.get_disk_info()
+        info = catalogue.get_disc_info()
         assert info.cycle_number == 1
         assert info.num_files == 1
 

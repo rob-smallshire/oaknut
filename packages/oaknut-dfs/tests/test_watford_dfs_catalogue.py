@@ -123,12 +123,12 @@ class TestWatfordDFSCatalogueGetDiskInfo:
     def test_get_disk_info_empty_disk(self, watford_dfs_surface):
         """Test reading disk info from empty Watford DFS disk."""
         catalogue = WatfordDFSCatalogue(watford_dfs_surface)
-        disk_info = catalogue.get_disk_info()
+        disc_info = catalogue.get_disc_info()
 
-        assert disk_info.title == "WATFORD"
-        assert disk_info.num_files == 0  # Both sections empty
-        assert disk_info.total_sectors == 800
-        assert disk_info.boot_option == 0
+        assert disc_info.title == "WATFORD"
+        assert disc_info.num_files == 0  # Both sections empty
+        assert disc_info.total_sectors == 800
+        assert disc_info.boot_option == 0
 
     def test_get_disk_info_combines_file_counts(self, watford_dfs_surface):
         """Test that file count is sum of both catalog sections."""
@@ -141,9 +141,9 @@ class TestWatfordDFSCatalogueGetDiskInfo:
         buffer[768 + 5] = 3 * 8
 
         catalogue = WatfordDFSCatalogue(watford_dfs_surface)
-        disk_info = catalogue.get_disk_info()
+        disc_info = catalogue.get_disc_info()
 
-        assert disk_info.num_files == 8  # 5 + 3
+        assert disc_info.num_files == 8  # 5 + 3
 
 
 class TestWatfordDFSCatalogueListFiles:
@@ -259,8 +259,8 @@ class TestWatfordDFSCatalogueFileOperations:
         assert files[0].start_sector == 4
 
         # Verify disk info updated
-        disk_info = catalogue.get_disk_info()
-        assert disk_info.num_files == 1
+        disc_info = catalogue.get_disc_info()
+        assert disc_info.num_files == 1
 
     def test_remove_file_entry(self, watford_dfs_surface):
         """Test removing a file entry (triggers _rebuild_catalog)."""
@@ -284,8 +284,8 @@ class TestWatfordDFSCatalogueFileOperations:
         files = catalogue.list_files()
         assert len(files) == 0
 
-        disk_info = catalogue.get_disk_info()
-        assert disk_info.num_files == 0
+        disc_info = catalogue.get_disc_info()
+        assert disc_info.num_files == 0
 
     def test_set_boot_option(self, watford_dfs_surface):
         """Test setting boot option (triggers _sync_metadata)."""
@@ -295,8 +295,8 @@ class TestWatfordDFSCatalogueFileOperations:
         catalogue.set_boot_option(3)
 
         # Verify it was set
-        disk_info = catalogue.get_disk_info()
-        assert disk_info.boot_option == 3
+        disc_info = catalogue.get_disc_info()
+        assert disc_info.boot_option == 3
 
     def test_compact(self, watford_dfs_surface):
         """Test compact operation (triggers _rebuild_catalog)."""

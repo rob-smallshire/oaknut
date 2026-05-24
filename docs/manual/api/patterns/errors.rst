@@ -51,9 +51,9 @@ table — ``exc.exit_code`` is the truth.
 .. code-block:: python
 
    from oaknut.exception import DataError
-   from oaknut.dfs.exceptions import DiskFullError
+   from oaknut.dfs.exceptions import DiscFullError
 
-   exc = DiskFullError("no room")
+   exc = DiscFullError("no room")
    exc.exit_code           # ExitCode.CANT_CREATE
    int(exc.exit_code)      # 73
    isinstance(exc, DataError)   # True

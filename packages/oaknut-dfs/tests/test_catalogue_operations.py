@@ -35,7 +35,7 @@ class TestSetTitle:
         catalogue.set_title("NEW DISK")
 
         # Verify title changed
-        info = catalogue.get_disk_info()
+        info = catalogue.get_disc_info()
         assert info.title == "NEW DISK"
         assert info.cycle_number == 1  # Cycle incremented
 
@@ -92,12 +92,12 @@ class TestSetBootOption:
         catalogue = AcornDFSCatalogue(surface)
 
         # Verify initial boot option
-        assert catalogue.get_disk_info().boot_option == 1
+        assert catalogue.get_disc_info().boot_option == 1
 
         # Change to boot option 3
         catalogue.set_boot_option(3)
 
-        info = catalogue.get_disk_info()
+        info = catalogue.get_disc_info()
         assert info.boot_option == 3
         assert info.cycle_number == 1  # Incremented
 
@@ -171,7 +171,7 @@ class TestLockUnlockFile:
         # Verify file is now locked
         files = catalogue.list_files()
         assert files[0].locked
-        assert catalogue.get_disk_info().cycle_number == 1  # Cycle incremented
+        assert catalogue.get_disc_info().cycle_number == 1  # Cycle incremented
 
     def test_unlock_file(self):
         """Test unlocking a file."""
@@ -211,7 +211,7 @@ class TestLockUnlockFile:
         # Verify file is now unlocked
         files = catalogue.list_files()
         assert not files[0].locked
-        assert catalogue.get_disk_info().cycle_number == 1
+        assert catalogue.get_disc_info().cycle_number == 1
 
     def test_lock_nonexistent_file(self):
         """Test locking nonexistent file raises error."""
@@ -283,7 +283,7 @@ class TestRenameFile:
         assert files[0].exec_address == 0x2000
         assert files[0].length == 100
         assert files[0].start_sector == 2
-        assert catalogue.get_disk_info().cycle_number == 1
+        assert catalogue.get_disc_info().cycle_number == 1
 
     def test_rename_file_change_directory(self):
         """Test renaming file to different directory."""

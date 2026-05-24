@@ -6,7 +6,7 @@ import oaknut.dfs.watford_dfs_catalogue  # noqa: F401
 
 # Import acorn_encoding to register the codec
 import oaknut.file.acorn_encoding  # noqa: F401
-from oaknut.dfs.catalogue import DiskInfo
+from oaknut.dfs.catalogue import DiscInfo
 from oaknut.dfs.dfs import DFS, DFSPath, DFSStat, detect_dfs_format, expand
 from oaknut.dfs.formats import (
     ACORN_DFS_40T_DOUBLE_SIDED_INTERLEAVED,
@@ -15,7 +15,7 @@ from oaknut.dfs.formats import (
     ACORN_DFS_80T_DOUBLE_SIDED_INTERLEAVED,
     ACORN_DFS_80T_DOUBLE_SIDED_SEQUENTIAL,
     ACORN_DFS_80T_SINGLE_SIDED,
-    DiskFormat,
+    DiscFormat,
 )
 from oaknut.file import (
     SOURCE_DIR,
@@ -47,7 +47,7 @@ __all__ = [
     "DFS",
     "DFSPath",
     "DFSStat",
-    "DiskFormat",
+    "DiscFormat",
     "ACORN_DFS_40T_SINGLE_SIDED",
     "ACORN_DFS_40T_DOUBLE_SIDED_INTERLEAVED",
     "ACORN_DFS_40T_DOUBLE_SIDED_SEQUENTIAL",
@@ -55,7 +55,7 @@ __all__ = [
     "ACORN_DFS_80T_DOUBLE_SIDED_INTERLEAVED",
     "ACORN_DFS_80T_DOUBLE_SIDED_SEQUENTIAL",
     "BootOption",
-    "DiskInfo",
+    "DiscInfo",
     "FSError",
     "MetaFormat",
     "SOURCE_DIR",

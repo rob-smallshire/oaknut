@@ -17,7 +17,7 @@ floppies (.ssd / .dsd). It depends on:
   `BootOption`, the `'acorn'` text codec, and the `host_bridge`
   import/export cascade.
 - `oaknut-discimage` — for `Surface`, `SectorsView`, `UnifiedDisc`, the
-  generic `DiskFormat` dataclass, and `SurfaceSpec` helpers.
+  generic `DiscFormat` dataclass, and `SurfaceSpec` helpers.
 - `oaknut-basic` — for BBC BASIC tokenisation used by
   `DFSPath.read_basic` / `write_basic`.
 
@@ -34,7 +34,7 @@ Every module below lives under `src/oaknut/dfs/`:
   `rename`, `lock`, `unlock`, etc.). Format detection from file
   size and extension lives here.
 - `catalogue.py` — the DFS catalogue ABC: `Catalogue`, `FileEntry`,
-  `DiskInfo`, `ParsedFilename`. DFS-specific shape (31-file cap,
+  `DiscInfo`, `ParsedFilename`. DFS-specific shape (31-file cap,
   single-char directories, 7-char filenames, cycle_number) — not
   shared with ADFS, which has its own directory hierarchy in
   `oaknut.adfs`.
@@ -45,10 +45,10 @@ Every module below lives under `src/oaknut/dfs/`:
 - `catalogued_surface.py` — wraps a `Surface` with a `Catalogue`,
   giving the mid-level API that `dfs.py` builds on.
 - `formats.py` — DFS and Watford format constants. Imports the
-  generic `DiskFormat` + surface-spec helpers from
+  generic `DiscFormat` + surface-spec helpers from
   `oaknut.discimage.formats`.
 - `exceptions.py` — `DFSError` base + DFS-specific subclasses
-  (`CatalogError`, `DiskFullError`, `FileLocked`,
+  (`CatalogError`, `DiscFullError`, `FileLocked`,
   `InvalidFormatError`, `FileExistsError`, `CatalogFullError`,
   `CatalogReadError`). All derive from the shared `FSError` base in
   `oaknut.file.exceptions`.
