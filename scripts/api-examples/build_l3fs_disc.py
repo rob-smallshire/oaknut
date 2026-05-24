@@ -15,11 +15,7 @@ from oaknut.afs import AFS, UserSpec
 
 
 def build_server_disc(filepath: Path) -> None:
-    """Create a 10 MB L3FS hard disc with a custom user and one library.
-
-    The capacity="10MB" string saves the caller from manual byte
-    arithmetic; the users and emplacements arguments turn what used
-    to be a four-import composition into a single call site.
+    """Create a 10 MB L3FS hard disc with one custom user and one library.
 
     Args:
         filepath: Destination .dat path. The companion .dsc sidecar
