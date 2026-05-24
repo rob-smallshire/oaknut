@@ -38,13 +38,11 @@ Walking an ADFS tree recursively
 --------------------------------
 
 ADFS (and AFS) is hierarchical: ``$`` contains named subdirectories
-which contain further files and directories. :meth:`iterdir` yields
-the immediate children of a path; :meth:`is_dir` says whether each
-child is itself a directory to descend into.
-
-The function below recurses depth-first and prints the tree in
-filesystem order. The same code runs against an
-:class:`oaknut.afs.AFSPath` without modification.
+which contain further files and directories. :meth:`walk` mirrors
+:meth:`pathlib.Path.walk` — each step yields
+``(dirpath, dirnames, filenames)`` in pre-order, descending into
+every subdirectory. The same call works against
+:class:`oaknut.dfs.DFSPath` and :class:`oaknut.afs.AFSPath`.
 
 .. literalinclude:: ../../../scripts/api-examples/walk_adfs_tree.py
    :language: python

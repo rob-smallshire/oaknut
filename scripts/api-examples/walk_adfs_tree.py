@@ -1,39 +1,32 @@
 """Walk an ADFS directory tree recursively.
 
-ADFS is hierarchical — unlike DFS's flat catalogue — so the natural
-read pattern is recursive iteration. walk_tree below is the
-equivalent of os.walk for an ADFS image and works identically against
-AFS via AFSPath.
+ADFS (and AFS) is hierarchical, so the natural read pattern is a
+tree walk. ADFSPath.walk and AFSPath.walk both mirror
+pathlib.Path.walk: each step yields ``(dirpath, dirnames, filenames)``
+in pre-order, descending into every subdirectory.
 """
 
 from __future__ import annotations
 
 import tempfile
 from pathlib import Path
-from typing import Iterable
 
 from oaknut.adfs import ADFS, ADFS_L
 
 
-def walk_tree(start: "ADFSPath", indent: str = "") -> None:  # noqa: F821
+def walk_tree(start) -> None:
     """Print an ADFS subtree with two-space indentation per level.
-
-    Demonstrates ADFSPath.iterdir, is_dir for branch selection, and
-    the natural recursion the hierarchical model invites. The same
-    code works against AFSPath without modification.
 
     Args:
         start: Path to walk from. Usually adfs.root for the whole tree.
-        indent: Current indentation prefix. Used by the recursive call;
-            callers typically leave it at the default empty string.
     """
-    print(f"{indent}{start.name}/")
-    for child in sorted(start.iterdir(), key=lambda p: (not p.is_dir(), p.name)):
-        if child.is_dir():
-            walk_tree(child, indent + "  ")
-        else:
-            st = child.stat()
-            print(f"{indent}  {child.name:18s}  {st.length:>6d}")
+    root_depth = len(start.parts)
+    for dirpath, dirnames, filenames in start.walk():
+        indent = "  " * (len(dirpath.parts) - root_depth)
+        print(f"{indent}{dirpath.name}/")
+        for filename in filenames:
+            size = (dirpath / filename).stat().length
+            print(f"{indent}  {filename:18s}  {size:>6d}")
 
 
 def _build_demo_tree(workdir: Path) -> Path:
