@@ -41,16 +41,23 @@ of single-character names are reserved for directory references:
        *default* directory — see :ref:`dfs-flat-catalogue` below for
        why this matters.
    * - ``^``
-     - The parent directory (one level up). Only meaningful on the
-       hierarchical filing systems (ADFS, AFS).
+     - The parent directory (one level up). Multiple hats chain
+       (``^^`` is two levels up), and dots between consecutive
+       hats are optional — ``^^`` and ``^.^`` are equivalent,
+       matching Acorn ``*DIR`` syntax. Works on DFS too, where it
+       walks up from a file to its single-character directory, and
+       from there to the nameless root.
    * - ``@``
      - The current directory (rarely needed on the CLI — the *current*
        is always the filing system's notional root for batch tools)
 
 A fully-qualified ADFS or AFS ``PATH_SPEC`` therefore starts with
 ``$.`` and walks down: ``$.Games.Elite`` is the file ``Elite`` inside
-the directory ``Games`` at the root. ``^.Sib`` is the file ``Sib`` in
-the parent of whatever directory the command's earlier argument named.
+the directory ``Games`` at the root. Hats can appear mid-path to
+sidestep up and across: ``$.Games.^.Docs.ReadMe`` walks down into
+``Games``, back up one level to the root, and into ``Docs.ReadMe``
+— useful as a single-string spelling of a file in a sibling
+directory.
 
 Filename component lengths vary by filing system: DFS allows up to 7
 characters per filename (and exactly one character for the directory
@@ -78,16 +85,19 @@ one level back up. Directory creation (``disc mkdir``) and recursive
 operations (``disc cp -r``, ``disc tree``) work the way Unix users
 would expect.
 
-**DFS — a flat catalogue with single-character namespace tags.**
-The on-disc structure is a fixed 31-entry list of files (62 on
-Watford DDFS), and every entry carries one character of "directory"
-prefix. The legal prefixes are ``$`` and ``A``–``Z``, and they are
-*siblings*, not parent-and-child. ``$.MYPROG`` and ``A.MYPROG`` are
-two independent files. ``$`` is the *default* directory that DFS
-assumes when a command omits one, per the Acorn DFS User Guide
-("the current directory ... is always set to drive 0 and directory
-``$`` ... the drive and directory can therefore be omitted from
-file specifications"). It is not a container for the other letters.
+**DFS — single-character directories under a nameless root.**
+A DFS catalogue holds up to 31 file entries (62 on Watford DDFS).
+Each lives in one of 27 directories — ``$`` and ``A``–``Z`` — and
+all 27 are children of a nameless root. ``$`` is the default
+directory DFS assumes when a command omits one, per the Acorn DFS
+User Guide ("the current directory ... is always set to drive 0
+and directory ``$`` ... the drive and directory can therefore be
+omitted from file specifications"); it is a sibling of
+``A``–``Z``, not a container for them. ``$.MYPROG`` and
+``A.MYPROG`` are two independent files. Empty directories cannot
+exist — a directory comes into being the first time a file is
+written under it and disappears again when its last file is
+deleted, which is why ``disc mkdir`` is not a DFS operation.
 
 What this means in practice on the CLI:
 
