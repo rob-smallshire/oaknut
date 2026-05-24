@@ -48,32 +48,32 @@ class TestCLIBasics:
 
 
 class TestLs:
-    def test_ls_dfs_bare_lists_dollar(self, runner: CliRunner, dfs_image_filepath: Path) -> None:
-        """Bare ``disc ls IMAGE`` on DFS lists the contents of ``$``.
-
-        Without this, the bare form yields a single ``$/`` placeholder
-        row, which surprises every user — the most useful default is
-        to descend into ``$`` directly. Files in other letter
-        directories remain listable via ``disc ls IMAGE:A``.
+    def test_ls_dfs_bare_lists_populated_directory_letters(
+        self, runner: CliRunner, dfs_image_filepath: Path
+    ) -> None:
+        """Bare ``disc ls IMAGE`` on DFS lists the populated directory
+        letters — the children of the nameless root, matching the
+        per-FS "default PATH_SPEC = root" model. Drill into a letter
+        with ``disc ls IMAGE:$`` (or ``:A``, etc.) for the files.
         """
-        # --as display pins the Rich renderer so the format-label in the
-        # table title ("DFS") is part of the output. Default piped
-        # output is TSV, which omits titles.
         result = runner.invoke(cli, ["ls", "--as", "display", str(dfs_image_filepath)])
         assert result.exit_code == 0
         assert "DFS" in result.output
-        # Files in $ appear directly (same as `disc ls IMAGE:$`).
-        assert "HELLO" in result.output
-        assert "DATA" in result.output
+        # The bare listing carries directory rows, not file rows.
+        # $ is the populated letter in the standard fixture.
+        assert "$" in result.output
+        assert "dir" in result.output
+        # The files in $ should NOT appear at this level.
+        assert "HELLO" not in result.output
 
-    def test_ls_dfs_bare_equals_explicit_dollar(
+    def test_ls_dfs_dollar_lists_files(
         self, runner: CliRunner, dfs_image_filepath: Path
     ) -> None:
-        """Bare and ``IMAGE:$`` forms must produce identical output."""
-        bare = runner.invoke(cli, ["ls", str(dfs_image_filepath)])
-        explicit = runner.invoke(cli, ["ls", f"{dfs_image_filepath}:$"])
-        assert bare.exit_code == 0 and explicit.exit_code == 0
-        assert bare.output == explicit.output
+        """Drilling into ``$`` lists the files filed under it."""
+        result = runner.invoke(cli, ["ls", "--as", "display", f"{dfs_image_filepath}:$"])
+        assert result.exit_code == 0
+        assert "HELLO" in result.output
+        assert "DATA" in result.output
 
     def test_ls_adfs_root(self, runner: CliRunner, adfs_image_filepath: Path) -> None:
         result = runner.invoke(cli, ["ls", "--as", "display", str(adfs_image_filepath)])
@@ -165,21 +165,23 @@ class TestAccessBytesFormattedCorrectlyOnAFS:
         attr_line = next(ln for ln in result.output.splitlines() if "Attr" in ln)
         assert expected_attr in attr_line, attr_line
 
-    def test_ls_afs_directory_shows_D_form(
+    def test_ls_afs_directory_marked_as_dir_in_type_column(
         self,
         runner: CliRunner,
         afs_image_with_access_bytes: Path,
     ) -> None:
-        """A directory must render with the ``D/`` form, not be
+        """A directory must render with ``type=dir``, not be
         misinterpreted as a file.
         """
         result = runner.invoke(cli, ["ls", f"{afs_image_with_access_bytes}:afs:$"])
         assert result.exit_code == 0, result.output
-        # The ls code path renders directories as a separate row
-        # without an Attr column — just verify the directory name
-        # appears with the trailing slash convention and the row
-        # doesn't leak a misformatted file-style attr for it.
-        assert "Folder/" in result.output
+        # Directory rows carry the bare name, type=dir, and no
+        # load/exec/attr. The Type column discriminates dir from file
+        # so scripts don't have to parse a name marker.
+        assert "Folder" in result.output
+        # The TSV form has tab-separated fields; check the dir row's
+        # Type value is "dir".
+        assert "Folder\tdir" in result.output
 
     def test_ls_adfs_unchanged(self, runner: CliRunner, adfs_image_filepath: Path) -> None:
         """Regression: ADFS ls must still produce its wire-form

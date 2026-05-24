@@ -32,5 +32,6 @@ SOURCE = (
 with in_tmp_dir():
     shutil.copy(SOURCE, "planetoid.ssd")
     show("disc ls planetoid.ssd")
+    show("disc ls 'planetoid.ssd:$'")
     show("disc tree planetoid.ssd")
     show("disc type 'planetoid.ssd:$.!BOOT'")

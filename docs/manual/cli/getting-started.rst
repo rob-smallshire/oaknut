@@ -17,23 +17,27 @@ builds a blank one to follow along with.
 First contact
 -------------
 
-Three commands cover the common case of "look at a disc and read a
-file". Here they are against Acornsoft's *Planetoid* (1982), a
-small BBC Micro arcade port of Defender that ships in oaknut's
-test fixtures:
+A short tour against Acornsoft's *Planetoid* (1982), a small BBC
+Micro arcade port of Defender that ships in oaknut's test
+fixtures:
 
 .. cli-example:: first_contact_planetoid
 
-Five files: the BASIC loader ``PLANET``, two binary blobs
+The first ``disc ls`` lists the populated children of the disc's
+root — on a DFS image the root is nameless and its children are
+the single-character directories ``$`` and ``A``–``Z`` that
+actually hold files (see :ref:`dfs-flat-catalogue`). Planetoid
+uses only ``$``, with five entries in it.
+
+Drilling into ``$`` with ``disc ls planetoid.ssd:$`` shows those
+five files: the BASIC loader ``PLANET``, two binary blobs
 ``Planet1`` and ``Planet2``, the cassette-launcher ``PLANETO``,
 and the ``!BOOT`` file that pressing :kbd:`SHIFT-BREAK` runs.
-``disc ls`` shows the catalogue with load and exec addresses;
-``disc tree`` shows the catalogue's two-level structure (DFS's
-27 directories ``$``/``A``–``Z`` are siblings under a nameless
-root; see :ref:`dfs-flat-catalogue`);
-``disc type`` reads ``!BOOT`` as text and translates the Acorn
-``\r`` line terminator to the host's newline so the four BASIC
-lines render cleanly.
+
+``disc tree`` shows the same two-level structure recursively in
+one shot; ``disc type`` reads ``!BOOT`` as text and translates the
+Acorn ``\r`` line terminator to the host's newline so the four
+BASIC lines render cleanly.
 
 If those work the way you expect, you have the mental model for
 the rest of the page. To compose ``disc`` with shell pipelines —

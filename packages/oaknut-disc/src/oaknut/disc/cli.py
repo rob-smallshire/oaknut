@@ -403,17 +403,6 @@ def ls(file_spec: str, show_access_byte: bool):
     with open_image(image, fs) as handle:
         target = _navigate(handle, bare, fs)
 
-        # On DFS the natural "list this disc" target is ``$`` — the
-        # directory that actually holds files. The level above is a
-        # catalogue-wide view that yields only directory letters as
-        # placeholders, which surprises every user. Treat a bare
-        # ``disc ls IMAGE`` (no PATH_SPEC) as if the reader had typed
-        # ``disc ls IMAGE:$``. Files in non-$ letter directories are
-        # still reachable via ``disc ls IMAGE:A`` etc., or via the
-        # whole-disc recursive view ``disc tree IMAGE``.
-        if fs is FilingSystem.DFS and not bare:
-            target = handle.path("$")
-
         if not target.exists() and not target.is_dir():
             raise click.ClickException(f"path not found: {bare or '$'}")
 
@@ -456,6 +445,10 @@ def ls(file_spec: str, show_access_byte: bool):
 
         table = TableContent(title=table_title, description=description)
         table.add_column("name", "Name", header=True)
+        # ``type`` is dir or file. It discriminates rows so the length
+        # column can carry bytes for files and entry-count for
+        # directories without an ambiguous name marker.
+        table.add_column("type", "Type")
         # Load and exec are Acorn-specific addresses that matter in
         # display-focused use and are available via get-load/get-exec
         # on demand; drop them from TSV by default so the piped-output
@@ -472,11 +465,17 @@ def ls(file_spec: str, show_access_byte: bool):
 
         for child in entries:
             if child.is_dir():
+                try:
+                    entry_count = sum(1 for _ in child.iterdir())
+                    length_str = str(entry_count)
+                except Exception:
+                    length_str = ""
                 row = {
-                    "name": f"{child.name}/",
+                    "name": child.name,
+                    "type": "dir",
                     "load": "",
                     "exec": "",
-                    "length": "",
+                    "length": length_str,
                     "attr": "",
                 }
                 if show_access_byte:
@@ -493,6 +492,7 @@ def ls(file_spec: str, show_access_byte: bool):
                 attr_str = _format_access(st.access)
             row = {
                 "name": child.name,
+                "type": "file",
                 "load": load_str,
                 "exec": exec_str,
                 "length": length_str,

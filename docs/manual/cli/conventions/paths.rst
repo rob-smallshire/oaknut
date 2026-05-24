@@ -71,19 +71,17 @@ and length implications when patterns are involved.
 DFS vs ADFS / AFS: flat catalogue vs hierarchical tree
 ------------------------------------------------------
 
-The three filing systems oaknut supports differ fundamentally in how
-they organise files. The same ``PATH_SPEC`` syntax covers all three,
-but the *meaning* of the leading symbol differs in ways that catch
-out anyone arriving from Unix or from one Acorn filesystem expecting
-another.
+Every filing system has a **root** — the implicit default for a
+command whose ``PATH_SPEC`` is omitted. The three filing systems
+differ in what their root is.
 
 **ADFS and AFS — hierarchical trees.**
-``$`` is a real root directory that contains all the others.
-``$.Games.Elite`` walks two levels down from the root: ``Games``
-lives inside ``$``, and ``Elite`` lives inside ``Games``. ``^`` moves
-one level back up. Directory creation (``disc mkdir``) and recursive
-operations (``disc cp -r``, ``disc tree``) work the way Unix users
-would expect.
+The root is ``$``. ``$.Games.Elite`` walks two levels down from
+it: ``Games`` lives inside ``$``, and ``Elite`` lives inside
+``Games``. Bare ``disc ls IMAGE.adl`` lists the children of
+``$`` (subdirectories and files). Directory creation (``disc
+mkdir``) and recursive operations (``disc cp -r``, ``disc tree``)
+work the way Unix users would expect.
 
 **DFS — single-character directories under a nameless root.**
 A DFS catalogue holds up to 31 file entries (62 on Watford DDFS).
@@ -95,21 +93,26 @@ exist — a directory comes into being the first time a file is
 written under it and disappears again when its last file is
 deleted, which is why ``disc mkdir`` is not a DFS operation.
 
-What this means in practice on the CLI:
+Because the DFS root is nameless, there is no name to write in a
+``PATH_SPEC``; the way to refer to the root is to omit the
+``PATH_SPEC``. So bare ``disc ls IMAGE.ssd`` lists the populated
+directory letters at the root, and the next level — the actual
+files — is reachable via ``disc ls IMAGE.ssd:$`` (or ``:A``,
+etc.).
+
+What this looks like in practice:
 
 .. code-block:: sh
 
-   disc ls games.ssd                 # files in $ (disc ls treats a
-                                     # bare DFS image as IMAGE:$, since
-                                     # the level above $ would otherwise
-                                     # yield only directory letters)
-   disc ls 'games.ssd:$'             # equivalent: explicit $
+   disc ls games.ssd                 # populated directory letters at
+                                     # the (nameless) root
+   disc ls 'games.ssd:$'             # files in directory $
    disc ls 'games.ssd:A'             # files in directory A
    disc cat 'games.ssd:$.HELLO'      # the file HELLO in directory $
-   disc cat 'games.ssd:A.HELLO'      # the file HELLO in directory A — different
-                                     # from $.HELLO; not the same file
+   disc cat 'games.ssd:A.HELLO'      # the file HELLO in directory A —
+                                     # different file from $.HELLO
    disc cat 'games.ssd:HELLO'        # error: PATH_SPEC needs a directory
-                                     # letter; disc cat does not assume $
+                                     # letter; bare names do not resolve
 
 No DFS command will recurse into siblings the way ADFS commands
 recurse into subdirectories, because there are no subdirectories to
