@@ -48,11 +48,11 @@ the code reads identically.
 
 On DFS specifically, ``$`` is a child of the nameless root, just
 like any other single-character directory name. On a real BBC Micro
-it is the default current directory after boot. ``dfs.root /
-"$"`` selects that child, and iterating it yields the files filed
-under ``$``. ADFS and AFS differ: on those filesystems ``$``
-*is* the root, so ``adfs.root.iterdir()`` yields the children of
-``$`` directly.
+it is the default current directory after boot. The expression
+``dfs.root / "$"`` selects that child, and iterating it yields the
+files filed under ``$``. ADFS and AFS differ: on those filesystems
+``$`` *is* the root, so ``adfs.root.iterdir()`` yields the
+children of ``$`` directly.
 
 
 .. _api-first-disc:
@@ -60,10 +60,10 @@ under ``$``. ADFS and AFS differ: on those filesystems ``$``
 Build a blank disc to follow along
 ----------------------------------
 
-:meth:`DFS.create_file <oaknut.dfs.DFS.create_file>` makes a fresh
-image you can write into. We will use a single-sided BBC Micro
-floppy (SSD) — small, fast, and what most Acorn-era discs in the
-wild are.
+The :meth:`DFS.create_file <oaknut.dfs.DFS.create_file>` named
+constructor makes a fresh image you can write into. We will use a
+single-sided BBC Micro floppy (SSD) — small, fast, and what most
+Acorn-era discs in the wild are.
 
 .. code-block:: python
 
@@ -130,7 +130,7 @@ whatever terminators your string already has. The
 :meth:`touch` method creates an empty file (skipping if it already
 exists, matching :meth:`pathlib.Path.touch`).
 
-``access`` accepts :class:`oaknut.file.Access` flags;
+The ``access`` keyword accepts :class:`oaknut.file.Access` flags;
 :attr:`Access.LWR` is the canonical "locked owner R+W",
 :attr:`Access.WR` is unlocked owner R+W (the default if you omit
 ``access`` entirely).
@@ -152,19 +152,20 @@ The symmetric three:
        text = (dfs.root / "$.README").read_text()
        st   = (dfs.root / "$.PROG").stat()
 
-:meth:`read_text` applies universal-newline translation by default
-(``"\r"``, ``"\r\n"``, and ``"\n"`` all become ``"\n"`` in the
-returned string). :meth:`stat` returns an :class:`oaknut.file.Stat`
-with ``.length``, ``.load_address``, ``.exec_address``, and
-``.access`` — the same shape across all three filesystems.
+The :meth:`read_text` method applies universal-newline translation
+by default (``"\r"``, ``"\r\n"``, and ``"\n"`` all become ``"\n"``
+in the returned string). The :meth:`stat` companion returns an
+:class:`oaknut.file.Stat` with ``.length``, ``.load_address``,
+``.exec_address``, and ``.access`` — the same shape across all
+three filesystems.
 
 
 Walking the catalogue
 ---------------------
 
 ADFS and AFS are hierarchical, so the natural traversal is a tree
-walk. :meth:`walk` mirrors :meth:`pathlib.Path.walk`: each step
-yields ``(dirpath, dirnames, filenames)`` in pre-order:
+walk. The :meth:`walk` method mirrors :meth:`pathlib.Path.walk`:
+each step yields ``(dirpath, dirnames, filenames)`` in pre-order:
 
 .. code-block:: python
 
@@ -188,11 +189,11 @@ exists, as long as the existing entry is itself a directory).
 DFS images do not nest. The catalogue is flat and the
 single-character directory names (``$``, ``A``–``Z``) all sit as
 siblings under the nameless root, so :meth:`mkdir` does not exist
-on :class:`DFSPath`. :meth:`walk` does work: starting from
-``dfs.root`` it visits the nameless root once, then yields one
-tuple per populated directory letter — the canonical way to see
-every file on the disc without first knowing which letters are in
-use. See :doc:`patterns/paths` for the full model.
+on :class:`DFSPath`. The :meth:`walk` method does work, however:
+starting from ``dfs.root`` it visits the nameless root once, then
+yields one tuple per populated directory letter — the canonical
+way to see every file on the disc without first knowing which
+letters are in use. See :doc:`patterns/paths` for the full model.
 
 
 A real Acorn disc: Repton Infinity
