@@ -147,13 +147,13 @@ class TestFromBufferRejection:
             DFS.from_buffer(memoryview(buf), ACORN_DFS_80T_SINGLE_SIDED)
 
 
-class TestFromFileTruncatedReadOnly:
+class TestFromFileTruncated:
     """DFS.from_file in read-only mode should pad in memory without
     modifying the original file.
     """
 
-    def test_read_only_truncated_succeeds(self, tmp_path):
-        """Opening a truncated .ssd read-only should succeed."""
+    def test_truncated_open_succeeds(self, tmp_path):
+        """Opening a truncated .ssd should succeed (in-memory padding)."""
         truncated_size = 136 * BYTES_PER_SECTOR
         buf = bytearray(truncated_size)
         _minimal_catalogue(buf)
@@ -165,8 +165,8 @@ class TestFromFileTruncatedReadOnly:
             assert dfs.title == "TRUNCATD"
             assert len(dfs.files) == 0
 
-    def test_read_only_does_not_modify_file(self, tmp_path):
-        """The original file must not be modified by read-only access."""
+    def test_open_does_not_modify_file(self, tmp_path):
+        """Opening a truncated file must not modify it on disc."""
         truncated_size = 136 * BYTES_PER_SECTOR
         buf = bytearray(truncated_size)
         _minimal_catalogue(buf)
@@ -195,73 +195,9 @@ class TestFromFileTruncatedReadOnly:
             assert bytes(beyond[0:BYTES_PER_SECTOR]) == b"\x00" * BYTES_PER_SECTOR
 
 
-class TestFromFileTruncatedReadWrite:
-    """DFS.from_file in read-write mode should extend the file to the
-    canonical format size before mmapping.
-    """
-
-    def test_read_write_extends_file(self, tmp_path):
-        """Opening a truncated .ssd read-write should extend the file."""
-        truncated_size = 136 * BYTES_PER_SECTOR
-        expected_size = 80 * SECTORS_PER_TRACK * BYTES_PER_SECTOR  # 204800
-        buf = bytearray(truncated_size)
-        _minimal_catalogue(buf)
-
-        filepath = tmp_path / "truncated.ssd"
-        filepath.write_bytes(buf)
-
-        with DFS.from_file(filepath, ACORN_DFS_80T_SINGLE_SIDED, mode="r+b") as dfs:
-            assert dfs.title == "TRUNCATD"
-
-        assert filepath.stat().st_size == expected_size
-
-    def test_read_write_extended_region_is_zeros(self, tmp_path):
-        """The extended region should be filled with zeros."""
-        truncated_size = 136 * BYTES_PER_SECTOR
-        expected_size = 80 * SECTORS_PER_TRACK * BYTES_PER_SECTOR
-        buf = bytearray(truncated_size)
-        _minimal_catalogue(buf)
-
-        filepath = tmp_path / "truncated.ssd"
-        filepath.write_bytes(buf)
-
-        with DFS.from_file(filepath, ACORN_DFS_80T_SINGLE_SIDED, mode="r+b"):
-            pass
-
-        data = filepath.read_bytes()
-        assert data[truncated_size:] == b"\x00" * (expected_size - truncated_size)
-
-    def test_read_write_preserves_original_data(self, tmp_path):
-        """The original data in the truncated region must be preserved."""
-        truncated_size = 136 * BYTES_PER_SECTOR
-        buf = bytearray(truncated_size)
-        _minimal_catalogue(buf)
-        # Write a marker into the last sector of the original data
-        marker_offset = truncated_size - BYTES_PER_SECTOR
-        buf[marker_offset : marker_offset + 4] = b"\xca\xfe\xba\xbe"
-
-        filepath = tmp_path / "truncated.ssd"
-        filepath.write_bytes(buf)
-
-        with DFS.from_file(filepath, ACORN_DFS_80T_SINGLE_SIDED, mode="r+b"):
-            pass
-
-        data = filepath.read_bytes()
-        assert data[marker_offset : marker_offset + 4] == b"\xca\xfe\xba\xbe"
-
-    def test_read_write_full_size_not_modified(self, tmp_path):
-        """A full-size image opened read-write should not change size."""
-        full_size = 80 * SECTORS_PER_TRACK * BYTES_PER_SECTOR
-        buf = bytearray(full_size)
-        _minimal_catalogue(buf)
-
-        filepath = tmp_path / "full.ssd"
-        filepath.write_bytes(buf)
-
-        with DFS.from_file(filepath, ACORN_DFS_80T_SINGLE_SIDED, mode="r+b") as dfs:
-            _ = dfs.title
-
-        assert filepath.stat().st_size == full_size
+# DFS.from_file never extends a truncated image on open — opening
+# never modifies the file. The explicit way to grow a truncated
+# image to its canonical size is :func:`expand`, exercised below.
 
 
 # ===================================================================

@@ -140,7 +140,7 @@ class TestWFSINITComparison:
             )
 
         # Step 4: Run initialise() with WFSINIT-matching parameters.
-        with ADFS.from_file(candidate_filepath, mode="r+b") as adfs:
+        with ADFS.from_file(candidate_filepath) as adfs:
             initialise(
                 adfs,
                 spec=InitSpec(

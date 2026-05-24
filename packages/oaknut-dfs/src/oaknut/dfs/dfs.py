@@ -644,12 +644,12 @@ class DFS:
         disk_format: DiskFormat | None = None,
         *,
         side: int = 0,
-        mode: str = "rb",
     ) -> Iterator["DFS"]:
         """Open a disc image file as a context manager.
 
-        When opened in read-write mode (``r+b``), changes are written
-        through to the file via mmap.
+        The image is opened writable when host filesystem permissions
+        allow, read-only otherwise. Mutations against a read-only-backed
+        image raise from the mmap layer at the point of write.
 
         ``disk_format`` is optional — when omitted, the format is
         auto-detected from the file extension and size (see
@@ -658,13 +658,16 @@ class DFS:
         flavour, which shares its byte count with the interleaved
         form).
 
+        A truncated image is padded in memory with zeros; the on-disc
+        file is never grown by this call. Mutations to a truncated
+        image therefore land in the in-memory pad and are not
+        persisted — opening a file never modifies it.
+
         Args:
             filepath: Path to the disc image file (``.ssd`` or ``.dsd``).
             disk_format: DiskFormat specifying geometry and catalogue
                 type; auto-detected when ``None``.
             side: Which surface to use (0-based index, default 0).
-            mode: File open mode — ``"rb"`` for read-only (default),
-                ``"r+b"`` for read-write.
 
         Yields:
             DFS instance backed by the file
@@ -672,52 +675,31 @@ class DFS:
         Raises:
             FileNotFoundError: If the file does not exist
             IndexError: If side index is out of range for the format
-            ValueError: If mode is not ``"rb"`` or ``"r+b"``, or
-                auto-detection cannot identify the format
+            ValueError: If auto-detection cannot identify the format
 
         Examples:
-            # Read-only access; format auto-detected.
             with DFS.from_file("Zalaga.ssd") as dfs:
                 print(dfs.title)
                 data = (dfs.root / "$" / "ZALAGA").read_bytes()
 
-            # Read-write access, explicit format.
-            with DFS.from_file("disc.ssd", ACORN_DFS_40T_SINGLE_SIDED, mode="r+b") as dfs:
+            with DFS.from_file("disc.ssd", ACORN_DFS_40T_SINGLE_SIDED) as dfs:
                 (dfs.root / "$" / "HELLO").write_bytes(b"Hello!")
         """
-        if mode not in ("rb", "r+b"):
-            raise ValueError(f"mode must be 'rb' or 'r+b', got {mode!r}")
+        from oaknut.discimage.open_image import open_image_mmap
 
         filepath = Path(filepath)
         if disk_format is None:
             disk_format = detect_dfs_format(filepath)
         file_size = filepath.stat().st_size
         expected_size = disk_format.image_size
-        is_truncated = file_size < expected_size
 
-        if mode == "rb":
-            if is_truncated:
-                # Read into a bytearray and let from_buffer pad it
-                data = bytearray(filepath.read_bytes())
-                dfs = DFS.from_buffer(memoryview(data), disk_format, side)
-                yield dfs
-            else:
-                with open(filepath, mode) as f:
-                    mm = mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ)
-                    dfs = DFS.from_buffer(memoryview(mm), disk_format, side)
-                    yield dfs
-        else:
-            # Read-write: extend the file on disc before mmapping
-            if is_truncated:
-                with open(filepath, "ab") as f:
-                    f.write(b"\x00" * (expected_size - file_size))
-            with open(filepath, mode) as f:
-                mm = mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_WRITE)
-                dfs = DFS.from_buffer(memoryview(mm), disk_format, side)
-                try:
-                    yield dfs
-                finally:
-                    mm.flush()
+        if file_size < expected_size:
+            data = bytearray(filepath.read_bytes())
+            yield DFS.from_buffer(memoryview(data), disk_format, side)
+            return
+
+        with open_image_mmap(filepath) as (mm, _writable):
+            yield DFS.from_buffer(memoryview(mm), disk_format, side)
 
     @classmethod
     def from_buffer(cls, buffer: memoryview, disk_format: DiskFormat, side: int = 0) -> "DFS":

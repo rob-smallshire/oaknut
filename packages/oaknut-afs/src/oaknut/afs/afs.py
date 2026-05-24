@@ -122,35 +122,28 @@ class AFS:
 
     @staticmethod
     @contextmanager
-    def from_file(
-        filepath: Union[str, PathLike],
-        *,
-        mode: str = "rb",
-    ) -> Iterator[AFS]:
+    def from_file(filepath: Union[str, PathLike]) -> Iterator[AFS]:
         """Open a disc image and yield the AFS partition as a context manager.
 
         Opens the image first as ADFS (reusing its sector-access and
         geometry detection), then reaches the AFS partition through
-        :attr:`oaknut.adfs.ADFS.afs_partition`. Raises
-        :class:`AFSNotPresentError` if the disc has no AFS pointers.
-
-        The host ADFS context manager stays active for the duration
-        of the yielded block; on exit, any mutations flush through
-        the same :class:`UnifiedDisc` the ADFS handle owns.
+        :attr:`oaknut.adfs.ADFS.afs_partition`. The image is opened
+        writable when host filesystem permissions allow, read-only
+        otherwise; mutations against a read-only-backed image raise
+        from the mmap layer at the point of write.
 
         Args:
             filepath: Path to the ADFS hard-disc image carrying the
                 AFS partition.
-            mode: ``"rb"`` for read-only (default), ``"r+b"`` for
-                read-write — required for mutation methods like
-                :meth:`add_user`, :meth:`remove_user`, or
-                :meth:`AFSPath.write_bytes`.
+
+        Raises:
+            AFSNotPresentError: If the disc has no AFS pointers.
         """
         # Deferred import to avoid a hard module-level import cycle
         # between oaknut-afs and oaknut-adfs during test collection.
         from oaknut.adfs import ADFS
 
-        with ADFS.from_file(filepath, mode=mode) as adfs, adfs.afs_partition as afs:
+        with ADFS.from_file(filepath) as adfs, adfs.afs_partition as afs:
             yield afs
 
     @staticmethod

@@ -906,7 +906,7 @@ class TestDFSFromFile:
         shutil.copy2(GAME_IMAGE_FILEPATH, tmp_filepath)
 
         # Modify via mmap
-        with DFS.from_file(tmp_filepath, ACORN_DFS_80T_SINGLE_SIDED, mode="r+b") as dfs:
+        with DFS.from_file(tmp_filepath, ACORN_DFS_80T_SINGLE_SIDED) as dfs:
             dfs.title = "MODIFIED"
             assert dfs.title == "MODIFIED"
 
@@ -914,23 +914,30 @@ class TestDFSFromFile:
         with DFS.from_file(tmp_filepath, ACORN_DFS_80T_SINGLE_SIDED) as dfs:
             assert dfs.title == "MODIFIED"
 
-    def test_from_file_invalid_mode(self):
-        """Test that invalid mode raises ValueError."""
-        with pytest.raises(ValueError, match="mode must be"):
-            with DFS.from_file(GAME_IMAGE_FILEPATH, ACORN_DFS_80T_SINGLE_SIDED, mode="wb"):
-                pass
-
     def test_from_file_nonexistent(self):
         """Test that missing file raises FileNotFoundError."""
         with pytest.raises(FileNotFoundError):
             with DFS.from_file("/nonexistent/disc.ssd", ACORN_DFS_80T_SINGLE_SIDED):
                 pass
 
-    def test_from_file_read_only_prevents_writes(self):
-        """Test that read-only mode prevents modifications."""
-        with DFS.from_file(GAME_IMAGE_FILEPATH, ACORN_DFS_80T_SINGLE_SIDED) as dfs:
-            with pytest.raises(TypeError):
-                dfs.title = "NOPE"
+    def test_from_file_readonly_host_file_prevents_writes(self, tmp_path):
+        """Mutating a host-readonly image raises from the mmap layer.
+
+        Writability follows host filesystem permissions; there is no
+        application-level read-only mode flag.
+        """
+        import shutil
+        import stat
+
+        local = tmp_path / "ro.ssd"
+        shutil.copy2(GAME_IMAGE_FILEPATH, local)
+        local.chmod(stat.S_IRUSR | stat.S_IRGRP | stat.S_IROTH)
+        try:
+            with DFS.from_file(local, ACORN_DFS_80T_SINGLE_SIDED) as dfs:
+                with pytest.raises(TypeError):
+                    dfs.title = "NOPE"
+        finally:
+            local.chmod(stat.S_IRUSR | stat.S_IWUSR)
 
     def test_from_file_with_side(self, tmp_path):
         """Test from_file with side parameter for DSD images."""

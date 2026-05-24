@@ -1240,11 +1240,7 @@ class ADFS:
 
     @staticmethod
     @contextmanager
-    def from_file(
-        filepath: Union[str, PathLike],
-        *,
-        mode: str = "rb",
-    ) -> Iterator[ADFS]:
+    def from_file(filepath: Union[str, PathLike]) -> Iterator[ADFS]:
         """Open an ADFS disc image file as a context manager.
 
         For floppy images (``.adf``, ``.adl``), auto-detects the format
@@ -1255,9 +1251,13 @@ class ADFS:
         Either the ``.dat`` or ``.dsc`` file may be specified — the
         companion is located by swapping the extension.
 
+        The image is opened writable when host filesystem permissions
+        allow, read-only otherwise. Mutations attempted against a
+        read-only-backed image raise from the mmap layer at the point
+        of write.
+
         Args:
             filepath: Path to the disc image file.
-            mode: ``"rb"`` for read-only (default), ``"r+b"`` for read-write.
 
         Yields:
             ADFS instance backed by the file.
@@ -1266,14 +1266,12 @@ class ADFS:
             FileNotFoundError: If the file or its companion does not exist.
             ADFSError: If the image is not a valid ADFS disc.
         """
-        if mode not in ("rb", "r+b"):
-            raise ValueError(f"mode must be 'rb' or 'r+b', got {mode!r}")
+        from oaknut.discimage.open_image import open_image_mmap
 
         p = Path(filepath)
         ext = p.suffix.lower()
 
         if ext in (".dat", ".dsc"):
-            # Hard disc image pair
             dat_filepath = p.with_suffix(".dat")
             dsc_filepath = p.with_suffix(".dsc")
 
@@ -1286,27 +1284,11 @@ class ADFS:
             dat_size = dat_filepath.stat().st_size
             fmt = _hard_disc_format(geometry, dat_size)
 
-            access = mmap.ACCESS_READ if mode == "rb" else mmap.ACCESS_WRITE
-            dat_mode = mode if ext == ".dat" else "rb"
-            with open(dat_filepath, dat_mode) as f:
-                mm = mmap.mmap(f.fileno(), 0, access=access)
-                adfs = ADFS._from_buffer_with_format(memoryview(mm), fmt, geometry)
-                try:
-                    yield adfs
-                finally:
-                    if dat_mode == "r+b":
-                        mm.flush()
+            with open_image_mmap(dat_filepath) as (mm, _writable):
+                yield ADFS._from_buffer_with_format(memoryview(mm), fmt, geometry)
         else:
-            # Floppy image
-            access = mmap.ACCESS_READ if mode == "rb" else mmap.ACCESS_WRITE
-            with open(filepath, mode) as f:
-                mm = mmap.mmap(f.fileno(), 0, access=access)
-                adfs = ADFS.from_buffer(memoryview(mm))
-                try:
-                    yield adfs
-                finally:
-                    if mode == "r+b":
-                        mm.flush()
+            with open_image_mmap(p) as (mm, _writable):
+                yield ADFS.from_buffer(memoryview(mm))
 
     @classmethod
     def from_buffer(cls, buffer: memoryview) -> ADFS:

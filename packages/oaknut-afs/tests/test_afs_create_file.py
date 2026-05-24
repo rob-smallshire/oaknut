@@ -97,7 +97,7 @@ class TestAFSFromFile:
         with AFS.create_file(filepath, capacity="5MB", disc_name="Reopen"):
             pass
 
-        with AFS.from_file(filepath, mode="r+b") as afs:
+        with AFS.from_file(filepath) as afs:
             afs.add_user("alice", quota="1MB")
 
         with AFS.from_file(filepath) as afs:
@@ -111,7 +111,7 @@ class TestAFSFromFile:
             pass
 
         with pytest.raises(RuntimeError):
-            with AFS.from_file(filepath, mode="r+b") as afs:
+            with AFS.from_file(filepath) as afs:
                 afs.add_user("ghost", quota="1MB")
                 raise RuntimeError("boom")
 

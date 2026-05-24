@@ -145,14 +145,14 @@ The current `__truediv__` blindly concatenates with `.`, leaving the caller resp
 ## 7. `DFS.from_file` requires explicit `disk_format`; `ADFS.from_file` auto-detects
 
 **Where**:
-- `DFS.from_file(filepath, disk_format, side=0, mode="rb")`
-- `ADFS.from_file(filepath, *, mode="rb")`
+- `DFS.from_file(filepath, disk_format, side=0)`
+- `ADFS.from_file(filepath, *)`
 
 DFS hosts the same kind of "is this `.ssd` or `.dsd` and 40T or 80T?" question that ADFS solves automatically — file size and extension are usually conclusive.
 
 **Proposed fix**
 
-- `DFS.from_file(filepath, *, disk_format=None, side=0, mode="rb")` — auto-detect when `disk_format is None`, otherwise honour the caller's choice.
+- `DFS.from_file(filepath, *, disk_format=None, side=0)` — auto-detect when `disk_format is None`, otherwise honour the caller's choice.
 - Detection rule: `.dsd` ⇒ double-sided; size ⇒ `80T`-or-`40T`; the existing `formats` module already encodes both.
 
 ## 8. `AFS.create_file` does not exist — `AFS.from_file` does
