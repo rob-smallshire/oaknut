@@ -41,8 +41,8 @@ def populate_disc(filepath: Path) -> None:
             bytes(range(64)),
             load_address=0x3000,
         )
-        (dfs.root / "$.LOCKED").write_bytes(
-            b"do not delete\r",
+        (dfs.root / "$.LOCKED").write_text(
+            "do not delete\r",
             access=Access.LWR,
         )
 

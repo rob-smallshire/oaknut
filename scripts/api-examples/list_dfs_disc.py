@@ -41,8 +41,8 @@ def _build_demo_disc(workdir: Path) -> Path:
     """Build a small fresh disc so the listing has something to show."""
     filepath = workdir / "demo.ssd"
     with DFS.create_file(filepath, title="Demo") as dfs:
-        (dfs.root / "$.HELLO").write_bytes(
-            b'10 PRINT "Hello"\r20 END\r',
+        (dfs.root / "$.HELLO").write_text(
+            '10 PRINT "Hello"\r20 END\r',
             load_address=0x1900,
             exec_address=0x1900,
         )

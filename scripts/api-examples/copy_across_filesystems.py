@@ -40,11 +40,11 @@ def cross_copy(source_filepath: Path, target_filepath: Path) -> None:
 def _build_source_floppy(workdir: Path) -> Path:
     filepath = workdir / "games.ssd"
     with DFS.create_file(filepath, title="Games") as dfs:
-        (dfs.root / "$.HELLO").write_bytes(
-            b'PRINT "Hello"\r', load_address=0x1900
+        (dfs.root / "$.HELLO").write_text(
+            'PRINT "Hello"', load_address=0x1900
         )
-        (dfs.root / "$.LOCKED").write_bytes(b"keep\r", access=Access.LWR)
-        (dfs.root / "A.NOTES").write_bytes(b"sibling-dir note\r")
+        (dfs.root / "$.LOCKED").write_text("keep", access=Access.LWR)
+        (dfs.root / "A.NOTES").write_text("sibling-dir note")
     return filepath
 
 

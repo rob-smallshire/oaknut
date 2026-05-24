@@ -36,8 +36,8 @@ def build_server_disc(filepath: Path) -> None:
         # The yielded AFS handle is open and writable — drop a personal
         # boot file into the new RJS user's home directory equivalent.
         (afs.root / "RJS").mkdir()
-        (afs.root / "RJS" / "Notes").write_bytes(
-            b"server built via AFS.create_file\r",
+        (afs.root / "RJS" / "Notes").write_text(
+            "server built via AFS.create_file",
         )
 
 

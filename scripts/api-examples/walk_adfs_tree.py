@@ -40,13 +40,13 @@ def _build_demo_tree(workdir: Path) -> Path:
     """Build a small ADFS image with a nested directory tree."""
     filepath = workdir / "demo.adl"
     with ADFS.create_file(filepath, ADFS_L, title="Demo") as adfs:
-        (adfs.root / "ReadMe").write_bytes(b"top-level note\r")
+        (adfs.root / "ReadMe").write_text("top-level note\r")
         (adfs.root / "Code").mkdir()
         (adfs.root / "Code" / "Main").write_bytes(b"\x00" * 200)
         (adfs.root / "Code" / "Utils").mkdir()
         (adfs.root / "Code" / "Utils" / "Sort").write_bytes(b"\x00" * 50)
         (adfs.root / "Docs").mkdir()
-        (adfs.root / "Docs" / "Manual").write_bytes(b"manual\r")
+        (adfs.root / "Docs" / "Manual").write_text("manual\r")
     return filepath
 
 
