@@ -89,7 +89,7 @@ with a concrete example invocation against an ``image.ssd``:
    .. code-block:: sh
 
       pip install oaknut-disc
-      oaknut-disc ls image.ssd
+      disc ls image.ssd
 
 4. **Run once via pipx, without installing.** The pipx-side equivalent
    of ``uvx`` if you already use pipx for managing Python tools.
