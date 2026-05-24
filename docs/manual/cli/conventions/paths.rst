@@ -88,12 +88,9 @@ would expect.
 **DFS — single-character directories under a nameless root.**
 A DFS catalogue holds up to 31 file entries (62 on Watford DDFS).
 Each lives in one of 27 directories — ``$`` and ``A``–``Z`` — and
-all 27 are children of a nameless root. ``$`` is the default
-directory DFS assumes when a command omits one, per the Acorn DFS
-User Guide ("the current directory ... is always set to drive 0
-and directory ``$`` ... the drive and directory can therefore be
-omitted from file specifications"); it is a sibling of
-``A``–``Z``, not a container for them. ``$.MYPROG`` and
+all 27 are children of a nameless root. ``$`` is the directory
+``disc`` assumes when a command's path omits one; it is a sibling
+of ``A``–``Z``, not a container for them. ``$.MYPROG`` and
 ``A.MYPROG`` are two independent files. Empty directories cannot
 exist — a directory comes into being the first time a file is
 written under it and disappears again when its last file is
