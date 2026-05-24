@@ -15,7 +15,7 @@ from oaknut.dfs.catalogue import FileEntry
 from oaknut.dfs.catalogued_surface import CataloguedSurface
 from oaknut.dfs.formats import BYTES_PER_SECTOR, DiscFormat
 from oaknut.discimage.surface import DiscImage
-from oaknut.file import Access, AcornMeta, AcornPath, MetaFormat
+from oaknut.file import Access, AcornMeta, AcornPath, MetaFormat, resolving_io
 from oaknut.file.host_bridge import (
     DEFAULT_EXPORT_META_FORMAT,
     DEFAULT_IMPORT_META_FORMATS,
@@ -174,6 +174,12 @@ class DFSPath(AcornPath):
             return DFSPath(self._dfs, name)
         return DFSPath(self._dfs, f"{self._path}.{name}")
 
+    def _root(self) -> DFSPath:
+        return DFSPath(self._dfs, "")
+
+    def _root_parts(self) -> tuple[str, ...]:
+        return ()
+
     @property
     def parent(self) -> DFSPath:
         """Parent path: ``$.HELLO`` → ``$``; ``$`` → root; root → root."""
@@ -204,6 +210,7 @@ class DFSPath(AcornPath):
 
     # --- Querying ---
 
+    @resolving_io
     def exists(self) -> bool:
         """Check whether this path exists on disc."""
         if not self._path:
@@ -212,18 +219,21 @@ class DFSPath(AcornPath):
             return any(f.directory == self._path.upper() for f in self._dfs.files)
         return self._dfs._catalogued_surface.find_file(self._path) is not None
 
+    @resolving_io
     def is_dir(self) -> bool:
         """Check whether this path is a directory."""
         if not self._path:
             return True  # Root
         return self._is_directory_path()
 
+    @resolving_io
     def is_file(self) -> bool:
         """Check whether this path is a file (not a directory)."""
         if not self._path or self._is_directory_path():
             return False
         return self._dfs._catalogued_surface.find_file(self._path) is not None
 
+    @resolving_io
     def stat(self) -> DFSStat:
         """Return metadata for this path.
 
@@ -251,6 +261,7 @@ class DFSPath(AcornPath):
 
     # --- Directory operations ---
 
+    @resolving_io
     def iterdir(self) -> Iterator[DFSPath]:
         """Iterate over directory contents.
 
@@ -277,6 +288,7 @@ class DFSPath(AcornPath):
 
     # --- File operations ---
 
+    @resolving_io
     def read_bytes(self) -> bytes:
         """Read file contents (*LOAD).
 
@@ -288,6 +300,7 @@ class DFSPath(AcornPath):
             raise ValueError(f"Cannot read directory as file: '{self._path}'")
         return self._dfs._catalogued_surface.read_file(self._path)
 
+    @resolving_io
     def write_bytes(
         self,
         data: bytes,
@@ -322,6 +335,7 @@ class DFSPath(AcornPath):
             parsed.filename, parsed.directory, data, load_address, exec_address, locked_val
         )
 
+    @resolving_io
     def read_basic(self) -> str:
         """Read a BBC BASIC program and return its detokenised source.
 
@@ -372,6 +386,7 @@ class DFSPath(AcornPath):
         )
 
 
+    @resolving_io
     def touch(
         self,
         *,
@@ -406,6 +421,7 @@ class DFSPath(AcornPath):
 
     # --- Modification ---
 
+    @resolving_io
     def rename(self, target: Union[str, DFSPath]) -> DFSPath:
         """Rename file, returns new DFSPath.
 
@@ -416,6 +432,7 @@ class DFSPath(AcornPath):
         self._dfs._catalogued_surface.catalogue.rename_file(self._path, target_path)
         return DFSPath(self._dfs, target_path)
 
+    @resolving_io
     def unlink(self) -> None:
         """Delete file (*DELETE).
 
@@ -427,18 +444,22 @@ class DFSPath(AcornPath):
             raise ValueError(f"Cannot unlink directory: '{self._path}'")
         self._dfs._catalogued_surface.delete_file(self._path)
 
+    @resolving_io
     def lock(self) -> None:
         """Lock file (*ACCESS +L)."""
         self._dfs._catalogued_surface.catalogue.lock_file(self._path)
 
+    @resolving_io
     def unlock(self) -> None:
         """Unlock file (*ACCESS -L)."""
         self._dfs._catalogued_surface.catalogue.unlock_file(self._path)
 
+    @resolving_io
     def set_load_address(self, address: int) -> None:
         """Set the load address without rewriting the file data."""
         self._dfs._catalogued_surface.catalogue.set_load_address(self._path, address)
 
+    @resolving_io
     def set_exec_address(self, address: int) -> None:
         """Set the exec address without rewriting the file data."""
         self._dfs._catalogued_surface.catalogue.set_exec_address(self._path, address)
@@ -531,6 +552,7 @@ class DFSPath(AcornPath):
     def __hash__(self) -> int:
         return hash(self._path.upper())
 
+    @resolving_io
     def __contains__(self, name: str) -> bool:
         """Check if *name* exists in this directory."""
         if not self._path:

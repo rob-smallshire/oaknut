@@ -29,7 +29,7 @@ from typing import TYPE_CHECKING, Iterator, Sequence, Union
 
 from oaknut.afs.directory import MAX_NAME_LENGTH
 from oaknut.afs.exceptions import AFSDirectoryEntryExistsError, AFSPathError
-from oaknut.file import Access, AcornPath
+from oaknut.file import Access, AcornPath, resolving_io
 from oaknut.file.host_bridge import (
     DEFAULT_EXPORT_META_FORMAT,
     DEFAULT_IMPORT_META_FORMATS,
@@ -168,6 +168,12 @@ class AFSPath(AcornPath):
         _validate_part(name)
         return AFSPath(self.parts + (name,), afs=self.afs)
 
+    def _root(self) -> AFSPath:
+        return AFSPath((ROOT,), afs=self.afs)
+
+    def _root_parts(self) -> tuple[str, ...]:
+        return ("$",)
+
     # ------------------------------------------------------------------
     # Queries
     # ------------------------------------------------------------------
@@ -226,6 +232,7 @@ class AFSPath(AcornPath):
             )
         return self.afs
 
+    @resolving_io
     def exists(self) -> bool:
         """Check whether this path resolves to an object on disc."""
         afs = self._require_afs()
@@ -235,6 +242,7 @@ class AFSPath(AcornPath):
             return False
         return True
 
+    @resolving_io
     def is_dir(self) -> bool:
         """True if this path is a directory."""
         afs = self._require_afs()
@@ -243,6 +251,7 @@ class AFSPath(AcornPath):
         _, entry = afs._resolve(self)
         return entry.is_directory
 
+    @resolving_io
     def is_file(self) -> bool:
         """True if this path is a file (not a directory)."""
         afs = self._require_afs()
@@ -251,6 +260,7 @@ class AFSPath(AcornPath):
         _, entry = afs._resolve(self)
         return not entry.is_directory
 
+    @resolving_io
     def read_bytes(self) -> bytes:
         """Return the full contents of this file as bytes.
 
@@ -265,6 +275,7 @@ class AFSPath(AcornPath):
             raise AFSPathError(f"{self} is a directory, not a file")
         return afs._read_object_bytes(entry.sin)
 
+    @resolving_io
     def stat(self) -> AFSStat:
         """Return the :class:`AFSStat` for this path.
 
@@ -298,6 +309,7 @@ class AFSPath(AcornPath):
             name=entry.name,
         )
 
+    @resolving_io
     def directory_entry(self) -> "DirectoryEntry":
         """Return the raw on-disc :class:`DirectoryEntry`.
 
@@ -312,6 +324,7 @@ class AFSPath(AcornPath):
         _, entry = afs._resolve(self)
         return entry
 
+    @resolving_io
     def iterdir(self) -> Iterator[AFSPath]:
         """Yield the children of this directory as bound ``AFSPath``s.
 
@@ -326,6 +339,7 @@ class AFSPath(AcornPath):
     # Write path — phases 11-13
     # ------------------------------------------------------------------
 
+    @resolving_io
     def write_bytes(
         self,
         data: bytes,
@@ -391,6 +405,7 @@ class AFSPath(AcornPath):
             date=date,
         )
 
+    @resolving_io
     def touch(
         self,
         *,
@@ -449,6 +464,7 @@ class AFSPath(AcornPath):
             date = AfsDate(datetime.date.today())
         self.write_bytes(b"", access=access, date=date)
 
+    @resolving_io
     def mkdir(
         self,
         *,
@@ -534,6 +550,7 @@ class AFSPath(AcornPath):
             date=date,
         )
 
+    @resolving_io
     def unlink(self) -> None:
         """Delete this file (or empty directory) from its parent.
 
@@ -562,6 +579,7 @@ class AFSPath(AcornPath):
         new_parent = delete_entry(parent_raw, name)
         afs._write_object_bytes(parent_sin, new_parent)
 
+    @resolving_io
     def rmdir(self) -> None:
         """Alias for :meth:`unlink` — the empty-dir check is shared."""
         self.unlink()
@@ -570,6 +588,7 @@ class AFSPath(AcornPath):
     # Entry-field updates
     # ------------------------------------------------------------------
 
+    @resolving_io
     def chmod(self, access: "int | AFSAccess") -> None:
         """Set the access attributes of this file or directory.
 
@@ -606,6 +625,7 @@ class AFSPath(AcornPath):
         new_parent = update_entry_fields(parent_raw, name, access=new_access)
         afs._write_object_bytes(parent_sin, new_parent)
 
+    @resolving_io
     def lock(self) -> None:
         """Set the ``L`` (locked) bit, preserving all other flags."""
         from oaknut.afs.access import AFSAccess
@@ -616,6 +636,7 @@ class AFSPath(AcornPath):
         _, entry = afs._resolve(self)
         self.chmod(entry.access | AFSAccess.LOCKED)
 
+    @resolving_io
     def unlock(self) -> None:
         """Clear the ``L`` (locked) bit, preserving all other flags."""
         from oaknut.afs.access import AFSAccess
@@ -626,6 +647,7 @@ class AFSPath(AcornPath):
         _, entry = afs._resolve(self)
         self.chmod(entry.access & ~AFSAccess.LOCKED)
 
+    @resolving_io
     def set_load_address(self, address: int) -> None:
         """Rewrite this entry's load address without touching its data."""
         from oaknut.afs.directory import update_entry_fields
@@ -638,6 +660,7 @@ class AFSPath(AcornPath):
         new_parent = update_entry_fields(parent_raw, name, load_address=address)
         afs._write_object_bytes(parent_sin, new_parent)
 
+    @resolving_io
     def set_exec_address(self, address: int) -> None:
         """Rewrite this entry's exec address without touching its data."""
         from oaknut.afs.directory import update_entry_fields
@@ -650,6 +673,7 @@ class AFSPath(AcornPath):
         new_parent = update_entry_fields(parent_raw, name, exec_address=address)
         afs._write_object_bytes(parent_sin, new_parent)
 
+    @resolving_io
     def rename(self, target: "str | AFSPath") -> AFSPath:
         """Rename or move this entry to ``target``, returning the new path.
 
@@ -717,6 +741,7 @@ class AFSPath(AcornPath):
     # Host filesystem transfer
     # ------------------------------------------------------------------
 
+    @resolving_io
     def export_file(
         self,
         target_filepath: "Union[str, PathLike]",
@@ -768,6 +793,7 @@ class AFSPath(AcornPath):
             filename=self.name,
         )
 
+    @resolving_io
     def import_file(
         self,
         source_filepath: "Union[str, PathLike]",

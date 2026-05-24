@@ -18,12 +18,41 @@ Callers wanting "a path on any Acorn filesystem" can type-hint with
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Iterator
+from functools import wraps
+from typing import TYPE_CHECKING, Callable, Iterator, TypeVar
 
 if TYPE_CHECKING:
     from oaknut.file.access import Access
     from oaknut.file.exceptions import FSError
     from oaknut.file.stat import Stat
+
+
+_F = TypeVar("_F", bound=Callable)
+
+
+def resolving_io(method: _F) -> _F:
+    """Decorator: resolve ``^`` components before calling an I/O method.
+
+    Wraps a path-class I/O method so any literal carets stored in
+    the path are collapsed via :meth:`AcornPath.resolve` before the
+    underlying body runs. If the path has no carets, the call goes
+    straight through.
+
+    Apply to every method on a concrete path class whose answer
+    depends on the disc — :meth:`read_bytes`, :meth:`exists`,
+    :meth:`stat`, :meth:`iterdir`, and the rest. Pure path ops
+    (``__str__``, :attr:`parts`, :attr:`parent`) stay un-decorated
+    because they should preserve the literal form.
+    """
+
+    @wraps(method)
+    def wrapper(self: AcornPath, *args, **kwargs):
+        resolved = self.resolve()
+        if resolved is not self:
+            return getattr(resolved, method.__name__)(*args, **kwargs)
+        return method(self, *args, **kwargs)
+
+    return wrapper  # type: ignore[return-value]
 
 
 class AcornPath:
@@ -47,33 +76,74 @@ class AcornPath:
     def __truediv__(self, name: str) -> "AcornPath":
         """Slash-join a path fragment, returning a new path.
 
-        Splits *name* on ``.`` and walks each component in turn.
-        A component that consists entirely of carets (``^``,
-        ``^^``, ``^^^`` …) walks one level up the directory tree
-        per caret, matching Acorn shell syntax — dots between
-        consecutive hats are optional. Any other component is
-        passed to :meth:`_join_name` for filesystem-specific
-        appending.
+        Splits *name* on ``.`` and appends each component literally
+        via :meth:`_join_name`. The Acorn shell's ``^`` parent
+        token is stored as a literal path component too — call
+        :meth:`resolve` to collapse ``^`` runs against their
+        preceding directories. This mirrors :class:`pathlib.PurePath`
+        which stores ``..`` literally rather than resolving on join.
 
         Examples::
 
             p / "Games" / "Elite"      # join two names
             p / "Games.Elite"          # equivalent, single string
-            p / "^"                    # parent of p
-            p / "^^"                   # grandparent (two levels up)
-            p / "^.^"                  # equivalent to ^^
-            p / "^^.Docs.ReadMe"       # up two, then into Docs/ReadMe
+            p / "^"                    # literal ^ component; resolve()
+                                       # collapses it to p.parent
+            p / "^^.Docs.ReadMe"       # ^^ stored as one component;
+                                       # resolve() walks up two then in
         """
         path: "AcornPath" = self
         for component in name.split("."):
             if not component:
                 continue
-            if set(component) == {"^"}:
-                for _ in component:
-                    path = path.parent
-            else:
-                path = path._join_name(component)
+            path = path._join_name(component)
         return path
+
+    def resolve(self) -> "AcornPath":
+        """Collapse any ``^`` components against their preceding parts.
+
+        Returns a new path with every caret component (``^``,
+        ``^^``, ``^^^`` …) removed, after walking one directory up
+        per caret character. Carets that would walk past the root
+        clamp at the root, mirroring :attr:`parent`'s behaviour.
+
+        Pure operation — does not touch the filesystem. ``^`` is
+        reserved Acorn syntax and cannot appear in a legitimate
+        on-disc name, so I/O methods call ``resolve()`` automatically
+        before reading or writing.
+        """
+        resolved: list[str] = list(self._root_parts())
+        for part in self.parts[len(self._root_parts()):]:
+            if set(part) == {"^"}:
+                for _ in part:
+                    if len(resolved) > len(self._root_parts()):
+                        resolved.pop()
+                    # else: clamp at root
+            else:
+                resolved.append(part)
+        if tuple(resolved) == self.parts:
+            return self
+        path = self._root()
+        for part in resolved[len(self._root_parts()):]:
+            path = path._join_name(part)
+        return path
+
+    def _root(self) -> "AcornPath":
+        """Return the root path of the filesystem this path is bound to.
+
+        Subclasses implement this so :meth:`resolve` can reconstruct
+        a path with carets collapsed by re-joining from the root.
+        """
+        raise NotImplementedError
+
+    def _root_parts(self) -> tuple[str, ...]:
+        """The ``parts`` tuple of the filesystem root.
+
+        Empty for DFS (nameless root); ``("$",)`` for ADFS/AFS.
+        Used by :meth:`resolve` to know where the joinable suffix
+        begins.
+        """
+        raise NotImplementedError
 
     def _join_name(self, name: str) -> "AcornPath":
         """Append a single non-caret name component.

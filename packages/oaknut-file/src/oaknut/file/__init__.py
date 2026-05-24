@@ -42,7 +42,7 @@ from oaknut.file.inf import (
     write_inf_file,
 )
 from oaknut.file.meta import AcornMeta
-from oaknut.file.path import AcornPath
+from oaknut.file.path import AcornPath, resolving_io
 from oaknut.file.stat import Stat
 from oaknut.file.text_io import decode_text, encode_text
 from oaknut.file.xattr import (
@@ -56,6 +56,7 @@ __all__ = [
     "Access",
     "AcornMeta",
     "AcornPath",
+    "resolving_io",
     "copy_file",
     "BootOption",
     "DEFAULT_EXPORT_META_FORMAT",

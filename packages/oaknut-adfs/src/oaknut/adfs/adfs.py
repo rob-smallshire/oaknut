@@ -43,7 +43,7 @@ from oaknut.adfs.exceptions import (
 from oaknut.adfs.free_space_map import OldFreeSpaceMap
 from oaknut.discimage.surface import DiscImage, SurfaceSpec
 from oaknut.discimage.unified_disc import UnifiedDisc
-from oaknut.file import AcornMeta, AcornPath, MetaFormat
+from oaknut.file import AcornMeta, AcornPath, MetaFormat, resolving_io
 from oaknut.file.host_bridge import (
     DEFAULT_EXPORT_META_FORMAT,
     DEFAULT_IMPORT_META_FORMATS,
@@ -412,6 +412,12 @@ class ADFSPath(AcornPath):
             return ADFSPath(self._adfs, f"$.{name}")
         return ADFSPath(self._adfs, f"{self._path}.{name}")
 
+    def _root(self) -> ADFSPath:
+        return ADFSPath(self._adfs, "$")
+
+    def _root_parts(self) -> tuple[str, ...]:
+        return ("$",)
+
     @property
     def parent(self) -> ADFSPath:
         """Parent directory."""
@@ -437,6 +443,7 @@ class ADFSPath(AcornPath):
 
     # --- Querying ---
 
+    @resolving_io
     def exists(self) -> bool:
         """Check whether this path exists on disc."""
         if self._path == "$":
@@ -447,6 +454,7 @@ class ADFSPath(AcornPath):
         except ADFSPathError:
             return False
 
+    @resolving_io
     def is_dir(self) -> bool:
         """Check whether this path is a directory."""
         if self._path == "$":
@@ -457,6 +465,7 @@ class ADFSPath(AcornPath):
         except ADFSPathError:
             return False
 
+    @resolving_io
     def is_file(self) -> bool:
         """Check whether this path is a file (not a directory)."""
         if self._path == "$":
@@ -467,6 +476,7 @@ class ADFSPath(AcornPath):
         except ADFSPathError:
             return False
 
+    @resolving_io
     def stat(self) -> ADFSStat:
         """Return metadata for this path.
 
@@ -532,6 +542,7 @@ class ADFSPath(AcornPath):
 
     # --- Directory operations ---
 
+    @resolving_io
     def iterdir(self) -> Iterator[ADFSPath]:
         """Iterate over directory contents.
 
@@ -544,6 +555,7 @@ class ADFSPath(AcornPath):
 
     # --- File operations ---
 
+    @resolving_io
     def read_bytes(self) -> bytes:
         """Read file contents.
 
@@ -557,6 +569,7 @@ class ADFSPath(AcornPath):
             raise ADFSPathError(f"'{self._path}' is a directory, not a file")
         return self._adfs._read_file_data(entry)
 
+    @resolving_io
     def read_basic(self) -> str:
         """Read a BBC BASIC program and return its detokenised source.
 
@@ -572,6 +585,7 @@ class ADFSPath(AcornPath):
         """
         return basic.detokenise(self.read_bytes())
 
+    @resolving_io
     def write_bytes(
         self,
         data: bytes,
@@ -621,6 +635,7 @@ class ADFSPath(AcornPath):
             locked_val,
         )
 
+    @resolving_io
     def write_basic(
         self,
         source: str,
@@ -656,6 +671,7 @@ class ADFSPath(AcornPath):
             access=access,
         )
 
+    @resolving_io
     def unlink(self) -> None:
         """Delete this file.
 
@@ -667,6 +683,7 @@ class ADFSPath(AcornPath):
             raise ADFSPathError("Cannot unlink root directory")
         self._adfs._unlink_file(self._path.split("."))
 
+    @resolving_io
     def mkdir(self, *, parents: bool = False, exist_ok: bool = False) -> None:
         """Create a new directory at this path.
 
@@ -703,6 +720,7 @@ class ADFSPath(AcornPath):
 
         self._adfs._mkdir(self._path.split("."))
 
+    @resolving_io
     def rmdir(self) -> None:
         """Remove an empty directory.
 
@@ -715,6 +733,7 @@ class ADFSPath(AcornPath):
             raise ADFSPathError("Cannot rmdir root directory")
         self._adfs._rmdir(self._path.split("."))
 
+    @resolving_io
     def rename(self, target: Union[str, ADFSPath]) -> ADFSPath:
         """Rename this file or directory, returning the new path.
 
@@ -741,6 +760,7 @@ class ADFSPath(AcornPath):
         self._adfs._rename(self._path.split("."), target_parts)
         return ADFSPath(self._adfs, target_path)
 
+    @resolving_io
     def lock(self) -> None:
         """Lock this file.
 
@@ -751,6 +771,7 @@ class ADFSPath(AcornPath):
             raise ADFSPathError("Cannot lock root directory")
         self._adfs._set_locked(self._path.split("."), True)
 
+    @resolving_io
     def unlock(self) -> None:
         """Unlock this file.
 
@@ -761,6 +782,7 @@ class ADFSPath(AcornPath):
             raise ADFSPathError("Cannot unlock root directory")
         self._adfs._set_locked(self._path.split("."), False)
 
+    @resolving_io
     def chmod(self, access: int) -> None:
         """Set access attributes, replacing the current ones.
 
@@ -782,6 +804,7 @@ class ADFSPath(AcornPath):
             raise ADFSPathError("Cannot chmod root directory")
         self._adfs._chmod(self._path.split("."), access)
 
+    @resolving_io
     def set_load_address(self, address: int) -> None:
         """Set the load address without rewriting the file data.
 
@@ -790,6 +813,7 @@ class ADFSPath(AcornPath):
         """
         self._adfs._set_load_address(self._path.split("."), address)
 
+    @resolving_io
     def set_exec_address(self, address: int) -> None:
         """Set the exec address without rewriting the file data.
 
@@ -896,6 +920,7 @@ class ADFSPath(AcornPath):
     def __hash__(self) -> int:
         return hash(self._path.upper())
 
+    @resolving_io
     def __contains__(self, name: str) -> bool:
         """Check if *name* exists in this directory."""
         directory = self._resolve_as_directory()
