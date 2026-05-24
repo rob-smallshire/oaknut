@@ -156,7 +156,8 @@ class AFS:
                 raise AFSNotPresentError(
                     f"{filepath} has no AFS partition (no info-sector pointers)"
                 )
-            yield afs
+            with afs:
+                yield afs
 
     @staticmethod
     @contextmanager
@@ -238,7 +239,8 @@ class AFS:
             afs = adfs.afs_partition
             for name_or_path in emplacements:
                 emplace_library(afs, name_or_path)
-            yield afs
+            with afs:
+                yield afs
 
     # ------------------------------------------------------------------
     # Properties
