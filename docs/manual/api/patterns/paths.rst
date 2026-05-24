@@ -84,30 +84,27 @@ the tree as far as the root (the root's parent is itself).
 :meth:`iterdir` on a subdirectory yields its immediate children.
 
 The Acorn shell's ``^`` parent-token works as a slash-join
-component too: ``p / "^"`` is the parent of ``p``, ``p / "^^"`` is
-the grandparent, and dots between consecutive hats are optional
-(``^^`` and ``^.^`` are the same), matching the syntax the Acorn
-``*DIR`` command accepts. Mix freely with name components::
+component too — stored literally, exactly the way
+:class:`pathlib.PurePath` stores ``..``. Dots between consecutive
+hats are optional (``^^`` and ``^.^`` parse to one component and
+two components respectively but resolve identically), matching the
+syntax the Acorn ``*DIR`` command accepts. :meth:`AcornPath.resolve`
+collapses any carets present::
 
     elite = adfs.root / "Games" / "Elite"
-    elite / "^"                       # $.Games
-    elite / "^^"                      # $
-    elite / "^.^.Docs.ReadMe"         # up two, then into Docs.ReadMe
-    elite / "^^.Docs.ReadMe"          # same, no dot between hats
+    (elite / "^").path                 # "$.Games.Elite.^"   (literal)
+    (elite / "^").resolve().path       # "$.Games"           (collapsed)
+    (elite / "^^").parts               # ("$", "Games", "Elite", "^^")
+    (elite / "^^.Docs.ReadMe").resolve().path
+                                       # "$.Docs.ReadMe"     (up two, into Docs)
 
-.. note::
-
-   This is one place where oaknut diverges from
-   :class:`pathlib.PurePath`. pathlib stores ``..`` as a literal
-   component on join (``PurePosixPath("/foo") / ".."`` keeps the
-   ``..`` and you opt into normalisation via :meth:`pathlib.Path.resolve`),
-   whereas oaknut resolves ``^`` immediately during the slash-join.
-   The reasons are practical: ``^`` is reserved Acorn syntax that
-   no real directory can be named, so storing it as a literal
-   component would only produce a path that fails at I/O time; and
-   the Acorn shell itself resolves ``^`` eagerly at the ``*DIR``
-   prompt rather than lazily. Eager resolution keeps oaknut paths
-   consistent with the Acorn semantics they exist to describe.
+I/O methods (:meth:`read_bytes`, :meth:`stat`, :meth:`iterdir`,
+and the rest) call :meth:`resolve` automatically before touching
+the disc, so caret-bearing paths read and write correctly without
+the caller having to remember to resolve. Pure path operations
+(:attr:`parts`, :attr:`path`, :attr:`name`, :attr:`parent`,
+slash-join, equality) preserve the literal form, just as pathlib
+does.
 
 **DFS — single-character directories under a nameless root.**
 A DFS catalogue holds up to 31 file entries (62 on Watford DDFS).
