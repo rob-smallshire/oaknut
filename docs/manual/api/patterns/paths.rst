@@ -3,17 +3,104 @@ Path objects
 
 Each filing system exposes a path object with a uniform interface
 modelled loosely on :class:`pathlib.Path`. Once you have a path, you
-can ``iterdir()``, ``stat()``, ``read_bytes()``, ``write_bytes()`` and
-slash-join it regardless of which filesystem owns it.
+can :meth:`iterdir`, :meth:`stat`, :meth:`read_bytes`,
+:meth:`write_bytes`, and slash-join it regardless of which filesystem
+owns it.
 
-.. note::
+- :class:`oaknut.dfs.DFSPath`
+- :class:`oaknut.adfs.ADFSPath`
+- :class:`oaknut.afs.AFSPath`
 
-   This page is a placeholder. Final content will cover:
+A path is obtained from an open filesystem handle::
 
-   - :class:`oaknut.dfs.DFSPath`, :class:`oaknut.adfs.ADFSPath`,
-     :class:`oaknut.afs.AFSPath`
-   - the slash-join operator, ``^`` for the parent directory
-   - methods all path classes share, and where they diverge
-   - using these paths inside ``with FS.from_file(...) as fs:``
-     contexts — paths bind to a filesystem handle and become stale
-     when it closes
+    with ADFS.from_file("disc.adl") as adfs:
+        elite = adfs.root / "Games" / "Elite"
+        elite.read_bytes()
+
+Paths bind to a filesystem handle and become stale when the handle
+closes — never escape a path out of its ``with`` block and reach
+for it later.
+
+
+Shared shape
+------------
+
+Every path class implements the same surface, so a function that
+takes "a path on any Acorn filesystem" can be written without
+caring which family produced it:
+
+- ``read_bytes()`` / ``write_bytes(data, *, load_address=0,
+  exec_address=0, access=None, date=None)``
+- ``stat() -> oaknut.file.Stat`` (the unified :class:`Stat` protocol —
+  ``length``, ``load_address``, ``exec_address``, ``access`` as a
+  canonical :class:`oaknut.file.Access`, ``is_directory``, ``date``)
+- ``exists()`` / ``is_dir()`` / ``is_file()``
+- ``iterdir()`` and ``__iter__``
+- ``export_file(host_path, *, meta_format=, owner=)`` /
+  ``import_file(source_filepath, *, meta_formats=)``
+- ``copy_to(dst)`` — sugar for ``copy_file(self, dst)``
+
+The cookbook recipes lean on this uniformity: code that walks a
+directory and prints its contents looks the same on DFS, ADFS, and
+AFS.
+
+
+Where the path models diverge
+-----------------------------
+
+The same surface hides a structural difference that bites if you
+assume Unix or ADFS shape when reading DFS code.
+
+**ADFS and AFS — hierarchical trees.**
+``adfs.root`` and ``afs.root`` are the actual top-level directory
+``$``. Walking with ``/`` descends into named subdirectories::
+
+    adfs.root                       # represents $
+    adfs.root / "Games"             # $.Games (a directory)
+    adfs.root / "Games" / "Elite"   # $.Games.Elite (a file)
+
+``mkdir()`` works on ADFSPath / AFSPath. ``^`` is meaningful (the
+parent path). ``iterdir()`` on a subdirectory yields its
+immediate children.
+
+**DFS — flat catalogue with single-character namespace tags.**
+DFS does not have subdirectories. The on-disc catalogue is a flat
+list of up to 31 entries (62 on Watford DDFS), each tagged with a
+one-character "directory" — one of ``$``, ``A``–``Z``. The tags are
+*siblings*, not parent-and-child: ``$.MYPROG`` and ``A.MYPROG`` are
+two independent files; neither is "inside" the other. ``$`` is the
+*default* directory that DFS assumes when a path omits one (per the
+Acorn DFS User Guide), not a root that contains the others.
+
+For this reason ``dfs.root`` is intentionally **not** a path for
+``$``; it is the empty-string catalogue handle from which the ``/``
+operator can build a path in *any* directory letter::
+
+    dfs.root                       # the whole catalogue
+    dfs.root / "$.HELLO"           # default directory
+    dfs.root / "A.GAME"            # sibling directory A — not inside $
+
+``DFSPath.mkdir()`` does not exist. ``^`` carries no meaning, since
+there is no tree to walk up. ``iterdir()`` on the catalogue handle
+yields one entry per populated directory letter; ``iterdir()`` on a
+single-letter directory handle yields the files carrying that tag.
+
+See :doc:`/cli/conventions/paths` for the CLI-side companion to this
+explanation.
+
+
+Binding to a filesystem handle
+------------------------------
+
+A path holds a reference to the filesystem handle it came from. The
+handle owns the underlying mmap / file descriptor and flushes on
+exit. A path that outlives its handle's ``with`` block is a stale
+view onto a closed disc image — reading from it raises::
+
+    with ADFS.from_file("disc.adl") as adfs:
+        elite = adfs.root / "Games" / "Elite"
+    # adfs is closed now
+    elite.read_bytes()      # raises — handle gone
+
+Keep path use inside the ``with`` block, or pull the bytes you need
+out before exiting.

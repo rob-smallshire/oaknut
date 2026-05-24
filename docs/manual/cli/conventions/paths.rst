@@ -37,23 +37,77 @@ of single-character names are reserved for directory references:
    * - Symbol
      - Meaning
    * - ``$``
-     - The root directory of the filing system
+     - On ADFS and AFS, the root of the directory tree. On DFS, the
+       *default* directory — see :ref:`dfs-flat-catalogue` below for
+       why this matters.
    * - ``^``
-     - The parent directory (one level up)
+     - The parent directory (one level up). Only meaningful on the
+       hierarchical filing systems (ADFS, AFS).
    * - ``@``
      - The current directory (rarely needed on the CLI — the *current*
        is always the filing system's notional root for batch tools)
 
-A fully-qualified ``PATH_SPEC`` therefore starts with ``$.`` and walks
-down: ``$.Games.Elite`` is the file ``Elite`` inside the directory
-``Games`` at the root. ``^.Sib`` is the file ``Sib`` in the parent of
-whatever directory the command's earlier argument named.
+A fully-qualified ADFS or AFS ``PATH_SPEC`` therefore starts with
+``$.`` and walks down: ``$.Games.Elite`` is the file ``Elite`` inside
+the directory ``Games`` at the root. ``^.Sib`` is the file ``Sib`` in
+the parent of whatever directory the command's earlier argument named.
 
 Filename component lengths vary by filing system: DFS allows up to 7
 characters per filename (and exactly one character for the directory
 prefix), while ADFS and AFS allow up to 10 characters per component
 in a hierarchical tree. See :doc:`wildcards` for the matching rules
 and length implications when patterns are involved.
+
+
+.. _dfs-flat-catalogue:
+
+DFS vs ADFS / AFS: flat catalogue vs hierarchical tree
+------------------------------------------------------
+
+The three filing systems oaknut supports differ fundamentally in how
+they organise files. The same ``PATH_SPEC`` syntax covers all three,
+but the *meaning* of the leading symbol differs in ways that catch
+out anyone arriving from Unix or from one Acorn filesystem expecting
+another.
+
+**ADFS and AFS — hierarchical trees.**
+``$`` is a real root directory that contains all the others.
+``$.Games.Elite`` walks two levels down from the root: ``Games``
+lives inside ``$``, and ``Elite`` lives inside ``Games``. ``^`` moves
+one level back up. Directory creation (``disc mkdir``) and recursive
+operations (``disc cp -r``, ``disc tree``) work the way Unix users
+would expect.
+
+**DFS — a flat catalogue with single-character namespace tags.**
+The on-disc structure is a fixed 31-entry list of files (62 on
+Watford DDFS), and every entry carries one character of "directory"
+prefix. The legal prefixes are ``$`` and ``A``–``Z``, and they are
+*siblings*, not parent-and-child. ``$.MYPROG`` and ``A.MYPROG`` are
+two independent files. ``$`` is the *default* directory that DFS
+assumes when a command omits one, per the Acorn DFS User Guide
+("the current directory ... is always set to drive 0 and directory
+``$`` ... the drive and directory can therefore be omitted from
+file specifications"). It is not a container for the other letters.
+
+What this means in practice on the CLI:
+
+.. code-block:: sh
+
+   disc ls games.ssd                 # lists every directory's entries
+   disc ls 'games.ssd:$'             # lists only files in $
+   disc ls 'games.ssd:A'             # lists only files in directory A
+   disc cat 'games.ssd:$.HELLO'      # explicit
+   disc cat 'games.ssd:HELLO'        # also $.HELLO; $ assumed
+
+   disc cp 'games.ssd:$.HELLO' 'games.ssd:A.HELLO'
+                                     # two *different* files now
+
+No DFS command will recurse into siblings the way ADFS commands
+recurse into subdirectories, because there are no subdirectories to
+recurse into. ``disc mkdir`` is an ADFS-only command for the same
+reason. ``disc tree`` does work on DFS images, but the resulting
+"tree" is two levels deep at most: the catalogue, then each
+populated directory letter.
 
 
 Filing-system dispatch prefixes

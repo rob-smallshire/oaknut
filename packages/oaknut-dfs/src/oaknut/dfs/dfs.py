@@ -132,19 +132,38 @@ class DFSStat:
 class DFSPath:
     """A path within a DFS filesystem, inspired by pathlib.Path.
 
-    DFS has a flat directory structure with single-letter directory
-    prefixes ($, A-Z). DFSPath models this as a virtual root containing
-    directory letters, each containing files::
+    **DFS is not a hierarchical filesystem.** Its on-disc catalogue is a
+    *flat* list of up to 31 entries, each tagged with a single-character
+    "directory" — one of ``$``, ``A``–``Z``. The directory character is a
+    namespace, not a container: ``$.MYPROG`` and ``A.MYPROG`` are two
+    independent files, and neither is "inside" the other. The Acorn DFS
+    User Guide spells this out — quoting roughly, *"Files of the same
+    name can be created on the same disc with different directories"*
+    and *"the current directory and drive number is always set to drive
+    0 and directory ``$`` ... they will be assumed"*.
 
-        (root)          path=""
-        ├── $           path="$"
+    ``$`` is therefore the **default directory** DFS assumes when a path
+    omits one; it is not a parent of ``A``–``Z``. Compare ADFS / AFS,
+    which *do* have a tree rooted at ``$``.
+
+    DFSPath models the catalogue as a notional root holding the set of
+    populated directory tags, each tag in turn enumerating the files
+    that carry it::
+
+        (catalogue)     path=""
+        ├── $           path="$"      (default directory)
         │   └── HELLO   path="$.HELLO"
-        └── A           path="A"
+        └── A           path="A"      (sibling of $, not inside it)
             └── GAME    path="A.GAME"
 
-    Navigate with the ``/`` operator::
+    ``dfs.root`` is the empty-string catalogue handle, not ``$`` —
+    walking ``/`` from it produces paths in *any* directory letter, not
+    just the default one. Navigate with the ``/`` operator and the
+    ``DIR.NAME`` form::
 
-        dfs.root / "$" / "HELLO"    # → DFSPath("$.HELLO")
+        dfs.root / "$.HELLO"        # default directory
+        dfs.root / "A.GAME"         # sibling directory A
+        dfs.root / "$" / "HELLO"    # also $.HELLO (two-step form)
     """
 
     def __init__(self, dfs: DFS, path: str):
@@ -586,7 +605,15 @@ class DFSPath:
 
 
 class DFS:
-    """High-level DFS filesystem operations."""
+    """High-level DFS filesystem operations.
+
+    DFS is the Acorn Disc Filing System used on BBC Micro and Electron
+    floppies. The on-disc structure is a *flat* 31-entry catalogue, not
+    a hierarchical tree: every entry carries a single-character
+    "directory" tag (``$``, ``A``–``Z``) that namespaces files of the
+    same name. See :class:`DFSPath` for the model and what this means
+    for path construction.
+    """
 
     def __init__(self, catalogued_surface: CataloguedSurface):
         """
@@ -902,7 +929,18 @@ class DFS:
     # Path API
     @property
     def root(self) -> DFSPath:
-        """The virtual root directory containing all directory letters."""
+        """A path handle representing the whole catalogue.
+
+        DFS is a flat-catalogue filesystem (see :class:`DFSPath`); this
+        handle is the empty-string entry point from which the ``/``
+        operator can build a path in *any* directory letter, including
+        the default ``$`` and the sibling tags ``A``–``Z``. It is
+        deliberately **not** ``$`` — making it ``$`` would suggest the
+        other directories live inside it, which they do not.
+
+        For the hierarchical-root equivalent on ADFS / AFS, see
+        :attr:`oaknut.adfs.ADFS.root` and :attr:`oaknut.afs.AFS.root`.
+        """
         return DFSPath(self, "")
 
     def path(self, path: str) -> DFSPath:
