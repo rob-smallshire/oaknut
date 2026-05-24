@@ -586,11 +586,15 @@ def _attach_children(dir_node, parent_tree_node) -> None:
             "distinct from each partition. Single-partition images fold "
             "this content into ``partition_1``."
         ),
+        "dfs": (
+            "DFS summary. DFS images carry one filing system per disc — "
+            "there is no partition framing, so this report stands alone."
+        ),
         "partition_1": (
-            "Filesystem summary. On a single-partition image (DFS floppy "
-            "or ADFS image with no AFS tail) this is the only block and "
-            "carries the disc-level geometry too; on a partitioned ADFS+AFS "
-            "disc this is the ADFS slice and ``disc`` carries the geometry."
+            "Filesystem summary on an ADFS image. Stands alone for ADFS "
+            "without an AFS tail and carries the disc-level geometry; on a "
+            "partitioned ADFS+AFS disc this is the ADFS slice and ``disc`` "
+            "carries the geometry."
         ),
         "partition_2": (
             "Second partition (AFS, present only on ADFS+AFS hard discs; "
@@ -684,7 +688,7 @@ def _stat_disc(image_filepath: Path, fs: FilingSystem):
             # same physical partition across stat invocations.
             sections["partition_2"] = Report(data=_afs_partition_only_tc(handle))
         elif fs is FilingSystem.DFS:
-            sections["partition_1"] = Report(data=_dfs_partition_tc(handle, is_only=True))
+            sections["dfs"] = Report(data=_dfs_summary_tc(handle))
         else:
             if not handle.has_afs_partition:
                 # Single-partition ADFS image: fold disc-level info
@@ -745,18 +749,17 @@ def _disc_header_adfs_tc(handle):
     )
 
 
-def _dfs_partition_tc(handle, *, is_only: bool):
-    """DFS partition block.
+def _dfs_summary_tc(handle):
+    """DFS summary block.
 
-    ``is_only=True`` (every DFS image, since DFS doesn't carry a tail
-    partition) drops the ``Partition 1:`` prefix from the table title
-    so the single block reads as a plain "DFS" summary.
+    DFS images carry one filing system per disc — they never share
+    with a tail AFS partition — so there is no ``Partition 1:``
+    framing to consider.
     """
     info = handle.info
     boot = handle.boot_option
-    title = "DFS" if is_only else "Partition 1: DFS"
     return _kv_table(
-        title,
+        "DFS",
         [
             ("title", "Title", handle.title or ""),
             ("boot_option", "Boot option", f"{boot.name} ({boot.value})"),
