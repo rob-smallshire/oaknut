@@ -219,8 +219,9 @@ Open Superior Software's *Repton Infinity* (1988):
 The disc's boot option is ``EXEC``: pressing :kbd:`SHIFT-BREAK` on
 a real BBC effectively types ``*EXEC $.!BOOT``, so the contents of
 ``!BOOT`` run as if each line had been typed at the OS prompt.
-``read_text`` does the ``"\r"`` → ``"\n"`` translation so the file
-reads cleanly without ``cat -v`` tricks.
+The :meth:`read_text` method does the ``"\r"`` → ``"\n"``
+translation so the file reads cleanly respecting Python's
+universal-newline convention.
 
 The :doc:`CLI walkthrough </cli/getting-started>` runs the same
 disc through ``disc`` from the shell.
