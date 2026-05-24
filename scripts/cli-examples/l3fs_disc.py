@@ -11,7 +11,9 @@ Sections:
   envelope     Create the empty ADFS hard-disc envelope.
   install_fs   Copy the file-server binary across from its SSD.
   boot         Write !BOOT and set the boot option (read + set).
-  attach_afs   Plan + initialise the AFS partition + verify users.
+  plan_afs     Dry-run sizing of the AFS partition (afs-plan).
+  init_afs     Carve out the AFS partition for real (afs-init).
+  inspect_afs  Confirm the resulting user list (afs-users).
   verify       Final stat showing the dual-partition shape.
 
 The source SSD with the FS executable lives in the cookbook corpus
@@ -45,14 +47,18 @@ with in_tmp_dir():
     show("disc opt scsi0.dat")
     show("disc opt scsi0.dat EXEC")
 
-    section("attach_afs")
+    section("plan_afs")
     show("disc afs-plan scsi0.dat")
+
+    section("init_afs")
     show(
         "disc afs-init scsi0.dat --disc-name Server"
         " --user RJS:2MB"
         " --omit-user Welcome"
         " --emplace Library --emplace Library1"
     )
+
+    section("inspect_afs")
     show("disc afs-users scsi0.dat")
 
     section("verify")

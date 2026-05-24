@@ -189,31 +189,27 @@ file, not a binary — pressing :kbd:`SHIFT-BREAK` runs
 ``*EXEC $.!BOOT``, which effectively types the ``*RUN $.FS3v126``
 line at the OS prompt.
 
-**4. Attach the AFS partition.**
+**4. Plan the AFS partition (optional).**
 
 .. cli-example:: l3fs_disc
-   :section: attach_afs
+   :section: plan_afs
 
-The ``afs-plan`` subcommand is a dry-run that shows the disc's
-geometry, how many sectors ADFS currently occupies, and what an AFS
-partition built from the remaining free space would look like.
-Reviewing the plan before committing is the polite habit.
+``afs-plan`` is a dry-run that shows the disc's geometry, how many
+sectors ADFS currently occupies, and what an AFS partition built
+from the remaining free space would look like. Nothing is written
+— the step is there to let you review the proposed shape before
+committing. Skip it if you know what you want.
 
-After that, ``afs-init`` carves out the AFS partition for real,
-adds an ``RJS`` regular user, ``--omit-user``-s the built-in
-``Welcome`` account, and ``--emplace``-s two shipped library
-images.
+**5. Initialise the AFS partition.**
 
-The ``Syst`` and ``Boot`` accounts are not created explicitly —
-those are built-ins and arrive for free with every freshly-
-initialised AFS partition (``Welcome`` would too, but for the explicit
-omission). To change a built-in's quota or password instead of
-dropping it, supply ``--user NAME:...`` and the spec overrides the
-default. Following up, ``disc afs-users`` confirms the resulting
-user list: ``Syst``, ``Boot``, and ``RJS`` are present; ``Welcome``
-is not.
+.. cli-example:: l3fs_disc
+   :section: init_afs
 
-Note also the absence of ``--cylinders``: when omitted, ``afs-init``
+``afs-init`` carves out the AFS partition for real, adds an
+``RJS`` regular user, ``--omit-user``-s the built-in ``Welcome``
+account, and ``--emplace``-s two shipped library images.
+
+Note the absence of ``--cylinders``: when omitted, ``afs-init``
 claims the existing free space, which is exactly what ``afs-plan``
 suggested. Pass an explicit value if you want a smaller AFS region
 and ADFS retained beyond what is strictly necessary.
@@ -222,7 +218,21 @@ The ``--emplace`` option accepts a shipped name (``Library``,
 ``Library1``, ``ArthurLib``) or a path to any ADFS ``.adl``; the
 contents land in a directory of the same name on the AFS partition.
 
-**5. Verify the dual-partition shape and walk the disc.**
+**6. Inspect the new AFS partition.**
+
+.. cli-example:: l3fs_disc
+   :section: inspect_afs
+
+``disc afs-users`` confirms the resulting account list: ``Syst``,
+``Boot``, and ``RJS`` are present; ``Welcome`` is not. The
+``Syst`` and ``Boot`` accounts are not created explicitly — they
+are built-ins and arrive for free with every freshly-initialised
+AFS partition (``Welcome`` would too, but for the explicit
+omission). To change a built-in's quota or password instead of
+dropping it, supply ``--user NAME:...`` and the spec overrides the
+default.
+
+**7. Verify the dual-partition shape and walk the disc.**
 
 .. cli-example:: l3fs_disc
    :section: verify
