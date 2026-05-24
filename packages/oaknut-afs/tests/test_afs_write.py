@@ -15,8 +15,10 @@ from helpers.afs_image import build_synthetic_adfs_with_afs
 from oaknut.afs import (
     AFSAccess,
     AfsDate,
+    AFSDirectoryEntryExistsError,
     AFSDirectoryNotEmptyError,
     AFSFileLockedError,
+    AFSPathError,
 )
 
 
@@ -101,6 +103,95 @@ class TestMkdir:
         (afs.root / "A" / "B").mkdir()
         (afs.root / "A" / "B" / "file").write_bytes(b"deep")
         assert (afs.root / "A" / "B" / "file").read_bytes() == b"deep"
+
+    def test_mkdir_existing_raises(self) -> None:
+        adfs = build_synthetic_adfs_with_afs()
+        afs = adfs.afs_partition
+        (afs.root / "Dir").mkdir()
+        with pytest.raises(AFSDirectoryEntryExistsError):
+            (afs.root / "Dir").mkdir()
+
+    def test_mkdir_parent_not_found_raises(self) -> None:
+        adfs = build_synthetic_adfs_with_afs()
+        afs = adfs.afs_partition
+        with pytest.raises(AFSPathError):
+            (afs.root / "Missing" / "Sub").mkdir()
+
+
+class TestMkdirExistOk:
+    """``exist_ok=True`` mirrors ``pathlib.Path.mkdir``: swallows the
+    "already exists" error only when the existing entry is itself a
+    directory, never when it is a file.
+    """
+
+    def test_exist_ok_true_silent_when_directory_already_exists(self) -> None:
+        adfs = build_synthetic_adfs_with_afs()
+        afs = adfs.afs_partition
+        (afs.root / "Dir").mkdir()
+        (afs.root / "Dir").mkdir(exist_ok=True)  # no exception
+
+    def test_exist_ok_true_still_raises_when_file_already_exists(self) -> None:
+        adfs = build_synthetic_adfs_with_afs()
+        afs = adfs.afs_partition
+        (afs.root / "Name").write_bytes(b"file data")
+        with pytest.raises(AFSPathError, match="already exists"):
+            (afs.root / "Name").mkdir(exist_ok=True)
+
+    def test_exist_ok_false_still_raises_when_directory_exists(self) -> None:
+        adfs = build_synthetic_adfs_with_afs()
+        afs = adfs.afs_partition
+        (afs.root / "Dir").mkdir()
+        with pytest.raises(AFSDirectoryEntryExistsError):
+            (afs.root / "Dir").mkdir(exist_ok=False)
+
+    def test_exist_ok_true_does_not_clobber_existing_directory_contents(self) -> None:
+        adfs = build_synthetic_adfs_with_afs()
+        afs = adfs.afs_partition
+        (afs.root / "Dir").mkdir()
+        (afs.root / "Dir" / "Inner").write_bytes(b"keep me")
+        (afs.root / "Dir").mkdir(exist_ok=True)
+        assert (afs.root / "Dir" / "Inner").read_bytes() == b"keep me"
+
+
+class TestMkdirParents:
+    """``parents=True`` mirrors ``pathlib.Path.mkdir``: creates any
+    missing intermediate directories.
+    """
+
+    def test_parents_false_raises_when_intermediate_missing(self) -> None:
+        adfs = build_synthetic_adfs_with_afs()
+        afs = adfs.afs_partition
+        with pytest.raises(AFSPathError):
+            (afs.root / "Missing" / "Sub").mkdir()
+
+    def test_parents_true_creates_intermediates(self) -> None:
+        adfs = build_synthetic_adfs_with_afs()
+        afs = adfs.afs_partition
+        (afs.root / "A" / "B" / "C").mkdir(parents=True)
+        assert (afs.root / "A").is_dir()
+        assert (afs.root / "A" / "B").is_dir()
+        assert (afs.root / "A" / "B" / "C").is_dir()
+
+    def test_parents_true_succeeds_when_intermediates_exist(self) -> None:
+        adfs = build_synthetic_adfs_with_afs()
+        afs = adfs.afs_partition
+        (afs.root / "A").mkdir()
+        (afs.root / "A" / "B" / "C").mkdir(parents=True)
+        assert (afs.root / "A" / "B" / "C").is_dir()
+
+    def test_parents_true_still_raises_on_existing_target_without_exist_ok(self) -> None:
+        adfs = build_synthetic_adfs_with_afs()
+        afs = adfs.afs_partition
+        (afs.root / "A" / "B").mkdir(parents=True)
+        with pytest.raises(AFSDirectoryEntryExistsError):
+            (afs.root / "A" / "B").mkdir(parents=True)
+
+    def test_parents_true_and_exist_ok_true_fully_idempotent(self) -> None:
+        adfs = build_synthetic_adfs_with_afs()
+        afs = adfs.afs_partition
+        (afs.root / "A" / "B" / "C").mkdir(parents=True, exist_ok=True)
+        (afs.root / "A" / "B" / "C").mkdir(parents=True, exist_ok=True)
+        assert (afs.root / "A" / "B" / "C").is_dir()
 
 
 class TestUnlink:

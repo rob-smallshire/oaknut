@@ -444,6 +444,8 @@ class AFSPath:
     def mkdir(
         self,
         *,
+        parents: bool = False,
+        exist_ok: bool = False,
         access=None,
         date=None,
     ) -> None:
@@ -453,16 +455,52 @@ class AFSPath:
         directory byte image (DRENTS=0, free list spanning every
         slot, trailing seq byte matching leading). Its access byte
         has the directory-type bit set.
+
+        Mirrors :meth:`pathlib.Path.mkdir`.
+
+        Args:
+            parents: If ``True``, missing intermediate directories are
+                created. Default ``False`` raises when any ancestor is
+                absent.
+            exist_ok: If ``True``, do not raise when this path already
+                resolves to a directory. A non-directory at the path
+                still raises. Default ``False``.
+            access: Optional :class:`AFSAccess` for the new directory;
+                defaults to ``D/``.
+            date: Optional :class:`AfsDate`; defaults to today.
+
+        Raises:
+            AFSPathError: If the path is the root, or already exists
+                as a file, or the parent does not exist and
+                ``parents`` is ``False``.
+            AFSDirectoryEntryExistsError: If the path already exists
+                as a directory and ``exist_ok`` is ``False``.
         """
         import datetime
 
         from oaknut.afs.access import AFSAccess
         from oaknut.afs.directory import build_directory_bytes
+        from oaknut.afs.exceptions import AFSDirectoryEntryExistsError
         from oaknut.afs.types import AfsDate
 
         afs = self._require_afs()
         if self.is_root():
             raise AFSPathError("cannot mkdir the root directory")
+
+        if parents:
+            parent = self.parent
+            if not parent.is_root() and not parent.exists():
+                parent.mkdir(parents=True, exist_ok=True)
+
+        if self.exists():
+            if self.is_dir():
+                if exist_ok:
+                    return
+                raise AFSDirectoryEntryExistsError(
+                    f"directory {self.path!r} already exists"
+                )
+            raise AFSPathError(f"{self.path!r} already exists as a file")
+
         if access is None:
             access = AFSAccess.from_string("D/")
         if date is None:
