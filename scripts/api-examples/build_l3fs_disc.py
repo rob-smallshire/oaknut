@@ -25,20 +25,20 @@ def build_server_disc(filepath: Path) -> None:
         filepath: Destination .dat path. The companion .dsc sidecar
             is written automatically.
     """
+    username = "Herman"
     with AFS.create_file(
         filepath,
         capacity="10MB",
         disc_name="MyServer",
-        users=[UserSpec("RJS", quota="2MB")],
+        users=[UserSpec(username, quota="2MB")],
         omit_users=["Welcome"],
         emplacements=["Library"],
     ) as afs:
         # The yielded AFS handle is open and writable — drop a personal
-        # boot file into the new RJS user's home directory equivalent.
-        (afs.root / "RJS").mkdir()
-        (afs.root / "RJS" / "Notes").write_text(
-            "server built via AFS.create_file\n",
-        )
+        # boot file into the new user's home directory equivalent.
+        home = afs.root / username
+        home.mkdir()
+        (home / "Notes").write_text("server built via AFS.create_file\n")
 
 
 def main(workdir: Path) -> None:
@@ -48,10 +48,10 @@ def main(workdir: Path) -> None:
     # Re-open and confirm every part of the build landed on disc.
     with AFS.from_file(filepath) as afs:
         names = {user.name for user in afs.users.active}
-        assert "RJS" in names
+        assert "Herman" in names
         assert "Welcome" not in names
         assert (afs.root / "Library").is_dir()
-        assert (afs.root / "RJS" / "Notes").read_text().startswith(
+        assert (afs.root / "Herman" / "Notes").read_text().startswith(
             "server built via AFS.create_file"
         )
 
