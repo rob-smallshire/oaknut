@@ -143,7 +143,10 @@ class AFS:
         # between oaknut-afs and oaknut-adfs during test collection.
         from oaknut.adfs import ADFS
 
-        with ADFS.from_file(filepath) as adfs, adfs.afs_partition as afs:
+        with (
+            ADFS.from_file(filepath) as adfs,
+            adfs.afs_partition as afs,
+        ):
             yield afs
 
     @staticmethod

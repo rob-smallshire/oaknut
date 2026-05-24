@@ -37,7 +37,10 @@ def add_user(disc_filepath: Path, username: str, quota: str) -> None:
         quota: Capacity string (``"2MB"``, ``"512KiB"``, ...) or raw
             int byte count.
     """
-    with ADFS.from_file(disc_filepath) as adfs, adfs.afs_partition as afs:
+    with (
+        ADFS.from_file(disc_filepath) as adfs,
+        adfs.afs_partition as afs,
+    ):
         afs.add_user(username, quota=quota)
 
 
@@ -52,7 +55,10 @@ def main(workdir: Path) -> None:
     filepath = _build_empty_server(workdir)
     add_user(filepath, "alice", quota="2MB")
 
-    with ADFS.from_file(filepath) as adfs, adfs.afs_partition as afs:
+    with (
+        ADFS.from_file(filepath) as adfs,
+        adfs.afs_partition as afs,
+    ):
         alice = next(u for u in afs.users.active if u.name == "alice")
         print(f"Added user: {alice.name}  quota={alice.free_space:,} bytes")
 

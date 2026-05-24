@@ -237,7 +237,10 @@ def _open_afs(image_filepath: Path) -> Iterator:
     """
     from oaknut.adfs import ADFS
 
-    with ADFS.from_file(image_filepath) as adfs, adfs.afs_partition as afs:
+    with (
+        ADFS.from_file(image_filepath) as adfs,
+        adfs.afs_partition as afs,
+    ):
         yield afs
 
 
@@ -266,7 +269,10 @@ def open_image_for_afs_write(image_filepath: Path) -> Iterator:
     """Open for AFS write: yields (adfs, afs) with auto-flush on clean exit."""
     from oaknut.adfs import ADFS
 
-    with ADFS.from_file(image_filepath) as adfs, adfs.afs_partition as afs:
+    with (
+        ADFS.from_file(image_filepath) as adfs,
+        adfs.afs_partition as afs,
+    ):
         yield adfs, afs
 
 

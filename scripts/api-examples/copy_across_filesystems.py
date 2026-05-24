@@ -28,7 +28,10 @@ def cross_copy(source_filepath: Path, target_filepath: Path) -> None:
         target_filepath: ADFS image (.dat or .adl) to copy into.
             Opened read-write; the source is opened read-only.
     """
-    with DFS.from_file(source_filepath) as dfs, ADFS.from_file(target_filepath) as adfs:
+    with (
+        DFS.from_file(source_filepath) as dfs,
+        ADFS.from_file(target_filepath) as adfs,
+    ):
         for letter in dfs.root.iterdir():
             for entry in letter.iterdir():
                 # ADFS filenames are <= 10 chars and case-preserving;

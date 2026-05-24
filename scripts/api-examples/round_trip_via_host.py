@@ -48,7 +48,10 @@ def round_trip(image_filepath: Path, host_dirpath: Path) -> None:
             (target.root / entry.name).import_file(host_path)
 
     # Verify the bits actually round-tripped intact.
-    with ADFS.from_file(image_filepath) as source, ADFS.from_file(fresh_filepath) as target:
+    with (
+        ADFS.from_file(image_filepath) as source,
+        ADFS.from_file(fresh_filepath) as target,
+    ):
         for entry in source.root.iterdir():
             if entry.is_dir():
                 continue
