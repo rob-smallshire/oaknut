@@ -59,3 +59,15 @@ class TitleNotSupportedError(FSError):
     directories have no title field, and files never do. Attempting
     to read or set a title on such an entity raises this.
     """
+
+
+class InvalidAddressError(FSError):
+    """A load or execution address could not be parsed.
+
+    Addresses are written as integer literals whose base comes from
+    the prefix — ``0x`` hex, ``0o`` octal, ``0b`` binary, or none for
+    decimal. Input that is not a valid literal (non-numeric text, or
+    the Acorn ``&`` hex sigil) raises this. As an :class:`FSError` it
+    carries the data-error exit code and is rendered by the CLI
+    boundary without a traceback.
+    """

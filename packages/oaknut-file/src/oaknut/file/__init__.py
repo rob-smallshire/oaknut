@@ -10,11 +10,13 @@ __version__ = "10.7.0"
 # Side-effect import registers the 'acorn' text codec on package import.
 import oaknut.file.acorn_encoding  # noqa: F401
 from oaknut.file.access import Access, format_access_hex, format_access_text, parse_access
+from oaknut.file.address import parse_address
 from oaknut.file.boot_option import BootOption
 from oaknut.file.copy import copy_file
 from oaknut.file.exceptions import (
     FilesystemClosedError,
     FSError,
+    InvalidAddressError,
     TitleNotSupportedError,
 )
 from oaknut.file.filename_encoding import (
@@ -67,7 +69,9 @@ __all__ = [
     "DEFAULT_IMPORT_META_FORMATS",
     "FSError",
     "FilesystemClosedError",
+    "InvalidAddressError",
     "TitleNotSupportedError",
+    "parse_address",
     "MetaFormat",
     "SOURCE_DIR",
     "SOURCE_FILENAME",

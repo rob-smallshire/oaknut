@@ -1192,6 +1192,18 @@ class TestPut:
         assert result.exit_code == 0
         assert b"adfs payload" in result.output_bytes
 
+    def test_put_invalid_load_address_clean_error(
+        self, runner: CliRunner, dfs_image_filepath: Path, tmp_path: Path
+    ) -> None:
+        src = tmp_path / "payload.bin"
+        src.write_bytes(b"data")
+        result = runner.invoke(
+            cli,
+            ["put", f"{dfs_image_filepath}:$.NewFile", str(src), "--load", "&1900"],
+        )
+        assert result.exit_code == 65
+        assert "Traceback" not in result.output
+
 
 # ---------------------------------------------------------------------------
 # Modification: title, opt
@@ -1966,6 +1978,24 @@ class TestSetGetLoad:
         assert result.exit_code == 0
         assert "00001900" in result.output
 
+    def test_set_load_bare_number_is_decimal(
+        self, runner: CliRunner, dfs_image_filepath: Path
+    ) -> None:
+        """An unprefixed value is decimal: 256 stores as 0x100, not 0x256."""
+        result = runner.invoke(cli, ["set-load", f"{dfs_image_filepath}:$.HELLO", "256"])
+        assert result.exit_code == 0
+        result = runner.invoke(cli, ["get-load", f"{dfs_image_filepath}:$.HELLO"])
+        assert "00000100" in result.output
+
+    def test_set_load_invalid_address_clean_error(
+        self, runner: CliRunner, dfs_image_filepath: Path
+    ) -> None:
+        """A malformed address is a categorised data error, not a traceback."""
+        result = runner.invoke(cli, ["set-load", f"{dfs_image_filepath}:$.HELLO", "&1900"])
+        assert result.exit_code == 65
+        assert "Traceback" not in result.output
+        assert "0x" in result.output  # message points at the 0x form
+
 
 class TestSetGetExec:
     def test_set_exec_dfs(self, runner: CliRunner, dfs_image_filepath: Path) -> None:
@@ -1979,6 +2009,13 @@ class TestSetGetExec:
         result = runner.invoke(cli, ["get-exec", f"{dfs_image_filepath}:$.HELLO"])
         assert result.exit_code == 0
         assert "00008023" in result.output
+
+    def test_set_exec_invalid_address_clean_error(
+        self, runner: CliRunner, dfs_image_filepath: Path
+    ) -> None:
+        result = runner.invoke(cli, ["set-exec", f"{dfs_image_filepath}:$.HELLO", "notanumber"])
+        assert result.exit_code == 65
+        assert "Traceback" not in result.output
 
 
 # ---------------------------------------------------------------------------

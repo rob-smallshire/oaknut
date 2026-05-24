@@ -1422,6 +1422,8 @@ def put(
     decimal, not hex. See :doc:`/cli/conventions/metadata` for the
     full mapping and trade-offs.
     """
+    from oaknut.file import parse_address
+
     image, path = parse_file_spec(file_spec)
     if not path:
         raise click.UsageError("PATH is required")
@@ -1435,8 +1437,8 @@ def put(
     # Read data.
     if host_path is not None and str(host_path) == "-":
         data = sys.stdin.buffer.read()
-        resolved_load = int(load_address, 0) if load_address else _DEFAULT_ADDR
-        resolved_exec = int(exec_address, 0) if exec_address else _DEFAULT_ADDR
+        resolved_load = parse_address(load_address) if load_address else _DEFAULT_ADDR
+        resolved_exec = parse_address(exec_address) if exec_address else _DEFAULT_ADDR
     elif host_path is not None:
         # Try to import with metadata.
         from oaknut.file import DEFAULT_IMPORT_META_FORMATS, MetaFormat, import_with_metadata
@@ -1451,8 +1453,8 @@ def put(
             meta_formats=meta_formats,
         )
         data = host_path.read_bytes()
-        resolved_load = int(load_address, 0) if load_address else (meta.load_address or 0)
-        resolved_exec = int(exec_address, 0) if exec_address else (meta.exec_address or 0)
+        resolved_load = parse_address(load_address) if load_address else (meta.load_address or 0)
+        resolved_exec = parse_address(exec_address) if exec_address else (meta.exec_address or 0)
     else:
         raise click.ClickException("HOST_PATH is required (or use - for stdin)")
 
@@ -2264,10 +2266,12 @@ def set_load(
     matches (directories themselves are skipped — they have no load
     address field).
     """
+    from oaknut.file import parse_address
+
     image, path = parse_file_spec(file_spec)
     if not path:
         raise click.UsageError("PATH is required")
-    address = int(addr, 0)
+    address = parse_address(addr)
     fs, bare = resolve_path(image, path)
     with open_image(image, fs) as handle:
         for target in _iter_targets(handle, bare, fs, recursive=recursive):
@@ -2308,10 +2312,12 @@ def set_exec(
     matches (directories themselves are skipped — they have no exec
     address field).
     """
+    from oaknut.file import parse_address
+
     image, path = parse_file_spec(file_spec)
     if not path:
         raise click.UsageError("PATH is required")
-    address = int(addr, 0)
+    address = parse_address(addr)
     fs, bare = resolve_path(image, path)
     with open_image(image, fs) as handle:
         for target in _iter_targets(handle, bare, fs, recursive=recursive):
