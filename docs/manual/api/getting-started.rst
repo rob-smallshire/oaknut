@@ -120,13 +120,15 @@ Three write methods, mirroring :class:`pathlib.Path`:
        )
        (dfs.root / "$.STUB").touch(access=Access.LWR)
 
-:meth:`write_text` encodes via the Acorn character set and
-translates Python ``"\n"`` to the on-disc ``"\r"`` line terminator
-by default — pass ``newline=""`` to preserve whatever terminators
-your string already has. :meth:`write_bytes` writes raw bytes plus
-optional ``load_address``, ``exec_address``, and ``access``.
-:meth:`touch` creates an empty file (skip it if it already exists,
-matching :meth:`pathlib.Path.touch`).
+The :meth:`write_text` method encodes via the Acorn character set
+and translates Python ``"\n"`` to the on-disc ``"\r"`` line
+terminator by default — the write-side companion of Python's
+universal-newline convention. Pass ``newline=""`` to preserve
+whatever terminators your string already has. The
+:meth:`write_bytes` method writes raw bytes plus optional
+``load_address``, ``exec_address``, and ``access``. The
+:meth:`touch` method creates an empty file (skipping if it already
+exists, matching :meth:`pathlib.Path.touch`).
 
 ``access`` accepts :class:`oaknut.file.Access` flags;
 :attr:`Access.LWR` is the canonical "locked owner R+W",
