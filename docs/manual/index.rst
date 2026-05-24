@@ -9,8 +9,8 @@ guide.
 
 Most readers reach for the ``disc`` :doc:`command-line interface
 <cli/getting-started>` to inspect, extract, or modify Acorn disc
-images from a shell. The :doc:`Python API <api/cookbook>` is for
-programs that consume the on-disc formats directly.
+images from a shell. The :doc:`Python API <api/getting-started>` is
+for programs that consume the on-disc formats directly.
 
 .. toctree::
    :hidden:
@@ -31,6 +31,7 @@ programs that consume the on-disc formats directly.
    :hidden:
    :caption: Python API
 
+   api/getting-started
    api/cookbook
    api/patterns/index
    api/reference/index
