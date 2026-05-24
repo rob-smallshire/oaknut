@@ -17,7 +17,7 @@ Hierarchy::
         │   ├── CatalogReadError      (ExitCode.DATA_ERR)
         │   ├── CatalogFullError      (ExitCode.CANT_CREATE)
         │   └── FileExistsError       (ExitCode.CANT_CREATE)
-        ├── DiskFullError             (ExitCode.CANT_CREATE)
+        ├── DiscFullError             (ExitCode.CANT_CREATE)
         ├── FileLocked                (ExitCode.NO_PERM)
         └── InvalidFormatError        (ExitCode.DATA_ERR)
 """
@@ -67,7 +67,7 @@ class FileExistsError(CatalogError):
     _exit_code = ExitCode.CANT_CREATE
 
 
-class DiskFullError(DFSError):
+class DiscFullError(DFSError):
     """Insufficient free space on disc.
 
     Raised when attempting to save a file but there aren't enough
@@ -95,3 +95,12 @@ class InvalidFormatError(DFSError):
     """
 
     _exit_code = ExitCode.DATA_ERR
+
+
+class DFSFormatError(DFSError):
+    """The caller did not provide enough information to pick a DFS format.
+
+    Raised by :meth:`DFS.create_file` when the filename extension
+    does not uniquely identify a format and no explicit
+    :class:`DiscFormat` argument was supplied.
+    """

@@ -69,25 +69,29 @@ wild are.
 
    from pathlib import Path
    from oaknut.dfs import DFS
-   from oaknut.dfs.formats import ACORN_DFS_80T_SINGLE_SIDED
 
    filepath = Path("hello.ssd")
-   with DFS.create_file(filepath, ACORN_DFS_80T_SINGLE_SIDED,
-                        title="GETSTART"):
+   with DFS.create_file(filepath, title="GETSTART"):
        pass
 
 The yielded handle is a writable :class:`DFS` instance. The
 ``with`` block here is empty because we just want the empty disc;
-the next sections fill it.
+the next sections fill it. The ``.ssd`` extension is enough for
+``create_file`` to pick the canonical 80-track single-sided format;
+``.dsd`` would give you the 80-track double-sided interleaved one.
+Pass an explicit :class:`DiscFormat` for the 40-track or
+sequential-double-sided variants.
 
-ADFS and AFS have the same ``create_file`` shape. ADFS floppies need
-an explicit format (``ADFS_S``, ``ADFS_M``, ``ADFS_L``):
+ADFS and AFS have the same ``create_file`` shape. ADFS picks the
+floppy format from the extension too — ``.ads`` ⇒ ADFS_S,
+``.adm`` ⇒ ADFS_M, ``.adl`` ⇒ ADFS_L — and ``.adf`` is the lone
+ambiguous case that still needs an explicit argument:
 
 .. code-block:: python
 
-   from oaknut.adfs import ADFS, ADFS_L
+   from oaknut.adfs import ADFS
 
-   with ADFS.create_file("hello.adl", ADFS_L, title="GETSTART"):
+   with ADFS.create_file("hello.adl", title="GETSTART"):
        pass
 
 AFS lives in the tail of an ADFS hard-disc image, and

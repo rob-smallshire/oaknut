@@ -1,6 +1,6 @@
-"""Auto-detect a DFS DiskFormat from filename + size (#28).
+"""Auto-detect a DFS DiscFormat from filename + size (#28).
 
-DFS.from_file / DFS.create_file accept a None disk_format and pick
+DFS.from_file / DFS.create_file accept a None disc_format and pick
 the right format from the extension and (for from_file) size, so
 ``DFS.from_file("foo.ssd")`` works without further arguments.
 """
@@ -38,13 +38,13 @@ class TestDetectDfsFormat:
     def test_unknown_extension_raises(self, tmp_path: Path) -> None:
         filepath = tmp_path / "x.unknown"
         filepath.write_bytes(b"\x00" * 100_000)
-        with pytest.raises(ValueError, match="pass disk_format= explicitly"):
+        with pytest.raises(ValueError, match="pass disc_format= explicitly"):
             detect_dfs_format(filepath)
 
     def test_unexpected_size_raises(self, tmp_path: Path) -> None:
         filepath = tmp_path / "x.ssd"
         filepath.write_bytes(b"\x00" * 500_000)  # too big for either SSD variant
-        with pytest.raises(ValueError, match="pass disk_format= explicitly"):
+        with pytest.raises(ValueError, match="pass disc_format= explicitly"):
             detect_dfs_format(filepath)
 
 
@@ -53,7 +53,7 @@ class TestDfsFromFileAutoDetect:
         filepath = tmp_path / "test.ssd"
         with DFS.create_file(filepath, title="Auto") as dfs:
             (dfs.root / "$.Hello").write_bytes(b"world", load_address=0x1900)
-        # Reopen without disk_format — auto-detection should pick up
+        # Reopen without disc_format — auto-detection should pick up
         # ACORN_DFS_80T_SINGLE_SIDED.
         with DFS.from_file(filepath) as dfs:
             assert dfs.title == "Auto"
@@ -80,6 +80,8 @@ class TestDfsCreateFileAutoDetect:
         )
 
     def test_unknown_extension_raises(self, tmp_path: Path) -> None:
-        with pytest.raises(ValueError, match="cannot pick a default"):
+        from oaknut.dfs.exceptions import DFSFormatError
+
+        with pytest.raises(DFSFormatError, match="cannot pick a default"):
             with DFS.create_file(tmp_path / "fresh.unknown"):
                 pass

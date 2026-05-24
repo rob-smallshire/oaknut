@@ -37,6 +37,7 @@ from oaknut.adfs.exceptions import (
     ADFSEntryExistsError,
     ADFSError,
     ADFSFileLockedError,
+    ADFSFormatError,
     ADFSPathError,
 )
 from oaknut.adfs.free_space_map import OldFreeSpaceMap
@@ -1192,6 +1193,22 @@ def _create_image_file(
             mm.flush()
 
 
+def _floppy_format_from_extension(ext: str) -> ADFSFormat:
+    """Pick a floppy :class:`ADFSFormat` from a lowercase extension.
+
+    Recognises ``.ads``, ``.adm`` and ``.adl``. Anything else —
+    including the historically-ambiguous ``.adf`` (used for both S
+    and M sizes) — raises :class:`ADFSFormatError`.
+    """
+    table = {".ads": ADFS_S, ".adm": ADFS_M, ".adl": ADFS_L}
+    if ext not in table:
+        raise ADFSFormatError(
+            f"cannot pick a default ADFS format for extension {ext!r}; "
+            "pass adfs_format= explicitly (ADFS_S, ADFS_M, or ADFS_L)"
+        )
+    return table[ext]
+
+
 @contextmanager
 def _create_floppy_file(
     filepath: Path,
@@ -1534,6 +1551,8 @@ class ADFS:
                 boot_option=boot_option,
             )
         else:
+            if adfs_format is None:
+                adfs_format = _floppy_format_from_extension(ext)
             ctx = _create_floppy_file(
                 p,
                 adfs_format=adfs_format,

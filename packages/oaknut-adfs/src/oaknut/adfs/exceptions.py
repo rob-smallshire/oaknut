@@ -37,6 +37,15 @@ class ADFSError(FSError):
     """Base exception for all ADFS errors."""
 
 
+class ADFSFormatError(ADFSError):
+    """The caller did not provide enough information to pick an ADFS format.
+
+    Raised by :meth:`ADFS.create_file` when the filename extension
+    does not uniquely identify a format and no explicit
+    :class:`ADFSFormat` argument was supplied.
+    """
+
+
 class ADFSDirectoryError(ADFSError):
     """ADFS directory structure error.
 

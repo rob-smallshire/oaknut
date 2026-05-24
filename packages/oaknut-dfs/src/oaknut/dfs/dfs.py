@@ -13,7 +13,7 @@ from typing import Iterator, Union
 import oaknut.basic as basic
 from oaknut.dfs.catalogue import FileEntry
 from oaknut.dfs.catalogued_surface import CataloguedSurface
-from oaknut.dfs.formats import BYTES_PER_SECTOR, DiskFormat
+from oaknut.dfs.formats import BYTES_PER_SECTOR, DiscFormat
 from oaknut.discimage.surface import DiscImage
 from oaknut.file import Access, AcornMeta, MetaFormat
 from oaknut.file.host_bridge import (
@@ -27,8 +27,8 @@ from oaknut.file.host_bridge import (
 _DFS_DIRECTORY_CHARS = frozenset("$ABCDEFGHIJKLMNOPQRSTUVWXYZ")
 
 
-def detect_dfs_format(filepath: Union[str, PathLike]) -> DiskFormat:
-    """Auto-detect a DFS :class:`DiskFormat` from the file extension and size.
+def detect_dfs_format(filepath: Union[str, PathLike]) -> DiscFormat:
+    """Auto-detect a DFS :class:`DiscFormat` from the file extension and size.
 
     Recognised pairs:
 
@@ -43,7 +43,7 @@ def detect_dfs_format(filepath: Union[str, PathLike]) -> DiskFormat:
 
     The sequential-double-sided variants share their byte count with
     the interleaved forms, so detection cannot distinguish them — pass
-    ``disk_format=`` explicitly for those.
+    ``disc_format=`` explicitly for those.
 
     Raises:
         FileNotFoundError: If *filepath* does not exist.
@@ -73,7 +73,7 @@ def detect_dfs_format(filepath: Union[str, PathLike]) -> DiskFormat:
 
     raise ValueError(
         f"could not auto-detect DFS format for {filepath.name!r} "
-        f"(extension {ext!r}, size {size} bytes); pass disk_format= explicitly"
+        f"(extension {ext!r}, size {size} bytes); pass disc_format= explicitly"
     )
 
 
@@ -673,7 +673,7 @@ class DFS:
     @contextmanager
     def from_file(
         filepath: Union[str, PathLike],
-        disk_format: DiskFormat | None = None,
+        disc_format: DiscFormat | None = None,
         *,
         side: int = 0,
     ) -> Iterator["DFS"]:
@@ -683,7 +683,7 @@ class DFS:
         allow, read-only otherwise. Mutations against a read-only-backed
         image raise from the mmap layer at the point of write.
 
-        ``disk_format`` is optional — when omitted, the format is
+        ``disc_format`` is optional — when omitted, the format is
         auto-detected from the file extension and size (see
         :func:`detect_dfs_format`).  Pass it explicitly to override
         detection (necessary for the rare sequential-double-sided
@@ -697,7 +697,7 @@ class DFS:
 
         Args:
             filepath: Path to the disc image file (``.ssd`` or ``.dsd``).
-            disk_format: DiskFormat specifying geometry and catalogue
+            disc_format: DiscFormat specifying geometry and catalogue
                 type; auto-detected when ``None``.
             side: Which surface to use (0-based index, default 0).
 
@@ -720,27 +720,27 @@ class DFS:
         from oaknut.discimage.open_image import open_image_mmap
 
         filepath = Path(filepath)
-        if disk_format is None:
-            disk_format = detect_dfs_format(filepath)
+        if disc_format is None:
+            disc_format = detect_dfs_format(filepath)
         file_size = filepath.stat().st_size
-        expected_size = disk_format.image_size
+        expected_size = disc_format.image_size
 
         if file_size < expected_size:
             data = bytearray(filepath.read_bytes())
-            yield DFS.from_buffer(memoryview(data), disk_format, side)
+            yield DFS.from_buffer(memoryview(data), disc_format, side)
             return
 
         with open_image_mmap(filepath) as (mm, _writable):
-            yield DFS.from_buffer(memoryview(mm), disk_format, side)
+            yield DFS.from_buffer(memoryview(mm), disc_format, side)
 
     @classmethod
-    def from_buffer(cls, buffer: memoryview, disk_format: DiskFormat, side: int = 0) -> "DFS":
+    def from_buffer(cls, buffer: memoryview, disc_format: DiscFormat, side: int = 0) -> "DFS":
         """
         Create DFS from buffer using specified disk format.
 
         Args:
             buffer: Disk image buffer
-            disk_format: DiskFormat specifying geometry and catalogue type
+            disc_format: DiscFormat specifying geometry and catalogue type
             side: Which surface to use (0-based index, default 0)
 
         Returns:
@@ -767,30 +767,30 @@ class DFS:
         from oaknut.dfs.catalogue import Catalogue
 
         # Validate side parameter
-        num_surfaces = len(disk_format.surface_specs)
+        num_surfaces = len(disc_format.surface_specs)
         if not 0 <= side < num_surfaces:
             raise IndexError(f"side must be in range [0, {num_surfaces}), got {side}")
 
         # Look up catalogue class from registry
-        if disk_format.catalogue_name not in Catalogue._registry:
+        if disc_format.catalogue_name not in Catalogue._registry:
             raise KeyError(
-                f"Unknown catalogue type: {disk_format.catalogue_name!r}. "
+                f"Unknown catalogue type: {disc_format.catalogue_name!r}. "
                 f"Available: {list(Catalogue._registry.keys())}"
             )
-        catalogue_class = Catalogue._registry[disk_format.catalogue_name]
+        catalogue_class = Catalogue._registry[disc_format.catalogue_name]
 
         # Pad truncated images to the canonical format size
-        buffer = cls._pad_buffer(buffer, disk_format)
+        buffer = cls._pad_buffer(buffer, disc_format)
 
         # Create disc and surface
-        disc = DiscImage(buffer, disk_format.surface_specs)
+        disc = DiscImage(buffer, disc_format.surface_specs)
         surface = disc.surface(side)
         catalogued = CataloguedSurface(surface, catalogue_class)
 
         return cls(catalogued)
 
     @staticmethod
-    def _pad_buffer(buffer: memoryview, disk_format: DiskFormat) -> memoryview:
+    def _pad_buffer(buffer: memoryview, disc_format: DiscFormat) -> memoryview:
         """Pad a truncated buffer to the canonical format size with zero bytes.
 
         Accepts buffers that are shorter than the format requires, provided
@@ -802,7 +802,7 @@ class DFS:
                 size, or if the buffer is empty.
         """
         buffer_size = len(buffer)
-        expected_size = disk_format.image_size
+        expected_size = disc_format.image_size
 
         if buffer_size == expected_size:
             return buffer
@@ -826,7 +826,7 @@ class DFS:
     @classmethod
     def create(
         cls,
-        disk_format: DiskFormat,
+        disc_format: DiscFormat,
         *,
         side: int = 0,
         title: str = "",
@@ -835,7 +835,7 @@ class DFS:
         """Create a new in-memory DFS disc image with an empty catalogue.
 
         Args:
-            disk_format: DiskFormat specifying geometry and catalogue type.
+            disc_format: DiscFormat specifying geometry and catalogue type.
             side: Which surface to initialise (0-based, default 0).
             title: Disc title (default empty).
             boot_option: Boot option 0–3 (default 0).
@@ -846,7 +846,7 @@ class DFS:
         from oaknut.dfs.catalogue import Catalogue
 
         # Calculate buffer size from the format's surface specs
-        specs = disk_format.surface_specs
+        specs = disc_format.surface_specs
         buffer_size = 0
         for spec in specs:
             end = (
@@ -862,7 +862,7 @@ class DFS:
         total_sectors = surface.num_sectors
 
         # Look up and initialise the catalogue
-        catalogue_class = Catalogue._registry[disk_format.catalogue_name]
+        catalogue_class = Catalogue._registry[disc_format.catalogue_name]
         catalogue_class.initialise(surface, total_sectors, title, boot_option)
 
         catalogued = CataloguedSurface(surface, catalogue_class)
@@ -872,7 +872,7 @@ class DFS:
     @contextmanager
     def create_file(
         filepath: Union[str, PathLike],
-        disk_format: DiskFormat | None = None,
+        disc_format: DiscFormat | None = None,
         *,
         side: int = 0,
         title: str = "",
@@ -883,7 +883,7 @@ class DFS:
         The file is created at *filepath* with the correct size and
         opened read-write via mmap. Changes are flushed on exit.
 
-        ``disk_format`` is optional — when omitted it is picked from
+        ``disc_format`` is optional — when omitted it is picked from
         the filename extension (``.ssd`` ⇒ 80-track single-sided,
         ``.dsd`` ⇒ 80-track double-sided interleaved).  Pass it
         explicitly for the 40-track or sequential-double-sided
@@ -891,7 +891,7 @@ class DFS:
 
         Args:
             filepath: Path for the new disc image file.
-            disk_format: DiskFormat specifying geometry and catalogue
+            disc_format: DiscFormat specifying geometry and catalogue
                 type; chosen from the extension when ``None``.
             side: Which surface to initialise (0-based, default 0).
             title: Disc title (default empty).
@@ -906,20 +906,22 @@ class DFS:
             ACORN_DFS_80T_SINGLE_SIDED,
         )
 
-        if disk_format is None:
+        if disc_format is None:
+            from oaknut.dfs.exceptions import DFSFormatError
+
             ext = Path(filepath).suffix.lower()
             if ext == ".ssd":
-                disk_format = ACORN_DFS_80T_SINGLE_SIDED
+                disc_format = ACORN_DFS_80T_SINGLE_SIDED
             elif ext == ".dsd":
-                disk_format = ACORN_DFS_80T_DOUBLE_SIDED_INTERLEAVED
+                disc_format = ACORN_DFS_80T_DOUBLE_SIDED_INTERLEAVED
             else:
-                raise ValueError(
+                raise DFSFormatError(
                     f"cannot pick a default DFS format for extension {ext!r}; "
-                    f"pass disk_format= explicitly"
+                    "pass disc_format= explicitly"
                 )
 
         # Calculate file size
-        specs = disk_format.surface_specs
+        specs = disc_format.surface_specs
         file_size = 0
         for spec in specs:
             end = (
@@ -941,7 +943,7 @@ class DFS:
             surface = disc.surface(side)
             total_sectors = surface.num_sectors
 
-            catalogue_class = Catalogue._registry[disk_format.catalogue_name]
+            catalogue_class = Catalogue._registry[disc_format.catalogue_name]
             catalogue_class.initialise(surface, total_sectors, title, boot_option)
 
             catalogued = CataloguedSurface(surface, catalogue_class)
@@ -980,7 +982,7 @@ class DFS:
     @property
     def title(self) -> str:
         """Get disk title."""
-        return self._catalogued_surface.disk_info.title
+        return self._catalogued_surface.disc_info.title
 
     @title.setter
     def title(self, value: str) -> None:
@@ -992,7 +994,7 @@ class DFS:
         """Get boot option as a :class:`oaknut.file.BootOption` enum."""
         from oaknut.file import BootOption
 
-        return BootOption(self._catalogued_surface.disk_info.boot_option)
+        return BootOption(self._catalogued_surface.disc_info.boot_option)
 
     @boot_option.setter
     def boot_option(self, value: "BootOption | int") -> None:
@@ -1058,13 +1060,13 @@ class DFS:
         Returns:
             Dict with: title, num_files, total_sectors, free_sectors, boot_option
         """
-        disk_info = self._catalogued_surface.disk_info
+        disc_info = self._catalogued_surface.disc_info
         return {
-            "title": disk_info.title,
-            "num_files": disk_info.num_files,
-            "total_sectors": disk_info.total_sectors,
+            "title": disc_info.title,
+            "num_files": disc_info.num_files,
+            "total_sectors": disc_info.total_sectors,
             "free_sectors": self.free_sectors,
-            "boot_option": disk_info.boot_option,
+            "boot_option": disc_info.boot_option,
         }
 
     def validate(self) -> list[str]:
@@ -1151,15 +1153,15 @@ class DFS:
     # _parse_filename() removed - parsing now delegated to Catalogue layer
 
 
-def expand(filepath: Union[str, PathLike], disk_format: DiskFormat) -> int:
+def expand(filepath: Union[str, PathLike], disc_format: DiscFormat) -> int:
     """Physically extend a truncated disc image file to its canonical format size.
 
     Appends zero bytes to *filepath* until it reaches the size required
-    by *disk_format*.  The original data is preserved.
+    by *disc_format*.  The original data is preserved.
 
     Args:
         filepath: Path to the disc image file.
-        disk_format: Target format whose ``image_size`` the file should
+        disc_format: Target format whose ``image_size`` the file should
             match after expansion.
 
     Returns:
@@ -1173,7 +1175,7 @@ def expand(filepath: Union[str, PathLike], disk_format: DiskFormat) -> int:
     """
     filepath = Path(filepath)
     file_size = filepath.stat().st_size
-    expected_size = disk_format.image_size
+    expected_size = disc_format.image_size
 
     if file_size == 0:
         raise ValueError(f"{filepath.name} is empty")
