@@ -1081,6 +1081,7 @@ def _create_image_file(
         try:
             yield adfs
         finally:
+            adfs._closed = True
             mm.flush()
 
 
@@ -1197,11 +1198,36 @@ class ADFS:
         fsm: OldFreeSpaceMap,
         geometry: ADFSGeometry,
     ):
-        self._disc = unified_disc
+        # _closed must be set before any attribute that property-gates
+        # would touch via _require_open.
+        self._closed = False
+        self._d = unified_disc
         self._dir_format = dir_format
-        self._fsm = fsm
+        self._fsm_ = fsm
         self._geometry = geometry
         self._afs_partition_cache = None
+
+    def _require_open(self) -> None:
+        """Raise :class:`FilesystemClosedError` if this handle is closed."""
+        if self._closed:
+            from oaknut.file.exceptions import FilesystemClosedError
+
+            raise FilesystemClosedError(
+                "ADFS handle is closed; "
+                "I/O outside the with block is not supported"
+            )
+
+    @property
+    def _disc(self) -> UnifiedDisc:
+        """The backing UnifiedDisc; raises if the handle is closed."""
+        self._require_open()
+        return self._d
+
+    @property
+    def _fsm(self) -> OldFreeSpaceMap:
+        """The free space map; raises if the handle is closed."""
+        self._require_open()
+        return self._fsm_
 
     # --- Named constructors ---
 
@@ -1252,10 +1278,18 @@ class ADFS:
             fmt = _hard_disc_format(geometry, dat_size)
 
             with open_image_mmap(dat_filepath) as (mm, _writable):
-                yield ADFS._from_buffer_with_format(memoryview(mm), fmt, geometry)
+                adfs = ADFS._from_buffer_with_format(memoryview(mm), fmt, geometry)
+                try:
+                    yield adfs
+                finally:
+                    adfs._closed = True
         else:
             with open_image_mmap(p) as (mm, _writable):
-                yield ADFS.from_buffer(memoryview(mm))
+                adfs = ADFS.from_buffer(memoryview(mm))
+                try:
+                    yield adfs
+                finally:
+                    adfs._closed = True
 
     @classmethod
     def from_buffer(cls, buffer: memoryview) -> ADFS:
@@ -1567,6 +1601,11 @@ class ADFS:
         # cannot import it at module load without a cycle.
         from oaknut.afs.afs import AFS, AFSNotPresentError
 
+        # Invalidate the cache if the previously-returned AFS handle
+        # has been closed (its own ``with`` block exited). The user
+        # asking for ``adfs.afs_partition`` again wants a fresh handle.
+        if self._afs_partition_cache is not None and self._afs_partition_cache._closed:
+            self._afs_partition_cache = None
         if self._afs_partition_cache is None:
             sec1, sec2 = self._fsm.afs_info_pointers
             if sec1 == 0 and sec2 == 0:
@@ -1613,7 +1652,7 @@ class ADFS:
 
         # Re-read the FSM so it reflects the fresh state
         map_data = self._disc.sector_range(0, 2)
-        self._fsm = OldFreeSpaceMap(map_data)
+        self._fsm_ = OldFreeSpaceMap(map_data)
 
         # 3. Rewrite all objects
         count = self._restore_directory(

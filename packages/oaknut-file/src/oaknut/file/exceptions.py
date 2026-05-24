@@ -37,3 +37,14 @@ class FSError(DataError):
     :class:`DataError`; specific subclasses override
     :attr:`_exit_code` to a more precise code.
     """
+
+
+class FilesystemClosedError(FSError):
+    """An I/O operation was attempted on a closed filesystem handle.
+
+    Raised when a path object outlives the ``with`` block that
+    opened its filesystem and a method is called that would have
+    needed to touch the underlying disc image. Pure path
+    manipulation (slash-join, ``parent``, ``name``, ``parts``,
+    ``path``, equality) does not raise this.
+    """

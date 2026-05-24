@@ -103,7 +103,10 @@ class AFS:
                 f"AFS info-sector pointers are zero (sec1={sec1}, sec2={sec2}); "
                 "disc has no AFS partition"
             )
-        self._disc = unified_disc
+        # _closed must be set first because _disc is a property that
+        # reads it via _require_open.
+        self._closed = False
+        self._d = unified_disc
         self._sec1 = sec1
         self._sec2 = sec2
         # Write-back buffer must be initialised before _read_and_verify_info
@@ -115,6 +118,22 @@ class AFS:
         self._allocator_cache = None
         self._acting_user: str = user
         self._enforce_quota: bool = enforce_quota
+
+    def _require_open(self) -> None:
+        """Raise :class:`FilesystemClosedError` if this handle is closed."""
+        if self._closed:
+            from oaknut.file.exceptions import FilesystemClosedError
+
+            raise FilesystemClosedError(
+                "AFS handle is closed; "
+                "I/O outside the with block is not supported"
+            )
+
+    @property
+    def _disc(self) -> "UnifiedDisc":
+        """The backing UnifiedDisc; raises if the handle is closed."""
+        self._require_open()
+        return self._d
 
     # ------------------------------------------------------------------
     # Named constructors
@@ -942,10 +961,13 @@ class AFS:
         return self
 
     def __exit__(self, exc_type, exc, tb) -> None:
-        if exc_type is None:
-            self.flush()
-        else:
-            self.discard()
+        try:
+            if exc_type is None:
+                self.flush()
+            else:
+                self.discard()
+        finally:
+            self._closed = True
 
     def __repr__(self) -> str:
         return (

@@ -580,8 +580,32 @@ class DFS:
         Args:
             catalogued_surface: A CataloguedSurface instance
         """
-        self._catalogued_surface = catalogued_surface
+        # _closed must be set before any attribute that property-gates
+        # would touch via _require_open.
+        self._closed = False
+        self._cs = catalogued_surface
         self._current_directory = "$"  # Default directory
+
+    def _require_open(self) -> None:
+        """Raise :class:`FilesystemClosedError` if this handle is closed."""
+        if self._closed:
+            from oaknut.file.exceptions import FilesystemClosedError
+
+            raise FilesystemClosedError(
+                "DFS handle is closed; "
+                "I/O outside the with block is not supported"
+            )
+
+    @property
+    def _catalogued_surface(self) -> CataloguedSurface:
+        """Access the catalogued surface, raising if the handle is closed.
+
+        Every I/O path bottoms out in this attribute, so gating it
+        here gives the runtime check we need without per-method
+        ``_require_open()`` calls scattered through DFSPath.
+        """
+        self._require_open()
+        return self._cs
 
     # Named constructors
     @staticmethod
@@ -642,11 +666,19 @@ class DFS:
 
         if file_size < expected_size:
             data = bytearray(filepath.read_bytes())
-            yield DFS.from_buffer(memoryview(data), disc_format, side)
+            dfs = DFS.from_buffer(memoryview(data), disc_format, side)
+            try:
+                yield dfs
+            finally:
+                dfs._closed = True
             return
 
         with open_image_mmap(filepath) as (mm, _writable):
-            yield DFS.from_buffer(memoryview(mm), disc_format, side)
+            dfs = DFS.from_buffer(memoryview(mm), disc_format, side)
+            try:
+                yield dfs
+            finally:
+                dfs._closed = True
 
     @classmethod
     def from_buffer(cls, buffer: memoryview, disc_format: DiscFormat, side: int = 0) -> "DFS":
@@ -866,6 +898,7 @@ class DFS:
             try:
                 yield dfs
             finally:
+                dfs._closed = True
                 mm.flush()
 
     # Path API
