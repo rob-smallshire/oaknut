@@ -45,8 +45,16 @@ def main(workdir: Path) -> None:
     filepath = workdir / "server.dat"
     build_server_disc(filepath)
 
-    # Re-open and report the final state.
+    # Re-open and confirm every part of the build landed on disc.
     with AFS.from_file(filepath) as afs:
+        names = {user.name for user in afs.users.active}
+        assert "RJS" in names
+        assert "Welcome" not in names
+        assert (afs.root / "Library").is_dir()
+        assert (afs.root / "RJS" / "Notes").read_text().startswith(
+            "server built via AFS.create_file"
+        )
+
         print(f"Disc:    {afs.disc_name}")
         print(f"Free:    {afs.free_sectors} sectors")
         print("Users:")
