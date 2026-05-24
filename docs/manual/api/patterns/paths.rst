@@ -27,22 +27,69 @@ Shared shape
 
 Every path class implements the same surface, so a function that
 takes "a path on any Acorn filesystem" can be written without
-caring which family produced it:
+caring which family produced it.
 
-- ``read_bytes()`` / ``write_bytes(data, *, load_address=0,
-  exec_address=0, access=None, date=None)``
+**Navigation** (slash-join, properties):
+
+- ``p / "name"`` — slash-join a child component
+- ``parent`` — the containing path
+- ``name`` — the final component
+- ``parts`` — a tuple of components
+- ``path`` — the full path string
+
+**Querying:**
+
+- ``exists()`` / ``is_dir()`` / ``is_file()``
 - ``stat() -> oaknut.file.Stat`` (the unified :class:`Stat` protocol —
   ``length``, ``load_address``, ``exec_address``, ``access`` as a
   canonical :class:`oaknut.file.Access`, ``is_directory``, ``date``)
-- ``exists()`` / ``is_dir()`` / ``is_file()``
-- ``iterdir()`` and ``__iter__``
+
+**Iteration:**
+
+- ``iterdir()`` and ``__iter__`` — direct children of a directory
+- ``walk()`` — :meth:`pathlib.Path.walk`-shaped pre-order traversal
+  yielding ``(dirpath, dirnames, filenames)``
+
+**Read:**
+
+- ``read_bytes()``
+- ``read_text(*, encoding="acorn", newline=None)`` — applies
+  Python's universal-newline translation by default
+
+**Write:**
+
+- ``write_bytes(data, *, load_address=0, exec_address=0,
+  access=None, date=None)``
+- ``write_text(text, *, encoding="acorn", newline="\r", ...)`` —
+  translates Python ``"\n"`` to the Acorn-native ``"\r"`` by default
+- ``touch(*, access=None, exist_ok=True)`` —
+  :meth:`pathlib.Path.touch`-shaped
+
+**Mutate:**
+
+- ``rename(target) -> Path``
+- ``unlink()``
+- ``lock()`` / ``unlock()``
+- ``set_load_address(addr)`` / ``set_exec_address(addr)``
+
+**Host-side round-trip:**
+
 - ``export_file(host_path, *, meta_format=, owner=)`` /
   ``import_file(source_filepath, *, meta_formats=)``
-- ``copy_to(dst)`` — sugar for ``copy_file(self, dst)``
+- ``copy_to(dst)`` — sugar for :func:`oaknut.file.copy_file`
 
 The cookbook recipes lean on this uniformity: code that walks a
 directory and prints its contents looks the same on DFS, ADFS, and
 AFS.
+
+.. note::
+
+   The uniform interface is currently a *structural* contract —
+   parallel implementations on :class:`DFSPath`, :class:`ADFSPath`,
+   and :class:`AFSPath`, with no shared :class:`~typing.Protocol`
+   or :class:`abc.ABC` declaring it. Callers that want to type-hint
+   "a path on any Acorn filesystem" can use a union
+   (``DFSPath | ADFSPath | AFSPath``) until a formal protocol lands.
 
 
 Where the path models diverge
