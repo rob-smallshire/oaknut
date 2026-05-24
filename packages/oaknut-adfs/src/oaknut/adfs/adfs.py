@@ -724,16 +724,40 @@ class ADFSPath:
             raise ADFSPathError("Cannot unlink root directory")
         self._adfs._unlink_file(self._path.split("."))
 
-    def mkdir(self) -> None:
+    def mkdir(self, *, parents: bool = False, exist_ok: bool = False) -> None:
         """Create a new directory at this path.
 
+        Mirrors :meth:`pathlib.Path.mkdir`.
+
+        Args:
+            parents: If ``True``, missing intermediate directories are
+                created. Default ``False`` raises when any ancestor is
+                absent.
+            exist_ok: If ``True``, do not raise when this path already
+                resolves to a directory. A non-directory at the path
+                still raises. Default ``False``.
+
         Raises:
-            ADFSPathError: If the path is root, already exists, or parent not found.
+            ADFSPathError: If the path is root, parent is not found
+                (and ``parents`` is ``False``), or already exists
+                as a file. Also when ``exist_ok`` is ``False`` and
+                the path already exists.
             ADFSDiscFullError: If the disc has insufficient free space.
             ADFSDirectoryFullError: If the parent directory is full.
         """
         if self._path == "$":
             raise ADFSPathError("Cannot mkdir root directory")
+
+        if parents:
+            parent = self.parent
+            if not parent.exists():
+                parent.mkdir(parents=True, exist_ok=True)
+
+        if exist_ok and self.exists():
+            if self.is_dir():
+                return
+            raise ADFSPathError(f"'{self._path}' already exists as a file")
+
         self._adfs._mkdir(self._path.split("."))
 
     def rmdir(self) -> None:

@@ -114,3 +114,70 @@ class TestMkdir:
             (adfs.root / "Big").write_bytes(b"\x00" * ((free - 4) * 256))
         with pytest.raises(ADFSDiscFullError):
             (adfs.root / "Dir").mkdir()
+
+
+class TestMkdirExistOk:
+    """``exist_ok=True`` mirrors ``pathlib.Path.mkdir``: swallows the
+    "already exists" error only when the existing entry is itself a
+    directory, never when it is a file.
+    """
+
+    def test_exist_ok_true_silent_when_directory_already_exists(self):
+        adfs = ADFS.create(ADFS_S)
+        (adfs.root / "Games").mkdir()
+        (adfs.root / "Games").mkdir(exist_ok=True)  # no exception
+
+    def test_exist_ok_true_still_raises_when_file_already_exists(self):
+        adfs = ADFS.create(ADFS_S)
+        (adfs.root / "Name").write_bytes(b"file data")
+        with pytest.raises(ADFSPathError, match="already exists"):
+            (adfs.root / "Name").mkdir(exist_ok=True)
+
+    def test_exist_ok_false_still_raises_when_directory_exists(self):
+        adfs = ADFS.create(ADFS_S)
+        (adfs.root / "Games").mkdir()
+        with pytest.raises(ADFSPathError, match="already exists"):
+            (adfs.root / "Games").mkdir(exist_ok=False)
+
+    def test_exist_ok_true_does_not_clobber_existing_directory_contents(self):
+        adfs = ADFS.create(ADFS_M)
+        (adfs.root / "Games").mkdir()
+        (adfs.root / "Games" / "Elite").write_bytes(b"game data")
+        (adfs.root / "Games").mkdir(exist_ok=True)
+        assert (adfs.root / "Games" / "Elite").read_bytes() == b"game data"
+
+
+class TestMkdirParents:
+    """``parents=True`` mirrors ``pathlib.Path.mkdir``: creates any
+    missing intermediate directories.
+    """
+
+    def test_parents_false_raises_when_intermediate_missing(self):
+        adfs = ADFS.create(ADFS_S)
+        with pytest.raises(ADFSPathError):
+            (adfs.root / "Missing" / "Sub").mkdir()
+
+    def test_parents_true_creates_intermediates(self):
+        adfs = ADFS.create(ADFS_M)
+        (adfs.root / "A" / "B" / "C").mkdir(parents=True)
+        assert (adfs.root / "A").is_dir()
+        assert (adfs.root / "A" / "B").is_dir()
+        assert (adfs.root / "A" / "B" / "C").is_dir()
+
+    def test_parents_true_succeeds_when_intermediates_exist(self):
+        adfs = ADFS.create(ADFS_M)
+        (adfs.root / "A").mkdir()
+        (adfs.root / "A" / "B" / "C").mkdir(parents=True)
+        assert (adfs.root / "A" / "B" / "C").is_dir()
+
+    def test_parents_true_still_raises_on_existing_target_without_exist_ok(self):
+        adfs = ADFS.create(ADFS_M)
+        (adfs.root / "A" / "B").mkdir(parents=True)
+        with pytest.raises(ADFSPathError, match="already exists"):
+            (adfs.root / "A" / "B").mkdir(parents=True)
+
+    def test_parents_true_and_exist_ok_true_fully_idempotent(self):
+        adfs = ADFS.create(ADFS_M)
+        (adfs.root / "A" / "B" / "C").mkdir(parents=True, exist_ok=True)
+        (adfs.root / "A" / "B" / "C").mkdir(parents=True, exist_ok=True)
+        assert (adfs.root / "A" / "B" / "C").is_dir()
