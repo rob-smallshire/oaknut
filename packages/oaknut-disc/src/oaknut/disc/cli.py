@@ -219,11 +219,34 @@ def _open_dfs(image_filepath: Path) -> Iterator:
 
 
 @contextmanager
+def _adfs_from_file(image_filepath: Path) -> Iterator:
+    """Open an ADFS image, translating stdlib OS errors into categorised ones.
+
+    :meth:`ADFS.from_file` raises :class:`FileNotFoundError` when an
+    ADFS hard-disc ``.dat`` is missing its companion ``.dsc`` (or
+    vice versa). That stdlib error bypasses the CLI's
+    :func:`handled_errors` boundary and prints a raw traceback — a
+    bug from the user's point of view. Re-raise the same message
+    through :class:`ADFSError` so it flows through the categorised
+    error pipeline and emerges as a normal ``Error: …`` line.
+    """
+    from oaknut.adfs import ADFS
+    from oaknut.adfs.exceptions import ADFSError
+
+    try:
+        with ADFS.from_file(image_filepath) as adfs:
+            yield adfs
+    except FileNotFoundError as exc:
+        # Bare raise (no ``from exc``) so render_error does not echo
+        # the same message twice as a "caused by" line — the cause
+        # chain still threads through ``__context__`` for --debug.
+        raise ADFSError(str(exc)) from None
+
+
+@contextmanager
 def _open_adfs(image_filepath: Path) -> Iterator:
     """Open image as ADFS, yielding the ADFS handle."""
-    from oaknut.adfs import ADFS
-
-    with ADFS.from_file(image_filepath) as adfs:
+    with _adfs_from_file(image_filepath) as adfs:
         yield adfs
 
 
@@ -235,10 +258,8 @@ def _open_afs(image_filepath: Path) -> Iterator:
     installed; the CLI :func:`handled_errors` boundary translates
     that to a user-facing message and exit code.
     """
-    from oaknut.adfs import ADFS
-
     with (
-        ADFS.from_file(image_filepath) as adfs,
+        _adfs_from_file(image_filepath) as adfs,
         adfs.open_afs_partition() as afs,
     ):
         yield afs
@@ -267,10 +288,8 @@ def open_image(
 @contextmanager
 def open_image_for_afs_write(image_filepath: Path) -> Iterator:
     """Open for AFS write: yields (adfs, afs) with auto-flush on clean exit."""
-    from oaknut.adfs import ADFS
-
     with (
-        ADFS.from_file(image_filepath) as adfs,
+        _adfs_from_file(image_filepath) as adfs,
         adfs.open_afs_partition() as afs,
     ):
         yield adfs, afs
@@ -1030,45 +1049,87 @@ def freemap(file_spec: str) -> None:
             _freemap_adfs(handle)
 
 
-def _sector_bar(total: int, free_regions: list[tuple[int, int]], width: int = 64) -> str:
-    """Build an ASCII bar showing sector usage.
+def _build_freemap_grid_lines(
+    rows: int,
+    groups_per_row: int,
+    cells_per_group: int,
+    total_sectors: int,
+    free_regions: list[tuple[int, int]],
+) -> list[str]:
+    """Render a 2-D free-space grid keyed to disc geometry.
 
-    *free_regions* is a list of ``(start, length)`` in sector units.
-    ``#`` = used, ``.`` = free.
+    Each row is one cylinder (ADFS) / track (DFS). Within a row the
+    sectors are laid out in ``groups_per_row`` head-blocks of
+    ``cells_per_group`` glyphs, separated by single spaces. ``#``
+    marks a used sector, ``.`` a free one. Sectors past
+    ``total_sectors`` (the off-disc tail when the image is shorter
+    than the geometry implies) render as spaces so each row keeps
+    its expected width.
     """
-    if total == 0:
-        return ""
-    # Build a boolean bitmap: True = free.
-    bitmap = [False] * total
+    free = [False] * total_sectors
     for start, length in free_regions:
-        for s in range(start, min(start + length, total)):
-            bitmap[s] = True
+        for sector in range(start, min(start + length, total_sectors)):
+            free[sector] = True
 
-    # Scale to *width* characters.
-    bar = []
-    for col in range(width):
-        lo = col * total // width
-        hi = (col + 1) * total // width
-        if hi <= lo:
-            hi = lo + 1
-        # If any sector in this column is free, show it as free.
-        if any(bitmap[s] for s in range(lo, min(hi, total))):
-            bar.append(".")
-        else:
-            bar.append("#")
-    return "".join(bar)
+    cells_per_row = groups_per_row * cells_per_group
+    label_width = max(2, len(str(rows - 1)))
+
+    lines: list[str] = []
+    for row in range(rows):
+        row_base = row * cells_per_row
+        cells: list[str] = []
+        for group in range(groups_per_row):
+            if group > 0:
+                cells.append(" ")
+            group_base = row_base + group * cells_per_group
+            for offset in range(cells_per_group):
+                sector = group_base + offset
+                if sector >= total_sectors:
+                    cells.append(" ")
+                elif free[sector]:
+                    cells.append(".")
+                else:
+                    cells.append("█")
+        lines.append(f"{row:>{label_width}} {''.join(cells)}")
+
+    return lines
+
+
+# Fixed for every Acorn DFS variant — the floppy controller's hardware
+# format is 10 sectors per track on a 5.25" / 3.5" double-density disc,
+# whether SSD or DSD, 40-track or 80-track.
+_DFS_SECTORS_PER_TRACK = 10
 
 
 def _freemap_dfs(handle) -> None:
-    """DFS free-space map."""
+    """DFS free-space map rendered as a 2-D grid (tracks × sectors-per-track).
+
+    DFS itself does not record geometry — the catalogue only carries a
+    total sector count. We synthesise tracks = total / 10, heads = 1
+    (``disc freemap`` operates on a single catalogue side), and 10
+    sectors per track, which matches every standard Acorn floppy.
+    """
     regions = handle._catalogued_surface.get_free_map()
     disc_info = handle._catalogued_surface.catalogue.get_disc_info()
     total = disc_info.total_sectors
     free = handle.free_sectors
 
-    bar = _sector_bar(total, regions)
-    click.echo(f"Sectors: 0{' ' * (len(bar) - 2)}{total}")
-    click.echo(f"         {bar}")
+    tracks = (total + _DFS_SECTORS_PER_TRACK - 1) // _DFS_SECTORS_PER_TRACK
+    click.echo(
+        f"Geometry: {tracks} tracks × {_DFS_SECTORS_PER_TRACK} sectors/track "
+        f"({total} sectors, single side)"
+    )
+    click.echo("Legend: █ = used, . = free")
+    click.echo()
+    for line in _build_freemap_grid_lines(
+        rows=tracks,
+        groups_per_row=1,
+        cells_per_group=_DFS_SECTORS_PER_TRACK,
+        total_sectors=total,
+        free_regions=regions,
+    ):
+        click.echo(line)
+    click.echo()
 
     if regions:
         largest = max(length for _, length in regions)
@@ -1080,16 +1141,28 @@ def _freemap_dfs(handle) -> None:
 
 
 def _freemap_adfs(handle) -> None:
-    """ADFS free-space map using the old-map free_space_entries."""
-    # Convert byte-addressed entries to sector-addressed.
+    """ADFS free-space map rendered as a 2-D grid keyed to disc geometry."""
     byte_entries = handle._fsm.free_space_entries()
     sector_entries = [(start // 256, length // 256) for start, length in byte_entries]
     total_sectors = handle._fsm.total_sectors
     free_bytes = handle.free_space
+    geometry = handle.geometry
 
-    bar = _sector_bar(total_sectors, sector_entries)
-    click.echo(f"Sectors: 0{' ' * (len(bar) - 2)}{total_sectors}")
-    click.echo(f"         {bar}")
+    click.echo(
+        f"Geometry: {geometry.cylinders} cylinders × {geometry.heads} heads × "
+        f"{geometry.sectors_per_track} sectors/track ({geometry.total_sectors} sectors)"
+    )
+    click.echo("Legend: █ = used, . = free")
+    click.echo()
+    for line in _build_freemap_grid_lines(
+        rows=geometry.cylinders,
+        groups_per_row=geometry.heads,
+        cells_per_group=geometry.sectors_per_track,
+        total_sectors=total_sectors,
+        free_regions=sector_entries,
+    ):
+        click.echo(line)
+    click.echo()
 
     if sector_entries:
         largest = max(length for _, length in sector_entries)
@@ -1101,8 +1174,27 @@ def _freemap_adfs(handle) -> None:
         click.echo("Free: 0 bytes")
 
 
+def _afs_shade_glyph(used: int, capacity: int) -> str:
+    """Pick a shade-block glyph for an AFS cylinder's used fraction.
+
+    Five bins map onto the four Unicode shade blocks plus an empty
+    marker: ``.`` for exactly empty, then ``░ ▒ ▓ █`` for the four
+    quarters from sparsely-to-fully used.
+    """
+    if used == 0 or capacity == 0:
+        return "."
+    fraction = used / capacity
+    if fraction <= 0.25:
+        return "░"
+    if fraction <= 0.50:
+        return "▒"
+    if fraction <= 0.75:
+        return "▓"
+    return "█"
+
+
 def _freemap_afs(handle) -> None:
-    """AFS free-space map showing per-cylinder occupancy."""
+    """AFS free-space map: one shade-block glyph per cylinder."""
     shadow = handle._bitmap_shadow()
     geom = handle.geometry
     spc = geom.sectors_per_cylinder
@@ -1115,42 +1207,53 @@ def _freemap_afs(handle) -> None:
     for i in range(num_cylinders):
         bm = shadow.bitmap_for(i)
         free = bm.free_count()
+        used = spc - free
         total_free += free
         total_sectors += spc
-        # Proportional fill for this cylinder.
-        if free == spc:
-            bar_chars.append(".")
-        elif free == 0:
-            bar_chars.append("#")
-        else:
-            bar_chars.append(":")  # partially used
+        bar_chars.append(_afs_shade_glyph(used, spc))
 
     bar = "".join(bar_chars)
     click.echo(f"Cylinders: {start_cyl}{' ' * max(0, len(bar) - 2)}{geom.cylinders}")
     click.echo(f"           {bar}")
     click.echo(f"Free: {total_free} sectors of {total_sectors} ({num_cylinders} cylinders)")
-    click.echo("Legend: # = full, : = partial, . = empty")
+    click.echo("Legend: . = empty, ░ ≤ 25%, ▒ ≤ 50%, ▓ ≤ 75%, █ > 75% used")
 
 
 @cli.command()
 @click.argument("image", type=click.Path(exists=True, path_type=Path))
 def validate(image: Path) -> None:
-    """Validate disc image structure."""
+    """Check disc image structure for inconsistencies.
+
+    On a clean image, prints nothing and exits 0 — the silence-is-golden
+    convention, so the command is composable with ``&&`` in shell
+    pipelines and CI scripts. On a damaged image, prints one
+    ``Error: <description>`` line on stderr per defect detected,
+    followed by an ``N error(s) found`` summary line, and exits with
+    code 65 (``EX_DATAERR``).
+
+    DFS, ADFS floppies, and ADFS hard discs are supported. Defects
+    surfaced include catalogue overflow, files extending past the end
+    of the disc, two files claiming the same sector, duplicate
+    filenames (DFS) and free-space-map checksum or structure problems
+    (ADFS).
+    """
+    from oaknut.exception import render_error
+
+    from .console import print_error
+
     fs = detect_filing_system(image)
-    if fs is FilingSystem.DFS:
-        click.echo("DFS validation not yet implemented")
-        return
     with open_image(image, fs) as handle:
-        if hasattr(handle, "validate"):
-            errors = handle.validate()
-            if errors:
-                for err in errors:
-                    click.echo(f"Error: {err}", err=True)
-                raise SystemExit(1)
-            else:
-                click.echo("OK")
-        else:
-            click.echo("Validation not available for this format")
+        errors = handle.validate()
+
+    if not errors:
+        return
+
+    for err in errors:
+        for line, is_continuation in render_error(err):
+            print_error(line, is_continuation)
+    plural = "" if len(errors) == 1 else "s"
+    click.echo(f"{len(errors)} error{plural} found", err=True)
+    raise SystemExit(int(ExitCode.DATA_ERR))
 
 
 # ---------------------------------------------------------------------------
@@ -1185,9 +1288,24 @@ def get(
     meta_format: str,
     owner: int,
 ) -> None:
-    """Export a file from the image.
+    """Export a file from the image to the host filesystem.
 
     Accepts a ``FILE_SPEC`` and an optional ``HOST_PATH``.
+
+    When ``HOST_PATH`` is omitted, the file is written to the current
+    working directory under its on-disc Acorn name. When
+    ``HOST_PATH`` is ``-``, the raw bytes go to stdout with no
+    metadata sidecar — equivalent to :command:`disc cat`. Otherwise
+    ``HOST_PATH`` is the destination path on the host.
+
+    Acorn metadata (load address, exec address, access bits) is
+    preserved alongside the data file according to ``--meta-format``.
+    The default ``inf-trad`` writes a traditional ``HOST_PATH.inf``
+    sidecar; ``xattr-acorn`` stashes the metadata in host extended
+    attributes; ``filename-riscos``/``filename-mos`` encode it into
+    the host filename; ``none`` drops it entirely. See
+    :doc:`/cli/conventions/metadata` for the full mapping and
+    trade-offs.
     """
     from oaknut.file import AcornMeta, MetaFormat, export_with_metadata
 
@@ -2336,11 +2454,26 @@ _FORMAT_BY_EXTENSION = {
 )
 @click.option("--title", "disc_title", default="", help="Disc title.")
 @click.option(
+    "--tracks",
+    type=click.Choice(["40", "80"]),
+    default=None,
+    help=(
+        "Track count for SSD/DSD. Defaults to 80. Acorn DFS floppies "
+        "are standardised at 40 or 80 tracks; other counts are rejected."
+    ),
+)
+@click.option(
     "--capacity",
     default=None,
     help="Capacity (hard disc). Accepts e.g. 10MB, 40MiB, 1024kB, or plain bytes.",
 )
-def create(host_path: Path, fmt: str | None, disc_title: str, capacity: str | None) -> None:
+def create(
+    host_path: Path,
+    fmt: str | None,
+    disc_title: str,
+    tracks: str | None,
+    capacity: str | None,
+) -> None:
     """Create a new empty disc image."""
     if fmt is None:
         ext = host_path.suffix.lower()
@@ -2350,15 +2483,38 @@ def create(host_path: Path, fmt: str | None, disc_title: str, capacity: str | No
                 f"cannot infer disc format from extension {ext!r}; "
                 "pass --format explicitly"
             )
+    if tracks is not None and fmt not in ("ssd", "dsd"):
+        raise click.ClickException(
+            f"--tracks applies only to ssd/dsd formats (got --format={fmt})"
+        )
+    tracks_int = int(tracks) if tracks is not None else 80
     if fmt == "ssd":
-        from oaknut.dfs import ACORN_DFS_80T_SINGLE_SIDED, DFS
+        from oaknut.dfs import (
+            ACORN_DFS_40T_SINGLE_SIDED,
+            ACORN_DFS_80T_SINGLE_SIDED,
+            DFS,
+        )
 
-        with DFS.create_file(host_path, ACORN_DFS_80T_SINGLE_SIDED, title=disc_title):
+        disc_format = (
+            ACORN_DFS_40T_SINGLE_SIDED
+            if tracks_int == 40
+            else ACORN_DFS_80T_SINGLE_SIDED
+        )
+        with DFS.create_file(host_path, disc_format, title=disc_title):
             pass
     elif fmt == "dsd":
-        from oaknut.dfs import ACORN_DFS_80T_DOUBLE_SIDED_INTERLEAVED, DFS
+        from oaknut.dfs import (
+            ACORN_DFS_40T_DOUBLE_SIDED_INTERLEAVED,
+            ACORN_DFS_80T_DOUBLE_SIDED_INTERLEAVED,
+            DFS,
+        )
 
-        with DFS.create_file(host_path, ACORN_DFS_80T_DOUBLE_SIDED_INTERLEAVED, title=disc_title):
+        disc_format = (
+            ACORN_DFS_40T_DOUBLE_SIDED_INTERLEAVED
+            if tracks_int == 40
+            else ACORN_DFS_80T_DOUBLE_SIDED_INTERLEAVED
+        )
+        with DFS.create_file(host_path, disc_format, title=disc_title):
             pass
     elif fmt == "adfs-s":
         from oaknut.adfs import ADFS, ADFS_S

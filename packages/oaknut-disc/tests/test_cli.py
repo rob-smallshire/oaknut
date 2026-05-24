@@ -955,10 +955,84 @@ class TestTranslateLineEndings:
 
 
 class TestValidate:
-    def test_validate_adfs(self, runner: CliRunner, adfs_image_filepath: Path) -> None:
+    def test_validate_clean_adfs_is_silent(
+        self, runner: CliRunner, adfs_image_filepath: Path
+    ) -> None:
+        """A clean ADFS image: no output, exit 0 (silence is golden)."""
         result = runner.invoke(cli, ["validate", str(adfs_image_filepath)])
         assert result.exit_code == 0
-        assert "OK" in result.output
+        assert result.output == ""
+
+    def test_validate_clean_dfs_is_silent(
+        self, runner: CliRunner, dfs_image_filepath: Path
+    ) -> None:
+        """DFS validation actually runs (was previously a stub); a clean image is silent."""
+        result = runner.invoke(cli, ["validate", str(dfs_image_filepath)])
+        assert result.exit_code == 0
+        assert result.output == ""
+
+    def test_validate_damaged_dfs_reports_errors(
+        self, runner: CliRunner, tmp_path: Path
+    ) -> None:
+        """A DFS image with two files at the same sector triggers an overlap report.
+
+        Built by hand because the public API would refuse to create the
+        overlap; we want a deliberately-broken catalogue.
+        """
+        buffer = bytearray(102400)
+        buffer[0:8] = b"BROKEN  "
+        buffer[256:260] = b"    "
+        buffer[260] = 0
+        buffer[261] = 16  # 2 files
+        buffer[262] = 0x00
+        buffer[263] = 200
+        # File 1: $.A at sector 2, 100 bytes
+        buffer[8:15] = b"A      "
+        buffer[15] = ord("$")
+        buffer[256 + 8 : 256 + 16] = bytes([0, 0, 0, 0, 100, 0, 0, 2])
+        # File 2: $.B at sector 2 (overlaps A)
+        buffer[16:23] = b"B      "
+        buffer[23] = ord("$")
+        buffer[256 + 16 : 256 + 24] = bytes([0, 0, 0, 0, 100, 0, 0, 2])
+
+        bad = tmp_path / "bad.ssd"
+        bad.write_bytes(bytes(buffer))
+
+        result = runner.invoke(cli, ["validate", str(bad)])
+        # sysexits.h EX_DATAERR
+        assert result.exit_code == 65
+        # Each problem reported on stderr with the Error: prefix
+        assert "Error:" in result.output
+        assert "Sector 2" in result.output
+        # Summary line
+        assert "1 error" in result.output or "error(s) found" in result.output.lower()
+
+    def test_validate_damaged_dfs_summary_uses_singular_for_one_error(
+        self, runner: CliRunner, tmp_path: Path
+    ) -> None:
+        """One error → ``1 error found`` (singular). Many → ``N errors found``."""
+        buffer = bytearray(102400)
+        buffer[0:8] = b"BROKEN  "
+        buffer[256:260] = b"    "
+        buffer[260] = 0
+        buffer[261] = 8  # 1 file
+        buffer[262] = 0x00
+        buffer[263] = 200
+        buffer[8:15] = b"A      "
+        buffer[15] = ord("$")
+        # Single file claimed at sector 390 with length 5120 bytes (20 sectors).
+        # end_sector = 390 + 20 = 410, but the 40T surface holds 400 sectors,
+        # so the file overflows by 10. Encoding: length-low in bytes 4-5;
+        # start_sector high bits in 0x03 of byte 6; start_sector low in byte 7.
+        # 390 = 0x186 → low = 0x86, high = 0x01.
+        buffer[256 + 8 : 256 + 16] = bytes([0, 0, 0, 0, 0x00, 0x14, 0x01, 0x86])
+
+        bad = tmp_path / "bad.ssd"
+        bad.write_bytes(bytes(buffer))
+
+        result = runner.invoke(cli, ["validate", str(bad)])
+        assert result.exit_code == 65
+        assert "1 error found" in result.output
 
 
 # ---------------------------------------------------------------------------
@@ -2084,6 +2158,61 @@ class TestCreate:
         assert result.exit_code != 0
         assert "capacity" in result.output.lower()
 
+    def test_create_ssd_default_is_80_tracks(
+        self, runner: CliRunner, tmp_path: Path
+    ) -> None:
+        out = tmp_path / "default.ssd"
+        result = runner.invoke(cli, ["create", str(out), "--format", "ssd"])
+        assert result.exit_code == 0
+        assert out.stat().st_size == 204800  # 80 tracks × 10 sectors × 256 bytes
+
+    def test_create_ssd_40_tracks(self, runner: CliRunner, tmp_path: Path) -> None:
+        out = tmp_path / "small.ssd"
+        result = runner.invoke(
+            cli, ["create", str(out), "--format", "ssd", "--tracks", "40"]
+        )
+        assert result.exit_code == 0
+        assert out.stat().st_size == 102400  # 40 tracks × 10 sectors × 256 bytes
+
+    def test_create_ssd_80_tracks_explicit(
+        self, runner: CliRunner, tmp_path: Path
+    ) -> None:
+        out = tmp_path / "big.ssd"
+        result = runner.invoke(
+            cli, ["create", str(out), "--format", "ssd", "--tracks", "80"]
+        )
+        assert result.exit_code == 0
+        assert out.stat().st_size == 204800
+
+    def test_create_dsd_40_tracks(self, runner: CliRunner, tmp_path: Path) -> None:
+        out = tmp_path / "small.dsd"
+        result = runner.invoke(
+            cli, ["create", str(out), "--format", "dsd", "--tracks", "40"]
+        )
+        assert result.exit_code == 0
+        # 40T DSD: 2 sides × 40 tracks × 10 sectors × 256 bytes
+        assert out.stat().st_size == 204800
+
+    def test_create_tracks_rejected_for_adfs(
+        self, runner: CliRunner, tmp_path: Path
+    ) -> None:
+        out = tmp_path / "new.adl"
+        result = runner.invoke(
+            cli,
+            ["create", str(out), "--format", "adfs-l", "--tracks", "40"],
+        )
+        assert result.exit_code != 0
+        assert "tracks" in result.output.lower()
+
+    def test_create_tracks_rejects_invalid_value(
+        self, runner: CliRunner, tmp_path: Path
+    ) -> None:
+        out = tmp_path / "new.ssd"
+        result = runner.invoke(
+            cli, ["create", str(out), "--format", "ssd", "--tracks", "60"]
+        )
+        assert result.exit_code != 0
+
 
 # ---------------------------------------------------------------------------
 # Whole-image: compact
@@ -2095,7 +2224,40 @@ class TestFreemap:
         result = runner.invoke(cli, ["freemap", str(dfs_image_filepath)])
         assert result.exit_code == 0
         assert "Free:" in result.output
-        assert "#" in result.output or "." in result.output
+        assert "█" in result.output or "." in result.output
+
+    def test_freemap_dfs_geometry_header(
+        self, runner: CliRunner, dfs_image_filepath: Path
+    ) -> None:
+        """Synthesised DFS geometry: 80 tracks × 10 sectors/track for an 80T SSD."""
+        result = runner.invoke(cli, ["freemap", str(dfs_image_filepath)])
+        assert result.exit_code == 0
+        assert "80 tracks" in result.output
+        assert "10 sectors/track" in result.output
+
+    def test_freemap_dfs_grid_shape(
+        self, runner: CliRunner, dfs_image_filepath: Path
+    ) -> None:
+        """80T SSD: 80 track rows, each carrying 10 sector glyphs (no head split)."""
+        result = runner.invoke(cli, ["freemap", str(dfs_image_filepath)])
+        assert result.exit_code == 0
+
+        grid_chars = set(".█ ")
+        grid_rows: list[str] = []
+        for line in result.output.splitlines():
+            parts = line.split(maxsplit=1)
+            if (
+                len(parts) == 2
+                and parts[0].isdigit()
+                and parts[1]
+                and set(parts[1]) <= grid_chars
+            ):
+                grid_rows.append(parts[1])
+        assert len(grid_rows) == 80, (
+            f"expected 80 track rows, got {len(grid_rows)}"
+        )
+        for row in grid_rows:
+            assert len(row) == 10, f"unexpected row width {len(row)}: {row!r}"
 
     def test_freemap_adfs(self, runner: CliRunner, adfs_image_filepath: Path) -> None:
         result = runner.invoke(cli, ["freemap", str(adfs_image_filepath)])
@@ -2103,11 +2265,73 @@ class TestFreemap:
         assert "Free:" in result.output
         assert "region" in result.output
 
+    def test_freemap_adfs_geometry_header(
+        self, runner: CliRunner, adfs_image_filepath: Path
+    ) -> None:
+        """ADFS-L is 80 cylinders × 2 heads × 16 sectors/track; the header surfaces it."""
+        result = runner.invoke(cli, ["freemap", str(adfs_image_filepath)])
+        assert result.exit_code == 0
+        assert "80 cylinders" in result.output
+        assert "2 heads" in result.output
+        assert "16 sectors/track" in result.output
+
+    def test_freemap_adfs_grid_shape(
+        self, runner: CliRunner, adfs_image_filepath: Path
+    ) -> None:
+        """ADFS-L: 80 cylinder rows, each rendering 16 + 1 + 16 = 33 sector glyphs."""
+        result = runner.invoke(cli, ["freemap", str(adfs_image_filepath)])
+        assert result.exit_code == 0
+
+        grid_chars = set(".█ ")
+        grid_rows: list[str] = []
+        for line in result.output.splitlines():
+            parts = line.split(maxsplit=1)
+            if (
+                len(parts) == 2
+                and parts[0].isdigit()
+                and parts[1]
+                and set(parts[1]) <= grid_chars
+            ):
+                grid_rows.append(parts[1])
+        assert len(grid_rows) == 80, (
+            f"expected 80 cylinder rows, got {len(grid_rows)}"
+        )
+        for row in grid_rows:
+            assert len(row) == 33, f"unexpected row width {len(row)}: {row!r}"
+
     def test_freemap_afs(self, runner: CliRunner, afs_image_filepath: Path) -> None:
         result = runner.invoke(cli, ["freemap", f"{afs_image_filepath}:afs:"])
         assert result.exit_code == 0
         assert "Free:" in result.output
         assert "cylinders" in result.output
+
+    def test_freemap_afs_shade_legend(
+        self, runner: CliRunner, afs_image_filepath: Path
+    ) -> None:
+        """AFS legend covers all five shade-block states."""
+        result = runner.invoke(cli, ["freemap", f"{afs_image_filepath}:afs:"])
+        assert result.exit_code == 0
+        for glyph in (".", "░", "▒", "▓", "█"):
+            assert glyph in result.output, f"missing legend glyph {glyph!r}"
+
+    def test_freemap_dat_without_dsc_is_user_error(
+        self, runner: CliRunner, tmp_path: Path
+    ) -> None:
+        """An ADFS hard-disc ``.dat`` with no companion ``.dsc`` should yield
+        a categorised user-facing error, not an uncaught ``FileNotFoundError``
+        traceback."""
+        dat_filepath = tmp_path / "orphan.dat"
+        dat_filepath.write_bytes(b"\x00" * 4096)
+
+        result = runner.invoke(cli, ["freemap", str(dat_filepath)])
+        assert result.exit_code != 0
+        # No raw stdlib traceback should reach the user
+        assert "Traceback" not in result.output
+        assert "FileNotFoundError" not in result.output
+        # The error should name the missing .dsc so the user knows what to do
+        assert ".dsc" in result.output
+        # The wrapped error should not produce a duplicate "caused by" line
+        assert "caused by" not in result.output
 
 
 class TestCompact:
