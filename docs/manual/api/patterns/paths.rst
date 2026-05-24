@@ -83,6 +83,18 @@ assume Unix or ADFS shape when reading DFS code.
 the tree as far as the root (the root's parent is itself).
 :meth:`iterdir` on a subdirectory yields its immediate children.
 
+The Acorn shell's ``^`` parent-token works as a slash-join
+component too: ``p / "^"`` is the parent of ``p``, ``p / "^^"`` is
+the grandparent, and dots between consecutive hats are optional
+(``^^`` and ``^.^`` are the same), matching the syntax the Acorn
+``*DIR`` command accepts. Mix freely with name components::
+
+    elite = adfs.root / "Games" / "Elite"
+    elite / "^"                       # $.Games
+    elite / "^^"                      # $
+    elite / "^.^.Docs.ReadMe"         # up two, then into Docs.ReadMe
+    elite / "^^.Docs.ReadMe"          # same, no dot between hats
+
 **DFS — single-character directories under a nameless root.**
 A DFS catalogue holds up to 31 file entries (62 on Watford DDFS).
 Each lives in one of 27 directories — ``$`` and ``A``–``Z`` — and

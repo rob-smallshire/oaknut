@@ -82,17 +82,21 @@ class TestParse:
 
 
 class TestValidation:
-    def test_empty_component(self) -> None:
-        with pytest.raises(AFSPathError, match="must not be empty"):
-            AFSPath.root() / ""
-
     def test_too_long_component(self) -> None:
         with pytest.raises(AFSPathError, match="exceeds 10"):
             AFSPath.root() / ("X" * 11)
 
-    def test_component_with_dot(self) -> None:
-        with pytest.raises(AFSPathError, match="forbidden character"):
-            AFSPath.root() / "has.dot"
+    def test_dotted_string_is_split_into_components(self) -> None:
+        """A string containing dots is split into components by the
+        base :meth:`AcornPath.__truediv__` — dots are the path
+        separator on every Acorn filesystem.
+        """
+        joined = AFSPath.root() / "Games.Elite"
+        assert joined.parts == ("$", "Games", "Elite")
+
+    def test_empty_string_is_a_no_op(self) -> None:
+        """``root / ""`` returns the root unchanged, matching DFS / ADFS."""
+        assert (AFSPath.root() / "").parts == AFSPath.root().parts
 
     def test_component_with_space(self) -> None:
         with pytest.raises(AFSPathError, match="forbidden character"):
