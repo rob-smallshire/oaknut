@@ -2,14 +2,25 @@ Path objects
 ============
 
 Each filing system exposes a path object with a uniform interface
-modelled loosely on :class:`pathlib.Path`. Once you have a path, you
-can :meth:`iterdir`, :meth:`stat`, :meth:`read_bytes`,
-:meth:`write_bytes`, and slash-join it regardless of which filesystem
-owns it.
+modelled on :class:`pathlib.Path`. The three concrete classes
+inherit from :class:`oaknut.file.AcornPath`, which carries the
+shared surface — slash-join, iterdir, stat, read_bytes,
+write_bytes, walk, touch, copy_to, and the rest — and delegates
+the filesystem-specific primitives to each subclass:
 
+- :class:`oaknut.file.AcornPath` (concrete base, parallel to
+  :class:`pathlib.PurePath` / :class:`pathlib.Path`)
 - :class:`oaknut.dfs.DFSPath`
 - :class:`oaknut.adfs.ADFSPath`
 - :class:`oaknut.afs.AFSPath`
+
+Callers wanting "a path on any Acorn filesystem" can type-hint
+with :class:`AcornPath` directly::
+
+    from oaknut.file import AcornPath
+
+    def summarise(p: AcornPath) -> None:
+        print(p.path, p.stat().length)
 
 A path is obtained from an open filesystem handle::
 
@@ -82,14 +93,12 @@ The cookbook recipes lean on this uniformity: code that walks a
 directory and prints its contents looks the same on DFS, ADFS, and
 AFS.
 
-.. note::
-
-   The uniform interface is currently a *structural* contract —
-   parallel implementations on :class:`DFSPath`, :class:`ADFSPath`,
-   and :class:`AFSPath`, with no shared :class:`~typing.Protocol`
-   or :class:`abc.ABC` declaring it. Callers that want to type-hint
-   "a path on any Acorn filesystem" can use a union
-   (``DFSPath | ADFSPath | AFSPath``) until a formal protocol lands.
+The shape mirrors :mod:`pathlib`'s own division: :class:`AcornPath`
+plays the role :class:`pathlib.PurePath` and :class:`pathlib.Path`
+play in the standard library — a concrete base with abstract-by-
+``NotImplementedError`` filesystem primitives and default
+implementations for everything that can be expressed in terms of
+those primitives.
 
 
 Where the path models diverge
