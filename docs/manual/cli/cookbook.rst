@@ -215,8 +215,8 @@ is not.
 
 Note also the absence of ``--cylinders``: when omitted, ``afs-init``
 claims the existing free space, which is exactly what ``afs-plan``
-would have suggested. Pass an explicit value if you want a smaller
-AFS region and ADFS retained beyond what is strictly necessary.
+suggested. Pass an explicit value if you want a smaller AFS region
+and ADFS retained beyond what is strictly necessary.
 
 The ``--emplace`` option accepts a shipped name (``Library``,
 ``Library1``, ``ArthurLib``) or a path to any ADFS ``.adl``; the
