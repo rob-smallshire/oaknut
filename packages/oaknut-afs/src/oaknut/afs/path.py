@@ -318,6 +318,23 @@ class AFSPath:
     def __iter__(self) -> Iterator[AFSPath]:
         return self.iterdir()
 
+    def walk(self) -> Iterator[tuple[AFSPath, list[str], list[str]]]:
+        """Walk the directory tree rooted at this path.
+
+        Mirrors :meth:`pathlib.Path.walk` / :func:`os.walk`. Yields
+        ``(dirpath, dirnames, filenames)`` tuples in pre-order
+        traversal, descending into each subdirectory.
+        """
+        afs = self._require_afs()
+        directory = afs._resolve_directory(self)
+        dirnames: list[str] = []
+        filenames: list[str] = []
+        for entry in directory:
+            (dirnames if entry.is_directory else filenames).append(entry.name)
+        yield self, dirnames, filenames
+        for dirname in dirnames:
+            yield from (self / dirname).walk()
+
     # ------------------------------------------------------------------
     # Read sugar
     # ------------------------------------------------------------------
@@ -440,6 +457,64 @@ class AFSPath:
             access=access,
             date=date,
         )
+
+    def touch(
+        self,
+        *,
+        access=None,
+        date=None,
+        exist_ok: bool = True,
+    ) -> None:
+        """Create an empty file at this path, mirroring :meth:`pathlib.Path.touch`.
+
+        AFS directory entries carry a date stamp. With the default
+        ``exist_ok=True``, touching an existing file refreshes that
+        date to ``date`` (defaulting to today).
+
+        Args:
+            access: Access flags for the file. On create, used for the
+                new entry. On an existing file, ignored (pathlib's
+                touch does not rewrite mode either).
+            date: Acorn date stamp. Defaults to today.
+            exist_ok: Default ``True`` matches pathlib. When ``False``,
+                an existing file or directory at the path raises.
+
+        Raises:
+            AFSPathError: If this path is the root, or already exists
+                as a directory.
+            AFSDirectoryEntryExistsError: If a file already exists at
+                the path and ``exist_ok`` is ``False``.
+        """
+        import datetime
+
+        from oaknut.afs.exceptions import AFSDirectoryEntryExistsError
+        from oaknut.afs.types import AfsDate
+
+        self._require_afs()
+        if self.is_root():
+            raise AFSPathError("cannot touch the root directory")
+        if self.exists():
+            if self.is_dir():
+                raise AFSPathError(
+                    f"{self.path!r} is a directory, cannot touch"
+                )
+            if not exist_ok:
+                raise AFSDirectoryEntryExistsError(
+                    f"file {self.path!r} already exists"
+                )
+            new_date = date if date is not None else AfsDate(datetime.date.today())
+            entry = self.directory_entry()
+            self.write_bytes(
+                self.read_bytes(),
+                load_address=entry.load_address,
+                exec_address=entry.exec_address,
+                access=entry.access,
+                date=new_date,
+            )
+            return
+        if date is None:
+            date = AfsDate(datetime.date.today())
+        self.write_bytes(b"", access=access, date=date)
 
     def mkdir(
         self,

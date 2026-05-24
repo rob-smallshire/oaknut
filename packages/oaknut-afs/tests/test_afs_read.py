@@ -71,6 +71,66 @@ class TestRootDirectoryIteration:
             p.read_bytes()
 
 
+class TestWalk:
+    """``AFSPath.walk`` mirrors :meth:`pathlib.Path.walk` / ``os.walk``.
+
+    Yields ``(dirpath, dirnames, filenames)`` tuples in pre-order
+    traversal, descending into each subdirectory.
+    """
+
+    def _populated(self):
+        adfs = build_synthetic_adfs_with_afs()
+        afs = adfs.afs_partition
+        (afs.root / "Code").mkdir()
+        (afs.root / "Code" / "Main").write_bytes(b"main")
+        (afs.root / "Code" / "Utils").mkdir()
+        (afs.root / "Code" / "Utils" / "Sort").write_bytes(b"sort")
+        (afs.root / "Docs").mkdir()
+        (afs.root / "Docs" / "Manual").write_bytes(b"manual")
+        (afs.root / "ReadMe").write_bytes(b"top")
+        return afs
+
+    def test_walk_yields_root_first(self) -> None:
+        afs = self._populated()
+        results = list(afs.root.walk())
+        root_path, root_dirs, root_files = results[0]
+        assert root_path == afs.root
+        assert set(root_dirs) == {"Code", "Docs"}
+        assert "ReadMe" in root_files
+
+    def test_walk_descends_into_subdirectories(self) -> None:
+        afs = self._populated()
+        paths = [p.path for p, _dirs, _files in afs.root.walk()]
+        assert "$.Code" in paths
+        assert "$.Code.Utils" in paths
+        assert "$.Docs" in paths
+
+    def test_walk_lists_files_in_each_directory(self) -> None:
+        afs = self._populated()
+        by_path = {p.path: (dirs, files) for p, dirs, files in afs.root.walk()}
+        assert "Main" in by_path["$.Code"][1]
+        assert "Utils" in by_path["$.Code"][0]
+        assert "Sort" in by_path["$.Code.Utils"][1]
+        assert "Manual" in by_path["$.Docs"][1]
+
+    def test_walk_subtree_starts_from_given_path(self) -> None:
+        afs = self._populated()
+        results = list((afs.root / "Code").walk())
+        paths = [p.path for p, _d, _f in results]
+        assert paths[0] == "$.Code"
+        assert "$.Code.Utils" in paths
+        assert "$.Docs" not in paths
+
+    def test_walk_leaf_directory_yields_single_tuple(self) -> None:
+        afs = self._populated()
+        results = list((afs.root / "Code" / "Utils").walk())
+        assert len(results) == 1
+        path, dirs, files = results[0]
+        assert path.path == "$.Code.Utils"
+        assert dirs == []
+        assert files == ["Sort"]
+
+
 class TestReadBytes:
     def test_round_trip_small_file(self) -> None:
         payload = b"Hello, AFS!\n"
