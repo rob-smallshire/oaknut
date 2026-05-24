@@ -209,8 +209,8 @@ committing. Skip it if you know what you want.
    :section: init_afs
 
 ``afs-init`` carves out the AFS partition for real, adds an
-``RJS`` regular user, ``--omit-user``-s the built-in ``Welcome``
-account, and ``--emplace``-s two shipped library images.
+``RJS`` regular user, omits the provided-by-default ``Welcome``
+account, and emplaces two shipped library images.
 
 Note the absence of ``--cylinders``: when omitted, ``afs-init``
 claims the existing free space, which is exactly what ``afs-plan``
