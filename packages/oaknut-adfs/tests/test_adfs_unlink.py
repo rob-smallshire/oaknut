@@ -3,6 +3,7 @@
 import pytest
 from oaknut.adfs import ADFS, ADFS_S
 from oaknut.adfs.exceptions import ADFSFileLockedError, ADFSPathError
+from oaknut.file import Access
 
 
 class TestUnlink:
@@ -43,7 +44,7 @@ class TestUnlink:
 
     def test_unlink_locked_raises(self):
         adfs = ADFS.create(ADFS_S)
-        (adfs.root / "Secret").write_bytes(b"data", access=True)
+        (adfs.root / "Secret").write_bytes(b"data", access=Access.LWR)
         with pytest.raises(ADFSFileLockedError):
             (adfs.root / "Secret").unlink()
         # File should still exist

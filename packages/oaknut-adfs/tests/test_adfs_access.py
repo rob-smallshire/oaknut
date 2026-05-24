@@ -4,6 +4,7 @@ import pytest
 from oaknut.adfs import ADFS, ADFS_S
 from oaknut.adfs.directory import Access
 from oaknut.adfs.exceptions import ADFSPathError
+from oaknut.file import Access
 
 
 class TestAccessEnum:
@@ -118,7 +119,7 @@ class TestChmod:
     def test_chmod_clears_other_flags(self):
         """chmod replaces the full attribute set."""
         adfs = ADFS.create(ADFS_S)
-        (adfs.root / "File").write_bytes(b"data", access=True)
+        (adfs.root / "File").write_bytes(b"data", access=Access.LWR)
         assert (adfs.root / "File").stat().locked is True
         (adfs.root / "File").chmod(Access.R | Access.W)
         stat = (adfs.root / "File").stat()
@@ -217,7 +218,7 @@ class TestStatAccess:
 
     def test_locked_file_access(self):
         adfs = ADFS.create(ADFS_S)
-        (adfs.root / "File").write_bytes(b"data", access=True)
+        (adfs.root / "File").write_bytes(b"data", access=Access.LWR)
         stat = (adfs.root / "File").stat()
         assert stat.access == Access.R | Access.W | Access.L | Access.PR
 
@@ -283,7 +284,7 @@ class TestLockUnlockWithChmod:
 
     def test_unlock_is_shorthand_for_removing_L(self):
         adfs = ADFS.create(ADFS_S)
-        (adfs.root / "File").write_bytes(b"data", access=True)
+        (adfs.root / "File").write_bytes(b"data", access=Access.LWR)
         (adfs.root / "File").unlock()
         stat = (adfs.root / "File").stat()
         assert stat.locked is False

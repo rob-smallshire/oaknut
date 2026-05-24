@@ -3,6 +3,7 @@
 import pytest
 from oaknut.adfs import ADFS, ADFS_M, ADFS_S
 from oaknut.adfs.exceptions import ADFSPathError
+from oaknut.file import Access
 
 
 class TestRenameCrossDirectory:
@@ -29,7 +30,7 @@ class TestRenameCrossDirectory:
             b"code",
             load_address=0x1900,
             exec_address=0x8023,
-            access=True,
+            access=Access.LWR,
         )
         (adfs.root / "Prog").rename(adfs.root / "Dir" / "Prog")
         stat = (adfs.root / "Dir" / "Prog").stat()

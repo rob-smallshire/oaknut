@@ -65,11 +65,14 @@ plus per-path methods to put bytes on disc. ``write_text`` accepts
 arbitrary strings and Acorn-encodes them; ``write_bytes`` takes raw
 data plus load/exec addresses and the unified ``access`` keyword.
 
-The locked shortcut — ``access=True`` — is shorthand for setting
-``Access.L`` and the filesystem's default owner R+W bits. Pass an
-explicit :class:`oaknut.file.Access` flag pattern for fine-grained
-control (owner-execute, public-read, …) on filesystems that store
-them.
+``access`` accepts a canonical :class:`oaknut.file.Access` flag
+combination — or ``None`` for the filesystem's default (unlocked
+owner R+W). Two named composites cover the cases that come up most:
+:attr:`Access.WR` (the unlocked default, equivalent to omitting
+``access``) and :attr:`Access.LWR` (locked owner R+W, the
+"do-not-delete" pattern). Fine-grained control — owner-execute,
+public-read, public-write — comes from combining the individual
+flags with ``|``.
 
 .. literalinclude:: ../../../scripts/api-examples/create_dfs_disc.py
    :language: python

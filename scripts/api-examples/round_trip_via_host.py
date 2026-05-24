@@ -66,7 +66,7 @@ def _build_source_disc(workdir: Path) -> Path:
             load_address=0x1900,
             exec_address=0x1900,
         )
-        (adfs.root / "Locked").write_bytes(b"static\r", access=True)
+        (adfs.root / "Locked").write_bytes(b"static\r", access=Access.LWR)
     return filepath
 
 

@@ -2,6 +2,7 @@
 
 import pytest
 from oaknut.adfs import ADFS, ADFS_M, ADFS_S
+from oaknut.file import Access
 
 
 class TestCompactBasic:
@@ -31,7 +32,7 @@ class TestCompactBasic:
             b"code",
             load_address=0x1900,
             exec_address=0x8023,
-            access=True,
+            access=Access.LWR,
         )
         adfs.compact()
         stat = (adfs.root / "Prog").stat()

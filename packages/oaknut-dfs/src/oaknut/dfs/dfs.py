@@ -77,18 +77,15 @@ def detect_dfs_format(filepath: Union[str, PathLike]) -> DiskFormat:
     )
 
 
-def _coerce_access_to_locked(access: "Access | bool | None") -> bool:
-    """Normalise the unified ``access`` kwarg to a plain ``locked`` bool.
+def _coerce_access_to_locked(access: "Access | None") -> bool:
+    """Project the canonical ``access`` value down to DFS's lone L bit.
 
-    DFS only stores the locked bit, so the richer :class:`Access`
-    flags collapse to ``Access.L`` presence. ``None`` defaults to
-    unlocked; ``bool`` passes straight through; an ``Access`` /
-    ``int`` is masked against ``Access.L``.
+    DFS only stores the locked bit; the richer :class:`Access` flags
+    collapse to ``Access.L`` presence. ``None`` (the default) maps to
+    unlocked; an :class:`Access` value is masked against ``Access.L``.
     """
     if access is None:
         return False
-    if isinstance(access, bool):
-        return access
     return bool(int(access) & int(Access.L))
 
 
@@ -328,7 +325,7 @@ class DFSPath:
         *,
         load_address: int = 0,
         exec_address: int = 0,
-        access: "Access | bool | None" = None,
+        access: "Access | None" = None,
         date: object = None,
     ) -> None:
         """Write file contents (*SAVE).
@@ -378,7 +375,7 @@ class DFSPath:
         *,
         load_address: int = basic.BBC_BASIC_LOAD_ADDRESS,
         exec_address: int = 0,
-        access: "Access | bool | None" = None,
+        access: "Access | None" = None,
     ) -> None:
         """Write a BBC BASIC program, tokenising the source first.
 
@@ -412,7 +409,7 @@ class DFSPath:
         encoding: str = "acorn",
         load_address: int = 0,
         exec_address: int = 0,
-        access: "Access | bool | None" = None,
+        access: "Access | None" = None,
     ) -> None:
         """Write text contents using the specified encoding.
 

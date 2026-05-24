@@ -338,19 +338,16 @@ class ADFSStat:
         return None
 
 
-def _coerce_access_to_locked(access: "Access | bool | None") -> bool:
-    """Normalise the unified ``access`` kwarg to ``locked: bool``.
+def _coerce_access_to_locked(access: "Access | None") -> bool:
+    """Project the canonical ``access`` value down to ``locked: bool``.
 
     write_bytes only sets the locked bit at the catalogue-write
     layer; richer flags (R/W/E/PR/PW) are applied later via
-    :meth:`chmod`. ``None`` defaults to unlocked; ``bool`` passes
-    straight through; an ``Access`` / ``int`` is masked against
-    ``Access.L``.
+    :meth:`chmod`. ``None`` (the default) maps to unlocked; an
+    :class:`Access` value is masked against ``Access.L``.
     """
     if access is None:
         return False
-    if isinstance(access, bool):
-        return access
     return bool(int(access) & int(Access.L))
 
 
@@ -599,7 +596,7 @@ class ADFSPath:
         *,
         load_address: int = 0,
         exec_address: int = 0,
-        access: "Access | bool | None" = None,
+        access: "Access | None" = None,
         date: object = None,
     ) -> None:
         """Write file contents, creating or overwriting the file.
@@ -652,7 +649,7 @@ class ADFSPath:
         encoding: str = "acorn",
         load_address: int = 0,
         exec_address: int = 0,
-        access: "Access | bool | None" = None,
+        access: "Access | None" = None,
     ) -> None:
         """Write text contents using the specified encoding.
 
@@ -676,7 +673,7 @@ class ADFSPath:
         *,
         load_address: int = basic.BBC_BASIC_LOAD_ADDRESS,
         exec_address: int = 0,
-        access: "Access | bool | None" = None,
+        access: "Access | None" = None,
     ) -> None:
         """Write a BBC BASIC program, tokenising the source first.
 

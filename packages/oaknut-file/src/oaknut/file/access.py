@@ -23,6 +23,15 @@ class Access(IntFlag):
     attribute byte, suitable for storage in xattrs or INF files::
 
         int(Access.R | Access.W)  # 0x03
+
+    Two convenience composites cover the cases that come up in every
+    write_bytes call site:
+
+      - :attr:`Access.WR` — owner read+write (the filesystem default
+        for a newly-created file).
+      - :attr:`Access.LWR` — locked owner read+write (a file that
+        should not be deleted, overwritten, or renamed). Pass this
+        as ``access=Access.LWR`` for the locked-default case.
     """
 
     R = 0x01  # Owner read
@@ -31,6 +40,10 @@ class Access(IntFlag):
     L = 0x08  # Locked (prevents delete, overwrite, rename)
     PR = 0x10  # Public read
     PW = 0x20  # Public write
+
+    # Convenience composites.
+    WR = R | W
+    LWR = L | R | W
 
 
 _OWNER_LETTERS = {"L": Access.L, "W": Access.W, "R": Access.R, "E": Access.E}

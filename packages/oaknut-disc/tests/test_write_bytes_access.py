@@ -1,11 +1,19 @@
 """Cross-filesystem write_bytes(access=) conformance (#25).
 
-Asserts that every path class accepts the same five forms on the
-``access`` keyword — ``None``, ``True``, ``False``,
-:class:`oaknut.file.Access`, and the filesystem's native access type
-(``AFSAccess`` on AFS, an int on DFS/ADFS treated as Access bits).
+Asserts that every path class accepts the documented forms on the
+``access`` keyword: ``None`` (filesystem default),
+:class:`oaknut.file.Access` (canonical wire-form), and the
+filesystem's native access type (``AFSAccess`` on AFS, an int on
+DFS/ADFS treated as Access bits). The bool shortcut that used to
+exist was dropped — ``access=True`` reads as "more access" but
+meant the opposite — so callers spell the canonical patterns
+explicitly: ``access=Access.LWR`` for locked owner R+W,
+``access=Access.WR`` for unlocked owner R+W (the default, so it
+can also be omitted entirely).
+
 The resulting on-disc state is checked via the unified
-:class:`oaknut.file.Stat` protocol so the test is itself filesystem-agnostic.
+:class:`oaknut.file.Stat` protocol so the test is itself
+filesystem-agnostic.
 """
 
 from __future__ import annotations
@@ -25,14 +33,14 @@ def _open_dfs(filepath: Path):
 class TestUnifiedAccessAcceptance:
     """Each path class must accept the documented forms of ``access``."""
 
-    def test_dfs_accepts_bool_true(self, dfs_image_filepath: Path) -> None:
+    def test_dfs_accepts_lwr_constant_for_locked(self, dfs_image_filepath: Path) -> None:
         with _open_dfs(dfs_image_filepath) as dfs:
-            (dfs.root / "$.LOCK").write_bytes(b"x", access=True)
+            (dfs.root / "$.LOCK").write_bytes(b"x", access=Access.LWR)
             assert (dfs.root / "$.LOCK").stat().access & Access.L
 
-    def test_dfs_accepts_bool_false(self, dfs_image_filepath: Path) -> None:
+    def test_dfs_accepts_wr_constant_for_unlocked(self, dfs_image_filepath: Path) -> None:
         with _open_dfs(dfs_image_filepath) as dfs:
-            (dfs.root / "$.OPEN").write_bytes(b"x", access=False)
+            (dfs.root / "$.OPEN").write_bytes(b"x", access=Access.WR)
             assert not ((dfs.root / "$.OPEN").stat().access & Access.L)
 
     def test_dfs_accepts_none(self, dfs_image_filepath: Path) -> None:
@@ -40,30 +48,36 @@ class TestUnifiedAccessAcceptance:
             (dfs.root / "$.NONE").write_bytes(b"x", access=None)
             assert not ((dfs.root / "$.NONE").stat().access & Access.L)
 
-    def test_dfs_accepts_canonical_Access(self, dfs_image_filepath: Path) -> None:
+    def test_dfs_accepts_explicit_flag_combination(self, dfs_image_filepath: Path) -> None:
         with _open_dfs(dfs_image_filepath) as dfs:
-            (dfs.root / "$.ACC").write_bytes(b"x", access=Access.L | Access.R | Access.W)
+            (dfs.root / "$.ACC").write_bytes(
+                b"x", access=Access.L | Access.R | Access.W
+            )
             assert (dfs.root / "$.ACC").stat().access & Access.L
 
-    def test_adfs_accepts_bool_true(self, adfs_image_filepath: Path) -> None:
+    def test_adfs_accepts_lwr_constant(self, adfs_image_filepath: Path) -> None:
         with ADFS.from_file(adfs_image_filepath, mode="r+b") as adfs:
-            (adfs.root / "Locked").write_bytes(b"x", access=True)
+            (adfs.root / "Locked").write_bytes(b"x", access=Access.LWR)
             assert (adfs.root / "Locked").stat().access & Access.L
 
-    def test_adfs_accepts_canonical_Access(self, adfs_image_filepath: Path) -> None:
+    def test_adfs_accepts_explicit_flag_combination(
+        self, adfs_image_filepath: Path
+    ) -> None:
         with ADFS.from_file(adfs_image_filepath, mode="r+b") as adfs:
             (adfs.root / "Acc").write_bytes(b"x", access=Access.L | Access.R)
             assert (adfs.root / "Acc").stat().access & Access.L
 
-    def test_afs_accepts_bool_true(self, afs_image_filepath: Path) -> None:
+    def test_afs_accepts_lwr_constant(self, afs_image_filepath: Path) -> None:
         with ADFS.from_file(afs_image_filepath, mode="r+b") as adfs:
             afs = adfs.afs_partition
-            (afs.root / "Locked").write_bytes(b"x", access=True)
+            (afs.root / "Locked").write_bytes(b"x", access=Access.LWR)
             from oaknut.afs import AFSAccess
 
             assert (afs.root / "Locked").stat().afs_access & AFSAccess.LOCKED
 
-    def test_afs_accepts_canonical_Access(self, afs_image_filepath: Path) -> None:
+    def test_afs_accepts_explicit_flag_combination(
+        self, afs_image_filepath: Path
+    ) -> None:
         with ADFS.from_file(afs_image_filepath, mode="r+b") as adfs:
             afs = adfs.afs_partition
             (afs.root / "Acc").write_bytes(b"x", access=Access.L | Access.PR)

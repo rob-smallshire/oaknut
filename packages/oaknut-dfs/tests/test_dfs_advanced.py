@@ -5,6 +5,7 @@ from oaknut.dfs.dfs import DFS
 from oaknut.dfs.formats import (
     ACORN_DFS_40T_SINGLE_SIDED,
 )
+from oaknut.file import Access
 
 
 class TestFreeSpace:
@@ -272,7 +273,7 @@ class TestCompaction:
         dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
         # Add a locked file
-        (dfs.root / "$" / "LOCKED").write_bytes(b"data", access=True)
+        (dfs.root / "$" / "LOCKED").write_bytes(b"data", access=Access.LWR)
 
         with pytest.raises(PermissionError, match="locked files present"):
             dfs.compact()

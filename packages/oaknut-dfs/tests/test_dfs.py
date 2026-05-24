@@ -10,6 +10,7 @@ from oaknut.dfs.formats import (
     ACORN_DFS_40T_SINGLE_SIDED,
     ACORN_DFS_80T_SINGLE_SIDED,
 )
+from oaknut.file import Access
 
 from tests.fixtures import REFERENCE_IMAGES_DIRPATH
 
@@ -326,7 +327,7 @@ class TestDFSCopyFile:
             orig_path.read_bytes(),
             load_address=orig_stat.load_address,
             exec_address=orig_stat.exec_address,
-            access=orig_stat.locked,
+            access=orig_stat.access,
         )
 
         # Both files should exist
@@ -364,7 +365,7 @@ class TestDFSCopyFile:
             src_path.read_bytes(),
             load_address=src_stat.load_address,
             exec_address=src_stat.exec_address,
-            access=src_stat.locked,
+            access=src_stat.access,
         )
 
         assert (dfs.root / "$" / "FILE").exists()
@@ -389,7 +390,7 @@ class TestDFSCopyFile:
         dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
         # Save and lock file
-        (dfs.root / "$" / "LOCKED").write_bytes(b"data", access=True)
+        (dfs.root / "$" / "LOCKED").write_bytes(b"data", access=Access.LWR)
 
         # Copy it
         src_path = dfs.root / "$" / "LOCKED"
@@ -398,7 +399,7 @@ class TestDFSCopyFile:
             src_path.read_bytes(),
             load_address=src_stat.load_address,
             exec_address=src_stat.exec_address,
-            access=src_stat.locked,
+            access=src_stat.access,
         )
 
         # Both should be locked
@@ -527,7 +528,7 @@ class TestDFSConvenienceMethods:
 
         # Save with metadata
         data = Path(source_file).read_bytes()
-        (dfs.root / "$" / "PROG").write_bytes(data, load_address=0x1900, access=True)
+        (dfs.root / "$" / "PROG").write_bytes(data, load_address=0x1900, access=Access.LWR)
 
         # Verify
         info = (dfs.root / "$" / "PROG").stat()

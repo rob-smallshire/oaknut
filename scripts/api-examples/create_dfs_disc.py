@@ -2,7 +2,7 @@
 
 Shows ``DFS.create_file`` (format defaulted from the ``.ssd`` extension),
 ``write_bytes`` and ``write_text``, varied load/exec addresses, and
-the unified ``access`` keyword's locked shortcut (``access=True``).
+the canonical locked-file pattern (``access=Access.LWR``).
 """
 
 from __future__ import annotations
@@ -41,7 +41,7 @@ def populate_disc(filepath: Path) -> None:
         )
         (dfs.root / "$.LOCKED").write_bytes(
             b"do not delete\r",
-            access=True,
+            access=Access.LWR,
         )
 
 

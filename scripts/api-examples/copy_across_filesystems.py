@@ -14,6 +14,7 @@ from pathlib import Path
 
 from oaknut.adfs import ADFS
 from oaknut.dfs import DFS
+from oaknut.file import Access
 
 
 def cross_copy(source_filepath: Path, target_filepath: Path) -> None:
@@ -38,7 +39,7 @@ def _build_source_floppy(workdir: Path) -> Path:
         (dfs.root / "$.HELLO").write_bytes(
             b'PRINT "Hello"\r', load_address=0x1900
         )
-        (dfs.root / "$.LOCKED").write_bytes(b"keep\r", access=True)
+        (dfs.root / "$.LOCKED").write_bytes(b"keep\r", access=Access.LWR)
         (dfs.root / "A.NOTES").write_bytes(b"sibling-dir note\r")
     return filepath
 

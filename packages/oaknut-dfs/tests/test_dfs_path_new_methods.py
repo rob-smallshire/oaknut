@@ -4,6 +4,7 @@ import oaknut.basic as basic
 import pytest
 from oaknut.dfs.dfs import DFS
 from oaknut.dfs.formats import ACORN_DFS_40T_SINGLE_SIDED
+from oaknut.file import Access
 
 
 def _make_empty_dfs():
@@ -101,7 +102,7 @@ class TestWriteBasic:
         (dfs.root / "$" / "PROG").write_basic(
             "10 PRINT",
             exec_address=0x8023,
-            access=True,
+            access=Access.LWR,
         )
         stat = (dfs.root / "$" / "PROG").stat()
         assert stat.exec_address == 0x8023
@@ -149,7 +150,7 @@ class TestExportFile:
             b"\x00" * 100,
             load_address=0x1900,
             exec_address=0x8023,
-            access=True,
+            access=Access.LWR,
         )
         target = tmp_path / "CODE"
         (dfs.root / "$" / "CODE").export_file(target)

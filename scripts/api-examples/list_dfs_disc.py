@@ -44,7 +44,7 @@ def _build_demo_disc(workdir: Path) -> Path:
             load_address=0x1900,
             exec_address=0x1900,
         )
-        (dfs.root / "$.LOCKED").write_bytes(b"\x00" * 256, access=True)
+        (dfs.root / "$.LOCKED").write_bytes(b"\x00" * 256, access=Access.LWR)
         (dfs.root / "A.GAME").write_bytes(b"\x00" * 100, load_address=0x3000)
     return filepath
 

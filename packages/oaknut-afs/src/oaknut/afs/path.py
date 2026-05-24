@@ -328,7 +328,7 @@ class AFSPath:
         *,
         load_address: int = 0,
         exec_address: int = 0,
-        access: "Access | AFSAccess | bool | int | None" = None,
+        access: "Access | AFSAccess | int | None" = None,
         date=None,
     ) -> None:
         """Create or replace a file at this path with ``data``.
@@ -338,13 +338,13 @@ class AFSPath:
         placed in freshly-allocated sectors. Allocator-level rollback
         on space exhaustion is handled by the lower layers.
 
-        ``access`` accepts five forms:
+        ``access`` accepts four forms:
 
           - ``None``: filesystem default — owner R+W, no public, unlocked.
-          - ``True`` / ``False``: locked shortcut.
           - :class:`oaknut.file.Access` (canonical wire form): translated
             to the AFS on-disc layout via
             :func:`oaknut.file.access_mapping.access_to_afs_bits`.
+            ``Access.LWR`` is the canonical "locked owner R+W" combination.
           - :class:`oaknut.afs.access.AFSAccess`: used verbatim.
           - ``int``: raw on-disc byte (interpreted via
             :meth:`AFSAccess.from_byte`).
@@ -366,8 +366,6 @@ class AFSPath:
             # ACCDEF at Uade01:271 — owner R+W, no public access,
             # unlocked. Matches what the ROM's create path defaults to.
             access = AFSAccess.from_string("WR/")
-        elif isinstance(access, bool):
-            access = AFSAccess.from_string("LR/" if access else "WR/")
         elif isinstance(access, AFSAccess):
             pass
         elif isinstance(access, Access):
