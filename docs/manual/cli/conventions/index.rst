@@ -12,4 +12,5 @@ understands one command understands the surface.
    wildcards
    quoting
    output-formats
+   metadata
    exit-codes

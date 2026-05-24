@@ -127,7 +127,8 @@ Three commands depending on what you want:
 - ``disc get`` writes the file to your host filesystem along with a
   metadata sidecar (an INF file by default) capturing the load /
   exec / access information that does not survive a plain host
-  ``cp``. See :doc:`/api/patterns/metadata` for the rationale.
+  ``cp``. See :doc:`conventions/metadata` for the full menu of
+  formats and when each is the right pick.
 
 
 Browsing the catalogue
