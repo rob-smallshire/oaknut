@@ -752,10 +752,8 @@ def _dfs_partition_tc(handle, *, is_only: bool):
     partition) drops the ``Partition 1:`` prefix from the table title
     so the single block reads as a plain "DFS" summary.
     """
-    from oaknut.file import BootOption
-
     info = handle.info
-    boot = BootOption(handle.boot_option)
+    boot = handle.boot_option
     title = "DFS" if is_only else "Partition 1: DFS"
     return _kv_table(
         title,
@@ -781,12 +779,10 @@ def _adfs_partition_tc(handle, *, is_only: bool):
     block; the disc-level geometry is in the separate ``disc`` report
     that the partitioned shape always carries.
     """
-    from oaknut.file import BootOption
-
     geom = handle.geometry
     adfs_sectors = handle.total_size // _SECTOR_SIZE
     adfs_cylinders = adfs_sectors // (geom.heads * geom.sectors_per_track)
-    boot = BootOption(handle.boot_option)
+    boot = handle.boot_option
     pairs: list[tuple[str, str, str]] = []
     if is_only:
         pairs.append(
@@ -2284,12 +2280,11 @@ def opt(image: Path, boot_option: int | None):
     """
     from asyoulikeit.scalar_data import ScalarContent
     from asyoulikeit.tabular_data import Report, Reports
-    from oaknut.file import BootOption
 
     fs = detect_filing_system(image)
     if boot_option is None:
         with open_image(image, fs) as handle:
-            bo = BootOption(handle.boot_option)
+            bo = handle.boot_option
         return Reports(
             boot_option=Report(
                 data=ScalarContent(

@@ -988,22 +988,23 @@ class DFS:
         self._catalogued_surface.catalogue.set_title(value)
 
     @property
-    def boot_option(self) -> int:
-        """Get boot option (0-3)."""
-        return self._catalogued_surface.disk_info.boot_option
+    def boot_option(self) -> "BootOption":
+        """Get boot option as a :class:`oaknut.file.BootOption` enum."""
+        from oaknut.file import BootOption
+
+        return BootOption(self._catalogued_surface.disk_info.boot_option)
 
     @boot_option.setter
-    def boot_option(self, value: int) -> None:
-        """
-        Set boot option (*OPT 4,n).
+    def boot_option(self, value: "BootOption | int") -> None:
+        """Set boot option (``*OPT 4,n``).
 
-        Args:
-            value: Boot option (0-3)
-
-        Raises:
-            ValueError: If value not in 0-3 range
+        Accepts either a :class:`oaknut.file.BootOption` or a plain
+        ``int`` in the range 0–3. Invalid values raise from the
+        :class:`BootOption` constructor itself.
         """
-        self._catalogued_surface.catalogue.set_boot_option(value)
+        from oaknut.file import BootOption
+
+        self._catalogued_surface.catalogue.set_boot_option(int(BootOption(value)))
 
     # File listing
     @property

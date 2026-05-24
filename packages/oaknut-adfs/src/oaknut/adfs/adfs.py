@@ -1576,16 +1576,23 @@ class ADFS:
         self.root.title = value
 
     @property
-    def boot_option(self) -> int:
-        """Boot option (0–3)."""
-        return self._fsm.boot_option
+    def boot_option(self) -> "BootOption":
+        """Boot option as a :class:`oaknut.file.BootOption` enum."""
+        from oaknut.file import BootOption
+
+        return BootOption(self._fsm.boot_option)
 
     @boot_option.setter
-    def boot_option(self, value: int) -> None:
-        """Set boot option (0–3)."""
-        if not 0 <= value <= 3:
-            raise ValueError(f"Boot option must be 0–3, got {value}")
-        self._fsm.set_boot_option(value)
+    def boot_option(self, value: "BootOption | int") -> None:
+        """Set boot option.
+
+        Accepts either a :class:`oaknut.file.BootOption` or a plain
+        ``int`` in the range 0–3. Invalid values raise from the
+        :class:`BootOption` constructor itself.
+        """
+        from oaknut.file import BootOption
+
+        self._fsm.set_boot_option(int(BootOption(value)))
 
     @property
     def free_space(self) -> int:

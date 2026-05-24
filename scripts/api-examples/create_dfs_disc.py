@@ -11,7 +11,7 @@ import tempfile
 from pathlib import Path
 
 from oaknut.dfs import DFS
-from oaknut.file import Access, BootOption
+from oaknut.file import Access
 
 
 def populate_disc(filepath: Path) -> None:
@@ -55,7 +55,7 @@ def main(workdir: Path) -> None:
     # metadata we set.
     with DFS.from_file(filepath) as dfs:
         print(f"Title:       {dfs.title}")
-        print(f"Boot option: {BootOption(dfs.boot_option).name}")
+        print(f"Boot option: {dfs.boot_option.name}")
         for letter in dfs.root.iterdir():
             for entry in letter.iterdir():
                 st = entry.stat()
