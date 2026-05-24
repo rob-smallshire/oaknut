@@ -28,8 +28,9 @@ Five files: the BASIC loader ``PLANET``, two binary blobs
 ``Planet1`` and ``Planet2``, the cassette-launcher ``PLANETO``,
 and the ``!BOOT`` file that pressing :kbd:`SHIFT-BREAK` runs.
 ``disc ls`` shows the catalogue with load and exec addresses;
-``disc tree`` shows the catalogue's two-level structure (DFS has
-``$`` as the default directory; see :ref:`dfs-flat-catalogue`);
+``disc tree`` shows the catalogue's two-level structure (DFS's
+27 directories ``$``/``A``–``Z`` are siblings under a nameless
+root; see :ref:`dfs-flat-catalogue`);
 ``disc type`` reads ``!BOOT`` as text and translates the Acorn
 ``\r`` line terminator to the host's newline so the four BASIC
 lines render cleanly.

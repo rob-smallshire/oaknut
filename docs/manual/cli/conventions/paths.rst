@@ -88,9 +88,8 @@ would expect.
 **DFS — single-character directories under a nameless root.**
 A DFS catalogue holds up to 31 file entries (62 on Watford DDFS).
 Each lives in one of 27 directories — ``$`` and ``A``–``Z`` — and
-all 27 are children of a nameless root. ``$`` is the directory
-``disc`` assumes when a command's path omits one; it is a sibling
-of ``A``–``Z``, not a container for them. ``$.MYPROG`` and
+all 27 are children of a nameless root. ``$`` is a sibling of
+``A``–``Z``, not a container for them. ``$.MYPROG`` and
 ``A.MYPROG`` are two independent files. Empty directories cannot
 exist — a directory comes into being the first time a file is
 written under it and disappears again when its last file is
@@ -103,11 +102,9 @@ What this means in practice on the CLI:
    disc ls games.ssd                 # lists every directory's entries
    disc ls 'games.ssd:$'             # lists only files in $
    disc ls 'games.ssd:A'             # lists only files in directory A
-   disc cat 'games.ssd:$.HELLO'      # explicit
-   disc cat 'games.ssd:HELLO'        # also $.HELLO; $ assumed
-
-   disc cp 'games.ssd:$.HELLO' 'games.ssd:A.HELLO'
-                                     # two *different* files now
+   disc cat 'games.ssd:$.HELLO'      # the file HELLO in directory $
+   disc cat 'games.ssd:A.HELLO'      # the file HELLO in directory A — different
+                                     # from $.HELLO; not the same file
 
 No DFS command will recurse into siblings the way ADFS commands
 recurse into subdirectories, because there are no subdirectories to
