@@ -83,27 +83,25 @@ assume Unix or ADFS shape when reading DFS code.
 parent path). ``iterdir()`` on a subdirectory yields its
 immediate children.
 
-**DFS — flat catalogue with single-character namespace tags.**
-DFS does not have subdirectories. The on-disc catalogue is a flat
-list of up to 31 entries (62 on Watford DDFS), each tagged with a
-one-character "directory" — one of ``$``, ``A``–``Z``. The tags are
-*siblings*, not parent-and-child: ``$.MYPROG`` and ``A.MYPROG`` are
-two independent files; neither is "inside" the other. ``$`` is the
-*default* directory that DFS assumes when a path omits one (per the
-Acorn DFS User Guide), not a root that contains the others.
+**DFS — single-character directories under a nameless root.**
+A DFS catalogue holds up to 31 file entries (62 on Watford DDFS).
+Each lives in one of 27 directories — ``$`` and ``A``–``Z`` — and
+all 27 are children of a nameless root. ``$`` is the default
+directory DFS assumes when a path omits one (per the Acorn DFS
+User Guide); it is not a parent of ``A``–``Z``, just a sibling
+with one extra job::
 
-For this reason ``dfs.root`` is intentionally **not** a path for
-``$``; it is the empty-string catalogue handle from which the ``/``
-operator can build a path in *any* directory letter::
+    dfs.root                       # the nameless root
+    dfs.root / "$" / "HELLO"       # $.HELLO in the default directory
+    dfs.root / "A" / "GAME"        # A.GAME, a sibling of $.HELLO
 
-    dfs.root                       # the whole catalogue
-    dfs.root / "$.HELLO"           # default directory
-    dfs.root / "A.GAME"            # sibling directory A — not inside $
-
-``DFSPath.mkdir()`` does not exist. ``^`` carries no meaning, since
-there is no tree to walk up. ``iterdir()`` on the catalogue handle
-yields one entry per populated directory letter; ``iterdir()`` on a
-single-letter directory handle yields the files carrying that tag.
+Empty directories cannot exist on DFS — a directory comes into
+being the first time you write a file under it and disappears
+again when its last file is deleted. There is no ``mkdir`` and no
+:meth:`DFSPath.mkdir`. ``^`` carries no meaning, since there is no
+tree to walk up. :meth:`iterdir` on the nameless root yields one
+entry per populated directory letter; :meth:`iterdir` on a
+single-letter directory yields the files filed under it.
 
 See :doc:`/cli/conventions/paths` for the CLI-side companion to this
 explanation.
