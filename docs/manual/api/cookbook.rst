@@ -39,11 +39,13 @@ full model.
 Walking an ADFS tree recursively
 --------------------------------
 
-ADFS (and AFS) is hierarchical: ``$`` contains named subdirectories
-which contain further files and directories. The :meth:`walk`
-method mirrors :meth:`pathlib.Path.walk` — each step yields
-``(dirpath, dirnames, filenames)`` in pre-order, descending into
-every subdirectory. The same call works against
+ADFS (and AFS — the Acorn Level 3 File Server's partition format,
+sometimes called *AFS0* after its on-disc magic; see the
+:doc:`glossary </glossary>`) is hierarchical: ``$`` contains named
+subdirectories which contain further files and directories. The
+:meth:`walk` method mirrors :meth:`pathlib.Path.walk` — each step
+yields ``(dirpath, dirnames, filenames)`` in pre-order, descending
+into every subdirectory. The same call works against
 :class:`oaknut.dfs.DFSPath` and :class:`oaknut.afs.AFSPath`.
 
 .. literalinclude:: ../../../scripts/api-examples/walk_adfs_tree.py

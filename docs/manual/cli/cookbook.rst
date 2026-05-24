@@ -55,7 +55,10 @@ Copying files across filing-system formats
 
 Copies span any combination of DFS, ADFS, and AFS images: source
 and destination need not share a format because ``disc cp`` maps
-Acorn metadata across them for you.
+Acorn metadata across them for you. (AFS here is the Acorn Level 3
+File Server's partition format — sometimes called *AFS0* after the
+magic at its head; see the :doc:`glossary </glossary>` for the
+longer note.)
 
 .. cli-example:: cross_format_cp
 

@@ -126,8 +126,11 @@ Filing-system dispatch prefixes
 -------------------------------
 
 A single ADFS hard-disc image can carry an AFS partition in its tail
-cylinders. To tell ``disc`` which filing system to address, prefix
-the ``PATH_SPEC`` with a filing-system tag:
+cylinders — the on-disc layout the Acorn Level 3 File Server uses,
+sometimes called *AFS0* after the four-byte magic at the head of the
+partition (see the :doc:`glossary </glossary>` for the longer note).
+To tell ``disc`` which filing system to address, prefix the
+``PATH_SPEC`` with a filing-system tag:
 
 .. code-block:: sh
 

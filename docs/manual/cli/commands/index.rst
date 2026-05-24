@@ -185,8 +185,8 @@ Whole-image operations
    .. cli-example:: cmd_expand
 
 
-Acorn File Server (AFS)
------------------------
+AFS (Acorn Level 3 File Server)
+-------------------------------
 
 .. oaknut-command:: oaknut.disc.cli:afs-plan
    :prog: disc afs-plan

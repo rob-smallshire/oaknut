@@ -5,6 +5,10 @@ The oaknut Python API lets you read, write, and round-trip Acorn DFS,
 ADFS, and AFS disc images from inside a Python program. The shape
 of the API is deliberately close to :class:`pathlib.Path` so that
 ``image.root / "Games" / "Elite"`` reads the same as a host path.
+AFS is the partition format used by the Acorn Level 3 File Server,
+sometimes called *AFS0* (pronounced "A F S zero") after the magic
+at the head of the partition; see the :doc:`glossary </glossary>`
+for the longer note.
 
 This page walks from "I have a disc image" to "I am confident
 reading and writing files" in about ten minutes. Every snippet is

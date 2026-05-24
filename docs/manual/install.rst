@@ -9,6 +9,13 @@ package that names the filing system you actually need to work with
 — DFS floppies, ADFS hard discs, AFS server discs, ZIP archives —
 and install just that.
 
+(AFS here is the partition format used by the Acorn Level 3 File
+Server. The four-byte magic at the head of the partition reads
+``AFS0``, so the format is also referred to as *AFS0* — pronounced
+"A F S zero" — when it needs to be told apart from the broader
+notion of a generic Acorn file server. No primary source records
+what the initialism originally stood for.)
+
 
 Prerequisites
 -------------

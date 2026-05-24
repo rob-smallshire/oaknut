@@ -5,6 +5,10 @@ The ``disc`` command-line tool speaks Acorn DFS, Acorn ADFS and AFS
 transparently, with a subcommand-style interface (``disc ls``,
 ``disc cp``, ``disc afs-init``, etc.) supplemented by Acorn-style
 star-command aliases — ``disc '*CAT'``, ``disc '*COPY'`` and so on.
+AFS is the partition format used by the Acorn Level 3 File Server,
+sometimes called *AFS0* (pronounced "A F S zero") after the
+four-byte magic at the head of the partition; see the
+:doc:`glossary </glossary>` for the longer note.
 
 This page walks from "I have a disc image" to "I am confident
 reading and writing files" in about ten minutes. Every command
