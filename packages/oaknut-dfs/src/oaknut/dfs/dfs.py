@@ -888,10 +888,15 @@ class DFS:
     def path(self, path: str) -> DFSPath:
         """Create a DFSPath from a path string.
 
+        Routes through :meth:`DFSPath.__truediv__` so the
+        Acorn-shell ``^`` parent token (and consecutive ``^^``)
+        are interpreted the same way as in a slash-joined chain.
+
         Args:
-            path: DFS path string, e.g. ``"$"``, ``"$.HELLO"``, or ``""`` for root.
+            path: DFS path string, e.g. ``"$"``, ``"$.HELLO"``,
+                ``"^.A.GAME"``, or ``""`` for root.
         """
-        return DFSPath(self, path)
+        return self.root / path
 
     # Disc metadata
     @property

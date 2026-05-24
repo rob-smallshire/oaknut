@@ -405,6 +405,9 @@ class ADFSPath(AcornPath):
     # --- Navigation ---
 
     def _join_name(self, name: str) -> ADFSPath:
+        if name == "$":
+            # Acorn absolute-path marker — reset to root.
+            return ADFSPath(self._adfs, "$")
         if self._path == "$":
             return ADFSPath(self._adfs, f"$.{name}")
         return ADFSPath(self._adfs, f"{self._path}.{name}")
@@ -1460,10 +1463,15 @@ class ADFS:
     def path(self, path: str) -> ADFSPath:
         """Create an ADFSPath from a path string.
 
+        Routes through :meth:`ADFSPath.__truediv__` so the
+        Acorn-shell ``^`` parent token (and consecutive ``^^``)
+        are interpreted the same way as in a slash-joined chain.
+
         Args:
-            path: ADFS path string, e.g. ``"$.Games.Elite"`` or ``"$"``.
+            path: ADFS path string, e.g. ``"$.Games.Elite"``,
+                ``"$"``, or ``"$.Games.^.Docs.ReadMe"``.
         """
-        return ADFSPath(self, path)
+        return self.root / path
 
     # --- Disc-level metadata ---
 
