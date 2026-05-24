@@ -120,6 +120,13 @@ The interesting moves:
   disc. The destination directory is **created automatically** —
   same convention as Unix ``cp -r SRC DEST`` when ``DEST`` does not
   exist. No explicit ``disc mkdir`` is required.
+- The disc-side ``$`` characters appear as ``\$`` inside the
+  double-quoted shell arguments: the arguments must be
+  double-quoted (not single-quoted) so ``$ssd`` and ``$name``
+  expand, and inside double quotes the shell would otherwise treat
+  the bare ``$`` as the start of a variable name. Escaping with a
+  backslash passes a literal ``$`` through to ``disc``. See
+  :doc:`conventions/quoting` for the broader rules.
 
 Note the silence: each successful ``disc cp -r`` writes nothing,
 so the 18-file copy across three SSDs produces no stdout chatter.
