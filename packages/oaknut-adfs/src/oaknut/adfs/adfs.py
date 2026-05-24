@@ -43,7 +43,7 @@ from oaknut.adfs.exceptions import (
 from oaknut.adfs.free_space_map import OldFreeSpaceMap
 from oaknut.discimage.surface import DiscImage, SurfaceSpec
 from oaknut.discimage.unified_disc import UnifiedDisc
-from oaknut.file import AcornMeta, MetaFormat
+from oaknut.file import AcornMeta, AcornPath, MetaFormat
 from oaknut.file.host_bridge import (
     DEFAULT_EXPORT_META_FORMAT,
     DEFAULT_IMPORT_META_FORMATS,
@@ -372,7 +372,10 @@ def _entry_to_stat(entry: _ADFSDirectoryEntry) -> ADFSStat:
 # --- ADFSPath ---
 
 
-class ADFSPath:
+class ADFSPath(AcornPath):
+    EntryExistsError = ADFSEntryExistsError
+    DirectoryError = ADFSPathError
+
     """A path within an ADFS filesystem, inspired by pathlib.Path.
 
     ADFSPath objects are lightweight handles that reference an ADFS
@@ -537,19 +540,6 @@ class ADFSPath:
         for entry in directory.entries:
             yield self / entry.name
 
-    def walk(self) -> Iterator[tuple[ADFSPath, list[str], list[str]]]:
-        """Walk directory tree, like ``os.walk()``.
-
-        Yields ``(dirpath, dirnames, filenames)`` tuples.
-        """
-        directory = self._resolve_as_directory()
-        dirnames = [e.name for e in directory.entries if e.is_directory]
-        filenames = [e.name for e in directory.entries if not e.is_directory]
-        yield self, dirnames, filenames
-
-        for dirname in dirnames:
-            yield from (self / dirname).walk()
-
     # --- File operations ---
 
     def read_bytes(self) -> bytes:
@@ -564,23 +554,6 @@ class ADFSPath:
         if entry.is_directory:
             raise ADFSPathError(f"'{self._path}' is a directory, not a file")
         return self._adfs._read_file_data(entry)
-
-    def read_text(
-        self,
-        *,
-        encoding: str = "acorn",
-        newline: str | None = None,
-    ) -> str:
-        """Read file contents as text via :func:`oaknut.file.decode_text`.
-
-        See that function for the encoding and newline-translation rules.
-
-        Raises:
-            ADFSPathError: If the path doesn't exist or is a directory.
-        """
-        from oaknut.file import decode_text
-
-        return decode_text(self.read_bytes(), encoding=encoding, newline=newline)
 
     def read_basic(self) -> str:
         """Read a BBC BASIC program and return its detokenised source.
@@ -645,74 +618,6 @@ class ADFSPath:
             exec_address,
             locked_val,
         )
-
-    def write_text(
-        self,
-        text: str,
-        *,
-        encoding: str = "acorn",
-        newline: str | None = "\r",
-        load_address: int = 0,
-        exec_address: int = 0,
-        access: "Access | None" = None,
-    ) -> None:
-        """Write text to this path via :func:`oaknut.file.encode_text`.
-
-        See that function for the encoding and newline-translation
-        rules; in particular the default ``newline="\\r"`` translates
-        Python ``"\\n"`` line endings to the Acorn-native ``"\\r"``.
-
-        Args:
-            text: Text to write.
-            encoding: Text encoding (default ``"acorn"``).
-            newline: Line-ending translation policy.
-            load_address: Load address (default 0).
-            exec_address: Execution address (default 0).
-            access: Access flags (see :meth:`write_bytes`).
-        """
-        from oaknut.file import encode_text
-
-        self.write_bytes(
-            encode_text(text, encoding=encoding, newline=newline),
-            load_address=load_address,
-            exec_address=exec_address,
-            access=access,
-        )
-
-    def touch(
-        self,
-        *,
-        access: "Access | None" = None,
-        exist_ok: bool = True,
-    ) -> None:
-        """Create an empty file at this path, mirroring :meth:`pathlib.Path.touch`.
-
-        ADFS catalogue entries carry no modification time, so touching
-        an existing file is a no-op when ``exist_ok`` is ``True``.
-
-        Args:
-            access: Access flags for the new file. Ignored on existing
-                files (the access is not rewritten).
-            exist_ok: Default ``True`` matches pathlib. When ``False``,
-                an existing file or directory at the path raises.
-
-        Raises:
-            ADFSPathError: If this path is the root, or already exists
-                as a directory (with or without ``exist_ok``).
-            ADFSEntryExistsError: If a file already exists at the path
-                and ``exist_ok`` is ``False``.
-        """
-        if self._path == "$":
-            raise ADFSPathError("Cannot touch root directory")
-        if self.exists():
-            if self.is_dir():
-                raise ADFSPathError(
-                    f"'{self._path}' is a directory, cannot touch"
-                )
-            if exist_ok:
-                return
-            raise ADFSEntryExistsError(f"'{self._path}' already exists")
-        self.write_bytes(b"", access=access)
 
     def write_basic(
         self,
@@ -973,18 +878,6 @@ class ADFSPath:
         if access is not None:
             self.chmod(access)
 
-    def copy_to(self, dst: object) -> None:
-        """Copy this file to *dst*, another oaknut path object.
-
-        Sugar for ``copy_file(self, dst)``: reads this file's bytes
-        and metadata and writes them to the destination, which may
-        live on any filesystem family (DFS, ADFS, or AFS). Access
-        attributes are mapped to the destination's native form.
-        """
-        from oaknut.file.copy import copy_file
-
-        copy_file(self, dst)
-
     # --- Protocols ---
 
     def __str__(self) -> str:
@@ -1000,10 +893,6 @@ class ADFSPath:
 
     def __hash__(self) -> int:
         return hash(self._path.upper())
-
-    def __iter__(self) -> Iterator[ADFSPath]:
-        """Shorthand for ``iterdir()``."""
-        return self.iterdir()
 
     def __contains__(self, name: str) -> bool:
         """Check if *name* exists in this directory."""

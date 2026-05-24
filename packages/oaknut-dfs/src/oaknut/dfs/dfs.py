@@ -15,7 +15,7 @@ from oaknut.dfs.catalogue import FileEntry
 from oaknut.dfs.catalogued_surface import CataloguedSurface
 from oaknut.dfs.formats import BYTES_PER_SECTOR, DiscFormat
 from oaknut.discimage.surface import DiscImage
-from oaknut.file import Access, AcornMeta, MetaFormat
+from oaknut.file import Access, AcornMeta, AcornPath, MetaFormat
 from oaknut.file.host_bridge import (
     DEFAULT_EXPORT_META_FORMAT,
     DEFAULT_IMPORT_META_FORMATS,
@@ -126,7 +126,7 @@ class DFSStat:
         return None
 
 
-class DFSPath:
+class DFSPath(AcornPath):
     """A path within a DFS filesystem, inspired by pathlib.Path.
 
     **DFS is not a hierarchical filesystem.** Its on-disc catalogue is a
@@ -276,24 +276,6 @@ class DFSPath:
         else:
             raise ValueError(f"'{self._path}' is not a directory")
 
-    def walk(self) -> Iterator[tuple[DFSPath, list[str], list[str]]]:
-        """Walk directory tree, like ``os.walk()``.
-
-        Yields ``(dirpath, dirnames, filenames)`` tuples.
-        """
-        if not self._path:
-            # Root: directories are children, no files at root level
-            populated_dirs = sorted({f.directory for f in self._dfs.files})
-            yield self, populated_dirs, []
-            for dir_letter in populated_dirs:
-                dir_path = DFSPath(self._dfs, dir_letter)
-                filenames = [f.filename for f in self._dfs.files if f.directory == dir_letter]
-                yield dir_path, [], filenames
-        elif self._is_directory_path():
-            dir_letter = self._path.upper()
-            filenames = [f.filename for f in self._dfs.files if f.directory == dir_letter]
-            yield self, [], filenames
-
     # --- File operations ---
 
     def read_bytes(self) -> bytes:
@@ -306,24 +288,6 @@ class DFSPath:
         if not self._path or self._is_directory_path():
             raise ValueError(f"Cannot read directory as file: '{self._path}'")
         return self._dfs._catalogued_surface.read_file(self._path)
-
-    def read_text(
-        self,
-        *,
-        encoding: str = "acorn",
-        newline: str | None = None,
-    ) -> str:
-        """Read file contents as text via :func:`oaknut.file.decode_text`.
-
-        See that function for the encoding and newline-translation rules.
-
-        Raises:
-            ValueError: If this path is a directory.
-            FileNotFoundError: If the file does not exist.
-        """
-        from oaknut.file import decode_text
-
-        return decode_text(self.read_bytes(), encoding=encoding, newline=newline)
 
     def write_bytes(
         self,
@@ -408,38 +372,6 @@ class DFSPath:
             access=access,
         )
 
-    def write_text(
-        self,
-        text: str,
-        *,
-        encoding: str = "acorn",
-        newline: str | None = "\r",
-        load_address: int = 0,
-        exec_address: int = 0,
-        access: "Access | None" = None,
-    ) -> None:
-        """Write text to this path via :func:`oaknut.file.encode_text`.
-
-        See that function for the encoding and newline-translation
-        rules; in particular the default ``newline="\\r"`` translates
-        Python ``"\\n"`` line endings to the Acorn-native ``"\\r"``.
-
-        Args:
-            text: Text to write.
-            encoding: Text encoding (default ``"acorn"``).
-            newline: Line-ending translation policy.
-            load_address: Load address (default 0).
-            exec_address: Execution address (default 0).
-            access: Access flags (see :meth:`write_bytes`).
-        """
-        from oaknut.file import encode_text
-
-        self.write_bytes(
-            encode_text(text, encoding=encoding, newline=newline),
-            load_address=load_address,
-            exec_address=exec_address,
-            access=access,
-        )
 
     def touch(
         self,
@@ -584,18 +516,6 @@ class DFSPath:
             access=meta.access,
         )
 
-    def copy_to(self, dst: object) -> None:
-        """Copy this file to *dst*, another oaknut path object.
-
-        Sugar for ``copy_file(self, dst)``: reads this file's bytes
-        and metadata and writes them to the destination, which may
-        live on any filesystem family (DFS, ADFS, or AFS). Access
-        attributes are mapped to the destination's native form.
-        """
-        from oaknut.file.copy import copy_file
-
-        copy_file(self, dst)
-
     # --- Protocols ---
 
     def __str__(self) -> str:
@@ -611,10 +531,6 @@ class DFSPath:
 
     def __hash__(self) -> int:
         return hash(self._path.upper())
-
-    def __iter__(self) -> Iterator[DFSPath]:
-        """Shorthand for ``iterdir()``."""
-        return self.iterdir()
 
     def __contains__(self, name: str) -> bool:
         """Check if *name* exists in this directory."""

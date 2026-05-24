@@ -28,8 +28,8 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Iterator, Sequence, Union
 
 from oaknut.afs.directory import MAX_NAME_LENGTH
-from oaknut.afs.exceptions import AFSPathError
-from oaknut.file import Access
+from oaknut.afs.exceptions import AFSDirectoryEntryExistsError, AFSPathError
+from oaknut.file import Access, AcornPath
 from oaknut.file.host_bridge import (
     DEFAULT_EXPORT_META_FORMAT,
     DEFAULT_IMPORT_META_FORMATS,
@@ -93,7 +93,10 @@ def _validate_part(part: str) -> None:
 
 
 @dataclass(frozen=True, slots=True)
-class AFSPath:
+class AFSPath(AcornPath):
+    EntryExistsError = AFSDirectoryEntryExistsError
+    DirectoryError = AFSPathError
+
     """An absolute path within an AFS directory tree.
 
     Paths always start at the root ``$`` and accumulate named
@@ -315,44 +318,6 @@ class AFSPath:
         for child_entry in directory:
             yield self / child_entry.name
 
-    def __iter__(self) -> Iterator[AFSPath]:
-        return self.iterdir()
-
-    def walk(self) -> Iterator[tuple[AFSPath, list[str], list[str]]]:
-        """Walk the directory tree rooted at this path.
-
-        Mirrors :meth:`pathlib.Path.walk` / :func:`os.walk`. Yields
-        ``(dirpath, dirnames, filenames)`` tuples in pre-order
-        traversal, descending into each subdirectory.
-        """
-        afs = self._require_afs()
-        directory = afs._resolve_directory(self)
-        dirnames: list[str] = []
-        filenames: list[str] = []
-        for entry in directory:
-            (dirnames if entry.is_directory else filenames).append(entry.name)
-        yield self, dirnames, filenames
-        for dirname in dirnames:
-            yield from (self / dirname).walk()
-
-    # ------------------------------------------------------------------
-    # Read sugar
-    # ------------------------------------------------------------------
-
-    def read_text(
-        self,
-        *,
-        encoding: str = "acorn",
-        newline: str | None = None,
-    ) -> str:
-        """Read file contents as text via :func:`oaknut.file.decode_text`.
-
-        See that function for the encoding and newline-translation rules.
-        """
-        from oaknut.file import decode_text
-
-        return decode_text(self.read_bytes(), encoding=encoding, newline=newline)
-
     # ------------------------------------------------------------------
     # Write path — phases 11-13
     # ------------------------------------------------------------------
@@ -416,42 +381,6 @@ class AFSPath:
             parent_sin,
             name,
             data,
-            load_address=load_address,
-            exec_address=exec_address,
-            access=access,
-            date=date,
-        )
-
-    def write_text(
-        self,
-        text: str,
-        *,
-        encoding: str = "acorn",
-        newline: str | None = "\r",
-        load_address: int = 0,
-        exec_address: int = 0,
-        access: "Access | AFSAccess | int | None" = None,
-        date=None,
-    ) -> None:
-        """Write text to this path via :func:`oaknut.file.encode_text`.
-
-        See that function for the encoding and newline-translation
-        rules; in particular the default ``newline="\\r"`` translates
-        Python ``"\\n"`` line endings to the Acorn-native ``"\\r"``.
-
-        Args:
-            text: String to write.
-            encoding: Text encoding (default ``"acorn"``).
-            newline: Line-ending translation policy.
-            load_address: Load address (default 0).
-            exec_address: Exec address (default 0).
-            access: Access flags (see :meth:`write_bytes`).
-            date: Acorn date stamp; defaults to today's date.
-        """
-        from oaknut.file import encode_text
-
-        self.write_bytes(
-            encode_text(text, encoding=encoding, newline=newline),
             load_address=load_address,
             exec_address=exec_address,
             access=access,
@@ -877,19 +806,6 @@ class AFSPath:
         # Apply richer access bits via chmod if the source had them.
         if meta.access is not None:
             self.chmod(int(meta.access))
-
-    def copy_to(self, dst: object) -> None:
-        """Copy this file to *dst*, another oaknut path object.
-
-        Sugar for ``copy_file(self, dst)``: reads this file's bytes
-        and metadata and writes them to the destination, which may
-        live on any filesystem family (DFS, ADFS, or AFS). Access
-        attributes are mapped to the destination's native form.
-        """
-        from oaknut.file.copy import copy_file
-
-        copy_file(self, dst)
-
 
 # ---------------------------------------------------------------------------
 # Helpers
