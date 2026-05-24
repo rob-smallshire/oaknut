@@ -1,8 +1,10 @@
-"""Example for ``disc cat`` — write file bytes to stdout.
+"""Example for ``disc cat`` — write raw file bytes to stdout.
 
-Like Unix ``cat``: raw bytes, no transformation. Acorn text files use
-``\\r`` line endings — see ``disc type`` for a variant that converts
-those for terminal display.
+Like Unix ``cat``: no transformation, no line-ending translation —
+the bytes on disc are the bytes you get. Piping through ``xxd``
+makes the rawness visible: the Acorn ``\\r`` (``0d``) line
+terminators are right there in the dump. For terminal-friendly text
+display with ``\\r``→``\\n`` conversion, use ``disc type`` instead.
 """
 
 from __future__ import annotations
@@ -20,4 +22,4 @@ SOURCE = REPO_ROOT / "tests" / "data" / "images" / "games" / "Disc002-Arcadians.
 
 with in_tmp_dir():
     shutil.copy(SOURCE, "arcadians.ssd")
-    show("disc cat 'arcadians.ssd:$.!BOOT'")
+    show("disc cat 'arcadians.ssd:$.!BOOT' | xxd")
