@@ -22,8 +22,8 @@ def populate_disc(filepath: Path) -> None:
     - ``$.PROG`` — raw program bytes loaded at the BBC's canonical
       ``0x1900``, auto-running on ``*RUN``.
     - ``$.DATA`` — arbitrary bytes at a non-default load address.
-    - ``$.LOCKED`` — small file, locked via the unified
-      ``access`` keyword's bool shortcut (``True`` ≡ ``Access.L``).
+    - ``$.LOCKED`` — small file, locked via the named composite
+      :attr:`Access.LWR` (locked + owner R+W).
     """
     with DFS.create_file(filepath, title="MyDisc", boot_option=2) as dfs:
         (dfs.root / "$.README").write_text(
