@@ -104,8 +104,8 @@ def import_host_tree(
         raise AFSHostImportError("target_path must be bound to the target AFS handle")
 
     # Ensure the landing directory exists.
-    if not target_path.is_root() and not target_path.exists():
-        target_path.mkdir()
+    if not target_path.is_root():
+        target_path.mkdir(exist_ok=True)
 
     for entry in sorted(source.iterdir()):
         name = _sanitise_name(entry.name)

@@ -77,8 +77,8 @@ def merge(
         raise ValueError("source_path must be bound to the source AFS handle")
 
     # Ensure the target subtree root exists.
-    if not target_path.is_root() and not target_path.exists():
-        target_path.mkdir()
+    if not target_path.is_root():
+        target_path.mkdir(exist_ok=True)
 
     # Dry-walk to collect conflicts if we are in "error" mode.
     if conflict == "error":

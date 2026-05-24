@@ -1903,20 +1903,8 @@ def _ensure_dir_chain(dst_handle, bare: str, fs: FilingSystem) -> None:
         return
     if not bare or bare == "$":
         return
-    # Normalise to a "$."-prefixed absolute path and walk components.
-    trimmed = bare
-    if trimmed.startswith("$."):
-        trimmed = trimmed[2:]
-    elif trimmed == "$":
-        return
-    cursor = "$"
-    for part in trimmed.split("."):
-        if not part:
-            continue
-        cursor = f"{cursor}.{part}"
-        node = _navigate(dst_handle, cursor, fs)
-        if not node.exists():
-            node.mkdir()
+    target = _navigate(dst_handle, bare, fs)
+    target.mkdir(parents=True, exist_ok=True)
 
 
 def _write_copy_item(
@@ -1952,15 +1940,16 @@ _alias("*COPY", "cp")
 
 @cli.command()
 @click.argument("file_spec")
-@click.option("-p", is_flag=True, help="No error if directory already exists.")
+@click.option(
+    "-p",
+    is_flag=True,
+    help="Create missing parents and do not error if the directory already exists.",
+)
 def mkdir(file_spec: str, p: bool) -> None:
     """Create a directory (ADFS/AFS only). Alias: *CDIR.
 
     Accepts a ``FILE_SPEC``.
     """
-    from oaknut.adfs.exceptions import ADFSEntryExistsError
-    from oaknut.afs.exceptions import AFSDirectoryEntryExistsError
-
     image, path = parse_file_spec(file_spec)
     if not path:
         raise click.UsageError("PATH is required")
@@ -1969,12 +1958,7 @@ def mkdir(file_spec: str, p: bool) -> None:
         raise click.ClickException("mkdir is not supported for DFS images")
     with open_image(image, fs) as handle:
         target = _navigate(handle, bare, fs)
-        try:
-            target.mkdir()
-        except (ADFSEntryExistsError, AFSDirectoryEntryExistsError):
-            if p:
-                return
-            raise
+        target.mkdir(parents=p, exist_ok=p)
         if fs is FilingSystem.AFS:
             handle.flush()
 
@@ -2592,8 +2576,7 @@ def _import_host_dir(handle, target_dir, host_dir: Path, meta_formats, verbose, 
             else:
                 # ADFS/AFS — create a subdirectory and recurse.
                 sub = target_dir / entry.name
-                if not sub.exists():
-                    sub.mkdir()
+                sub.mkdir(exist_ok=True)
                 _import_host_dir(handle, sub, entry, meta_formats, verbose, fs)
 
 

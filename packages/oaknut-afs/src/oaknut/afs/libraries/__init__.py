@@ -91,8 +91,7 @@ def emplace_library(
         )
 
     target_dir = target_afs.root / dirname
-    if not target_dir.exists():
-        target_dir.mkdir()
+    target_dir.mkdir(exist_ok=True)
 
     replaced: list[str] = []
     with ctx as adfs:
