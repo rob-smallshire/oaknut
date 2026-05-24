@@ -62,7 +62,6 @@ from docutils.statemachine import StringList
 from sphinx.application import Sphinx
 from sphinx.util.docutils import SphinxDirective
 
-
 # ---------------------------------------------------------------------------
 # Public registration
 # ---------------------------------------------------------------------------

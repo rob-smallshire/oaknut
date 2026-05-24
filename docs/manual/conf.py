@@ -1,5 +1,6 @@
 """Sphinx configuration for oaknut documentation."""
 
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -78,8 +79,6 @@ suppress_warnings = ["docutils"]
 #   - `silent("…")` — runs a setup step the reader is not meant to see.
 #   - `with in_tmp_dir():` — sandbox the recipe in a fresh temp directory.
 # ---------------------------------------------------------------------------
-
-import re
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 _CLI_EXAMPLES_DIRPATH = _REPO_ROOT / "scripts" / "cli-examples"

@@ -16,7 +16,6 @@ from pathlib import Path
 from oaknut.adfs import ADFS
 from oaknut.dfs import DFS
 
-
 _LEADING_PASCAL_WORD = re.compile(r".*-([A-Z][a-z]+)")
 
 

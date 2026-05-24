@@ -5,7 +5,7 @@ from oaknut.dfs.dfs import DFS
 from oaknut.dfs.formats import (
     ACORN_DFS_40T_SINGLE_SIDED,
 )
-from oaknut.file import MetaFormat, Access
+from oaknut.file import Access, MetaFormat
 
 
 def _make_dfs(buffer):

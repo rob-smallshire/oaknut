@@ -2,7 +2,6 @@
 
 import pytest
 from oaknut.adfs import ADFS, ADFS_S
-from oaknut.adfs.directory import Access
 from oaknut.adfs.exceptions import ADFSPathError
 from oaknut.file import Access
 

@@ -28,7 +28,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from cli_example_helper import in_tmp_dir, section, show, silent  # noqa: E402
+from cli_example_helper import in_tmp_dir, section, show  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 SOURCE = REPO_ROOT / "tests" / "data" / "images" / "cookbook" / "FS3v126.ssd"
