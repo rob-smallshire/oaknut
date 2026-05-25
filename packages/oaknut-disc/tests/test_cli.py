@@ -2796,6 +2796,134 @@ class TestAfsPasswd:
         assert result.exit_code != 0
 
 
+class TestAfsInitPasswords:
+    """afs-init --user-password NAME=VALUE, split once on the first '='."""
+
+    def test_password_for_regular_user(
+        self, runner: CliRunner, adfs_no_afs_filepath: Path
+    ) -> None:
+        result = runner.invoke(
+            cli,
+            [
+                "afs-init",
+                str(adfs_no_afs_filepath),
+                "--disc-name",
+                "PwInit",
+                "--cylinders",
+                "10",
+                "--user",
+                "alice",
+                "--user-password",
+                "alice=secret",
+            ],
+        )
+        assert result.exit_code == 0, result.output
+        assert _afs_user_password(adfs_no_afs_filepath, "alice") == "secret"
+
+    def test_password_keeps_colon_and_equals(
+        self, runner: CliRunner, adfs_no_afs_filepath: Path
+    ) -> None:
+        """Split once on the first '=' — the rest is a verbatim password."""
+        result = runner.invoke(
+            cli,
+            [
+                "afs-init",
+                str(adfs_no_afs_filepath),
+                "--disc-name",
+                "PwColon",
+                "--cylinders",
+                "10",
+                "--user",
+                "alice",
+                "--user-password",
+                "alice=p:s=w",
+            ],
+        )
+        assert result.exit_code == 0, result.output
+        assert _afs_user_password(adfs_no_afs_filepath, "alice") == "p:s=w"
+
+    def test_password_for_builtin(
+        self, runner: CliRunner, adfs_no_afs_filepath: Path
+    ) -> None:
+        """A built-in name needs no matching --user to take a password."""
+        result = runner.invoke(
+            cli,
+            [
+                "afs-init",
+                str(adfs_no_afs_filepath),
+                "--disc-name",
+                "PwBuilt",
+                "--cylinders",
+                "10",
+                "--user-password",
+                "Syst=admin",
+            ],
+        )
+        assert result.exit_code == 0, result.output
+        assert _afs_user_password(adfs_no_afs_filepath, "Syst") == "admin"
+
+    def test_unmatched_name_is_error(
+        self, runner: CliRunner, adfs_no_afs_filepath: Path
+    ) -> None:
+        result = runner.invoke(
+            cli,
+            [
+                "afs-init",
+                str(adfs_no_afs_filepath),
+                "--disc-name",
+                "PwGhost",
+                "--cylinders",
+                "10",
+                "--user-password",
+                "ghost=x",
+            ],
+        )
+        assert result.exit_code != 0
+        assert "ghost" in result.output.lower()
+
+    def test_missing_equals_is_error(
+        self, runner: CliRunner, adfs_no_afs_filepath: Path
+    ) -> None:
+        result = runner.invoke(
+            cli,
+            [
+                "afs-init",
+                str(adfs_no_afs_filepath),
+                "--disc-name",
+                "PwNoEq",
+                "--cylinders",
+                "10",
+                "--user",
+                "alice",
+                "--user-password",
+                "alice",
+            ],
+        )
+        assert result.exit_code != 0
+
+    def test_duplicate_password_is_error(
+        self, runner: CliRunner, adfs_no_afs_filepath: Path
+    ) -> None:
+        result = runner.invoke(
+            cli,
+            [
+                "afs-init",
+                str(adfs_no_afs_filepath),
+                "--disc-name",
+                "PwDup",
+                "--cylinders",
+                "10",
+                "--user",
+                "alice",
+                "--user-password",
+                "alice=a",
+                "--user-password",
+                "alice=b",
+            ],
+        )
+        assert result.exit_code != 0
+
+
 class TestAfsMerge:
     """Regression cover for the disc afs-merge CLI wrapper (issue #22)."""
 

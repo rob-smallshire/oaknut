@@ -13,7 +13,13 @@ from oaknut.afs.exceptions import (
     AFSQuotaError,
     AFSUserNameError,
 )
-from oaknut.afs.wfsinit import AFSSizeSpec, InitSpec, UserSpec, initialise
+from oaknut.afs.wfsinit import (
+    AFSSizeSpec,
+    InitSpec,
+    UserSpec,
+    builtin_account_system_flag,
+    initialise,
+)
 from oaknut.file import BootOption
 
 # The three built-in password entries that initialise() always creates
@@ -455,3 +461,24 @@ class TestBuiltinOverride:
                     UserSpec("syst", system=True, quota=0x20000),
                 ],
             )
+
+
+class TestBuiltinAccountSystemFlag:
+    """``builtin_account_system_flag`` exposes each built-in's fixed
+    system-privilege flag so callers (e.g. the CLI) can synthesise a
+    valid override ``UserSpec`` without contradicting the built-in.
+    """
+
+    def test_syst_is_system(self) -> None:
+        assert builtin_account_system_flag("Syst") is True
+
+    @pytest.mark.parametrize("name", ["Boot", "Welcome"])
+    def test_others_are_not_system(self, name: str) -> None:
+        assert builtin_account_system_flag(name) is False
+
+    def test_case_insensitive(self) -> None:
+        assert builtin_account_system_flag("syst") is True
+
+    def test_unknown_name_rejected(self) -> None:
+        with pytest.raises(AFSUserNameError):
+            builtin_account_system_flag("Gandalf")

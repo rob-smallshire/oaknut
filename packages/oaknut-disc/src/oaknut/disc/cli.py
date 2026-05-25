@@ -3062,7 +3062,20 @@ def _build_afs_plan_reports(document: dict):
         "User spec as NAME, NAME:S (system), NAME:QUOTA, "
         "or NAME:S:QUOTA. Quota accepts e.g. 2MiB. Repeat for multiple. "
         "A NAME matching a built-in (Syst, Boot, Welcome) overrides "
-        "that built-in's quota/password; Syst requires :S."
+        "that built-in's quota; Syst requires :S. Set passwords with "
+        "--user-password, not here."
+    ),
+)
+@click.option(
+    "--user-password",
+    "user_passwords",
+    multiple=True,
+    metavar="NAME=VALUE",
+    help=(
+        "Set a user's password as NAME=VALUE, split once on the first "
+        "'=' so the password may itself contain ':' or '='. NAME must "
+        "match a --user or a built-in (Syst, Boot, Welcome). Repeat for "
+        "multiple. Passwords are stored as cleartext (max 6 ASCII chars)."
     ),
 )
 @click.option(
@@ -3091,6 +3104,7 @@ def afs_init(
     cylinders: int | None,
     compact: bool,
     users: tuple[str, ...],
+    user_passwords: tuple[str, ...],
     default_quota: str | None,
     omit_users: tuple[str, ...],
     emplacements: tuple[str, ...],
@@ -3102,6 +3116,7 @@ def afs_init(
 
     try:
         user_specs: list[UserSpec] = _parse_user_specs(users)
+        user_specs = _apply_user_passwords(user_specs, user_passwords)
 
         init_kwargs: dict = {
             "disc_name": disc_name,
@@ -3179,6 +3194,65 @@ def _parse_user_specs(raw_specs: tuple[str, ...]) -> list:
         if quota is not None:
             kwargs["quota"] = quota
         specs.append(UserSpec(**kwargs))
+    return specs
+
+
+def _apply_user_passwords(user_specs: list, raw_passwords: tuple[str, ...]) -> list:
+    """Merge ``--user-password NAME=VALUE`` specs into ``user_specs``.
+
+    Each raw string is split **once** on the first ``=``: the left side
+    is the user name (the constrained key) and the right side is the
+    password, taken verbatim — so it may itself contain ``:`` or ``=``.
+    A name matching an existing ``--user`` spec sets that spec's
+    password; a name matching a built-in (Syst/Boot/Welcome) synthesises
+    an override spec with the built-in's required system flag; any other
+    name is an error.
+    """
+    if not raw_passwords:
+        return user_specs
+
+    import dataclasses
+
+    from oaknut.afs.wfsinit import (
+        BUILTIN_ACCOUNT_NAMES,
+        UserSpec,
+        builtin_account_system_flag,
+    )
+
+    builtin_by_upper = {n.upper(): n for n in BUILTIN_ACCOUNT_NAMES}
+    spec_index_by_upper = {spec.name.upper(): i for i, spec in enumerate(user_specs)}
+    specs = list(user_specs)
+    seen: set[str] = set()
+
+    for raw in raw_passwords:
+        name, separator, password = raw.partition("=")
+        if not separator:
+            raise click.ClickException(f"--user-password must be NAME=VALUE, got {raw!r}")
+        if not name:
+            raise click.ClickException(f"--user-password has an empty user name: {raw!r}")
+        upper = name.upper()
+        if upper in seen:
+            raise click.ClickException(f"duplicate --user-password for {name!r}")
+        seen.add(upper)
+
+        if upper in spec_index_by_upper:
+            index = spec_index_by_upper[upper]
+            specs[index] = dataclasses.replace(specs[index], password=password)
+        elif upper in builtin_by_upper:
+            canonical = builtin_by_upper[upper]
+            specs.append(
+                UserSpec(
+                    name=canonical,
+                    password=password,
+                    system=builtin_account_system_flag(canonical),
+                )
+            )
+            spec_index_by_upper[upper] = len(specs) - 1
+        else:
+            raise click.ClickException(
+                f"--user-password names {name!r}, which is neither a --user "
+                f"nor a built-in account ({', '.join(sorted(BUILTIN_ACCOUNT_NAMES))})"
+            )
     return specs
 
 

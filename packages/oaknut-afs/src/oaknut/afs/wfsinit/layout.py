@@ -36,6 +36,25 @@ _BUILTIN_IS_SYSTEM: dict[str, bool] = {
     "WELCOME": False,
 }
 
+
+def builtin_account_system_flag(name: str) -> bool:
+    """Whether built-in account *name* carries system privilege.
+
+    ``Syst`` is system-privileged; ``Boot`` and ``Welcome`` are
+    ordinary accounts.  Callers synthesising an override
+    :class:`UserSpec` for a built-in must set ``system`` to this value
+    or :class:`InitSpec` will reject the contradiction.  Matching is
+    case-insensitive.  Raises :class:`AFSUserNameError` if *name* is
+    not one of :data:`BUILTIN_ACCOUNT_NAMES`.
+    """
+    try:
+        return _BUILTIN_IS_SYSTEM[name.upper()]
+    except KeyError:
+        raise AFSUserNameError(
+            f"{name!r} is not a built-in account; "
+            f"valid names are {', '.join(sorted(BUILTIN_ACCOUNT_NAMES))}"
+        ) from None
+
 # Mirror of the limits the passwords-file encoder enforces
 # (passwords.py:_LEN_USER_ID / _LEN_PASSWORD).  Kept local so
 # InitSpec/UserSpec can validate eagerly without importing from the
