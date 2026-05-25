@@ -93,11 +93,11 @@ jobs:
         # reference page documents — the safety net for our hand-curated
         # autodoc. Each body is checked against the packages it
         # documents; add the remaining disc-family packages
-        # (oaknut.adfs, oaknut.afs) here as each
+        # (oaknut.afs) here as each
         # docs/disc/api/reference/*.rst stub is fleshed out.
         run: |
           uv run python scripts/check_doc_coverage.py --inventory _site/zip/objects.inv oaknut.zip
-          uv run python scripts/check_doc_coverage.py --inventory _site/disc/objects.inv oaknut.file oaknut.discimage oaknut.dfs
+          uv run python scripts/check_doc_coverage.py --inventory _site/disc/objects.inv oaknut.file oaknut.discimage oaknut.dfs oaknut.adfs
 
       - name: Run Sphinx doctests
         # Any .. doctest:: blocks in a body are executed against the
