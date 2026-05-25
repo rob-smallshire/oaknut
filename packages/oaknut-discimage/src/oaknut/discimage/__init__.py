@@ -10,3 +10,29 @@ in its own package, not here.
 """
 
 __version__ = "10.7.0"
+
+from oaknut.discimage.formats import (
+    BYTES_PER_SECTOR,
+    DiscFormat,
+    interleaved_double_sided_specs,
+    sequential_double_sided_specs,
+    single_sided_spec,
+)
+from oaknut.discimage.open_image import open_image_mmap
+from oaknut.discimage.sectors_view import SectorsView
+from oaknut.discimage.surface import DiscImage, Surface, SurfaceSpec
+from oaknut.discimage.unified_disc import UnifiedDisc
+
+__all__ = [
+    "BYTES_PER_SECTOR",
+    "DiscFormat",
+    "DiscImage",
+    "SectorsView",
+    "Surface",
+    "SurfaceSpec",
+    "UnifiedDisc",
+    "interleaved_double_sided_specs",
+    "open_image_mmap",
+    "sequential_double_sided_specs",
+    "single_sided_spec",
+]
