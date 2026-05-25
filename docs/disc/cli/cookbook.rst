@@ -119,7 +119,7 @@ The interesting moves:
   letter, which fits comfortably inside ADFS's 10-character
   filename limit.
 - ``disc cp -r SOURCE:$ TARGET:$.NAME`` recursively copies every
-  file under the DFS root (``$``) into ``$.NAME`` on the archive
+  file under the DFS directory ``$`` into ``$.NAME`` on the archive
   disc. The destination directory is **created automatically** —
   same convention as Unix ``cp -r SRC DEST`` when ``DEST`` does not
   exist. No explicit ``disc mkdir`` is required.

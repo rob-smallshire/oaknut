@@ -298,10 +298,11 @@ def open_image_for_afs_write(image_filepath: Path) -> Iterator:
 def _navigate(handle, bare_path: str, fs: FilingSystem):
     """Navigate to a path within the filesystem handle.
 
-    Returns the path object at *bare_path*, or the default root when
-    *bare_path* is empty. For DFS, the default root is ``$`` (the
-    directory that actually contains files), not the virtual root
-    above it.
+    Returns the path object at *bare_path*, or the filesystem's root
+    when *bare_path* is empty. For ADFS and AFS that root is ``$``;
+    for DFS it is the nameless virtual root whose children are the
+    single-character directories (``$`` and ``A``--``Z``), not ``$``
+    itself.
     """
     if not bare_path:
         return handle.root
