@@ -13,3 +13,15 @@
 html {
     font-size: 20px;
 }
+
+/*
+ * The clarity theme renders html_logo in the header branding at the
+ * Tailwind `h-8` utility (2rem), which is too small for a brand logo.
+ * Enlarge it; width stays auto so the aspect ratio is preserved. Both
+ * the light and dark-mode variants carry .header-branding__logo, so a
+ * single rule covers both; !important beats the utility class.
+ */
+.header-branding__logo {
+    height: 3.25rem !important;
+    width: auto !important;
+}
