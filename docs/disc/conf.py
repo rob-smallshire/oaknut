@@ -1,4 +1,11 @@
-"""Sphinx configuration for oaknut documentation."""
+"""Sphinx configuration for the oaknut disc manual.
+
+Generic settings — theme, the common extension set, autodoc /
+intersphinx / napoleon defaults, and the shared static assets — come
+from ``docs/_shared/conf_base.py`` via the star-import below. This file
+keeps only what is specific to the disc manual: its title and the
+CLI-documentation directives (``oaknut-command`` and ``cli-example``).
+"""
 
 import re
 import subprocess
@@ -8,58 +15,21 @@ from pathlib import Path
 from docutils import nodes
 from docutils.parsers.rst import Directive
 
-# Local extensions under docs/manual/_ext/.
+# Shared base config: extensions, theme, html_static_path, and the
+# autodoc / intersphinx / napoleon defaults common to every body.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "_shared"))
+from conf_base import *  # noqa: E402, F403
+
+# Local extensions under docs/disc/_ext/.
 sys.path.insert(0, str(Path(__file__).resolve().parent / "_ext"))
 
 project = "oaknut"
-author = "Robert Smallshire"
-copyright = "2024-2026, Robert Smallshire"
-
-extensions = [
-    "sphinx.ext.autodoc",
-    "sphinx.ext.doctest",
-    "sphinx.ext.intersphinx",
-    "sphinx.ext.napoleon",
-    "sphinx_click",
-    "sphinx_copybutton",
-    "sphinx_design",
-    "oaknut_command",
-]
-
-# Google-style docstrings — Args:/Returns:/Raises: sections.
-napoleon_google_docstring = True
-napoleon_numpy_docstring = False
-napoleon_include_init_with_doc = False
-napoleon_use_rtype = False
-napoleon_use_param = False
-
-# Theme
-html_theme = "sphinx_clarity_theme"
 html_title = "oaknut"
 
-# Custom static assets. _static/platform-tabs.js auto-selects the
-# host-platform tab in sphinx-design tab-sets that use the :sync: IDs
-# `bash` / `zsh` / `powershell` (see _static/platform-tabs.js for the
-# detection logic and conventions).
-html_static_path = ["_static"]
-html_js_files = ["platform-tabs.js"]
-html_css_files = ["font-size.css"]
-
-# Autodoc
-autodoc_member_order = "bysource"
-autodoc_typehints = "description"
-
-# Intersphinx
-intersphinx_mapping = {
-    "python": ("https://docs.python.org/3", None),
-}
-
-# Source
-exclude_patterns = ["_build"]
-
-# Suppress warnings from star-aliases (*CAT etc.) in Click docstrings
-# that sphinx-click renders — the * is misinterpreted as RST emphasis.
-suppress_warnings = ["docutils"]
+# Disc-specific extensions on top of the shared set: sphinx_click for
+# any residual `.. click::` usage, and oaknut_command for the semantic
+# `.. oaknut-command::` directive.
+extensions = [*extensions, "sphinx_click", "oaknut_command"]  # noqa: F405
 
 
 # ---------------------------------------------------------------------------
