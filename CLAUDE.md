@@ -45,6 +45,19 @@ pre-commit run --all-files                    # Run all hooks (ruff + namespace 
 
 The workspace uses `[tool.uv.sources]` at the root so sibling deps like `oaknut-file` resolve to local paths during development, and to PyPI for end-user installs — no source changes needed to switch between modes.
 
+## Documentation
+
+```sh
+scripts/build_docs.sh            # html + coverage + doctests (the default)
+scripts/build_docs.sh html       # build each docs/<body>/ into _site/<body>, copy the portal page
+scripts/build_docs.sh coverage   # CLI command/example coverage + public-API __all__ coverage
+scripts/build_docs.sh doctest    # run every .. doctest:: block against the real library
+```
+
+Each `docs/<body>/` with a `conf.py` (`disc`, `zip`) is an independent Sphinx project built into the top-level, git-ignored **`_site/<body>/`**; the `docs/portal/` landing page sits at `_site/index.html`. `scripts/build_docs.sh` is the single source of truth for the pipeline — `.github/workflows/{ci,release}.yml` call the same script (`bash scripts/build_docs.sh html|coverage|doctest`), so local and CI cannot drift. The `html` phase uses `-W` (warnings are errors) and, via the `cli-example` directive, runs every `scripts/cli-examples/*.py` recipe, so a broken example fails the build.
+
+Both documentation-coverage gates live in **`scripts/check_doc_coverage.py`** (subcommands `commands` and `api`), run by the `coverage` phase: `commands` checks every `disc` subcommand has an `.. oaknut-command::` entry plus a `cli-example` whose recipe exists; `api` checks each package's public `__all__` against the built `objects.inv`. Add a CLI command or a public symbol without documenting it and the build fails.
+
 ## Test infrastructure (non-obvious)
 
 **Pytest runs in `--import-mode=importlib`** (workspace `pyproject.toml`). This is mandatory for PEP 420 namespace packages — the default `prepend` mode collides with sibling packages contributing to the same namespace. Consequence: pytest does not auto-inject test directories into `sys.path`.
