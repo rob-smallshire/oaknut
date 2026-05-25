@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/rob-smallshire/oaknut-zip/main/docs/oaknut-zip-logo.png" alt="oaknut-zip" width="300">
+  <img src="https://raw.githubusercontent.com/rob-smallshire/oaknut/master/docs/zip/_static/oaknut-zip-logo.png" alt="oaknut-zip" width="300">
 </p>
 
 # oaknut-zip

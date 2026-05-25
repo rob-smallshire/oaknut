@@ -7,6 +7,7 @@ name = "oaknut-disc"
 requires-python = ">= 3.11"
 dynamic = ["version"]
 description = "CLI for working with Acorn DFS, ADFS, and AFS disc images."
+readme = "README.md"
 license = "MIT"
 authors = [{ name = "Robert Smallshire", email = "robert@smallshire.org.uk" }]
 classifiers = [

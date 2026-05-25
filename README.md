@@ -1,3 +1,9 @@
+<p align="center">
+  <a href="https://rob-smallshire.github.io/oaknut/disc/"><img src="docs/disc/_static/oaknut-disc-logo.png" alt="oaknut disc" width="280"></a>
+  &nbsp;&nbsp;
+  <a href="https://rob-smallshire.github.io/oaknut/zip/"><img src="docs/zip/_static/oaknut-zip-logo.png" alt="oaknut zip" width="280"></a>
+</p>
+
 # oaknut
 
 Python tools for Acorn computer filesystems, files, and formats — the BBC Micro, Electron, Archimedes, and their descendants.
