@@ -23,8 +23,8 @@ from conf_base import *  # noqa: E402, F403
 # Local extensions under docs/disc/_ext/.
 sys.path.insert(0, str(Path(__file__).resolve().parent / "_ext"))
 
-project = "oaknut"
-html_title = "oaknut"
+project = "oaknut-disc"
+html_title = "oaknut-disc"
 html_logo = "_static/oaknut-disc-logo.png"
 
 # Disc-specific extensions on top of the shared set: sphinx_click for

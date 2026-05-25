@@ -14,6 +14,6 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "_shared"))
 from conf_base import *  # noqa: E402, F403
 
-project = "oaknut zip"
-html_title = "oaknut zip"
+project = "oaknut-zip"
+html_title = "oaknut-zip"
 html_logo = "_static/oaknut-zip-logo.png"

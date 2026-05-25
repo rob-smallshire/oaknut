@@ -1,4 +1,4 @@
-oaknut zip
+oaknut-zip
 ==========
 
 Read ZIP archives that carry Acorn file metadata — the load and
