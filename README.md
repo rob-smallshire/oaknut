@@ -6,7 +6,7 @@
 
 Python tools for Acorn computer filesystems, files, and formats — the BBC Micro, Electron, Archimedes, and their descendants.
 
-oaknut is a [`uv`](https://github.com/astral-sh/uv) workspace monorepo of independently published `oaknut-*` packages that share a single `oaknut.` Python namespace. Two of them are the tools most people come for, and each has its own manual.
+oaknut is a [`uv`](https://github.com/astral-sh/uv) workspace monorepo of independently published `oaknut-*` packages that share a single `oaknut.` Python namespace. The two user-facing tools each have their own manual.
 
 ## oaknut-disc
 
