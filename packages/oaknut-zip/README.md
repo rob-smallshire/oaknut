@@ -5,9 +5,9 @@
 # oaknut-zip
 
 [![PyPI version](https://img.shields.io/pypi/v/oaknut-zip)](https://pypi.org/project/oaknut-zip/)
-[![CI](https://github.com/rob-smallshire/oaknut-zip/actions/workflows/tests.yml/badge.svg)](https://github.com/rob-smallshire/oaknut-zip/actions/workflows/tests.yml)
+[![CI](https://github.com/rob-smallshire/oaknut/actions/workflows/ci.yml/badge.svg)](https://github.com/rob-smallshire/oaknut/actions/workflows/ci.yml)
 [![Python versions](https://img.shields.io/pypi/pyversions/oaknut-zip)](https://pypi.org/project/oaknut-zip/)
-[![License: MIT](https://img.shields.io/pypi/l/oaknut-zip)](https://github.com/rob-smallshire/oaknut-zip/blob/main/LICENSE)
+[![License: MIT](https://img.shields.io/pypi/l/oaknut-zip)](https://github.com/rob-smallshire/oaknut/blob/master/packages/oaknut-zip/LICENSE)
 
 A Python tool for extracting ZIP files containing
 [Acorn computer](https://en.wikipedia.org/wiki/Acorn_Computers) metadata.
