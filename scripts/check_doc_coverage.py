@@ -12,6 +12,13 @@ manual's ``objects.inv`` inventory: it credits public-path
 documentation and only ever complains about symbols a package itself
 exports.
 
+A symbol counts as documented when its public name (``oaknut.dfs.DFS``)
+is in the inventory, or when the *same object* is documented under any
+other name — so a package that re-exports a lower layer's symbol (``from
+oaknut.file import AcornMeta`` surfacing as ``oaknut.dfs.AcornMeta``) is
+credited by the canonical ``oaknut.file.AcornMeta`` entry rather than
+forcing every page to re-document the shared surface.
+
 Run it against a built manual's inventory, naming the packages that
 manual is responsible for documenting::
 
@@ -54,6 +61,27 @@ def public_names(package: str) -> list[str]:
     return list(exported)
 
 
+def resolve(dotted_name: str) -> object | None:
+    """Resolve a documented dotted name to the live object, or None.
+
+    Imports the longest importable module prefix, then walks the
+    remaining components as attributes.
+    """
+    parts = dotted_name.split(".")
+    for split in range(len(parts), 0, -1):
+        try:
+            obj: object = importlib.import_module(".".join(parts[:split]))
+        except ModuleNotFoundError:
+            continue
+        try:
+            for attribute in parts[split:]:
+                obj = getattr(obj, attribute)
+        except AttributeError:
+            return None
+        return obj
+    return None
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -76,12 +104,26 @@ def main() -> int:
 
     documented = documented_py_names(args.inventory)
 
+    # Index documented names by their final component, so a re-exported
+    # symbol can be matched against the canonical entry that documents
+    # the same object under a different qualifier.
+    documented_by_leaf: dict[str, set[str]] = {}
+    for name in documented:
+        documented_by_leaf.setdefault(name.rsplit(".", 1)[-1], set()).add(name)
+
+    def is_documented(package: str, name: str) -> bool:
+        if f"{package}.{name}" in documented:
+            return True
+        obj = getattr(importlib.import_module(package), name)
+        return any(
+            resolve(candidate) is obj
+            for candidate in documented_by_leaf.get(name, ())
+        )
+
     missing: dict[str, list[str]] = {}
     for package in args.packages:
         gaps = [
-            name
-            for name in public_names(package)
-            if f"{package}.{name}" not in documented
+            name for name in public_names(package) if not is_documented(package, name)
         ]
         if gaps:
             missing[package] = gaps
