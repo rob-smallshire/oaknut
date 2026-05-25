@@ -25,3 +25,15 @@ html {
     height: 6.5rem !important;
     width: auto !important;
 }
+
+/*
+ * The enlarged logo is taller than the theme's default header bar
+ * (--header-height = 18 * --spacing = 4.5rem), so it spilled out the
+ * top. Raise the bar to fit the logo with a little breathing room.
+ * The theme defines --header-height on <html> and reuses it for the
+ * content offset, the sticky sidebar top/height, and anchor
+ * scroll-margin, so this one override keeps all of them in step.
+ */
+:root {
+    --header-height: 7.5rem !important;
+}
