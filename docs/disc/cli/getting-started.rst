@@ -215,8 +215,6 @@ Reading the output top to bottom:
   type`` rendered the ``\r`` line endings correctly — Acorn text
   files use CR, modern terminals use LF, and ``type`` does the
   translation.
-- The disc has **zero free sectors** — packed to the byte, which is
-  what released DFS floppies of the era almost always were.
 
 
 Acorn-style aliases
