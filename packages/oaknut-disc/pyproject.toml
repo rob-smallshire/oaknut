@@ -34,6 +34,12 @@ dependencies = [
     "exit-codes>=1.3",
 ]
 
+[project.urls]
+Homepage = "https://github.com/rob-smallshire/oaknut/tree/master/packages/oaknut-disc"
+Documentation = "https://rob-smallshire.github.io/oaknut/disc/"
+Repository = "https://github.com/rob-smallshire/oaknut"
+Issues = "https://github.com/rob-smallshire/oaknut/issues"
+
 [project.scripts]
 disc = "oaknut.disc.cli:cli"
 oaknut-disc = "oaknut.disc.cli:cli"
