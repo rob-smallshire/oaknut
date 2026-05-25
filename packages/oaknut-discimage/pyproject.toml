@@ -25,7 +25,8 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/rob-smallshire/oaknut"
+Homepage = "https://github.com/rob-smallshire/oaknut/tree/master/packages/oaknut-discimage"
+Documentation = "https://rob-smallshire.github.io/oaknut/disc/api/reference/discimage.html"
 Repository = "https://github.com/rob-smallshire/oaknut"
 Issues = "https://github.com/rob-smallshire/oaknut/issues"
 

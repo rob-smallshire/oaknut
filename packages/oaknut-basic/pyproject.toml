@@ -22,7 +22,7 @@ classifiers = [
 dependencies = []
 
 [project.urls]
-Homepage = "https://github.com/rob-smallshire/oaknut"
+Homepage = "https://github.com/rob-smallshire/oaknut/tree/master/packages/oaknut-basic"
 Repository = "https://github.com/rob-smallshire/oaknut"
 Issues = "https://github.com/rob-smallshire/oaknut/issues"
 
