@@ -60,7 +60,13 @@ doc_bodies() {
 build_html() {
   for body in $(doc_bodies); do
     group_start "Building $body"
-    uv run --group docs sphinx-build -b html "docs/$body" "$SITE_DIRPATH/$body" -W
+    # -E -a: always read every source afresh and write all output. Our
+    # manuals embed live library output (the oaknut-command directive)
+    # and freshly-executed cli-example transcripts, so Sphinx's
+    # incremental model — which only rebuilds when an .rst source
+    # changes — would silently leave docs stale after a code or
+    # dependency change.
+    uv run --group docs sphinx-build -E -a -b html "docs/$body" "$SITE_DIRPATH/$body" -W
     group_end
   done
   cp docs/portal/index.html "$SITE_DIRPATH/index.html"
@@ -85,7 +91,8 @@ check_coverage() {
 run_doctests() {
   for body in $(doc_bodies); do
     group_start "Doctest $body"
-    uv run --group docs sphinx-build -b doctest "docs/$body" "docs/$body/_build/doctest" -W
+    # -E: fresh environment so doctests run against the current library.
+    uv run --group docs sphinx-build -E -b doctest "docs/$body" "docs/$body/_build/doctest" -W
     group_end
   done
 }
