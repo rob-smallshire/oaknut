@@ -88,6 +88,14 @@ jobs:
           done
           cp docs/portal/index.html _site/index.html
 
+      - name: Check public API documentation coverage
+        # Fail if a package's public __all__ has symbols that no
+        # reference page documents — the safety net for our hand-curated
+        # autodoc. Gated per body; add the disc family's packages
+        # (oaknut.file, oaknut.discimage, …) here as each
+        # docs/disc/api/reference/*.rst stub is fleshed out.
+        run: uv run python scripts/check_doc_coverage.py --inventory _site/zip/objects.inv oaknut.zip
+
       - name: Run Sphinx doctests
         # Any .. doctest:: blocks in a body are executed against the
         # real library here, independently of the HTML build above so a
