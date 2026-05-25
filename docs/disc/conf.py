@@ -25,6 +25,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent / "_ext"))
 
 project = "oaknut"
 html_title = "oaknut"
+html_logo = "_static/oaknut-disc-logo.png"
 
 # Disc-specific extensions on top of the shared set: sphinx_click for
 # any residual `.. click::` usage, and oaknut_command for the semantic
