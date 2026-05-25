@@ -196,6 +196,15 @@ AFS (Acorn Level 3 File Server)
 .. oaknut-command:: oaknut.disc.cli:afs-init
    :prog: disc afs-init
 
+   Passwords are set with ``--user-password NAME=VALUE``, not inside
+   the ``--user`` spec: a password may contain a colon, which the
+   colon-delimited spec cannot represent, so the value is split once
+   on the first ``=`` and the rest taken verbatim. ``NAME`` matches a
+   ``--user`` or a built-in (``Syst``, ``Boot``, ``Welcome``). No
+   account has a password unless you give one — to ship a disc with
+   the system account already protected, initialise with
+   ``--user-password Syst=secret``.
+
    .. cli-example:: cmd_afs_init
 
 .. oaknut-command:: oaknut.disc.cli:afs-users
@@ -212,6 +221,11 @@ AFS (Acorn Level 3 File Server)
    :prog: disc afs-userdel
 
    .. cli-example:: cmd_afs_userdel
+
+.. oaknut-command:: oaknut.disc.cli:afs-passwd
+   :prog: disc afs-passwd
+
+   .. cli-example:: cmd_afs_passwd
 
 .. oaknut-command:: oaknut.disc.cli:afs-merge
    :prog: disc afs-merge

@@ -241,9 +241,24 @@ The ``disc afs-users`` command confirms the resulting account list:
 ``Syst`` and ``Boot`` accounts are not created explicitly — they
 are built-ins and arrive for free with every freshly-initialised
 AFS partition (``Welcome`` would too, but for the explicit
-omission). To change a built-in's quota or password instead of
-dropping it, supply ``--user NAME:...`` and the spec overrides the
-default.
+omission). To change a built-in's quota instead of dropping it,
+supply ``--user NAME:QUOTA`` and the spec overrides the default.
+
+No account has a password unless you ask for one — a freshly
+initialised disc leaves even the system account ``Syst`` open. The
+Level 3 File Server stores passwords as up to six cleartext ASCII
+characters (there is no encryption), so the only thing guarding the
+file on a real disc is its hidden access byte. Passwords live outside
+the ``--user`` spec — a password may itself contain a colon, which the
+colon-delimited spec could not represent — and are set with their own
+``--user-password NAME=VALUE`` option, split once on the first ``=``.
+To ship the disc with the system account already protected, add it at
+initialisation::
+
+    disc afs-init scsi0.dat --disc-name Server --user-password Syst=secret
+
+``NAME`` matches a ``--user`` or a built-in; set a password later with
+``disc afs-passwd IMAGE NAME --password VALUE``.
 
 **7. Verify the dual-partition shape and walk the disc.**
 
