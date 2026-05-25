@@ -72,14 +72,30 @@ jobs:
       - name: Install workspace + docs dependencies
         run: uv sync --group docs
 
-      - name: Build Sphinx docs
-        # -W: warnings as errors. The cli-example directive runs each
-        # scripts/cli-examples/*.py recipe at HTML-build time, so a
-        # broken or stale example fails this step.
-        run: uv run sphinx-build -b html docs/disc docs/disc/_build/html -W
+      - name: Build all documentation bodies
+        # Each docs/<body>/ that has a conf.py is an independent Sphinx
+        # project, built into its own /<body>/ subpath of the combined
+        # site so new bodies need no edit here. -W: warnings as errors —
+        # the disc manual's cli-example directive also runs each
+        # scripts/cli-examples/*.py recipe at this point, so a broken or
+        # stale example fails the build.
+        run: |
+          for conf in docs/*/conf.py; do
+            body="$(basename "$(dirname "$conf")")"
+            echo "::group::Building $body"
+            uv run sphinx-build -b html "docs/$body" "_site/$body" -W
+            echo "::endgroup::"
+          done
+          cp docs/portal/index.html _site/index.html
 
       - name: Run Sphinx doctests
-        # Any .. doctest:: blocks in the manual are executed against
-        # the real library here. Independent of the HTML build above
-        # so a doctest failure is reported with its own log.
-        run: uv run sphinx-build -b doctest docs/disc docs/disc/_build/doctest -W
+        # Any .. doctest:: blocks in a body are executed against the
+        # real library here, independently of the HTML build above so a
+        # doctest failure is reported with its own log.
+        run: |
+          for conf in docs/*/conf.py; do
+            body="$(basename "$(dirname "$conf")")"
+            echo "::group::Doctest $body"
+            uv run sphinx-build -b doctest "docs/$body" "docs/$body/_build/doctest" -W
+            echo "::endgroup::"
+          done

@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>oaknut documentation</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+        Helvetica, Arial, sans-serif;
+      max-width: 46rem;
+      margin: 4rem auto;
+      padding: 0 1.5rem;
+      line-height: 1.6;
+    }
+    h1 { font-size: 2rem; margin-bottom: 0.25rem; }
+    p.lead { color: #666; margin-top: 0; }
+    ul.bodies { list-style: none; padding: 0; margin: 2.5rem 0 0; }
+    ul.bodies li { margin: 0 0 1.25rem; }
+    ul.bodies a {
+      display: block;
+      padding: 1rem 1.25rem;
+      border: 1px solid #d0d0d0;
+      border-radius: 0.5rem;
+      text-decoration: none;
+      color: inherit;
+    }
+    ul.bodies a:hover { border-color: #888; }
+    ul.bodies .name { font-weight: 600; font-size: 1.15rem; }
+    ul.bodies .blurb { color: #666; }
+  </style>
+</head>
+<body>
+  <h1>oaknut</h1>
+  <p class="lead">Python tools for Acorn computer filesystems, files, and
+    formats — the BBC Micro, Electron, Archimedes, and their descendants.</p>
+
+  <ul class="bodies">
+    <li>
+      <a href="disc/">
+        <span class="name">disc</span>
+        <div class="blurb">Inspect, extract from, and modify Acorn disc
+          images — DFS, ADFS, AFS — from the <code>disc</code> command
+          line or the Python API.</div>
+      </a>
+    </li>
+    <li>
+      <a href="zip/">
+        <span class="name">zip</span>
+        <div class="blurb">Read ZIP archives that carry Acorn file
+          metadata: load and execution addresses, access bits, and RISC
+          OS filetypes.</div>
+      </a>
+    </li>
+  </ul>
+</body>
+</html>
