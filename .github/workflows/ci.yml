@@ -97,7 +97,7 @@ jobs:
         # docs/disc/api/reference/*.rst stub is fleshed out.
         run: |
           uv run python scripts/check_doc_coverage.py --inventory _site/zip/objects.inv oaknut.zip
-          uv run python scripts/check_doc_coverage.py --inventory _site/disc/objects.inv oaknut.file
+          uv run python scripts/check_doc_coverage.py --inventory _site/disc/objects.inv oaknut.file oaknut.discimage
 
       - name: Run Sphinx doctests
         # Any .. doctest:: blocks in a body are executed against the

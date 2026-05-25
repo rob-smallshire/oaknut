@@ -102,7 +102,7 @@ jobs:
         # docs/disc/api/reference/*.rst stub is fleshed out.
         run: |
           uv run python scripts/check_doc_coverage.py --inventory _site/zip/objects.inv oaknut.zip
-          uv run python scripts/check_doc_coverage.py --inventory _site/disc/objects.inv oaknut.file
+          uv run python scripts/check_doc_coverage.py --inventory _site/disc/objects.inv oaknut.file oaknut.discimage
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
