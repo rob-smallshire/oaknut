@@ -51,10 +51,10 @@ pip install oaknut-disc
 
 ```sh
 # List the contents of a DFS floppy
-disc ls games.ssd
+disc ls 'games.ssd.$'
 
 # Copy a file from a DFS floppy to an ADFS hard disc, mapping metadata across
-disc cp games.ssd:'$.ELITE' scsi0.dat:'$.Elite'
+disc cp 'games.ssd:$.ELITE' 'scsi0.dat:$.Elite'
 
 # Create and initialise a Level 3 File Server disc
 disc create scsi0.dat --format adfs-hard --capacity 10MiB --title Server
