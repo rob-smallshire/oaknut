@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="https://raw.githubusercontent.com/rob-smallshire/oaknut/master/docs/portal/oaknut-logo.png" alt="oaknut" width="320">
+</p>
+
 # oaknut
 
 This distribution is a **namespace placeholder**. It ships no code and has no

@@ -1,7 +1,5 @@
 <p align="center">
-  <a href="https://rob-smallshire.github.io/oaknut/disc/"><img src="docs/disc/_static/oaknut-disc-logo.png" alt="oaknut disc" width="280"></a>
-  &nbsp;&nbsp;
-  <a href="https://rob-smallshire.github.io/oaknut/zip/"><img src="docs/zip/_static/oaknut-zip-logo.png" alt="oaknut zip" width="280"></a>
+  <img src="docs/portal/oaknut-logo.png" alt="oaknut" width="320">
 </p>
 
 # oaknut
