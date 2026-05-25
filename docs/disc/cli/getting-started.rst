@@ -108,9 +108,9 @@ There are two ways to write into the disc.
 
 Both forms use ``printf`` rather than ``echo`` because BBC text files
 terminate lines with ``\r`` (carriage return), not ``\n`` — and ``echo``
-on every common shell appends ``\n``. ``disc put`` writes whatever
-bytes it gets; the convention is yours to maintain. ``disc type``
-later translates ``\r`` back to your host's native line ending when
+on every common shell appends ``\n``. The ``disc put`` command writes whatever bytes it gets; the
+convention is yours to maintain. The ``disc type`` command later
+translates ``\r`` back to your host's native line ending when
 reading the file out.
 
 The trailing ``-`` in the stdin form is the long-standing Unix
