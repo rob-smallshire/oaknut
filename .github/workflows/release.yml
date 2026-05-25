@@ -92,6 +92,7 @@ jobs:
             echo "::endgroup::"
           done
           cp docs/portal/index.html _site/index.html
+          cp docs/portal/oaknut-logo.png _site/oaknut-logo.png
 
       - name: Check public API documentation coverage
         # Block release if a package's public __all__ has symbols that no
