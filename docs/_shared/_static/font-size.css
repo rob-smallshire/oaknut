@@ -15,25 +15,27 @@ html {
 }
 
 /*
- * The clarity theme renders html_logo in the header branding at the
- * Tailwind `h-8` utility (2rem), which is too small for a brand logo.
- * Enlarge it; width stays auto so the aspect ratio is preserved. Both
- * the light and dark-mode variants carry .header-branding__logo, so a
- * single rule covers both; !important beats the utility class.
+ * The standalone header is gone (see _templates/layouts/default.html);
+ * the logo + title now sit at the top of the left sidebar. Stack them
+ * vertically and let the logo fill the narrow sidebar column (it was
+ * sized for a full-width header). Both light and dark logo variants
+ * carry .header-branding__logo.
  */
+.header-branding {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+}
 .header-branding__logo {
-    height: 6.5rem !important;
-    width: auto !important;
+    width: 100% !important;
+    height: auto !important;
 }
 
 /*
- * The enlarged logo is taller than the theme's default header bar
- * (--header-height = 18 * --spacing = 4.5rem), so it spilled out the
- * top. Raise the bar to fit the logo with a little breathing room.
- * The theme defines --header-height on <html> and reuses it for the
- * content offset, the sticky sidebar top/height, and anchor
- * scroll-margin, so this one override keeps all of them in step.
+ * With the header removed, zero its height. The theme keys the sticky
+ * sidebar offset, the content top-margin, and the mobile-drawer margins
+ * off --header-height (defined on <html>) to clear a sticky header that
+ * no longer exists.
  */
 :root {
-    --header-height: 7.5rem !important;
+    --header-height: 0px !important;
 }
