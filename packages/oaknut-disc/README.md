@@ -7,6 +7,9 @@
 [![PyPI version](https://img.shields.io/pypi/v/oaknut-disc)](https://pypi.org/project/oaknut-disc/)
 [![Python versions](https://img.shields.io/pypi/pyversions/oaknut-disc)](https://pypi.org/project/oaknut-disc/)
 [![License: MIT](https://img.shields.io/pypi/l/oaknut-disc)](https://github.com/rob-smallshire/oaknut)
+[![Documentation](https://img.shields.io/badge/docs-online-blue)](https://rob-smallshire.github.io/oaknut/disc/)
+
+**[Read the documentation](https://rob-smallshire.github.io/oaknut/disc/)** — full walkthrough, cookbook, and command reference.
 
 `disc` is a unified command-line tool for inspecting, extracting from, and
 modifying [Acorn computer](https://en.wikipedia.org/wiki/Acorn_Computers) disc
@@ -63,11 +66,6 @@ disc afs-init scsi0.dat --disc-name Server --user RJS:2MiB --emplace Library
 # Walk both partitions of a dual ADFS + AFS hard disc
 disc tree scsi0.dat
 ```
-
-## Documentation
-
-Full walkthrough, cookbook, and command reference:
-**https://rob-smallshire.github.io/oaknut/disc/**
 
 ## Licence
 
