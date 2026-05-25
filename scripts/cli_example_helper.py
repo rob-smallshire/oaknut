@@ -61,7 +61,7 @@ _SECTION_MARKER_PREFIX = "\x1f@@OAKNUT_SECTION@@"
 def section(name: str) -> None:
     """Mark the start of a named section in the captured transcript.
 
-    The ``cli-example`` directive in ``docs/manual/conf.py``
+    The ``cli-example`` directive in ``docs/disc/conf.py``
     recognises these markers and can extract just the named section
     into a page block via ``:section: <name>``. This lets a long,
     stateful recipe be interleaved with explanatory prose without

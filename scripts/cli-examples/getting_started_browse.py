@@ -1,7 +1,7 @@
 """Populated-disc snapshot: catalogue listings after a file has been added.
 
 Renders the ``disc tree`` / ``disc ls`` blocks in the "Browsing the
-catalogue" section of ``docs/manual/cli/getting-started.rst``. Builds
+catalogue" section of ``docs/disc/cli/getting-started.rst``. Builds
 the same ``hello.ssd`` as the surrounding narrative describes and
 writes a short plain-text README into ``$.README`` before listing.
 """

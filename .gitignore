@@ -16,7 +16,8 @@ env/
 
 # Build artefacts
 build/
-docs/manual/_build/
+docs/*/_build/
+_site/
 dist/
 *.egg-info/
 *.egg

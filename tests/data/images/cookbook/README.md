@@ -3,7 +3,7 @@
 Disc images consumed by the runnable CLI cookbook recipes under
 `scripts/cli-examples/`. The directive that embeds those recipes
 into the manual is `.. cli-example::` (defined in
-`docs/manual/conf.py`); the helper that pulls an image out of this
+`docs/disc/conf.py`); the helper that pulls an image out of this
 directory into the recipe's working dir is `copy_from_corpus()`
 (in `scripts/cli_example_helper.py`).
 

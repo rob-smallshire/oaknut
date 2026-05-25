@@ -1,7 +1,7 @@
 """Blank-disc snapshot: create a fresh DFS image and inspect it.
 
 Renders the ``disc stat`` block in the "Build a blank disc to follow
-along" section of ``docs/manual/cli/getting-started.rst``. The disc
+along" section of ``docs/disc/cli/getting-started.rst``. The disc
 is empty at this point — the reader has not yet put any files in.
 """
 
