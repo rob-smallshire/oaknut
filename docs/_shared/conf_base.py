@@ -43,8 +43,14 @@ html_theme = "sphinx_clarity_theme"
 # _static/platform-tabs.js auto-selects the host-platform tab in
 # sphinx-design tab-sets keyed on the :sync: IDs bash / zsh / powershell.
 html_static_path = [str((Path(__file__).resolve().parent / "_static"))]
-html_js_files = ["platform-tabs.js"]
+html_js_files = ["platform-tabs.js", "follow-os-theme.js"]
 html_css_files = ["font-size.css"]
+
+# Shared template overrides under docs/_shared/_templates. We blank out
+# partials/mode_select.html so the theme's light/dark toggle is never
+# rendered — the site follows the OS colour scheme instead (see
+# _static/follow-os-theme.js).
+templates_path = [str((Path(__file__).resolve().parent / "_templates"))]
 
 autodoc_member_order = "bysource"
 autodoc_typehints = "description"
