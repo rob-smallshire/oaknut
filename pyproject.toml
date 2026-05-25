@@ -23,7 +23,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "oaknut"
-version = "10.7.0"
+version = "11.0.0"
 requires-python = ">=3.11"
 description = "Namespace placeholder for the oaknut-* family of Acorn computer tools. Install oaknut-dfs, oaknut-adfs, oaknut-disc, etc. — not this."
 readme = "README-pypi.md"
@@ -110,7 +110,7 @@ docs = [
 ]
 
 [tool.bumpversion]
-current_version = "10.7.0"
+current_version = "11.0.0"
 commit = true
 tag = true
 tag_name = "v{new_version}"

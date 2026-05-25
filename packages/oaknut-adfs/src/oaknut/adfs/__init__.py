@@ -5,7 +5,7 @@ by the BBC Master, Acorn Archimedes, and RISC OS machines: small (S),
 medium (M), and large (L) floppy layouts plus hard-disc images.
 """
 
-__version__ = "10.7.0"
+__version__ = "11.0.0"
 
 from oaknut.adfs.adfs import (
     ADFS,
