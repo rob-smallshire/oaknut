@@ -165,8 +165,8 @@ def _detect_dfs_format(image_filepath: Path):
         ACORN_DFS_40T_SINGLE_SIDED,
         ACORN_DFS_80T_DOUBLE_SIDED_INTERLEAVED,
         ACORN_DFS_80T_SINGLE_SIDED,
-        DiscFormat,
     )
+    from oaknut.discimage import DiscFormat
     from oaknut.discimage.formats import SurfaceSpec
 
     size = image_filepath.stat().st_size
@@ -2571,9 +2571,9 @@ def create(
         ACORN_DFS_80T_DOUBLE_SIDED_INTERLEAVED,
         ACORN_DFS_80T_SINGLE_SIDED,
         DFS,
-        DiscFormat,
     )
     from oaknut.dfs import IMAGE_FORMAT_BY_EXTENSION as _DFS_BY_EXT
+    from oaknut.discimage import DiscFormat
 
     # Resolve a concrete target: a DFS DiscFormat, an ADFS ADFSFormat,
     # or the _ADFS_HARD_DISC sentinel. --format (CLI vocabulary) wins;
