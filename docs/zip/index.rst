@@ -24,3 +24,9 @@ one wins.
    :caption: Getting started
 
    getting-started
+
+.. toctree::
+   :hidden:
+   :caption: Reference
+
+   reference
