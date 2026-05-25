@@ -73,41 +73,21 @@ jobs:
         run: uv sync --group docs
 
       - name: Build all documentation bodies
-        # Each docs/<body>/ that has a conf.py is an independent Sphinx
-        # project, built into its own /<body>/ subpath of the combined
-        # site so new bodies need no edit here. -W: warnings as errors —
-        # the disc manual's cli-example directive also runs each
-        # scripts/cli-examples/*.py recipe at this point, so a broken or
-        # stale example fails the build.
-        run: |
-          for conf in docs/*/conf.py; do
-            body="$(basename "$(dirname "$conf")")"
-            echo "::group::Building $body"
-            uv run sphinx-build -b html "docs/$body" "_site/$body" -W
-            echo "::endgroup::"
-          done
-          cp docs/portal/index.html _site/index.html
-          cp docs/portal/oaknut-logo.png _site/oaknut-logo.png
+        # scripts/build_docs.sh is the single source of truth for the
+        # docs pipeline, shared with release.yml and local use. The html
+        # phase builds each docs/<body>/ into _site/<body> (-W: warnings
+        # as errors) and copies the portal landing page; building the
+        # disc manual also runs every scripts/cli-examples/*.py recipe,
+        # so a broken or stale example fails the build.
+        run: bash scripts/build_docs.sh html
 
-      - name: Check public API documentation coverage
-        # Fail if a package's public __all__ has symbols that no
-        # reference page documents — the safety net for our hand-curated
-        # autodoc. Each body is checked against the packages it
-        # documents; every package a body documents is listed here, so
-        # a new public symbol that no reference page covers fails the
-        # build until it is documented or dropped from __all__.
-        run: |
-          uv run python scripts/check_doc_coverage.py --inventory _site/zip/objects.inv oaknut.zip
-          uv run python scripts/check_doc_coverage.py --inventory _site/disc/objects.inv oaknut.file oaknut.discimage oaknut.dfs oaknut.adfs oaknut.afs
+      - name: Check documentation coverage
+        # CLI command/example coverage of the command reference, then
+        # each manual's public __all__ against its built objects.inv.
+        # Fails until a new command or public symbol is documented.
+        run: bash scripts/build_docs.sh coverage
 
       - name: Run Sphinx doctests
-        # Any .. doctest:: blocks in a body are executed against the
-        # real library here, independently of the HTML build above so a
-        # doctest failure is reported with its own log.
-        run: |
-          for conf in docs/*/conf.py; do
-            body="$(basename "$(dirname "$conf")")"
-            echo "::group::Doctest $body"
-            uv run sphinx-build -b doctest "docs/$body" "docs/$body/_build/doctest" -W
-            echo "::endgroup::"
-          done
+        # Execute any .. doctest:: blocks against the real library,
+        # separately from the HTML build so failures get their own log.
+        run: bash scripts/build_docs.sh doctest
