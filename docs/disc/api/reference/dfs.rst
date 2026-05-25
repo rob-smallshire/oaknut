@@ -57,17 +57,14 @@ are detected at read time and need no separate format constant here.
 .. autodata:: oaknut.dfs.IMAGE_FORMAT_BY_EXTENSION
 
 
-Re-exported shared surface
---------------------------
+See also
+--------
 
-For convenience, ``oaknut.dfs`` also re-exports the shared metadata
-surface from :doc:`file` and :doc:`discimage`, so a script working with
-DFS images need not import from several packages: the
-:class:`~oaknut.file.AcornMeta` record, the
-:class:`~oaknut.file.BootOption` and :class:`~oaknut.file.MetaFormat`
-enums, the :class:`~oaknut.file.FSError` base, the generic
-:class:`~oaknut.discimage.DiscFormat`, the metadata source labels
-(``SOURCE_*``) and format defaults (``DEFAULT_*``), and the
-:func:`~oaknut.file.export_with_metadata` /
-:func:`~oaknut.file.import_with_metadata` host-bridge helpers. They are
-documented on those pages.
+The shared metadata types that appear throughout the DFS API —
+:class:`~oaknut.file.AcornMeta`, the :class:`~oaknut.file.BootOption`
+and :class:`~oaknut.file.MetaFormat` enums, the
+:class:`~oaknut.file.FSError` base, and the host-bridge import/export
+helpers — belong to :doc:`oaknut.file <file>`; the generic
+:class:`~oaknut.discimage.DiscFormat` belongs to
+:doc:`oaknut.discimage <discimage>`. Import them from the package that
+owns them.

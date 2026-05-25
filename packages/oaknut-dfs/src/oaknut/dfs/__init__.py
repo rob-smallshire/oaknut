@@ -16,26 +16,6 @@ from oaknut.dfs.formats import (
     ACORN_DFS_80T_DOUBLE_SIDED_SEQUENTIAL,
     ACORN_DFS_80T_SINGLE_SIDED,
     IMAGE_FORMAT_BY_EXTENSION,
-    DiscFormat,
-)
-from oaknut.file import (
-    SOURCE_DIR,
-    SOURCE_FILENAME,
-    SOURCE_INF_PIEB,
-    SOURCE_INF_TRAD,
-    SOURCE_SPARKFS,
-    AcornMeta,
-    MetaFormat,
-)
-from oaknut.file.boot_option import BootOption
-from oaknut.file.exceptions import FSError
-from oaknut.file.host_bridge import (
-    DEFAULT_EXPORT_META_FORMAT,
-    DEFAULT_IMPORT_META_FORMATS,
-    SOURCE_XATTR_ACORN,
-    SOURCE_XATTR_PIEB,
-    export_with_metadata,
-    import_with_metadata,
 )
 
 Version = namedtuple("Version", ["major", "minor", "patch"])
@@ -44,11 +24,10 @@ __version__ = "10.7.0"
 __version_info__ = Version(*(__version__.split(".")))
 
 __all__ = [
-    "AcornMeta",
     "DFS",
     "DFSPath",
     "DFSStat",
-    "DiscFormat",
+    "DiscInfo",
     "ACORN_DFS_40T_SINGLE_SIDED",
     "ACORN_DFS_40T_DOUBLE_SIDED_INTERLEAVED",
     "ACORN_DFS_40T_DOUBLE_SIDED_SEQUENTIAL",
@@ -56,21 +35,6 @@ __all__ = [
     "ACORN_DFS_80T_DOUBLE_SIDED_INTERLEAVED",
     "ACORN_DFS_80T_DOUBLE_SIDED_SEQUENTIAL",
     "IMAGE_FORMAT_BY_EXTENSION",
-    "BootOption",
-    "DiscInfo",
-    "FSError",
-    "MetaFormat",
-    "SOURCE_DIR",
-    "SOURCE_FILENAME",
-    "SOURCE_INF_PIEB",
-    "SOURCE_INF_TRAD",
-    "SOURCE_SPARKFS",
-    "SOURCE_XATTR_ACORN",
-    "SOURCE_XATTR_PIEB",
-    "DEFAULT_EXPORT_META_FORMAT",
-    "DEFAULT_IMPORT_META_FORMATS",
     "detect_dfs_format",
     "expand",
-    "export_with_metadata",
-    "import_with_metadata",
 ]
