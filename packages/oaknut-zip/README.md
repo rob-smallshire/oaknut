@@ -8,6 +8,9 @@
 [![CI](https://github.com/rob-smallshire/oaknut/actions/workflows/ci.yml/badge.svg)](https://github.com/rob-smallshire/oaknut/actions/workflows/ci.yml)
 [![Python versions](https://img.shields.io/pypi/pyversions/oaknut-zip)](https://pypi.org/project/oaknut-zip/)
 [![License: MIT](https://img.shields.io/pypi/l/oaknut-zip)](https://github.com/rob-smallshire/oaknut/blob/master/packages/oaknut-zip/LICENSE)
+[![Documentation](https://img.shields.io/badge/docs-online-blue)](https://rob-smallshire.github.io/oaknut/zip/)
+
+**[Read the documentation](https://rob-smallshire.github.io/oaknut/zip/)** — getting started and the API reference.
 
 A Python tool for extracting ZIP files containing
 [Acorn computer](https://en.wikipedia.org/wiki/Acorn_Computers) metadata.
