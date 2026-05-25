@@ -27,8 +27,13 @@ extensions = [
 napoleon_google_docstring = True
 napoleon_numpy_docstring = False
 napoleon_include_init_with_doc = False
-napoleon_use_rtype = False
-napoleon_use_param = False
+# With autodoc_typehints = "description", emit per-parameter :param:/
+# :type: fields (and a :rtype: field) so Napoleon's descriptions and the
+# annotation-derived types merge into a single Parameters block — and a
+# single return entry — instead of rendering as two (one with
+# descriptions, one with types).
+napoleon_use_param = True
+napoleon_use_rtype = True
 
 html_theme = "sphinx_clarity_theme"
 
