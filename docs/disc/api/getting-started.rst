@@ -183,21 +183,8 @@ each step yields ``(dirpath, dirnames, filenames)`` in pre-order:
 
 The same call works against :class:`oaknut.dfs.DFSPath` and
 :class:`oaknut.afs.AFSPath`. For a one-level listing without
-descending, use :meth:`iterdir`.
-
-For creating subdirectories, :meth:`mkdir` mirrors pathlib too —
-including ``parents=True`` (create missing intermediates) and
-``exist_ok=True`` (suppress the error when the directory already
-exists, as long as the existing entry is itself a directory).
-
-DFS images do not nest. The catalogue is flat and the
-single-character directory names (``$``, ``A``–``Z``) all sit as
-siblings under the nameless root, so :meth:`mkdir` does not exist
-on :class:`DFSPath`. The :meth:`walk` method does work, however:
-starting from ``dfs.root`` it visits the nameless root once, then
-yields one tuple per populated directory letter — the canonical
-way to see every file on the disc without first knowing which
-letters are in use. See :doc:`patterns/paths` for the full model.
+descending, use :meth:`iterdir`. See :doc:`patterns/paths` for the
+full path model.
 
 
 A real Acorn disc: Repton Infinity
