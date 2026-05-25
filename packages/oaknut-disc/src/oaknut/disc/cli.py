@@ -3236,6 +3236,22 @@ def afs_userdel(image: Path, name: str) -> None:
         afs.remove_user(name)
 
 
+@cli.command(name="afs-passwd")
+@click.argument("image", type=click.Path(exists=True, path_type=Path))
+@click.argument("name")
+@click.option("--password", required=True, help="New password (max 6 ASCII chars).")
+def afs_passwd(image: Path, name: str, password: str) -> None:
+    """Change an existing AFS user's login password.
+
+    The Level 3 File Server stores passwords as up to six cleartext
+    ASCII characters; there is no encryption. Unlike afs-useradd this
+    only rewrites an existing record in place, so it never grows the
+    passwords file.
+    """
+    with open_image_for_afs_write(image) as (adfs, afs):
+        afs.set_password(name, password)
+
+
 @cli.command(name="afs-merge")
 @click.argument("image", type=click.Path(exists=True, path_type=Path))
 @click.option(

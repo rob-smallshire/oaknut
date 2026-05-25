@@ -363,6 +363,33 @@ class AFS:
         new_passwords = self.users.with_removed(name)
         self._update_passwords_on_disc(new_passwords)
 
+    def set_password(self, name: str, password: str) -> None:
+        """Set ``name``'s login password in the AFS passwords file.
+
+        Equivalent to ``disc afs-passwd`` on the CLI side. The Level 3
+        File Server stores passwords as up to six cleartext ASCII
+        characters (``MAXPW``) — there is no encryption, so the new
+        password is written verbatim. Because the record stays the same
+        31 bytes this never grows the passwords file, unlike
+        :meth:`add_user`.
+
+        Raises :class:`AFSUserNotFoundError` if no active user has that
+        name, and :class:`AFSPasswordError` if the password is not ASCII
+        or exceeds six characters.
+        """
+        from oaknut.afs.exceptions import AFSPasswordError
+        from oaknut.afs.passwords import _LEN_PASSWORD
+
+        try:
+            password.encode("ascii")
+        except UnicodeEncodeError as exc:
+            raise AFSPasswordError("password must be ASCII") from exc
+        if len(password) > _LEN_PASSWORD:
+            raise AFSPasswordError(f"password exceeds {_LEN_PASSWORD} characters")
+
+        new_passwords = self.users.with_password(name, password)
+        self._update_passwords_on_disc(new_passwords)
+
     @property
     def free_sectors(self) -> int:
         """Total free data sectors across all cylinders in the region."""

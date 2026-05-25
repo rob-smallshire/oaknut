@@ -2747,6 +2747,55 @@ class TestAfsUserAdd:
         assert "bob" in result.output
 
 
+def _afs_user_password(image: Path, name: str) -> str:
+    """Reopen *image* and return the on-disc password of user *name*."""
+    from oaknut.adfs import ADFS
+
+    with ADFS.from_file(image) as adfs, adfs.open_afs_partition() as afs:
+        return afs.users.find(name).password
+
+
+class TestAfsPasswd:
+    def test_afs_passwd_changes_password(
+        self, runner: CliRunner, afs_image_with_spare_slot: Path
+    ) -> None:
+        result = runner.invoke(
+            cli,
+            ["afs-passwd", str(afs_image_with_spare_slot), "alice", "--password", "sw0rd"],
+        )
+        assert result.exit_code == 0, result.output
+        assert _afs_user_password(afs_image_with_spare_slot, "alice") == "sw0rd"
+
+    def test_afs_passwd_allows_colon_and_equals(
+        self, runner: CliRunner, afs_image_with_spare_slot: Path
+    ) -> None:
+        """--password is its own option, so a ':'/'=' password is fine."""
+        result = runner.invoke(
+            cli,
+            ["afs-passwd", str(afs_image_with_spare_slot), "alice", "--password", "p:s=w"],
+        )
+        assert result.exit_code == 0, result.output
+        assert _afs_user_password(afs_image_with_spare_slot, "alice") == "p:s=w"
+
+    def test_afs_passwd_unknown_user(
+        self, runner: CliRunner, afs_image_with_spare_slot: Path
+    ) -> None:
+        result = runner.invoke(
+            cli,
+            ["afs-passwd", str(afs_image_with_spare_slot), "ghost", "--password", "x"],
+        )
+        assert result.exit_code != 0
+
+    def test_afs_passwd_too_long(
+        self, runner: CliRunner, afs_image_with_spare_slot: Path
+    ) -> None:
+        result = runner.invoke(
+            cli,
+            ["afs-passwd", str(afs_image_with_spare_slot), "alice", "--password", "toolong"],
+        )
+        assert result.exit_code != 0
+
+
 class TestAfsMerge:
     """Regression cover for the disc afs-merge CLI wrapper (issue #22)."""
 
