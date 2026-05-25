@@ -38,8 +38,9 @@ five files: the BASIC loader ``PLANET``, two binary blobs
 ``Planet1`` and ``Planet2``, the cassette-launcher ``PLANETO``,
 and the ``!BOOT`` file that pressing :kbd:`SHIFT-BREAK` runs.
 
-``disc tree`` shows the same two-level structure recursively in
-one shot; ``disc type`` reads ``!BOOT`` as text and translates the
+The ``disc tree`` command shows the same two-level structure
+recursively in one shot; ``disc type`` reads ``!BOOT`` as text and
+translates the
 Acorn ``\r`` line terminator to the host's newline so the four
 BASIC lines render cleanly.
 
