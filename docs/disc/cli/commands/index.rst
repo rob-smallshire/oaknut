@@ -247,3 +247,32 @@ Diagnostics
    :prog: disc generate-dsc
 
    .. cli-example:: cmd_generate_dsc
+
+
+Meta-commands
+-------------
+
+These describe the CLI itself rather than acting on a disc image:
+they introspect the reports each command produces and the output
+formatters available to ``--as``. See
+:doc:`../conventions/output-formats` for the concepts behind them.
+
+.. oaknut-command:: oaknut.disc.cli:list-reports
+   :prog: disc list-reports
+
+   .. cli-example:: cmd_list_reports
+
+.. oaknut-command:: oaknut.disc.cli:describe-report
+   :prog: disc describe-report
+
+   .. cli-example:: cmd_describe_report
+
+.. oaknut-command:: oaknut.disc.cli:list-report-formats
+   :prog: disc list-report-formats
+
+   .. cli-example:: cmd_list_report_formats
+
+.. oaknut-command:: oaknut.disc.cli:describe-report-format
+   :prog: disc describe-report-format
+
+   .. cli-example:: cmd_describe_report_format
