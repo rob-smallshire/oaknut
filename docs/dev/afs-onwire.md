@@ -261,6 +261,11 @@ From `Uade02.asm:133-141`:
 | 30 | 1 | `PWFLAG` | Status byte (see §User status byte) |
 | — | — | `PWENSZ` | **= 31 bytes total** |
 
+The `PWPASS` field holds the password as **cleartext ASCII** — there is
+no hashing or obfuscation; the server compares the supplied password
+against these bytes directly. The only protection on a real disc is the
+`&00` access byte hiding the file from ordinary users.
+
 The passwords file itself is an AFS object with access byte `&00` (no
 public or owner access), located at `$.Passwords`. WFSINIT creates it
 with initial capacity of one sector (~8 users). It must always be a

@@ -254,13 +254,16 @@ The prefix is case-insensitive (`AFS:`, `afs:`, `Afs:` all work). The `::disc.` 
 
 | Command | Purpose |
 |---|---|
-| `afs-init IMAGE --disc-name NAME [--cylinders N] [--user NAME[:S]] …` | Partition + initialise an AFS region (wraps `wfsinit.initialise`). |
+| `afs-init IMAGE --disc-name NAME [--cylinders N] [--user NAME[:S][:QUOTA]] [--user-password NAME=PWD] …` | Partition + initialise an AFS region (wraps `wfsinit.initialise`). |
 | `afs-users IMAGE` | List active users with quota, system flag, boot option. |
 | `afs-useradd IMAGE NAME [--system] [--quota N] [--password PWD]` | Add a user to the passwords file. |
 | `afs-userdel IMAGE NAME` | Remove a user (tombstone the slot). |
+| `afs-passwd IMAGE NAME --password PWD` | Change an existing user's password (in-place, never grows the file). |
 | `afs-merge IMAGE --source SOURCE_IMAGE [--target-path PATH]` | Merge a source AFS subtree into the target. |
 
 These do not have Acorn star-aliases (the Level 3 File Server's admin interface was over Econet, not local `*` commands).
+
+**Passwords are cleartext.** The Level 3 File Server stores each password as up to six plain ASCII bytes (`PWPASS`/`MAXPW`) in the `$.Passwords` file; there is no encryption. The only thing hiding them on a real disc is the `&00` access byte on the passwords file. Because a password sits inside an otherwise colon-delimited `--user` spec awkwardly — a password may itself contain `:` — `afs-init` keeps the password out of the `--user` grammar entirely. Passwords are passed through a separate `--user-password NAME=VALUE` option, split **once** on the first `=`, so the value after it is taken verbatim. `NAME` must match a `--user` or a built-in (`Syst`, `Boot`, `Welcome`); a built-in needs no matching `--user` to take a password.
 
 **Paths within the AFS partition** use `$.DIR.FILE` syntax with `.` as separator, just like ADFS. The 10-char / no-space name rules are enforced by `AFSPath` in the library. Users accustomed to ADFS paths will find AFS paths nearly identical.
 
