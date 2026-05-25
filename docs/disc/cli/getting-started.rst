@@ -40,9 +40,8 @@ and the ``!BOOT`` file that pressing :kbd:`SHIFT-BREAK` runs.
 
 The ``disc tree`` command shows the same two-level structure
 recursively in one shot; ``disc type`` reads ``!BOOT`` as text and
-translates the
-Acorn ``\r`` line terminator to the host's newline so the four
-BASIC lines render cleanly.
+translates the Acorn ``\r`` line terminator to the host's newline so
+the four BASIC lines render cleanly.
 
 If those work the way you expect, you have the mental model for
 the rest of the page. To compose ``disc`` with shell pipelines —
@@ -55,8 +54,8 @@ human-readable mode that hides when stdout is a pipe; see
 .. note::
 
    The Acorn-named alias for ``ls`` is ``*CAT`` — short for
-   *catalogue*. ``disc cat`` is the Unix ``cat`` and dumps raw bytes
-   to stdout; it is **not** an alias for the listing command. For
+   *catalogue*. The ``disc cat`` command is the Unix ``cat`` and dumps
+   raw bytes to stdout; it is **not** an alias for the listing command. For
    reading a text file at a terminal, prefer ``disc type`` (used in
    the example above), which also translates Acorn line endings into
    the host's native form.
@@ -67,8 +66,9 @@ human-readable mode that hides when stdout is a pipe; see
 Build a blank disc to follow along
 ----------------------------------
 
-``disc create`` makes a fresh image you can write into. We will use a
-single-sided BBC Micro floppy (SSD) — small, fast, and what most
+The ``disc create`` command makes a fresh image you can write into.
+We will use a single-sided BBC Micro floppy (SSD) — small, fast, and
+what most
 Acorn-era disc images out in the wild are.
 
 .. cli-example:: getting_started
@@ -108,10 +108,10 @@ There are two ways to write into the disc.
 
 Both forms use ``printf`` rather than ``echo`` because BBC text files
 terminate lines with ``\r`` (carriage return), not ``\n`` — and ``echo``
-on every common shell appends ``\n``. The ``disc put`` command writes whatever bytes it gets; the
-convention is yours to maintain. The ``disc type`` command later
-translates ``\r`` back to your host's native line ending when
-reading the file out.
+on every common shell appends ``\n``. The ``disc put`` command writes
+whatever bytes it gets; the convention is yours to maintain. The
+``disc type`` command later translates ``\r`` back to your host's
+native line ending when reading the file out.
 
 The trailing ``-`` in the stdin form is the long-standing Unix
 idiom for "read this argument from stdin" — codified as a guideline
