@@ -22,6 +22,6 @@ html {
  * single rule covers both; !important beats the utility class.
  */
 .header-branding__logo {
-    height: 3.25rem !important;
+    height: 6.5rem !important;
     width: auto !important;
 }
