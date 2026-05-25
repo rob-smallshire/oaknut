@@ -6,8 +6,8 @@ filesystem images. For interactive use and simple scripting, prefer
 the Command Line Interface (CLI) tools. For lower-level programmatic
 access, the Python API is likely to be more suitable. Pick the
 package that names the filing system you actually need to work with
-— DFS floppies, ADFS hard discs, AFS server discs, ZIP archives —
-and install just that.
+— DFS floppies, ADFS hard discs, AFS server discs — and install
+just that.
 
 
 Prerequisites
@@ -50,11 +50,6 @@ gives you executables on ``PATH``.
        Both command names are registered so you can use whichever you
        prefer; on a system where ``disc`` collides with another tool,
        ``oaknut-disc`` is unambiguous.
-   * - ``oaknut-zip``
-     - ``oaknut-zip``
-     - ZIP archives carrying Acorn metadata (SparkFS extras, INF
-       resolution, RISC OS filetypes). Also usable as a library — see
-       below.
 
 Most readers want ``oaknut-disc``. Pick the installation method
 that matches how often you will reach for the tool — each one ends
@@ -124,9 +119,6 @@ These packages exist to be imported by your Python code.
    * - ``oaknut-afs``
      - Read or write the Acorn Level 3 File Server's private on-disc
        format. Sits on top of ``oaknut-adfs``.
-   * - ``oaknut-zip``
-     - Read or write ZIP archives that carry Acorn metadata. Includes
-       the ``oaknut-zip`` CLI as a bonus.
    * - ``oaknut-basic``
      - The BBC BASIC tokeniser and detokeniser, on its own — when you
        want to work with ``.bas`` / ``.bbc`` files outside a disc
@@ -164,9 +156,8 @@ ADFS image:
 
 ``oaknut.dfs`` and ``oaknut.afs`` mirror the same
 context-manager shape, exposing ``DFS.from_file`` and
-``AFS.from_file`` respectively. ``oaknut.zip`` is function-shaped
-instead — ``extract_archive``, ``write_archive``. See
-:doc:`api/cookbook` for worked examples of each.
+``AFS.from_file`` respectively. See :doc:`api/cookbook` for worked
+examples of each.
 
 
 The ``oaknut`` placeholder
