@@ -184,12 +184,12 @@ for the attribute-mapping table.
 The ``!BOOT`` command file, which will be ``*EXEC``-uted at boot,
 contains ``*RUN $.FS3v126\r`` — the ``*RUN`` invocation plus the
 Acorn carriage-return line ending — so that loading the disc
-launches the file-server executable. printf builds those bytes on
-stdout, the shell pipes them in, and the trailing ``-`` tells
-disc put to read from stdin (the standard Unix convention).
-printf rather than echo because echo appends ``\n`` on every
-common shell, and we need ``\r`` — see :doc:`getting-started` for
-the line-ending rationale.
+launches the file-server executable. Here ``printf`` builds those
+bytes on stdout, the shell pipes them in, and the trailing ``-``
+tells ``disc put`` to read from stdin (the standard Unix
+convention). We use ``printf`` rather than ``echo`` because ``echo``
+appends ``\n`` on every common shell, and we need ``\r`` — see
+:doc:`getting-started` for the line-ending rationale.
 
 With no value, ``disc opt scsi0.dat`` reads the current boot option
 (``0`` / ``OFF`` on a freshly-created disc); passing ``EXEC`` sets
