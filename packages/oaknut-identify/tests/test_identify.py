@@ -49,6 +49,16 @@ class TestImageReader:
     def test_suffix_is_lowercased(self):
         assert ImageReader(b"", suffix=".SSD").suffix == ".ssd"
 
+    def test_find_locates_a_needle(self):
+        assert ImageReader(b"....AFS0....").find(b"AFS0") == 4
+
+    def test_find_honours_start(self):
+        reader = ImageReader(b"PK..PK..")
+        assert reader.find(b"PK", 1) == 4
+
+    def test_find_returns_minus_one_when_absent(self):
+        assert ImageReader(b"nothing here").find(b"AFS0") == -1
+
 
 class TestReaderFor:
     def test_buffer_source(self):

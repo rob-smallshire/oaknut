@@ -69,6 +69,21 @@ class ImageReader:
         end = min(offset + length, size)
         return bytes(self._data[offset:end])
 
+    def find(self, needle: bytes, start: int = 0) -> int:
+        """Return the offset of the first *needle* at or after *start*, or -1.
+
+        Delegates to the backing object's own ``find`` (``mmap.find`` for
+        path-backed images, ``bytes.find`` for buffers) so a large image
+        is scanned in place rather than copied. A prober looking for a
+        magic number that may sit deep in a hard-disc image should use
+        this, then check alignment, rather than reading the whole image.
+        """
+        start = max(start, 0)
+        data = self._data
+        if hasattr(data, "find"):
+            return data.find(needle, start)
+        return bytes(data).find(needle, start)
+
     def close(self) -> None:
         for closeable in self._closeables:
             with suppress(Exception):
