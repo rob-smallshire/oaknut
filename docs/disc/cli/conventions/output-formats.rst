@@ -68,9 +68,13 @@ suppressed) are emitted on the first line, prefixed with ``#`` so
 
    $ disc ls scsi0.dat --as tsv
    #name	load	exec	length	attr
-   !BOOT	FFFFFFFF	FFFFFFFF	14	WR/R
-   ELITE	00001900	00008023	5C00	LR/R
+   !BOOT	4294967295	4294967295	20	WR/R
+   ELITE	6400	32803	23552	LR/R
    …
+
+Addresses and lengths are emitted as plain decimal integers — the
+base is irrelevant to a consumer, so ``cut``/``awk`` get a number
+they can use directly rather than a hex string to re-parse.
 
 Field separators are literal tab characters (``\t``); no quoting,
 no escaping. The column order, names, and value formats are part of
@@ -91,17 +95,19 @@ data, or as a nested tree of objects for hierarchical data::
    {
      "disc": {
        "geometry": "615 cylinders, 4 heads, 32 sectors/track",
-       "size": "20,152,320 bytes (78720 sectors)"
+       "size": 20152320
      },
      "partition_1": { … },
      "partition_2": { … }
    }
 
-Field names match the ``tsv`` column names. Numeric quantities that
-``tsv`` renders as zero-padded hex (load address, exec address, file
-length) are rendered as JSON strings, not numbers, to preserve
-leading zeros and the convention that those are addresses, not
-integers.
+Field names match the ``tsv`` column names. Numeric quantities —
+load and exec addresses, file lengths, disc and partition sizes,
+user quotas — are rendered as JSON numbers, not strings, so a
+consumer can use them arithmetically without parsing. The ``display``
+format shows the same values human-first (addresses as ``0x``-prefixed
+hex, sizes and quotas in friendly units like ``19.2 MiB``); the
+machine formats (``tsv``, ``json``) always carry the raw integer.
 
 Reach for ``json`` when consuming output from a structured-data
 tool (``jq``, ``yq``, a Python or Node script) — the structure is

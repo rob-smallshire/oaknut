@@ -102,6 +102,31 @@ class TestLs:
         assert result.exit_code != 0
         assert "cannot access as ADFS" in result.output
 
+    def test_ls_machine_columns_are_numeric(
+        self, runner: CliRunner, dfs_image_filepath: Path
+    ) -> None:
+        """JSON: addresses are integers (base-free), length a decimal int."""
+        import json as _json
+
+        result = runner.invoke(cli, ["ls", "--as", "json", f"{dfs_image_filepath}:$"])
+        assert result.exit_code == 0, result.output
+        rows = _json.loads(result.output)["reports"]["entries"]["rows"]
+        hello = next(r for r in rows if r["name"] == "HELLO")
+        assert hello["load"] == 0x1900
+        assert hello["exec"] == 0x8023
+        assert isinstance(hello["length"], int)
+
+    def test_ls_display_addresses_are_hex(
+        self, runner: CliRunner, dfs_image_filepath: Path
+    ) -> None:
+        """Display: addresses keep the conventional ``0x`` hex form."""
+        result = runner.invoke(
+            cli, ["ls", "--as", "display", "--detailed", f"{dfs_image_filepath}:$"]
+        )
+        assert result.exit_code == 0, result.output
+        assert "0x00001900" in result.output
+        assert "0x00008023" in result.output
+
 
 # ---------------------------------------------------------------------------
 # Issue #12 — disc ls and disc stat must format AFS access bytes using the
@@ -573,11 +598,29 @@ class TestStat:
         assert "TestAFS" in result.output
 
     def test_stat_file(self, runner: CliRunner, dfs_image_filepath: Path) -> None:
-        result = runner.invoke(cli, ["stat", f"{dfs_image_filepath}:$.Hello"])
+        result = runner.invoke(
+            cli, ["stat", "--as", "display", f"{dfs_image_filepath}:$.Hello"]
+        )
         assert result.exit_code == 0
         assert "Hello" in result.output
-        assert "00001900" in result.output
-        assert "00008023" in result.output
+        # Addresses render as hex for humans.
+        assert "0x00001900" in result.output
+        assert "0x00008023" in result.output
+
+    def test_stat_file_machine_addresses_are_integers(
+        self, runner: CliRunner, dfs_image_filepath: Path
+    ) -> None:
+        """JSON gives load/exec as integers and length as a decimal count."""
+        import json as _json
+
+        result = runner.invoke(
+            cli, ["stat", "--as", "json", f"{dfs_image_filepath}:$.Hello"]
+        )
+        assert result.exit_code == 0, result.output
+        file_row = _json.loads(result.output)["reports"]["file"]["rows"][0]
+        assert file_row["load"] == 0x1900
+        assert file_row["exec"] == 0x8023
+        assert isinstance(file_row["length"], int)
 
     def test_stat_nonexistent(self, runner: CliRunner, dfs_image_filepath: Path) -> None:
         result = runner.invoke(cli, ["stat", f"{dfs_image_filepath}:$.NOPE"])
@@ -586,43 +629,28 @@ class TestStat:
 
 # ---------------------------------------------------------------------------
 # Issue #7 — disc stat must show a disc-level summary followed by one block
-# per filing-system partition, with self-consistent byte/sector figures.
+# per filing-system partition, with self-consistent size figures.
 # ---------------------------------------------------------------------------
 
 
-def _extract_sizes(output: str) -> list[tuple[int, int]]:
-    """Return every ``X bytes (Y sectors)``-shaped pair from ``output``."""
-    import re
+def _stat_block_sizes(runner: CliRunner, image_filepath: Path) -> dict[str, int]:
+    """Map each stat block name to its ``Size`` in bytes, via ``--as json``.
 
-    pairs = []
-    pattern = re.compile(r"([\d,]+)\s*bytes\s*\((\d+)\s*sectors?\)")
-    for match in pattern.finditer(output):
-        bytes_value = int(match.group(1).replace(",", ""))
-        sector_value = int(match.group(2))
-        pairs.append((bytes_value, sector_value))
-    return pairs
-
-
-def _extract_size_lines(output: str) -> list[tuple[int, int]]:
-    """Every ``Size X bytes (Y sectors)``-shaped line in order.
-
-    Tolerant of both the old ``Size:  ...`` display form and the new
-    ``Size\\t...`` TSV form that asyoulikeit emits.  Excludes ``Free``
-    lines so callers can count by block (``disc + N partitions``)
-    rather than by raw byte/sector pair.
+    Size is now a single audience-aware value — friendly units for
+    humans, a raw integer byte count for machines — so the self-
+    consistency checks read the exact integers out of JSON rather than
+    scraping a ``"X bytes (Y sectors)"`` string.
     """
-    import re
+    import json as _json
 
-    pairs = []
-    pattern = re.compile(
-        r"^\s*Size\b[:\t\s]+([\d,]+)\s*bytes\s*\((\d+)\s*sectors?\)",
-        re.MULTILINE,
-    )
-    for match in pattern.finditer(output):
-        bytes_value = int(match.group(1).replace(",", ""))
-        sector_value = int(match.group(2))
-        pairs.append((bytes_value, sector_value))
-    return pairs
+    result = runner.invoke(cli, ["stat", "--as", "json", str(image_filepath)])
+    assert result.exit_code == 0, result.output
+    reports = _json.loads(result.output)["reports"]
+    return {
+        name: report["rows"][0]["size"]
+        for name, report in reports.items()
+        if "size" in report["rows"][0]
+    }
 
 
 class TestStatPartitionStructure:
@@ -639,8 +667,6 @@ class TestStatPartitionStructure:
         # The block header is plain "DFS"; the title sits inside.
         assert "DFS" in result.output
         assert "TestDFS" in result.output
-        for bytes_value, sector_value in _extract_sizes(result.output):
-            assert bytes_value == sector_value * 256, f"{bytes_value} bytes != {sector_value}*256"
 
     def test_adfs_floppy_single_block(self, runner: CliRunner, adfs_image_filepath: Path) -> None:
         """Unpartitioned ADFS images emit a single ``ADFS`` block that
@@ -653,8 +679,6 @@ class TestStatPartitionStructure:
         assert "TestADFS" in result.output
         # Geometry has been folded into the single block.
         assert "cylinders" in result.output
-        for bytes_value, sector_value in _extract_sizes(result.output):
-            assert bytes_value == sector_value * 256
 
     def test_adfs_hard_no_afs_single_block(
         self, runner: CliRunner, adfs_hard_no_afs_filepath: Path
@@ -668,8 +692,6 @@ class TestStatPartitionStructure:
         assert "Partition 2" not in result.output
         # Geometry must still appear (folded into the single block).
         assert "cylinders" in result.output
-        for bytes_value, sector_value in _extract_sizes(result.output):
-            assert bytes_value == sector_value * 256
 
     def test_adfs_hard_with_afs_two_partitions(
         self, runner: CliRunner, adfs_hard_with_afs_filepath: Path
@@ -685,34 +707,19 @@ class TestStatPartitionStructure:
         assert "296 cylinders" in result.output
         assert "Split" in result.output  # ADFS title
         assert "TwinFS" in result.output  # AFS disc name
-        # Every byte/sector pair must be self-consistent — this is the
-        # specific regression the reporter asked to guard (issue #7).
-        pairs = _extract_sizes(result.output)
-        assert pairs, f"no byte/sector pairs found in:\n{result.output}"
-        for bytes_value, sector_value in pairs:
-            assert bytes_value == sector_value * 256, (
-                f"{bytes_value} bytes != {sector_value}*256 in:\n{result.output}"
-            )
 
     def test_adfs_hard_with_afs_partitions_sum_to_disc(
         self, runner: CliRunner, adfs_hard_with_afs_filepath: Path
     ) -> None:
-        """ADFS partition sectors + AFS partition sectors must equal
-        the disc sector count.  Detects the original symptom — a
-        partition size that bears no relation to the physical disc.
+        """ADFS partition size + AFS partition size must equal the disc
+        size.  Detects the original symptom — a partition size that bears
+        no relation to the physical disc (issue #7).
         """
-        result = runner.invoke(cli, ["stat", str(adfs_hard_with_afs_filepath)])
-        assert result.exit_code == 0, result.output
-        size_lines = _extract_size_lines(result.output)
-        # One Size line per block: disc, then each partition.
-        assert len(size_lines) == 3, (
-            f"expected 3 Size lines (disc + 2 partitions), got {size_lines!r}"
-        )
-        disc_sectors = size_lines[0][1]
-        partition_sectors = size_lines[1][1] + size_lines[2][1]
-        assert partition_sectors == disc_sectors, (
-            f"partitions sum to {partition_sectors} sectors but disc is {disc_sectors} sectors"
-        )
+        sizes = _stat_block_sizes(runner, adfs_hard_with_afs_filepath)
+        # One Size per block: disc, then each partition.
+        assert set(sizes) == {"disc", "partition_1", "partition_2"}, sizes
+        assert all(isinstance(v, int) for v in sizes.values()), sizes
+        assert sizes["partition_1"] + sizes["partition_2"] == sizes["disc"], sizes
 
     def test_adfs_hard_with_afs_omits_user_list(
         self, runner: CliRunner, adfs_hard_with_afs_filepath: Path
@@ -1400,10 +1407,12 @@ class TestCp:
                 f"{adfs_image_filepath}:$.Copied",
             ],
         )
-        result = runner.invoke(cli, ["stat", f"{adfs_image_filepath}:$.Copied"])
+        result = runner.invoke(
+            cli, ["stat", "--as", "display", f"{adfs_image_filepath}:$.Copied"]
+        )
         assert result.exit_code == 0
-        assert "00001900" in result.output  # load address preserved
-        assert "00008023" in result.output  # exec address preserved
+        assert "0x00001900" in result.output  # load address preserved
+        assert "0x00008023" in result.output  # exec address preserved
 
 
 # ---------------------------------------------------------------------------
@@ -1557,8 +1566,10 @@ class TestCpGlob:
             ],
         )
         assert result.exit_code == 0, result.output
-        stat = runner.invoke(cli, ["stat", f"{adfs_empty_filepath}:$.Hello"])
-        assert "00001900" in stat.output  # load address
+        stat = runner.invoke(
+            cli, ["stat", "--as", "display", f"{adfs_empty_filepath}:$.Hello"]
+        )
+        assert "0x00001900" in stat.output  # load address
 
 
 class TestCpRecursive:
@@ -1962,21 +1973,35 @@ class TestSetGetLoad:
     def test_set_load_dfs(self, runner: CliRunner, dfs_image_filepath: Path) -> None:
         result = runner.invoke(cli, ["set-load", f"{dfs_image_filepath}:$.HELLO", "0xFF00"])
         assert result.exit_code == 0
-        result = runner.invoke(cli, ["get-load", f"{dfs_image_filepath}:$.HELLO"])
+        result = runner.invoke(
+            cli, ["get-load", "--as", "display", f"{dfs_image_filepath}:$.HELLO"]
+        )
         assert result.exit_code == 0
-        assert "0000FF00" in result.output
+        assert "0x0000FF00" in result.output
 
     def test_set_load_adfs(self, runner: CliRunner, adfs_image_filepath: Path) -> None:
         result = runner.invoke(cli, ["set-load", f"{adfs_image_filepath}:$.Hello", "0xFFFF1234"])
         assert result.exit_code == 0
-        result = runner.invoke(cli, ["get-load", f"{adfs_image_filepath}:$.Hello"])
+        result = runner.invoke(
+            cli, ["get-load", "--as", "display", f"{adfs_image_filepath}:$.Hello"]
+        )
         assert result.exit_code == 0
-        assert "FFFF1234" in result.output
+        assert "0xFFFF1234" in result.output
 
     def test_get_load_original(self, runner: CliRunner, dfs_image_filepath: Path) -> None:
-        result = runner.invoke(cli, ["get-load", f"{dfs_image_filepath}:$.HELLO"])
+        result = runner.invoke(
+            cli, ["get-load", "--as", "display", f"{dfs_image_filepath}:$.HELLO"]
+        )
         assert result.exit_code == 0
-        assert "00001900" in result.output
+        assert "0x00001900" in result.output
+
+    def test_get_load_machine_is_integer(
+        self, runner: CliRunner, dfs_image_filepath: Path
+    ) -> None:
+        """A piped get-load gives the raw integer, base-free for consumers."""
+        result = runner.invoke(cli, ["get-load", "--as", "tsv", f"{dfs_image_filepath}:$.HELLO"])
+        assert result.exit_code == 0, result.output
+        assert result.output.strip() == str(0x1900)
 
     def test_set_load_bare_number_is_decimal(
         self, runner: CliRunner, dfs_image_filepath: Path
@@ -1984,8 +2009,10 @@ class TestSetGetLoad:
         """An unprefixed value is decimal: 256 stores as 0x100, not 0x256."""
         result = runner.invoke(cli, ["set-load", f"{dfs_image_filepath}:$.HELLO", "256"])
         assert result.exit_code == 0
-        result = runner.invoke(cli, ["get-load", f"{dfs_image_filepath}:$.HELLO"])
-        assert "00000100" in result.output
+        result = runner.invoke(
+            cli, ["get-load", "--as", "display", f"{dfs_image_filepath}:$.HELLO"]
+        )
+        assert "0x00000100" in result.output
 
     def test_set_load_invalid_address_clean_error(
         self, runner: CliRunner, dfs_image_filepath: Path
@@ -2001,14 +2028,25 @@ class TestSetGetExec:
     def test_set_exec_dfs(self, runner: CliRunner, dfs_image_filepath: Path) -> None:
         result = runner.invoke(cli, ["set-exec", f"{dfs_image_filepath}:$.HELLO", "0xABCD"])
         assert result.exit_code == 0
-        result = runner.invoke(cli, ["get-exec", f"{dfs_image_filepath}:$.HELLO"])
+        result = runner.invoke(
+            cli, ["get-exec", "--as", "display", f"{dfs_image_filepath}:$.HELLO"]
+        )
         assert result.exit_code == 0
-        assert "0000ABCD" in result.output
+        assert "0x0000ABCD" in result.output
 
     def test_get_exec_original(self, runner: CliRunner, dfs_image_filepath: Path) -> None:
-        result = runner.invoke(cli, ["get-exec", f"{dfs_image_filepath}:$.HELLO"])
+        result = runner.invoke(
+            cli, ["get-exec", "--as", "display", f"{dfs_image_filepath}:$.HELLO"]
+        )
         assert result.exit_code == 0
-        assert "00008023" in result.output
+        assert "0x00008023" in result.output
+
+    def test_get_exec_machine_is_integer(
+        self, runner: CliRunner, dfs_image_filepath: Path
+    ) -> None:
+        result = runner.invoke(cli, ["get-exec", "--as", "tsv", f"{dfs_image_filepath}:$.HELLO"])
+        assert result.exit_code == 0, result.output
+        assert result.output.strip() == str(0x8023)
 
     def test_set_exec_invalid_address_clean_error(
         self, runner: CliRunner, dfs_image_filepath: Path
@@ -2144,8 +2182,8 @@ class TestBulkMutation:
         assert result.exit_code == 0, result.output
         # Every file descendant should have load_address 0x0000CAFE.
         for bare in ("$.Dir.Inside", "$.Dir.Sub.Deep"):
-            st = runner.invoke(cli, ["get-load", f"{adfs_image_tree}:{bare}"])
-            assert "0000CAFE" in st.output, f"{bare} not set: {st.output!r}"
+            st = runner.invoke(cli, ["get-load", "--as", "display", f"{adfs_image_tree}:{bare}"])
+            assert "0x0000CAFE" in st.output, f"{bare} not set: {st.output!r}"
 
     def test_set_exec_glob(
         self,
@@ -2161,8 +2199,10 @@ class TestBulkMutation:
             ],
         )
         assert result.exit_code == 0, result.output
-        st = runner.invoke(cli, ["get-exec", f"{adfs_image_tree}:$.Dir.Inside"])
-        assert "0000BEEF" in st.output
+        st = runner.invoke(
+            cli, ["get-exec", "--as", "display", f"{adfs_image_tree}:$.Dir.Inside"]
+        )
+        assert "0x0000BEEF" in st.output
 
     def test_rm_glob(
         self,
@@ -2666,6 +2706,25 @@ class TestAfsUsers:
         assert result.exit_code == 0
         assert "Syst" in result.output
 
+    def test_afs_users_display_shows_friendly_units(
+        self, runner: CliRunner, afs_image_filepath: Path
+    ) -> None:
+        """The human display renders quotas in IEC units, not hex bytes."""
+        add = runner.invoke(
+            cli, ["afs-useradd", str(afs_image_filepath), "ALICE", "--quota", "1048576"]
+        )
+        assert add.exit_code == 0, add.output
+        # Pin --as display: under CliRunner there's no TTY to trigger the
+        # display default, so the formatter would otherwise fall back to TSV.
+        result = runner.invoke(
+            cli, ["afs-users", "--as", "display", str(afs_image_filepath)]
+        )
+        assert result.exit_code == 0, result.output
+        # ALICE's 1 MiB quota reads as a friendly unit, and the old
+        # hex-bytes rendering is gone entirely.
+        assert "1.0 MiB" in result.output
+        assert "0x" not in result.output
+
     def test_afs_users_json_roundtrip(self, runner: CliRunner, afs_image_filepath: Path) -> None:
         """--as json emits a parseable document listing every user."""
         import json as _json
@@ -2681,6 +2740,25 @@ class TestAfsUsers:
         # Syst is the one with the system flag set.
         syst_row = next(r for r in payload["rows"] if r["user"] == "Syst")
         assert syst_row["system"] == "yes"
+        # The machine audience gets a raw numeric byte count, not a hex
+        # string a consumer would have to re-parse.
+        assert isinstance(syst_row["quota"], int)
+
+    def test_afs_users_json_quota_is_exact_byte_count(
+        self, runner: CliRunner, afs_image_filepath: Path
+    ) -> None:
+        """A known quota survives to JSON as its exact integer byte count."""
+        import json as _json
+
+        add = runner.invoke(
+            cli, ["afs-useradd", str(afs_image_filepath), "ALICE", "--quota", "1048576"]
+        )
+        assert add.exit_code == 0, add.output
+        result = runner.invoke(cli, ["afs-users", "--as", "json", str(afs_image_filepath)])
+        assert result.exit_code == 0, result.output
+        payload = next(iter(_json.loads(result.output)["reports"].values()))
+        alice_row = next(r for r in payload["rows"] if r["user"] == "ALICE")
+        assert alice_row["quota"] == 1048576
 
     def test_afs_users_tsv_columns(self, runner: CliRunner, afs_image_filepath: Path) -> None:
         result = runner.invoke(cli, ["afs-users", "--as", "tsv", str(afs_image_filepath)])
@@ -2695,7 +2773,9 @@ class TestAfsUsers:
         assert len(cells) == 3
         assert cells[0] == "Syst"
         assert cells[1] == "yes"
-        assert cells[2].startswith("0x")
+        # TSV is a machine audience: a plain decimal byte count, ready
+        # for cut/awk, not the old "0x..." hex string.
+        assert cells[2].isdigit()
 
 
 class TestAfsUserDel:

@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Iterator
 
 import click
+from asyoulikeit import ByAudience
 from asyoulikeit.cli import (
     describe_formatter_command,
     describe_report_command,
@@ -23,6 +24,7 @@ from asyoulikeit.cli import (
     report_output,
 )
 from exit_codes import ExitCode
+from oaknut.file.capacity import format_capacity
 from oaknut.file.exceptions import FSError
 
 from . import __version__
@@ -486,16 +488,15 @@ def ls(file_spec: str, show_access_byte: bool):
         for child in entries:
             if child.is_dir():
                 try:
-                    entry_count = sum(1 for _ in child.iterdir())
-                    length_str = str(entry_count)
+                    length_value: object = sum(1 for _ in child.iterdir())
                 except Exception:
-                    length_str = ""
+                    length_value = ""
                 row = {
                     "name": child.name,
                     "type": "dir",
                     "load": "",
                     "exec": "",
-                    "length": length_str,
+                    "length": length_value,
                     "attr": "",
                 }
                 if show_access_byte:
@@ -503,9 +504,11 @@ def ls(file_spec: str, show_access_byte: bool):
                 table.add_row(**row)
                 continue
             st = child.stat()
-            load_str = f"0x{st.load_address:08X}" if hasattr(st, "load_address") else ""
-            exec_str = f"0x{st.exec_address:08X}" if hasattr(st, "exec_address") else ""
-            length_str = f"{st.length:08X}" if hasattr(st, "length") else ""
+            # Addresses: hex for humans, raw int for machine formatters.
+            # Length: always a decimal byte count — never hex.
+            load_cell = _address_cell(st.load_address) if hasattr(st, "load_address") else ""
+            exec_cell = _address_cell(st.exec_address) if hasattr(st, "exec_address") else ""
+            length_value = st.length if hasattr(st, "length") else ""
             locked = getattr(st, "locked", False)
             attr_str = "L" if locked else ""
             if hasattr(st, "access"):
@@ -513,9 +516,9 @@ def ls(file_spec: str, show_access_byte: bool):
             row = {
                 "name": child.name,
                 "type": "file",
-                "load": load_str,
-                "exec": exec_str,
-                "length": length_str,
+                "load": load_cell,
+                "exec": exec_cell,
+                "length": length_value,
                 "attr": attr_str,
             }
             if show_access_byte:
@@ -648,13 +651,13 @@ def stat(file_spec: str):
         row: dict = {"name": target.name}
         if hasattr(st, "load_address"):
             tc.add_column("load", "Load")
-            row["load"] = f"0x{st.load_address:08X}"
+            row["load"] = _address_cell(st.load_address)
         if hasattr(st, "exec_address"):
             tc.add_column("exec", "Exec")
-            row["exec"] = f"0x{st.exec_address:08X}"
+            row["exec"] = _address_cell(st.exec_address)
         if hasattr(st, "length"):
             tc.add_column("length", "Length")
-            row["length"] = f"{st.length:08X}"
+            row["length"] = st.length
         if hasattr(st, "access"):
             tc.add_column("attr", "Attr")
             row["attr"] = _format_access(st.access)
@@ -724,17 +727,38 @@ def _stat_disc(image_filepath: Path, fs: FilingSystem):
     return Reports(sections)
 
 
-def _format_size(sectors: int) -> str:
-    """Consistent ``X bytes (Y sectors)`` rendering."""
-    return f"{sectors * _SECTOR_SIZE:,} bytes ({sectors} sectors)"
+def _size_cell(sectors: int) -> ByAudience:
+    """A capacity as an audience-aware cell.
+
+    Humans read friendly IEC units (``800.0 KiB``); machine formatters
+    get the raw byte count as an integer, so the presentation base is
+    irrelevant to a consumer. Replaces the old composite
+    ``"X bytes (Y sectors)"`` string — the sector count is derivable
+    from the geometry the same report already carries.
+    """
+    num_bytes = sectors * _SECTOR_SIZE
+    return ByAudience(machine=num_bytes, human=format_capacity(num_bytes))
 
 
-def _kv_table(title: str, pairs: list[tuple[str, str, str]]):
+def _address_cell(address: int) -> ByAudience:
+    """A 32-bit Acorn address as an audience-aware cell.
+
+    Humans read the conventional ``0x``-prefixed 8-hex-digit form;
+    machine formatters (JSON, TSV) get the raw integer, so a consumer
+    never has to parse a base back out of a string.
+    """
+    return ByAudience(machine=address, human=f"0x{address:08X}")
+
+
+def _kv_table(title: str, pairs: list[tuple[str, str, object]]):
     """Build a transposed single-row table from (key, label, value) tuples.
 
-    Each tuple becomes a column whose sole row holds the rendered value.
-    Transposed presentation turns the one-row table into a key-value
-    report in the display formatter.
+    Each tuple becomes a column whose sole row holds the value. A value
+    may be a plain string, an integer (for machine-readable counts), or
+    a :class:`~asyoulikeit.ByAudience` cell that renders one way for
+    humans and another for machine formatters. Transposed presentation
+    turns the one-row table into a key-value report in the display
+    formatter.
     """
     from asyoulikeit.tabular_data import TableContent
 
@@ -764,7 +788,7 @@ def _disc_header_adfs_tc(handle):
                 f"{geom.cylinders} cylinders, {geom.heads} heads, "
                 f"{geom.sectors_per_track} sectors/track",
             ),
-            ("size", "Size", _format_size(total_sectors)),
+            ("size", "Size", _size_cell(total_sectors)),
         ],
     )
 
@@ -783,9 +807,9 @@ def _dfs_summary_tc(handle):
         [
             ("title", "Title", handle.title or ""),
             ("boot_option", "Boot option", f"{boot.name} ({boot.value})"),
-            ("size", "Size", _format_size(info["total_sectors"])),
-            ("free", "Free", _format_size(info["free_sectors"])),
-            ("files", "Files", str(info["num_files"])),
+            ("size", "Size", _size_cell(info["total_sectors"])),
+            ("free", "Free", _size_cell(info["free_sectors"])),
+            ("files", "Files", info["num_files"]),
         ],
     )
 
@@ -806,7 +830,7 @@ def _adfs_partition_tc(handle, *, is_only: bool):
     adfs_sectors = handle.total_size // _SECTOR_SIZE
     adfs_cylinders = adfs_sectors // (geom.heads * geom.sectors_per_track)
     boot = handle.boot_option
-    pairs: list[tuple[str, str, str]] = []
+    pairs: list[tuple[str, str, object]] = []
     if is_only:
         pairs.append(
             (
@@ -824,9 +848,9 @@ def _adfs_partition_tc(handle, *, is_only: bool):
     )
     if adfs_cylinders < geom.cylinders:
         pairs.append(("range", "Range", f"cylinders 0-{adfs_cylinders - 1}"))
-    pairs.append(("size", "Size", _format_size(adfs_sectors)))
+    pairs.append(("size", "Size", _size_cell(adfs_sectors)))
     free_sectors = handle.free_space // _SECTOR_SIZE
-    pairs.append(("free", "Free", _format_size(free_sectors)))
+    pairs.append(("free", "Free", _size_cell(free_sectors)))
     title = "ADFS" if is_only else "Partition 1: ADFS"
     return _kv_table(title, pairs)
 
@@ -844,8 +868,8 @@ def _afs_partition_tc(adfs_handle, afs):
                 "Range",
                 f"cylinders {afs.start_cylinder}-{geom.cylinders - 1}",
             ),
-            ("size", "Size", _format_size(afs_sectors)),
-            ("free", "Free", _format_size(afs.free_sectors)),
+            ("size", "Size", _size_cell(afs_sectors)),
+            ("free", "Free", _size_cell(afs.free_sectors)),
         ],
     )
 
@@ -857,11 +881,11 @@ def _afs_partition_only_tc(handle):
         "AFS",
         [
             ("disc_name", "Disc name", handle.disc_name),
-            ("start_cylinder", "Start cylinder", str(handle.start_cylinder)),
-            ("cylinders", "Cylinders", str(geom.cylinders)),
-            ("sectors_per_cylinder", "Sectors/cyl", str(geom.sectors_per_cylinder)),
-            ("total_sectors", "Total sectors", str(geom.total_sectors)),
-            ("free_sectors", "Free sectors", str(handle.free_sectors)),
+            ("start_cylinder", "Start cylinder", handle.start_cylinder),
+            ("cylinders", "Cylinders", geom.cylinders),
+            ("sectors_per_cylinder", "Sectors/cyl", geom.sectors_per_cylinder),
+            ("total_sectors", "Total sectors", geom.total_sectors),
+            ("free_sectors", "Free sectors", handle.free_sectors),
         ],
     )
 
@@ -2334,7 +2358,14 @@ def set_exec(
 
 @cli.command(name="get-load")
 @click.argument("file_spec")
-@report_output(reports={"load": "File load address as ``0x``-prefixed 8 hex digits."})
+@report_output(
+    reports={
+        "load": (
+            "File load address: a ``0x``-prefixed 8-hex-digit string for "
+            "humans, a raw integer for machine formatters."
+        )
+    }
+)
 def get_load(file_spec: str):
     """Print a file's load address.
 
@@ -2354,14 +2385,21 @@ def get_load(file_spec: str):
         st = target.stat()
     return Reports(
         load=Report(
-            data=ScalarContent(value=f"0x{st.load_address:08X}", title="Load"),
+            data=ScalarContent(value=_address_cell(st.load_address), title="Load"),
         ),
     )
 
 
 @cli.command(name="get-exec")
 @click.argument("file_spec")
-@report_output(reports={"exec": "File exec address as ``0x``-prefixed 8 hex digits."})
+@report_output(
+    reports={
+        "exec": (
+            "File exec address: a ``0x``-prefixed 8-hex-digit string for "
+            "humans, a raw integer for machine formatters."
+        )
+    }
+)
 def get_exec(file_spec: str):
     """Print a file's exec address.
 
@@ -2381,7 +2419,7 @@ def get_exec(file_spec: str):
         st = target.stat()
     return Reports(
         exec=Report(
-            data=ScalarContent(value=f"0x{st.exec_address:08X}", title="Exec"),
+            data=ScalarContent(value=_address_cell(st.exec_address), title="Exec"),
         ),
     )
 
@@ -3273,7 +3311,13 @@ def afs_users(image: Path):
             table.add_row(
                 user=u.full_id,
                 system="yes" if u.is_system else "",
-                quota=f"{u.free_space:#010x}",
+                # A quota is a byte count: humans want friendly units,
+                # machines want the raw number. ByAudience carries both,
+                # and the selected formatter's audience picks one.
+                quota=ByAudience(
+                    machine=u.free_space,
+                    human=format_capacity(u.free_space),
+                ),
             )
     return Reports(users=Report(data=table))
 

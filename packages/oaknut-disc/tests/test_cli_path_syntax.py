@@ -52,10 +52,12 @@ class TestSingleImageSinglePath:
         assert result.exit_code == 0, result.output
 
     def test_get_load_fused(self, runner: CliRunner, adfs_image_filepath: Path):
-        result = runner.invoke(cli, ["get-load", f"{adfs_image_filepath}:$.Hello"])
+        result = runner.invoke(
+            cli, ["get-load", "--as", "display", f"{adfs_image_filepath}:$.Hello"]
+        )
         assert result.exit_code == 0, result.output
-        # The fixture writes Hello with load=0x1900.
-        assert "1900" in result.output
+        # The fixture writes Hello with load=0x1900 (hex for humans).
+        assert "0x00001900" in result.output
 
     def test_mkdir_fused(self, runner: CliRunner, adfs_image_filepath: Path):
         result = runner.invoke(cli, ["mkdir", f"{adfs_image_filepath}:$.Fused"])
@@ -79,8 +81,10 @@ class TestImagePathTrailing:
     def test_set_load_fused_roundtrips(self, runner: CliRunner, adfs_image_filepath: Path):
         result = runner.invoke(cli, ["set-load", f"{adfs_image_filepath}:$.Hello", "0x3B00"])
         assert result.exit_code == 0, result.output
-        gl = runner.invoke(cli, ["get-load", f"{adfs_image_filepath}:$.Hello"])
-        assert "3B00" in gl.output
+        gl = runner.invoke(
+            cli, ["get-load", "--as", "display", f"{adfs_image_filepath}:$.Hello"]
+        )
+        assert "0x00003B00" in gl.output
 
     def test_get_fused(
         self,
