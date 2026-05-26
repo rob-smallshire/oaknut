@@ -66,3 +66,29 @@ def parse_capacity(text: str) -> int:
     if result < 0:
         raise ValueError(f"capacity must be non-negative, got {result}")
     return result
+
+
+_IEC_UNITS = ("KiB", "MiB", "GiB", "TiB")
+
+
+def format_capacity(num_bytes: int) -> str:
+    """Render a byte count as a human-friendly capacity string.
+
+    The rough inverse of :func:`parse_capacity`: counts below a kibibyte
+    are shown as bare ``"N bytes"``; larger ones roll up to the largest
+    IEC binary unit (``KiB``, ``MiB``, ``GiB``, ``TiB``) that keeps the
+    mantissa below 1024, with one decimal place. Binary rather than
+    decimal units, since Acorn disc and quota sizes are powers of two.
+
+    Raises :class:`ValueError` on a negative count.
+    """
+    if num_bytes < 0:
+        raise ValueError(f"capacity must be non-negative, got {num_bytes}")
+    if num_bytes < 1_024:
+        return "1 byte" if num_bytes == 1 else f"{num_bytes} bytes"
+
+    value = num_bytes / 1_024
+    for unit in _IEC_UNITS:
+        if value < 1_024 or unit == _IEC_UNITS[-1]:
+            return f"{value:.1f} {unit}"
+        value /= 1_024

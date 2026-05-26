@@ -1,7 +1,7 @@
 """Tests for parse_capacity — human-friendly byte size parser."""
 
 import pytest
-from oaknut.file.capacity import parse_capacity
+from oaknut.file.capacity import format_capacity, parse_capacity
 
 
 class TestBareNumbers:
@@ -81,3 +81,44 @@ class TestEdgeCases:
     def test_unknown_suffix_raises(self):
         with pytest.raises(ValueError, match="suffix"):
             parse_capacity("10XB")
+
+
+class TestFormatCapacity:
+    """format_capacity is the human-facing inverse of parse_capacity.
+
+    It renders IEC binary units (KiB/MiB/GiB), matching the
+    power-of-two sizes of Acorn discs and quotas.
+    """
+
+    def test_zero_bytes(self):
+        assert format_capacity(0) == "0 bytes"
+
+    def test_one_byte_is_singular(self):
+        assert format_capacity(1) == "1 byte"
+
+    def test_small_byte_count(self):
+        assert format_capacity(512) == "512 bytes"
+
+    def test_just_below_a_kibibyte_stays_in_bytes(self):
+        assert format_capacity(1023) == "1023 bytes"
+
+    def test_exact_kibibyte(self):
+        assert format_capacity(1024) == "1.0 KiB"
+
+    def test_fractional_kibibyte(self):
+        assert format_capacity(1536) == "1.5 KiB"
+
+    def test_exact_mebibyte(self):
+        # 0x00100000 — the AFS quota the disc afs-users complaint was about.
+        assert format_capacity(1024 * 1024) == "1.0 MiB"
+
+    def test_exact_gibibyte(self):
+        assert format_capacity(1024 * 1024 * 1024) == "1.0 GiB"
+
+    def test_rolls_up_to_largest_fitting_unit(self):
+        # 2 MiB must read as MiB, not 2048 KiB.
+        assert format_capacity(2 * 1024 * 1024) == "2.0 MiB"
+
+    def test_negative_raises(self):
+        with pytest.raises(ValueError, match="non-negative"):
+            format_capacity(-1)
