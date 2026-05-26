@@ -26,6 +26,7 @@ classifiers = [
 dependencies = [
     "oaknut-file>=10.0",
     "oaknut-discimage>=10.0",
+    "oaknut-identify>=10.0",
     "oaknut-basic>=10.0",
     "typename>=1.0.4",
 ]
@@ -35,6 +36,10 @@ Homepage = "https://github.com/rob-smallshire/oaknut/tree/master/packages/oaknut
 Documentation = "https://rob-smallshire.github.io/oaknut/disc/api/reference/adfs.html"
 Repository = "https://github.com/rob-smallshire/oaknut"
 Issues = "https://github.com/rob-smallshire/oaknut/issues"
+
+# Probers contributed to the oaknut.identify cascade.
+[project.entry-points."oaknut.prober"]
+adfs = "oaknut.adfs.probers:ADFSProber"
 
 [dependency-groups]
 test = [
