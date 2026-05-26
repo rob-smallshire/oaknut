@@ -41,6 +41,7 @@ Issues = "https://github.com/rob-smallshire/oaknut/issues"
 # format it detects.
 [project.entry-points."oaknut.prober"]
 acorn_dfs = "oaknut.dfs.probers:AcornDFSProber"
+watford_dfs = "oaknut.dfs.probers:WatfordDFSProber"
 
 [tool.setuptools.dynamic]
 version = { attr = "oaknut.dfs.__version__" }

@@ -10,6 +10,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 
 from oaknut.dfs.acorn_dfs_catalogue import AcornDFSCatalogue
+from oaknut.dfs.watford_dfs_catalogue import WatfordDFSCatalogue
 from oaknut.discimage import BYTES_PER_SECTOR, DiscImage, SurfaceSpec
 from oaknut.identify import Confidence, Identification, ImageReader, Prober
 
@@ -86,3 +87,42 @@ class AcornDFSProber(Prober):
         if len(sector1) < 8:
             return 0
         return ((sector1[6] & 0x03) << 8) | sector1[7]
+
+
+class WatfordDFSProber(Prober):
+    """Watford DDFS — the 62-file extended-catalogue BBC floppy format.
+
+    Watford reuses Acorn's opening two sectors but adds a second
+    catalogue in sectors 2–3, marked by twelve ``0xAA`` bytes at the
+    start of sector 2 and metadata (cycle, file count, total sectors)
+    that mirrors the first section. Those markers are distinctive
+    enough — and corroborated by the cross-section sync — to rate
+    STRONG, one rung above plain Acorn DFS, which is correct because
+    the Acorn prober deliberately excludes discs carrying them.
+
+    Reports the dfs family; like Acorn DFS the catalogue does not pin
+    down sidedness or interleave, so the concrete geometry is left
+    unresolved.
+    """
+
+    family = "dfs"
+    extensions = frozenset({".ssd", ".dsd"})
+    #: Outrank the Acorn prober when both somehow fire on one image —
+    #: the extended catalogue is the more specific match.
+    priority = 10
+
+    def probe(self, reader: ImageReader) -> Iterable[Identification]:
+        surface = _flat_surface(reader)
+        if surface is None or not WatfordDFSCatalogue.matches(surface):
+            return ()
+        return (
+            Identification(
+                prober_name=self.name,
+                family=self.family,
+                confidence=Confidence.STRONG,
+                evidence=(
+                    "Watford DDFS extended catalogue: 0xAA marker in sector 2 "
+                    "with metadata synced across both catalogue sections",
+                ),
+            ),
+        )
