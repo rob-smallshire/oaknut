@@ -28,6 +28,11 @@ from oaknut.file.capacity import format_capacity
 from oaknut.file.exceptions import FSError
 
 from . import __version__
+from .cli_identify import (
+    describe_format_command,
+    identify_command,
+    list_formats_command,
+)
 from .cli_paths import (
     FilingSystem,
     detect_filing_system,
@@ -396,6 +401,12 @@ cli.add_command(describe_formatter_command(), name="describe-report-format")
 # Companion pair: discover the reports each @report_output command produces.
 cli.add_command(list_reports_command(), name="list-reports")
 cli.add_command(describe_report_command(), name="describe-report")
+
+# Content-based identification: `identify` answers "what is this image?",
+# and the list/describe pair introspects the disc formats it can recognise.
+cli.add_command(identify_command(), name="identify")
+cli.add_command(list_formats_command(), name="list-formats")
+cli.add_command(describe_format_command(), name="describe-format")
 
 
 # ---------------------------------------------------------------------------
