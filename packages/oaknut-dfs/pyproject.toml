@@ -25,6 +25,7 @@ classifiers = [
 dependencies = [
     "oaknut-file>=10.0",
     "oaknut-discimage>=10.0",
+    "oaknut-identify>=10.0",
     "oaknut-basic>=10.0",
     "typename>=1.0.4",
 ]
@@ -34,6 +35,12 @@ Homepage = "https://github.com/rob-smallshire/oaknut/tree/master/packages/oaknut
 Documentation = "https://rob-smallshire.github.io/oaknut/disc/api/reference/dfs.html"
 Repository = "https://github.com/rob-smallshire/oaknut"
 Issues = "https://github.com/rob-smallshire/oaknut/issues"
+
+# Probers contributed to the oaknut.identify cascade. Discovered at
+# runtime via entry points, so the format detector ships with the
+# format it detects.
+[project.entry-points."oaknut.prober"]
+acorn_dfs = "oaknut.dfs.probers:AcornDFSProber"
 
 [tool.setuptools.dynamic]
 version = { attr = "oaknut.dfs.__version__" }
