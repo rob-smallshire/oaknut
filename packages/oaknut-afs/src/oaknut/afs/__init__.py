@@ -13,7 +13,7 @@ implemented. See ``docs/dev/afs-implementation-plan.md`` for the design
 and ``docs/dev/afs-onwire.md`` for the on-disc format specification.
 """
 
-__version__ = "11.1.0"
+__version__ = "11.2.0"
 
 from oaknut.afs.access import AFSAccess
 from oaknut.afs.afs import AFS, AFSNotPresentError

@@ -20,7 +20,7 @@ from oaknut.dfs.formats import (
 
 Version = namedtuple("Version", ["major", "minor", "patch"])
 
-__version__ = "11.1.0"
+__version__ = "11.2.0"
 __version_info__ = Version(*(__version__.split(".")))
 
 __all__ = [
