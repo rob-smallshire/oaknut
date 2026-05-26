@@ -1,0 +1,50 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "oaknut-identify"
+dynamic = ["version"]
+authors = [{ name = "Robert Smallshire", email = "robert@smallshire.org.uk" }]
+description = "Content-based identification of Acorn disc-image formats via a cascade of pluggable probers."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.11"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: System :: Filesystems",
+]
+dependencies = [
+    "oaknut-exception>=10.0",
+    "oaknut-extension>=10.0",
+    "oaknut-discimage>=10.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/rob-smallshire/oaknut/tree/master/packages/oaknut-identify"
+Repository = "https://github.com/rob-smallshire/oaknut"
+Issues = "https://github.com/rob-smallshire/oaknut/issues"
+
+[dependency-groups]
+test = [
+    "pytest>=8.0",
+]
+dev = [
+    "bump-my-version>=0.28.0",
+    "pre-commit>=3.0",
+    {include-group = "test"},
+]
+
+[tool.setuptools.dynamic]
+version = { attr = "oaknut.identify.__version__" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
