@@ -1713,6 +1713,48 @@ def _iter_target_paths(mount, pattern: str, *, recursive: bool):
             yield seed
 
 
+def _mutate_access(file_spec: str, *, recursive: bool, dry_run: bool, verb, transform) -> None:
+    """Apply an access-byte *transform* to every target of *file_spec*.
+
+    *transform* maps the current :class:`~oaknut.file.Access` to the new
+    one. Access is wire-canonical at the mount boundary — each filesystem
+    maps it to its own on-disc layout (DFS keeps only the lock bit), so
+    the CLI works in one representation. *verb* builds the --dry-run line.
+    A flat catalogue's notional directories carry no access and are
+    skipped.
+    """
+    from oaknut.file import Access, AcornMeta
+    from oaknut.filesystem import AcornMetadata, HierarchicalDirectories
+
+    _image, path = parse_file_spec(file_spec)
+    if not path:
+        raise click.UsageError("PATH is required")
+    with resolve_mount(file_spec, writable=not dry_run) as resolved:
+        mount = resolved.mount
+        if not isinstance(mount, AcornMetadata):
+            raise FSError(
+                f"{resolved.filesystem} files carry no access bits",
+                exit_code=ExitCode.OS_FILE,
+            )
+        flat = not isinstance(mount, HierarchicalDirectories)
+        pattern = resolved.path or mount.path_root()
+        for target in _iter_target_paths(mount, pattern, recursive=recursive):
+            if flat and mount.stat(target).is_dir:
+                continue  # a flat catalogue's directories are notional
+            if dry_run:
+                click.echo(verb(target))
+                continue
+            meta = mount.acorn_meta(target)
+            mount.set_acorn_meta(
+                target,
+                AcornMeta(
+                    load_address=meta.load_address,
+                    exec_address=meta.exec_address,
+                    access=int(transform(Access(meta.access))),
+                ),
+            )
+
+
 def _iter_targets(
     handle,
     bare: str,
@@ -2154,28 +2196,18 @@ def chmod(
     same access to every matching file.  ``-r`` recurses into any
     directory match.
     """
-    image, path = parse_file_spec(file_spec)
-    if not path:
-        raise click.UsageError("PATH is required")
-    from oaknut.file import Access, parse_access
+    from oaknut.file import parse_access
 
     flags = parse_access(access)
-    fs, bare = resolve_path(image, path)
-    with open_image(image, fs) as handle:
-        for target in _iter_targets(handle, bare, fs, recursive=recursive):
-            if dry_run:
-                click.echo(f"would chmod {target.path} {access}")
-                continue
-            if fs is FilingSystem.DFS:
-                # DFS only has lock/unlock.
-                if flags & Access.L:
-                    target.lock()
-                else:
-                    target.unlock()
-            else:
-                target.chmod(int(flags))
-        if fs is FilingSystem.AFS and not dry_run:
-            handle.flush()
+    # chmod replaces the access wholesale; the mount maps it to its layout
+    # (DFS keeps only the lock bit, ADFS/AFS the full set).
+    _mutate_access(
+        file_spec,
+        recursive=recursive,
+        dry_run=dry_run,
+        verb=lambda target: f"would chmod {target} {access}",
+        transform=lambda _current: flags,
+    )
 
 
 _alias("*ACCESS", "chmod")
@@ -2193,18 +2225,15 @@ def lock(file_spec: str, recursive: bool, dry_run: bool) -> None:
     Accepts a ``FILE_SPEC``.
     PATH may be a wildcard; ``-r`` recurses.
     """
-    image, path = parse_file_spec(file_spec)
-    if not path:
-        raise click.UsageError("PATH is required")
-    fs, bare = resolve_path(image, path)
-    with open_image(image, fs) as handle:
-        for target in _iter_targets(handle, bare, fs, recursive=recursive):
-            if dry_run:
-                click.echo(f"would lock {target.path}")
-                continue
-            target.lock()
-        if fs is FilingSystem.AFS and not dry_run:
-            handle.flush()
+    from oaknut.file import Access
+
+    _mutate_access(
+        file_spec,
+        recursive=recursive,
+        dry_run=dry_run,
+        verb=lambda target: f"would lock {target}",
+        transform=lambda current: current | Access.L,
+    )
 
 
 @cli.command()
@@ -2219,18 +2248,15 @@ def unlock(file_spec: str, recursive: bool, dry_run: bool) -> None:
     Accepts a ``FILE_SPEC``.
     PATH may be a wildcard; ``-r`` recurses.
     """
-    image, path = parse_file_spec(file_spec)
-    if not path:
-        raise click.UsageError("PATH is required")
-    fs, bare = resolve_path(image, path)
-    with open_image(image, fs) as handle:
-        for target in _iter_targets(handle, bare, fs, recursive=recursive):
-            if dry_run:
-                click.echo(f"would unlock {target.path}")
-                continue
-            target.unlock()
-        if fs is FilingSystem.AFS and not dry_run:
-            handle.flush()
+    from oaknut.file import Access
+
+    _mutate_access(
+        file_spec,
+        recursive=recursive,
+        dry_run=dry_run,
+        verb=lambda target: f"would unlock {target}",
+        transform=lambda current: current & ~Access.L,
+    )
 
 
 @cli.command(name="set-load")
