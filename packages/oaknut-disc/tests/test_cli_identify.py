@@ -14,14 +14,14 @@ class TestIdentify:
     def test_identifies_a_dfs_image(self, runner: CliRunner, dfs_image_filepath):
         result = runner.invoke(cli, ["identify", str(dfs_image_filepath)])
         assert result.exit_code == 0
-        assert "acorn_dfs" in result.output
-        assert "dfs" in result.output
+        assert "acorn-dfs" in result.output
         assert "PROBABLE" in result.output
 
     def test_identifies_a_combined_adfs_afs_image(self, runner: CliRunner):
         result = runner.invoke(cli, ["identify", str(_L3FS_DAT)])
         assert result.exit_code == 0
-        # Both partitions are reported, AFS (CERTAIN) leading.
+        # The ADFS host and its AFS tail (CERTAIN) are both reported —
+        # the AFS region nests under its host in the identification tree.
         assert "afs" in result.output
         assert "adfs" in result.output
         assert "CERTAIN" in result.output
@@ -47,7 +47,7 @@ class TestIdentify:
         # The human-facing Rich rendering must not error.
         result = runner.invoke(cli, ["identify", "--as", "display", str(dfs_image_filepath)])
         assert result.exit_code == 0
-        assert "acorn_dfs" in result.output
+        assert "acorn-dfs" in result.output
 
     def test_missing_file_is_a_clean_error(self, runner: CliRunner, tmp_path):
         result = runner.invoke(cli, ["identify", str(tmp_path / "nope.ssd")])
@@ -58,7 +58,7 @@ class TestListFormats:
     def test_lists_every_registered_format(self, runner: CliRunner):
         result = runner.invoke(cli, ["list-formats"])
         assert result.exit_code == 0
-        for name in ("acorn_dfs", "watford_dfs", "adfs", "afs", "zip"):
+        for name in ("acorn-dfs", "watford-dfs", "adfs", "afs", "zip"):
             assert name in result.output
 
 

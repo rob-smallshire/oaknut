@@ -1,8 +1,8 @@
 """Example for ``disc list-formats`` — the disc formats identification knows.
 
-Each row is a registered prober: the formats ``disc identify`` can
-recognise by content. The set grows automatically as format packages
-are installed.
+Each row is a registered filesystem: the formats ``disc identify`` can
+recognise by content. The set grows automatically as filesystem
+packages are installed.
 """
 
 from __future__ import annotations
