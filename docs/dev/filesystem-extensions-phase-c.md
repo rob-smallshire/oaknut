@@ -102,12 +102,18 @@ the Titled/Bootable capabilities.
 - [x] `set_acorn_meta` on DFS/ADFS/AFS mounts (keystone) — round-trip tested.
 - [x] `put`  (`write_bytes` + `set_acorn_meta`, writable context).
 
-Now unblocked (use `set_acorn_meta`; need a mount-based wildcard/recursive
-target iterator — the find walk is the model):
+A mount-based wildcard/recursive target iterator now exists
+(`_iter_target_paths` + `_expand_target_paths` + `_walk_post_order_mount`).
 
-- [ ] `chmod` (access), `lock` / `unlock` (L bit)
-- [ ] `set-load` / `set-exec` (one address)
-- [ ] `import` (bulk `write_bytes` + `set_acorn_meta`)
+- [x] `set-load` / `set-exec` (one address via `set_acorn_meta`).
+- [ ] `import` (bulk `write_bytes` + `set_acorn_meta`; reuses `make_directory`).
+
+Need a filesystem-aware **access representation** first (issue #12: AFS's
+access byte layout differs from the wire form, so generic `Access.L`
+bit-twiddling corrupts AFS). Add e.g. a canonical `locked: bool` to the
+capability, or a dedicated `Lockable`:
+
+- [ ] `chmod` (access), `lock` / `unlock`
 
 Still need new capability surface:
 
