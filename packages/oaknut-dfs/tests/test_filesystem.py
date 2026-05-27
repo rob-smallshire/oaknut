@@ -82,6 +82,16 @@ class TestMount:
             assert mount.read_bytes("$.HELLO") == b"hello world"
             assert mount.exists("$.HELLO")
 
+    def test_writable_open_persists_to_file(self, tmp_path):
+        image_filepath = _make_dfs_image(tmp_path)
+        filesystem = create_filesystem("acorn-dfs")
+        with reader_for(image_filepath, writable=True) as reader:
+            mount = filesystem.open(reader, filesystem.probe(reader).geometry)
+            mount.write_bytes("$.GREET", b"hi there")
+        with reader_for(image_filepath) as reader:
+            mount = filesystem.open(reader, filesystem.probe(reader).geometry)
+            assert mount.read_bytes("$.GREET") == b"hi there"
+
     def test_capabilities(self, tmp_path):
         image_filepath = _make_dfs_image(tmp_path)
         filesystem = create_filesystem("acorn-dfs")

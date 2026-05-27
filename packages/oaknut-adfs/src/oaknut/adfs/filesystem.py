@@ -202,9 +202,10 @@ class ADFS(Filesystem):
 
     def open(self, reader: ImageReader, geometry: Geometry | None = None) -> _ADFSMount:
         # ADFS determines its own geometry from image size, so the
-        # geometry argument is advisory here.
-        buffer = memoryview(bytearray(reader.read(0, reader.size)))
-        return _ADFSMount(_ADFSDisc.from_buffer(buffer), _reserved_regions(reader))
+        # geometry argument is advisory here. Building over the reader's
+        # buffer() means mutations persist to the file when the reader is
+        # writable, and run against a private copy when it is not.
+        return _ADFSMount(_ADFSDisc.from_buffer(reader.buffer()), _reserved_regions(reader))
 
     def geometry_grammar(self) -> GeometryGrammar:
         return GeometryGrammar(presets=dict(_ADFS_PRESETS), kinds=(FLOPPY, WINCHESTER))

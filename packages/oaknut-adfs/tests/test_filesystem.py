@@ -66,6 +66,20 @@ class TestMount:
             mount.make_directory("$.NEWDIR")
             assert mount.exists("$.NEWDIR")
 
+    def test_writable_open_persists_to_file(self, tmp_path):
+        # A writable reader makes mount mutations reach the file: write a
+        # file and make a directory, then reopen from disk and find them.
+        filesystem = create_filesystem("adfs")
+        image_filepath = _make_adfs_image(tmp_path)
+        with reader_for(image_filepath, writable=True) as reader:
+            mount = filesystem.open(reader, filesystem.probe(reader).geometry)
+            mount.make_directory("$.NEWDIR")
+            mount.write_bytes("$.GREET", b"hi there")
+        with reader_for(image_filepath) as reader:
+            mount = filesystem.open(reader, filesystem.probe(reader).geometry)
+            assert mount.exists("$.NEWDIR")
+            assert mount.read_bytes("$.GREET") == b"hi there"
+
     def test_capabilities(self, tmp_path):
         filesystem = create_filesystem("adfs")
         with reader_for(_make_adfs_image(tmp_path)) as reader:

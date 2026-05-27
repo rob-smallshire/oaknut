@@ -188,8 +188,10 @@ class _BaseDFS(Filesystem):
             surface_specs=list(geometry.surface_specs),
             catalogue_name=self._catalogue.CATALOGUE_NAME,
         )
-        buffer = memoryview(bytearray(reader.read(0, reader.size)))
-        return _DFSMount(DFS.from_buffer(buffer, disc_format))
+        # Building over the reader's buffer() means mutations persist to
+        # the file when the reader is writable, and run against a private
+        # copy when it is not.
+        return _DFSMount(DFS.from_buffer(reader.buffer(), disc_format))
 
     def geometry_grammar(self) -> GeometryGrammar:
         return GeometryGrammar(presets=dict(_GEOMETRY_PRESETS), kinds=(FLOPPY,))
