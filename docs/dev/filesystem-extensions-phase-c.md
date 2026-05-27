@@ -25,31 +25,25 @@ in `oaknut/disc/` is empty (bar the kept pyproject deps).
 - ( `list-report-formats` / `describe-report-format` / `list-reports` /
   `describe-report` are asyoulikeit output-format commands — out of scope. )
 
-## ⚠ Open design issue — geometry-aware recursion (blocks AFS-on-floppy)
+## ✓ Resolved — geometry-aware recursion
 
-Discovered migrating `ls`. The recursion hands the tail filesystem a
-**raw-byte window** (`ImageReader.window`). That is correct only for
-*linear* geometries (hard discs, single-sided floppies), where logical
-sector N == byte N×256. On an **interleaved** disc (ADFS-L, DFS `.dsd`)
-the tail's logical sectors are scattered through the byte stream, so a
-contiguous byte window is not the region. `l3fs` (a linear hard disc)
-masked this; the ADFS-L+AFS floppy fixture exposes it.
-
-**Fix direction (needs a decision):** recursion must give the tail a
-view of the host's *logical sectors*, de-interleaved — e.g. the
-`RegionHost` materialises its reserved region as a linear byte view
-(reading its own logical sectors via the host geometry), and the
-coordinator recurses into *that* rather than slicing raw bytes. The
-`open(ImageReader)` contract can stay if the host supplies a linearised
-region reader. Resolve before resuming command migration past read-only
-linear cases. Also re-apply (lost in the revert): an AFS-mount root
-`exists`/`stat` fix, and ADFS reserved-region detection via the &F6
-pointer (works for floppy + hard disc, unlike total-sectors).
+Discovered migrating `ls`: recursion handed the tail filesystem a
+**raw-byte window**, correct only for *linear* geometries. On an
+**interleaved** disc (ADFS-L, DFS `.dsd`) the tail's logical sectors are
+scattered through the byte stream. **Fixed** (commit "Make region
+recursion geometry-aware"): reserved regions are logical-sector runs
+(`Partition.start_sector`/`num_sectors`); `region_reader(reader,
+geometry, start, count)` gives a cheap byte window when the host is
+linear and a de-interleaved `UnifiedDisc` view when it is a floppy. ADFS
+reports its reserved tail via the &F6 pointer; the AFS mount root
+`exists`/`stat` is fixed. Verified end-to-end through the CLI by
+`test_ls_afs_prefix` on an ADFS-L+AFS floppy fixture.
 
 ## Read commands (core + capability-gated)
 
-- [~] `ls` — migrated on the substrate (works for DFS/ADFS/linear); blocked
-  on the interleave finding above for AFS-on-floppy. Reverted pending the fix.
+- [x] `ls` — on the substrate; capability dispatch (Titled/FreeSpace/
+  AcornMetadata); DFS nameless-root model; works DFS/ADFS/AFS incl.
+  AFS-on-interleaved-floppy.
 - [ ] `tree`
 - [ ] `stat`
 - [ ] `cat`
