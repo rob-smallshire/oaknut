@@ -64,9 +64,11 @@ the current contract. These need a deliberate capability addition (a
 `DiscSummary`/`Sized` surface and/or CHS-on-`Geometry`) before they can
 migrate faithfully — grouped here rather than half-migrated.
 
+- [x] `validate` — `Validatable` capability (DFS/ADFS opt-in; AFS clean).
 - [ ] `stat` (disc-summary half; file-metadata half is contract-clean)
-- [ ] `freemap`
-- [ ] `validate`
+- [ ] `freemap` — rendering is filesystem-specific (ADFS per-sector grid
+  vs AFS per-cylinder shading), so a generic data capability + one
+  renderer doesn't fit. Decision pending.
 
 ## ✓ Resolved — write-back path (substrate done)
 
