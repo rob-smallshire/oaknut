@@ -46,12 +46,12 @@ reports its reserved tail via the &F6 pointer; the AFS mount root
   AFS-on-interleaved-floppy.
 - [x] `tree` — whole-image tree from `partition_selectors()` + generic
   `Mount.iter_entries`; partitions labelled by selector.
-- [ ] `cat`
-- [ ] `type`
-- [ ] `find`
-- [ ] `get`
-- [ ] `export`
-- [ ] `get-load` / `get-exec`  (gate on AcornMetadata)
+- [x] `cat` — `Mount.read_bytes`.
+- [x] `type` — `Mount.read_bytes` + line-ending translation.
+- [x] `find` — all-partition / prefix-scoped walk via `partition_selectors`.
+- [x] `get` — `Mount.read_bytes` + `AcornMetadata.acorn_meta`.
+- [x] `export` — host-partition tree export via `Mount.iter_entries`.
+- [x] `get-load` / `get-exec` — gated on `AcornMetadata` (`_require_acorn_meta`).
 
 ### Needs a structural-summary capability decision (deferred)
 

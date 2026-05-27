@@ -1286,53 +1286,51 @@ def get(
     trade-offs.
     """
     from oaknut.file import AcornMeta, MetaFormat, export_with_metadata
+    from oaknut.filesystem import AcornMetadata
 
-    image, path = parse_file_spec(file_spec)
+    _image, path = parse_file_spec(file_spec)
     if not path:
         raise click.UsageError("PATH is required")
     host_path = Path(host_path) if host_path is not None else None
-    fs, bare = resolve_path(image, path)
-    with open_image(image, fs) as handle:
-        target = _navigate(handle, bare, fs)
-        if not target.exists():
-            raise FSError(f"path not found: {bare}", exit_code=ExitCode.OS_FILE)
-        if target.is_dir():
-            raise FSError(f"'{bare}' is a directory", exit_code=ExitCode.OS_FILE)
+    resolved = resolve_mount(file_spec)
+    mount = resolved.mount
+    target = resolved.path or mount.path_root()
+    if not mount.exists(target):
+        raise FSError(f"path not found: {target}", exit_code=ExitCode.OS_FILE)
+    entry = mount.stat(target)
+    if entry.is_dir:
+        raise FSError(f"'{target}' is a directory", exit_code=ExitCode.OS_FILE)
 
-        data = target.read_bytes()
+    data = mount.read_bytes(target)
 
-        # Stdout mode.
-        if host_path is not None and str(host_path) == "-":
-            sys.stdout.buffer.write(data)
-            return
+    # Stdout mode.
+    if host_path is not None and str(host_path) == "-":
+        sys.stdout.buffer.write(data)
+        return
 
-        # Build metadata.
-        st = target.stat()
-        meta = AcornMeta(
-            load_address=getattr(st, "load_address", None),
-            exec_address=getattr(st, "exec_address", None),
-            access=int(st.access)
-            if hasattr(st, "access")
-            else (0x08 if getattr(st, "locked", False) else 0),
-        )
+    # Acorn metadata travels with the data when the filesystem carries it.
+    if isinstance(mount, AcornMetadata):
+        meta = mount.acorn_meta(target)
+    else:
+        meta = AcornMeta(load_address=None, exec_address=None, access=0)
 
-        if host_path is None:
-            host_path = Path(target.name)
+    if host_path is None:
+        host_path = Path(entry.name)
 
-        resolved_meta_format: MetaFormat | None
-        if meta_format == "none":
-            resolved_meta_format = None
-        else:
-            resolved_meta_format = MetaFormat(meta_format)
+    resolved_meta_format: MetaFormat | None
+    if meta_format == "none":
+        resolved_meta_format = None
+    else:
+        resolved_meta_format = MetaFormat(meta_format)
 
-        export_with_metadata(
-            data,
-            host_path,
-            meta,
-            meta_format=resolved_meta_format,
-            owner=owner,
-            filename=target.name,
-        )
+    export_with_metadata(
+        data,
+        host_path,
+        meta,
+        meta_format=resolved_meta_format,
+        owner=owner,
+        filename=entry.name,
+    )
 
 
 @cli.command()
@@ -2309,6 +2307,31 @@ def set_exec(
             handle.flush()
 
 
+def _require_acorn_meta(file_spec: str):
+    """Resolve *file_spec* to an existing file and return its Acorn metadata.
+
+    Raises if the path is missing, is a directory, or the filesystem does
+    not carry Acorn metadata (the capability the get-load/get-exec
+    commands gate on).
+    """
+    from oaknut.filesystem import AcornMetadata
+
+    _image, path = parse_file_spec(file_spec)
+    if not path:
+        raise click.UsageError("PATH is required")
+    resolved = resolve_mount(file_spec)
+    mount = resolved.mount
+    target = resolved.path or mount.path_root()
+    if not mount.exists(target):
+        raise FSError(f"path not found: {target}", exit_code=ExitCode.OS_FILE)
+    if not isinstance(mount, AcornMetadata):
+        raise FSError(
+            f"{resolved.filesystem} files carry no load/exec address",
+            exit_code=ExitCode.OS_FILE,
+        )
+    return mount.acorn_meta(target)
+
+
 @cli.command(name="get-load")
 @click.argument("file_spec")
 @report_output(
@@ -2327,18 +2350,10 @@ def get_load(file_spec: str):
     from asyoulikeit.scalar_data import ScalarContent
     from asyoulikeit.tabular_data import Report, Reports
 
-    image, path = parse_file_spec(file_spec)
-    if not path:
-        raise click.UsageError("PATH is required")
-    fs, bare = resolve_path(image, path)
-    with open_image(image, fs) as handle:
-        target = _navigate(handle, bare, fs)
-        if not target.exists():
-            raise FSError(f"path not found: {bare}", exit_code=ExitCode.OS_FILE)
-        st = target.stat()
+    meta = _require_acorn_meta(file_spec)
     return Reports(
         load=Report(
-            data=ScalarContent(value=_address_cell(st.load_address), title="Load"),
+            data=ScalarContent(value=_address_cell(meta.load_address), title="Load"),
         ),
     )
 
@@ -2361,18 +2376,10 @@ def get_exec(file_spec: str):
     from asyoulikeit.scalar_data import ScalarContent
     from asyoulikeit.tabular_data import Report, Reports
 
-    image, path = parse_file_spec(file_spec)
-    if not path:
-        raise click.UsageError("PATH is required")
-    fs, bare = resolve_path(image, path)
-    with open_image(image, fs) as handle:
-        target = _navigate(handle, bare, fs)
-        if not target.exists():
-            raise FSError(f"path not found: {bare}", exit_code=ExitCode.OS_FILE)
-        st = target.stat()
+    meta = _require_acorn_meta(file_spec)
     return Reports(
         exec=Report(
-            data=ScalarContent(value=_address_cell(st.exec_address), title="Exec"),
+            data=ScalarContent(value=_address_cell(meta.exec_address), title="Exec"),
         ),
     )
 
@@ -2717,39 +2724,38 @@ def export_cmd(image: Path, host_dir: Path, meta_format: str, owner: int, verbos
     else:
         resolved_meta_format = MetaFormat(meta_format)
 
-    fs = detect_filing_system(image)
     host_dir.mkdir(parents=True, exist_ok=True)
 
-    with open_image(image, fs) as handle:
-        _export_recursive(handle.root, host_dir, resolved_meta_format, owner, verbose, fs)
+    resolved = resolve_mount(str(image))
+    mount = resolved.mount
+    _export_recursive(
+        mount, mount.path_root(), host_dir, resolved_meta_format, owner, verbose
+    )
 
 
 def _export_recursive(
-    node,
+    mount,
+    path: str,
     host_dir: Path,
     meta_format,
     owner: int,
     verbose: bool,
-    fs: FilingSystem,
 ) -> None:
-    """Recursively export files from the image to the host directory."""
+    """Recursively export files under *path* in *mount* to the host directory."""
     from oaknut.file import AcornMeta, export_with_metadata
+    from oaknut.filesystem import AcornMetadata
 
-    for child in node.iterdir():
-        if child.is_dir():
+    for child in mount.iter_entries(path):
+        if child.is_dir:
             sub_dir = host_dir / child.name
             sub_dir.mkdir(exist_ok=True)
-            _export_recursive(child, sub_dir, meta_format, owner, verbose, fs)
+            _export_recursive(mount, child.path, sub_dir, meta_format, owner, verbose)
         else:
-            data = child.read_bytes()
-            st = child.stat()
-            meta = AcornMeta(
-                load_address=getattr(st, "load_address", None),
-                exec_address=getattr(st, "exec_address", None),
-                access=int(st.access)
-                if hasattr(st, "access")
-                else (0x08 if getattr(st, "locked", False) else 0),
-            )
+            data = mount.read_bytes(child.path)
+            if isinstance(mount, AcornMetadata):
+                meta = mount.acorn_meta(child.path)
+            else:
+                meta = AcornMeta(load_address=None, exec_address=None, access=0)
             export_with_metadata(
                 data,
                 host_dir / child.name,
