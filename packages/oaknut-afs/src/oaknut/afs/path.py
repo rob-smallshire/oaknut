@@ -527,6 +527,7 @@ class AFSPath(AcornPath):
         from oaknut.afs.directory import build_directory_bytes
         from oaknut.afs.exceptions import AFSDirectoryEntryExistsError
         from oaknut.afs.types import AfsDate
+        from oaknut.file.access_mapping import access_to_afs_bits
 
         afs = self._require_afs()
         if self.is_root():
@@ -546,8 +547,21 @@ class AFSPath(AcornPath):
                 )
             raise AFSPathError(f"{self.path!r} already exists as a file")
 
+        # Normalise the `access` argument to an AFSAccess the same way
+        # write_bytes does — None → default, AFSAccess verbatim, canonical
+        # wire-form Access (what merge forwards from a source entry) and
+        # raw int translated to the on-disc layout — then force the
+        # directory-type bit on, since this object is a directory.
         if access is None:
             access = AFSAccess.from_string("D/")
+        else:
+            if isinstance(access, AFSAccess):
+                pass
+            elif isinstance(access, Access):
+                access = AFSAccess.from_byte(access_to_afs_bits(access))
+            else:
+                access = AFSAccess.from_byte(int(access))
+            access |= AFSAccess.DIRECTORY
         if date is None:
             date = AfsDate(datetime.date.today())
 
