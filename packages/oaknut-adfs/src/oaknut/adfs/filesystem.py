@@ -202,6 +202,16 @@ class _ADFSMount:
     def free_bytes(self) -> int:
         return self._adfs.free_space
 
+    # -- FreeMap --
+    def free_map(self):
+        from oaknut.filesystem import FreeMapData
+
+        fsm = self._adfs._fsm
+        regions = tuple(
+            (start // 256, length // 256) for start, length in fsm.free_space_entries()
+        )
+        return FreeMapData(free_regions=regions, total_sectors=fsm.total_sectors)
+
     # -- Compactable --
     def compact(self) -> int:
         return self._adfs.compact()

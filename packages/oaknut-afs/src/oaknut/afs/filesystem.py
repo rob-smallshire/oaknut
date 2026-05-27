@@ -199,6 +199,34 @@ class _AFSMount:
     def free_bytes(self) -> int:
         return self._afs.free_sectors * 256
 
+    # -- FreeMap --
+    def free_map(self):
+        from oaknut.filesystem import FreeMapData
+
+        shadow = self._afs._bitmap_shadow()
+        geom = self._afs.geometry
+        spc = geom.sectors_per_cylinder
+        num_cylinders = geom.cylinders - self._afs.start_cylinder
+
+        # Coalesce the per-cylinder bitmaps into partition-relative free
+        # runs over a flat [0, num_cylinders*spc) sector space.
+        regions: list[tuple[int, int]] = []
+        run_start: int | None = None
+        index = 0
+        for cylinder in range(num_cylinders):
+            bitmap = shadow.bitmap_for(cylinder)
+            for sector in range(spc):
+                if bitmap.is_free(sector):
+                    if run_start is None:
+                        run_start = index
+                elif run_start is not None:
+                    regions.append((run_start, index - run_start))
+                    run_start = None
+                index += 1
+        if run_start is not None:
+            regions.append((run_start, index - run_start))
+        return FreeMapData(free_regions=tuple(regions), total_sectors=num_cylinders * spc)
+
     # -- Compactable --
     def compact(self) -> int:
         result = self._afs.compact()

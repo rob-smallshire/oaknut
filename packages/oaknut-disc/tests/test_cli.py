@@ -2430,44 +2430,39 @@ class TestCreate:
 
 
 class TestFreemap:
+    @staticmethod
+    def _matrix_cell_count(output: str) -> int:
+        """Total sector glyphs across every matrix row in *output*.
+
+        A matrix row is ``<offset> <glyphs>`` where the glyphs are only
+        ``.`` (free) and ``█`` (used); counting them is independent of
+        the terminal width the rows were wrapped to.
+        """
+        cells = 0
+        for line in output.splitlines():
+            parts = line.split(maxsplit=1)
+            if (
+                len(parts) == 2
+                and parts[0].isdigit()
+                and parts[1]
+                and set(parts[1]) <= {".", "█"}
+            ):
+                cells += len(parts[1])
+        return cells
+
     def test_freemap_dfs(self, runner: CliRunner, dfs_image_filepath: Path) -> None:
         result = runner.invoke(cli, ["freemap", str(dfs_image_filepath)])
         assert result.exit_code == 0
         assert "Free:" in result.output
         assert "█" in result.output or "." in result.output
 
-    def test_freemap_dfs_geometry_header(
+    def test_freemap_dfs_matrix_covers_every_sector(
         self, runner: CliRunner, dfs_image_filepath: Path
     ) -> None:
-        """Synthesised DFS geometry: 80 tracks × 10 sectors/track for an 80T SSD."""
+        """80T SSD = 800 sectors; the matrix renders one glyph per sector."""
         result = runner.invoke(cli, ["freemap", str(dfs_image_filepath)])
         assert result.exit_code == 0
-        assert "80 tracks" in result.output
-        assert "10 sectors/track" in result.output
-
-    def test_freemap_dfs_grid_shape(
-        self, runner: CliRunner, dfs_image_filepath: Path
-    ) -> None:
-        """80T SSD: 80 track rows, each carrying 10 sector glyphs (no head split)."""
-        result = runner.invoke(cli, ["freemap", str(dfs_image_filepath)])
-        assert result.exit_code == 0
-
-        grid_chars = set(".█ ")
-        grid_rows: list[str] = []
-        for line in result.output.splitlines():
-            parts = line.split(maxsplit=1)
-            if (
-                len(parts) == 2
-                and parts[0].isdigit()
-                and parts[1]
-                and set(parts[1]) <= grid_chars
-            ):
-                grid_rows.append(parts[1])
-        assert len(grid_rows) == 80, (
-            f"expected 80 track rows, got {len(grid_rows)}"
-        )
-        for row in grid_rows:
-            assert len(row) == 10, f"unexpected row width {len(row)}: {row!r}"
+        assert self._matrix_cell_count(result.output) == 800
 
     def test_freemap_adfs(self, runner: CliRunner, adfs_image_filepath: Path) -> None:
         result = runner.invoke(cli, ["freemap", str(adfs_image_filepath)])
@@ -2475,73 +2470,38 @@ class TestFreemap:
         assert "Free:" in result.output
         assert "region" in result.output
 
-    def test_freemap_adfs_geometry_header(
+    def test_freemap_adfs_matrix_covers_every_sector(
         self, runner: CliRunner, adfs_image_filepath: Path
     ) -> None:
-        """ADFS-L is 80 cylinders × 2 heads × 16 sectors/track; the header surfaces it."""
+        """ADFS-L = 80 × 2 × 16 = 2560 sectors, each a cell in the matrix."""
         result = runner.invoke(cli, ["freemap", str(adfs_image_filepath)])
         assert result.exit_code == 0
-        assert "80 cylinders" in result.output
-        assert "2 heads" in result.output
-        assert "16 sectors/track" in result.output
-
-    def test_freemap_adfs_grid_shape(
-        self, runner: CliRunner, adfs_image_filepath: Path
-    ) -> None:
-        """ADFS-L: 80 cylinder rows, each rendering 16 + 1 + 16 = 33 sector glyphs."""
-        result = runner.invoke(cli, ["freemap", str(adfs_image_filepath)])
-        assert result.exit_code == 0
-
-        grid_chars = set(".█ ")
-        grid_rows: list[str] = []
-        for line in result.output.splitlines():
-            parts = line.split(maxsplit=1)
-            if (
-                len(parts) == 2
-                and parts[0].isdigit()
-                and parts[1]
-                and set(parts[1]) <= grid_chars
-            ):
-                grid_rows.append(parts[1])
-        assert len(grid_rows) == 80, (
-            f"expected 80 cylinder rows, got {len(grid_rows)}"
-        )
-        for row in grid_rows:
-            assert len(row) == 33, f"unexpected row width {len(row)}: {row!r}"
+        assert self._matrix_cell_count(result.output) == 2560
 
     def test_freemap_afs(self, runner: CliRunner, afs_image_filepath: Path) -> None:
         result = runner.invoke(cli, ["freemap", f"{afs_image_filepath}:afs:"])
         assert result.exit_code == 0
         assert "Free:" in result.output
-        assert "cylinders" in result.output
-
-    def test_freemap_afs_shade_legend(
-        self, runner: CliRunner, afs_image_filepath: Path
-    ) -> None:
-        """AFS legend covers all five shade-block states."""
-        result = runner.invoke(cli, ["freemap", f"{afs_image_filepath}:afs:"])
-        assert result.exit_code == 0
-        for glyph in (".", "░", "▒", "▓", "█"):
-            assert glyph in result.output, f"missing legend glyph {glyph!r}"
+        # AFS renders the same sector matrix now — no per-cylinder shading.
+        assert "█" in result.output or "." in result.output
+        assert "░" not in result.output and "▒" not in result.output
 
     def test_freemap_dat_without_dsc_is_user_error(
         self, runner: CliRunner, tmp_path: Path
     ) -> None:
-        """An ADFS hard-disc ``.dat`` with no companion ``.dsc`` should yield
-        a categorised user-facing error, not an uncaught ``FileNotFoundError``
-        traceback."""
+        """An unrecognisable image yields a clean user-facing error, not an
+        uncaught ``FileNotFoundError`` traceback."""
         dat_filepath = tmp_path / "orphan.dat"
         dat_filepath.write_bytes(b"\x00" * 4096)
 
         result = runner.invoke(cli, ["freemap", str(dat_filepath)])
         assert result.exit_code != 0
-        # No raw stdlib traceback should reach the user
+        # No raw stdlib traceback should reach the user.
         assert "Traceback" not in result.output
         assert "FileNotFoundError" not in result.output
-        # The error should name the missing .dsc so the user knows what to do
-        assert ".dsc" in result.output
-        # The wrapped error should not produce a duplicate "caused by" line
-        assert "caused by" not in result.output
+        # Content-first identification: an unrecognised image is reported
+        # as such (rather than a format-specific .dsc hint).
+        assert "no installed filesystem recognises" in result.output
 
 
 class TestCompact:

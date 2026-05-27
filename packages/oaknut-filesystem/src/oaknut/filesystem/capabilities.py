@@ -192,6 +192,28 @@ class FreeSpace(Protocol):
         ...
 
 
+@dataclass(frozen=True)
+class FreeMapData:
+    """A filesystem's free space as partition-relative sector runs.
+
+    Carries no geometry: the renderer lays the *total_sectors* out as a
+    sector matrix sized to the terminal, marking those in *free_regions*
+    free and the rest used. Each region is ``(start_sector, length)``.
+    """
+
+    free_regions: tuple[tuple[int, int], ...]
+    total_sectors: int
+
+
+@runtime_checkable
+class FreeMap(Protocol):
+    """The filesystem can report which of its sectors are free."""
+
+    def free_map(self) -> FreeMapData:
+        """The free-space map as partition-relative sector runs."""
+        ...
+
+
 @runtime_checkable
 class Compactable(Protocol):
     """The filesystem can defragment in place, consolidating free space."""

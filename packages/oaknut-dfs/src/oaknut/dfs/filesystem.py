@@ -203,6 +203,15 @@ class _DFSMount:
     def free_bytes(self) -> int:
         return self._dfs.free_sectors * 256
 
+    # -- FreeMap --
+    def free_map(self):
+        from oaknut.filesystem import FreeMapData
+
+        surface = self._dfs._catalogued_surface
+        regions = tuple(surface.get_free_map())  # already (start, length) in sectors
+        total = surface.catalogue.get_disc_info().total_sectors
+        return FreeMapData(free_regions=regions, total_sectors=total)
+
     # -- Compactable --
     def compact(self) -> int:
         return self._dfs.compact()

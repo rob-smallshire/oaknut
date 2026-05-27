@@ -1009,190 +1009,60 @@ def _find_recursive(mount, path: str, pattern: str, prefix: str, rows: list[dict
 @cli.command()
 @click.argument("file_spec")
 def freemap(file_spec: str) -> None:
-    """Show free-space map with ASCII fragmentation bar.
+    """Show the free-space map as a sector matrix.
 
-    Accepts a ``FILE_SPEC`` (the in-image ``PATH_SPEC`` is optional and defaults to the root).
+    Accepts a ``FILE_SPEC``; a partition prefix scopes the map to that
+    partition. Each cell is one sector — ``.`` free, ``█`` used — laid
+    out in rows sized to the terminal.
     """
-    image, path = parse_file_spec(file_spec)
-    fs, bare = resolve_path(image, path)
+    import shutil
 
-    with open_image(image, fs) as handle:
-        if fs is FilingSystem.DFS:
-            _freemap_dfs(handle)
-        elif fs is FilingSystem.AFS:
-            _freemap_afs(handle)
-        else:
-            _freemap_adfs(handle)
+    from oaknut.filesystem import FreeMap
+
+    with resolve_mount(file_spec) as resolved:
+        mount = resolved.mount
+        if not isinstance(mount, FreeMap):
+            raise click.ClickException(f"{resolved.filesystem} provides no free-space map")
+        data = mount.free_map()
+
+    width = shutil.get_terminal_size((80, 24)).columns
+    click.echo("Legend: █ = used, . = free")
+    click.echo()
+    for line in _render_free_map_lines(data, width):
+        click.echo(line)
+    click.echo()
+
+    total_free = sum(length for _, length in data.free_regions)
+    if data.free_regions:
+        largest = max(length for _, length in data.free_regions)
+        click.echo(
+            f"Free: {total_free} of {data.total_sectors} sectors in "
+            f"{len(data.free_regions)} region(s) (largest {largest} contiguous)"
+        )
+    else:
+        click.echo(f"Free: 0 of {data.total_sectors} sectors")
 
 
-def _build_freemap_grid_lines(
-    rows: int,
-    groups_per_row: int,
-    cells_per_group: int,
-    total_sectors: int,
-    free_regions: list[tuple[int, int]],
-) -> list[str]:
-    """Render a 2-D free-space grid keyed to disc geometry.
+def _render_free_map_lines(data, width: int) -> list[str]:
+    """Render the sector matrix: one glyph per sector, rows filling *width*.
 
-    Each row is one cylinder (ADFS) / track (DFS). Within a row the
-    sectors are laid out in ``groups_per_row`` head-blocks of
-    ``cells_per_group`` glyphs, separated by single spaces. ``#``
-    marks a used sector, ``.`` a free one. Sectors past
-    ``total_sectors`` (the off-disc tail when the image is shorter
-    than the geometry implies) render as spaces so each row keeps
-    its expected width.
+    Each row is prefixed with the sector offset at its start; ``.`` marks
+    a free sector, ``█`` a used one. The layout follows the terminal
+    width and carries no disc geometry.
     """
-    free = [False] * total_sectors
-    for start, length in free_regions:
-        for sector in range(start, min(start + length, total_sectors)):
-            free[sector] = True
+    free = bytearray(data.total_sectors)
+    for start, length in data.free_regions:
+        for sector in range(start, min(start + length, data.total_sectors)):
+            free[sector] = 1
 
-    cells_per_row = groups_per_row * cells_per_group
-    label_width = max(2, len(str(rows - 1)))
-
+    label_width = max(len(str(max(data.total_sectors - 1, 0))), 4)
+    cells_per_row = max(1, width - label_width - 1)
     lines: list[str] = []
-    for row in range(rows):
-        row_base = row * cells_per_row
-        cells: list[str] = []
-        for group in range(groups_per_row):
-            if group > 0:
-                cells.append(" ")
-            group_base = row_base + group * cells_per_group
-            for offset in range(cells_per_group):
-                sector = group_base + offset
-                if sector >= total_sectors:
-                    cells.append(" ")
-                elif free[sector]:
-                    cells.append(".")
-                else:
-                    cells.append("█")
-        lines.append(f"{row:>{label_width}} {''.join(cells)}")
-
+    for row_start in range(0, data.total_sectors, cells_per_row):
+        row_end = min(row_start + cells_per_row, data.total_sectors)
+        glyphs = "".join("." if free[s] else "█" for s in range(row_start, row_end))
+        lines.append(f"{row_start:>{label_width}} {glyphs}")
     return lines
-
-
-# Fixed for every Acorn DFS variant — the floppy controller's hardware
-# format is 10 sectors per track on a 5.25" / 3.5" double-density disc,
-# whether SSD or DSD, 40-track or 80-track.
-_DFS_SECTORS_PER_TRACK = 10
-
-
-def _freemap_dfs(handle) -> None:
-    """DFS free-space map rendered as a 2-D grid (tracks × sectors-per-track).
-
-    DFS itself does not record geometry — the catalogue only carries a
-    total sector count. We synthesise tracks = total / 10, heads = 1
-    (``disc freemap`` operates on a single catalogue side), and 10
-    sectors per track, which matches every standard Acorn floppy.
-    """
-    regions = handle._catalogued_surface.get_free_map()
-    disc_info = handle._catalogued_surface.catalogue.get_disc_info()
-    total = disc_info.total_sectors
-    free = handle.free_sectors
-
-    tracks = (total + _DFS_SECTORS_PER_TRACK - 1) // _DFS_SECTORS_PER_TRACK
-    click.echo(
-        f"Geometry: {tracks} tracks × {_DFS_SECTORS_PER_TRACK} sectors/track "
-        f"({total} sectors, single side)"
-    )
-    click.echo("Legend: █ = used, . = free")
-    click.echo()
-    for line in _build_freemap_grid_lines(
-        rows=tracks,
-        groups_per_row=1,
-        cells_per_group=_DFS_SECTORS_PER_TRACK,
-        total_sectors=total,
-        free_regions=regions,
-    ):
-        click.echo(line)
-    click.echo()
-
-    if regions:
-        largest = max(length for _, length in regions)
-        click.echo(
-            f"Free: {free} sectors in {len(regions)} region(s) (largest {largest} contiguous)"
-        )
-    else:
-        click.echo("Free: 0 sectors")
-
-
-def _freemap_adfs(handle) -> None:
-    """ADFS free-space map rendered as a 2-D grid keyed to disc geometry."""
-    byte_entries = handle._fsm.free_space_entries()
-    sector_entries = [(start // 256, length // 256) for start, length in byte_entries]
-    total_sectors = handle._fsm.total_sectors
-    free_bytes = handle.free_space
-    geometry = handle.geometry
-
-    click.echo(
-        f"Geometry: {geometry.cylinders} cylinders × {geometry.heads} heads × "
-        f"{geometry.sectors_per_track} sectors/track ({geometry.total_sectors} sectors)"
-    )
-    click.echo("Legend: █ = used, . = free")
-    click.echo()
-    for line in _build_freemap_grid_lines(
-        rows=geometry.cylinders,
-        groups_per_row=geometry.heads,
-        cells_per_group=geometry.sectors_per_track,
-        total_sectors=total_sectors,
-        free_regions=sector_entries,
-    ):
-        click.echo(line)
-    click.echo()
-
-    if sector_entries:
-        largest = max(length for _, length in sector_entries)
-        click.echo(
-            f"Free: {free_bytes:,} bytes ({sum(n for _, n in sector_entries)} sectors) "
-            f"in {len(sector_entries)} region(s) (largest {largest} contiguous)"
-        )
-    else:
-        click.echo("Free: 0 bytes")
-
-
-def _afs_shade_glyph(used: int, capacity: int) -> str:
-    """Pick a shade-block glyph for an AFS cylinder's used fraction.
-
-    Five bins map onto the four Unicode shade blocks plus an empty
-    marker: ``.`` for exactly empty, then ``░ ▒ ▓ █`` for the four
-    quarters from sparsely-to-fully used.
-    """
-    if used == 0 or capacity == 0:
-        return "."
-    fraction = used / capacity
-    if fraction <= 0.25:
-        return "░"
-    if fraction <= 0.50:
-        return "▒"
-    if fraction <= 0.75:
-        return "▓"
-    return "█"
-
-
-def _freemap_afs(handle) -> None:
-    """AFS free-space map: one shade-block glyph per cylinder."""
-    shadow = handle._bitmap_shadow()
-    geom = handle.geometry
-    spc = geom.sectors_per_cylinder
-    start_cyl = handle.start_cylinder
-    num_cylinders = geom.cylinders - start_cyl
-
-    total_free = 0
-    total_sectors = 0
-    bar_chars = []
-    for i in range(num_cylinders):
-        bm = shadow.bitmap_for(i)
-        free = bm.free_count()
-        used = spc - free
-        total_free += free
-        total_sectors += spc
-        bar_chars.append(_afs_shade_glyph(used, spc))
-
-    bar = "".join(bar_chars)
-    click.echo(f"Cylinders: {start_cyl}{' ' * max(0, len(bar) - 2)}{geom.cylinders}")
-    click.echo(f"           {bar}")
-    click.echo(f"Free: {total_free} sectors of {total_sectors} ({num_cylinders} cylinders)")
-    click.echo("Legend: . = empty, ░ ≤ 25%, ▒ ≤ 50%, ▓ ≤ 75%, █ > 75% used")
 
 
 @cli.command()
