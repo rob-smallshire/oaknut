@@ -24,6 +24,7 @@ from asyoulikeit.cli import (
     report_output,
 )
 from exit_codes import ExitCode
+from oaknut.cli import contributed_commands
 from oaknut.file.capacity import format_capacity
 from oaknut.file.exceptions import FSError
 
@@ -3177,3 +3178,15 @@ def generate_dsc(image: Path, heads: int, spt: int, force: bool) -> None:
             f"a padded image.",
             err=True,
         )
+
+
+# ---------------------------------------------------------------------------
+# Filesystem-contributed commands
+# ---------------------------------------------------------------------------
+# Each installed filesystem package may contribute admin subcommands — e.g.
+# `disc afs init`, `disc adfs generate-dsc`, `disc dfs expand` — on the
+# `oaknut.command` axis. Attach them to the root group; they inherit the
+# handled_errors boundary, `--debug`, and exit codes because AliasGroup.invoke
+# wraps the whole dispatch (including nested groups).
+for _contributed_command in contributed_commands():
+    cli.add_command(_contributed_command)
