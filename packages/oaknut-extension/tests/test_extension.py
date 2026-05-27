@@ -92,5 +92,6 @@ class TestTextHelpers:
     def test_first_line_of_empty_is_empty(self):
         assert first_line("   ") == ""
 
-    def test_normalize_name_hyphen_to_underscore(self):
-        assert normalize_name("acorn-dfs") == "acorn_dfs"
+    def test_normalize_name_preserves_hyphens(self):
+        # Keys are hyphenated and matched verbatim (only whitespace trimmed).
+        assert normalize_name("  acorn-dfs  ") == "acorn-dfs"

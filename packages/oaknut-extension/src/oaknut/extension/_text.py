@@ -32,13 +32,14 @@ def strip_lines(text: str) -> str:
 
 
 def normalize_name(name: str) -> str:
-    """Normalise a lookup name by converting hyphens to underscores.
+    """Normalise an extension lookup name.
 
-    Entry-point names are registered in their normalised (underscore)
-    form, so a caller may ask for either ``"acorn-dfs"`` or
-    ``"acorn_dfs"`` and reach the same extension.
+    Trims surrounding whitespace only; the name is otherwise matched
+    against the registered entry-point key verbatim. Hyphens are
+    significant — oaknut's user-facing keys are hyphenated
+    (``acorn-dfs``) — so they are preserved, not folded to underscores.
     """
-    return name.replace("-", "_")
+    return name.strip()
 
 
 def first_line(text: str) -> str:

@@ -161,10 +161,11 @@ class TestPartialInstall:
         assert identify(b"DFS!" + b"\x00" * 100, filesystems=only_dfs)
 
 
-class TestEmptyRegistry:
-    def test_no_filesystems_registered_yet(self):
-        # In Phase A nothing registers on oaknut.filesystem.
-        assert filesystem_names() == []
+class TestRegistry:
+    def test_filesystem_names_is_a_list(self):
+        # Whatever filesystem packages are installed, discovery returns a
+        # list (empty if none) and does not raise.
+        assert isinstance(filesystem_names(), list)
 
     def test_create_unknown_raises(self):
         with pytest.raises(FilesystemExtensionError):
