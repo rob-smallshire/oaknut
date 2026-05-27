@@ -25,6 +25,7 @@ dependencies = [
     "rich>=13.0",
     "oaknut-file>=10.0",
     "oaknut-identify>=10.0",
+    "oaknut-filesystem>=10.0",
 ]
 
 [project.urls]
@@ -36,9 +37,14 @@ Issues = "https://github.com/rob-smallshire/oaknut/issues"
 [project.scripts]
 oaknut-zip = "oaknut.zip.cli:cli"
 
-# Probers contributed to the oaknut.identify cascade.
+# Probers contributed to the oaknut.identify cascade. (Legacy axis;
+# retired in Phase C.)
 [project.entry-points."oaknut.prober"]
 zip = "oaknut.zip.probers:ZipProber"
+
+# Filesystem contributed to the oaknut.filesystem axis.
+[project.entry-points."oaknut.filesystem"]
+zip = "oaknut.zip.filesystem:Zip"
 
 [tool.setuptools.dynamic]
 version = { attr = "oaknut.zip.__version__" }
