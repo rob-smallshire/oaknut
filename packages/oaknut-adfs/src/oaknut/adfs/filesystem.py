@@ -202,6 +202,10 @@ class _ADFSMount:
     def free_bytes(self) -> int:
         return self._adfs.free_space
 
+    # -- Compactable --
+    def compact(self) -> int:
+        return self._adfs.compact()
+
     # -- RegionHost --
     def reserved_regions(self) -> tuple[Partition, ...]:
         return self._reserved

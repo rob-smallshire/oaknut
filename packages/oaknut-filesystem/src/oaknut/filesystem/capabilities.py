@@ -193,6 +193,15 @@ class FreeSpace(Protocol):
 
 
 @runtime_checkable
+class Compactable(Protocol):
+    """The filesystem can defragment in place, consolidating free space."""
+
+    def compact(self) -> int:
+        """Defragment, returning a filesystem-defined measure of work done."""
+        ...
+
+
+@runtime_checkable
 class UserDatabase(Protocol):
     """The filesystem has user accounts (AFS passwords / quota)."""
 

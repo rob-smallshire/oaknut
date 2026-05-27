@@ -203,6 +203,10 @@ class _DFSMount:
     def free_bytes(self) -> int:
         return self._dfs.free_sectors * 256
 
+    # -- Compactable --
+    def compact(self) -> int:
+        return self._dfs.compact()
+
 
 class _BaseDFS(Filesystem):
     """Shared behaviour for the flat-catalogue DFS-family filesystems."""

@@ -199,6 +199,12 @@ class _AFSMount:
     def free_bytes(self) -> int:
         return self._afs.free_sectors * 256
 
+    # -- Compactable --
+    def compact(self) -> int:
+        result = self._afs.compact()
+        self._afs.flush()
+        return result
+
     # -- UserDatabase --
     def user_names(self) -> tuple[str, ...]:
         return tuple(record.full_id for record in self._afs.users)

@@ -2682,12 +2682,15 @@ def create(
 @click.argument("image", type=click.Path(exists=True, path_type=Path))
 def compact(image: Path) -> None:
     """Defragment a disc image, consolidating free space."""
-    fs = detect_filing_system(image)
-    with open_image(image, fs) as handle:
-        try:
-            handle.compact()
-        except NotImplementedError as exc:
-            raise click.ClickException(str(exc))
+    from oaknut.filesystem import Compactable
+
+    with resolve_mount(str(image), writable=True) as resolved:
+        mount = resolved.mount
+        if not isinstance(mount, Compactable):
+            raise click.ClickException(
+                f"{resolved.filesystem} images cannot be compacted"
+            )
+        mount.compact()
 
 
 @cli.command()
