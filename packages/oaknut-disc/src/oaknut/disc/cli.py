@@ -40,7 +40,7 @@ from .cli_paths import (
     parse_prefix,
     resolve_path,
 )
-from .mount import resolve_mount
+from .mount import partition_selectors, resolve_mount
 
 # ---------------------------------------------------------------------------
 # Alias-aware Click group
@@ -525,7 +525,7 @@ def tree(file_spec: str):
     from asyoulikeit.tabular_data import Report, Reports
     from asyoulikeit.tree_data import TreeContent
 
-    image, path = parse_file_spec(file_spec)
+    _image, path = parse_file_spec(file_spec)
 
     # The root node carries the image name visibly now that asyoulikeit
     # 0.5.1 drops the Rich-table chrome around single-column trees —
@@ -534,52 +534,47 @@ def tree(file_spec: str):
     tc.add_column("name", "Name", header=True)
 
     if path:
-        # Explicit path (possibly with FS prefix) — show that subtree only.
-        fs, bare = resolve_path(image, path)
-        with open_image(image, fs) as handle:
-            root_node = _navigate(handle, bare, fs)
-            if not root_node.exists() and not root_node.is_dir():
-                raise click.ClickException(f"path not found: {bare or '$'}")
-            root = tc.add_root(name=root_node.name)
-            _attach_children(root_node, root)
+        # Explicit path (possibly with a partition prefix) — that subtree only.
+        resolved = resolve_mount(file_spec)
+        mount = resolved.mount
+        target = resolved.path or mount.path_root()
+        if not mount.exists(target):
+            raise click.ClickException(f"path not found: {target or '$'}")
+        entry = mount.stat(target)
+        root = tc.add_root(name=entry.name or resolved.image.name)
+        if entry.is_dir:
+            _attach_children_mount(mount, target, root)
     else:
-        _build_tree_whole_image(image, tc)
+        _build_tree_whole_image(file_spec, tc)
 
     return Reports(tree=Report(data=tc))
 
 
-def _build_tree_whole_image(image_filepath: Path, tc) -> None:
-    """Populate *tc* with one root per image, labelled partitions beneath."""
-    detected = detect_filing_system(image_filepath)
+def _build_tree_whole_image(file_spec: str, tc) -> None:
+    """Populate *tc* with one root per image, labelled partitions beneath.
+
+    Each identified partition is mounted through the coordinator and its
+    root contents attached; the partition label is its selector (``adfs``,
+    ``afs``, …). A single-partition image folds its contents straight
+    under the image root with no partition label.
+    """
+    image_filepath, _ = parse_file_spec(file_spec)
+    selectors = partition_selectors(image_filepath)
     image_root = tc.add_root(name=image_filepath.name)
-
-    if detected is FilingSystem.DFS:
-        with _open_dfs(image_filepath) as handle:
-            _attach_children(handle.root, image_root)
-        return
-
-    with _open_adfs(image_filepath) as adfs:
-        if not adfs.has_afs_partition:
-            _attach_node(adfs.root, image_root)
-        else:
-            afs = adfs.afs_partition
-            adfs_label = image_root.add_child(name="ADFS")
-            _attach_node(adfs.root, adfs_label)
-            afs_label = image_root.add_child(name="AFS")
-            _attach_node(afs.root, afs_label)
+    multi = len(selectors) > 1
+    for selector in selectors:
+        resolved = resolve_mount(f"{image_filepath}:{selector}:")
+        mount = resolved.mount
+        parent = image_root.add_child(name=selector) if multi else image_root
+        _attach_children_mount(mount, mount.path_root(), parent)
 
 
-def _attach_node(fs_node, parent_tree_node) -> None:
-    """Attach ``fs_node`` as a child of ``parent_tree_node`` and recurse."""
-    child = parent_tree_node.add_child(name=fs_node.name)
-    if fs_node.is_dir():
-        _attach_children(fs_node, child)
-
-
-def _attach_children(dir_node, parent_tree_node) -> None:
-    """Attach every child of ``dir_node`` under ``parent_tree_node``."""
-    for child in dir_node.iterdir():
-        _attach_node(child, parent_tree_node)
+def _attach_children_mount(mount, path: str, parent_tree_node) -> None:
+    """Attach every entry under *path* in *mount*, recursing into directories."""
+    for child in mount.iter_entries(path):
+        node = parent_tree_node.add_child(name=child.name)
+        if child.is_dir:
+            _attach_children_mount(mount, child.path, node)
 
 
 @cli.command()

@@ -106,6 +106,22 @@ def resolve_mount(
     )
 
 
+def partition_selectors(image_filepath: Path) -> list[str]:
+    """Selectors of every identified partition in *image_filepath*.
+
+    The host partition first, then each identified contained partition
+    (``adfs``, ``afs``, ``afs.1`` …) — the names a prefix would address.
+    Raises if nothing recognises the image.
+    """
+    candidates = identify(image_filepath)
+    if not candidates:
+        raise click.ClickException(_unrecognised_message(image_filepath.name))
+    host = candidates[0]
+    return [host.partition.selector] + [
+        c.partition.selector for c in host.contained if c.identified
+    ]
+
+
 def _select(
     best: Identification, selector: str | None
 ) -> tuple[Identification, Partition | None]:

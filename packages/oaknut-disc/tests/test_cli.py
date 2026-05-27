@@ -390,13 +390,13 @@ class TestTree:
         assert result.exit_code == 0, result.output
         doc = _json.loads(result.output)
         payload = next(iter(doc["reports"].values()))
-        # One root (the image filename) with ADFS and AFS labelled
-        # partitions beneath it.
+        # One root (the image filename) with the partitions labelled by
+        # their selectors (what a prefix would address) beneath it.
         assert len(payload["roots"]) == 1
         image_root = payload["roots"][0]
         partition_labels = [c["values"]["name"] for c in image_root["children"]]
-        assert "ADFS" in partition_labels
-        assert "AFS" in partition_labels
+        assert "adfs" in partition_labels
+        assert "afs" in partition_labels
 
 
 def _collect_names(node: dict) -> list[str]:
