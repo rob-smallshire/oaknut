@@ -72,6 +72,21 @@ class TestDescribeFilesystem:
         result = runner.invoke(cli, ["describe-filesystem", "nonsense"])
         assert result.exit_code != 0
 
+    def test_shows_geometry_presets(self, runner: CliRunner):
+        # The geometry grammar is the discoverable menu for --geometry.
+        result = runner.invoke(cli, ["describe-filesystem", "adfs"])
+        assert result.exit_code == 0
+        for preset in ("s", "m", "l"):
+            assert preset in result.output
+        # ADFS accepts hard-disc and floppy parameterised forms too.
+        assert "capacity=SIZE" in result.output
+        assert "cylinders=N" in result.output
+
+    def test_floppy_only_filesystem_lists_its_presets(self, runner: CliRunner):
+        result = runner.invoke(cli, ["describe-filesystem", "acorn-dfs"])
+        assert result.exit_code == 0
+        assert "80t-ds" in result.output
+
 
 class TestContentFirstRouting:
     def test_ls_opens_a_misnamed_image_by_content(

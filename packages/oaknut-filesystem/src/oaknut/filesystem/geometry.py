@@ -199,6 +199,12 @@ class GeometryGrammar:
         if key in self.presets:
             return self.presets[key]
 
+        # A bare word (no '=') is a mistyped preset, not a parameterised
+        # form — name what this filesystem actually accepts rather than
+        # complain about key=value syntax.
+        if "=" not in spec:
+            raise GeometryError(self._unknown_geometry_message(spec))
+
         params = _parse_params(spec)
         if {"cylinders", "heads", "capacity"} & params.keys():
             if WINCHESTER not in self.kinds:
@@ -209,10 +215,19 @@ class GeometryGrammar:
                 raise GeometryError("this filesystem does not accept floppy geometry")
             return self._floppy(params)
 
-        available = ", ".join(self.preset_names()) or "(none)"
-        raise GeometryError(
-            f"cannot parse geometry {spec!r}; known presets: {available}"
-        )
+        raise GeometryError(self._unknown_geometry_message(spec))
+
+    def _unknown_geometry_message(self, spec: str) -> str:
+        """A geometry error that lists what this filesystem actually accepts."""
+        options: list[str] = []
+        if self.presets:
+            options.append("presets " + ", ".join(self.preset_names()))
+        if WINCHESTER in self.kinds:
+            options.append("capacity=SIZE or cylinders=N,heads=N,spt=N")
+        if FLOPPY in self.kinds:
+            options.append("tracks=N,sides=N[,interleave=interleaved|sequential]")
+        accepts = "; ".join(options) or "no geometry (this filesystem has none)"
+        return f"cannot parse geometry {spec!r}; accepts: {accepts}"
 
     def _floppy(self, params: dict[str, str]) -> Geometry:
         try:

@@ -2122,7 +2122,8 @@ _alias("*OPT4", "opt")
         "Physical geometry. Inferred from the extension when omitted; an "
         "ambiguous (.adf) or open-ended (.dat hard disc) extension needs "
         "it. A preset (e.g. l, 80t-ds) or parameterised form "
-        "(capacity=10MB, cylinders=296,heads=4,spt=33)."
+        "(capacity=10MB, cylinders=296,heads=4,spt=33). Run "
+        "`disc describe-filesystem NAME` to list a filesystem's geometries."
     ),
 )
 @click.option("--title", "disc_title", default="", help="Disc title.")
@@ -2139,6 +2140,9 @@ def create(
     with ``--filesystem`` and ``--geometry`` to override. An ambiguous
     extension (``.adf``: ADFS-S or -M?) or an open-ended one (``.dat``: a
     hard disc) has no default geometry and requires ``--geometry``.
+
+    Run ``disc describe-filesystem NAME`` to see the geometries a
+    filesystem accepts (its presets and parameterised forms).
     """
     from oaknut.filesystem import create_filesystem, creating_filesystem, filesystem_names
 
@@ -2158,10 +2162,11 @@ def create(
     else:
         geometry = filesystem.default_geometry(suffix)
     if geometry is None:
-        presets = ", ".join(grammar.preset_names()) or "none"
+        presets = ", ".join(grammar.preset_names())
+        hint = f"presets: {presets}; " if presets else ""
         raise click.ClickException(
             f"{name} has no default geometry for {suffix!r}; pass --geometry "
-            f"(presets: {presets}; or e.g. capacity=10MB)"
+            f"({hint}run `disc describe-filesystem {name}` for all options)"
         )
 
     filesystem.create(host_path, geometry, title=disc_title)

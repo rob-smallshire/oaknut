@@ -98,10 +98,19 @@ class TestGeometryGrammar:
         with pytest.raises(GeometryError, match="l"):
             grammar.parse("nonsense")
 
-    def test_malformed_field(self):
+    def test_unknown_spec_lists_what_is_accepted(self):
+        # A bare word (no '=') is a mistyped preset; the error names the
+        # parameterised forms this filesystem accepts rather than
+        # complaining about key=value syntax.
+        grammar = GeometryGrammar(kinds=(FLOPPY,))
+        with pytest.raises(GeometryError, match="accepts:.*tracks=N,sides=N"):
+            grammar.parse("tracks 80")
+
+    def test_partial_key_value_field_errors(self):
+        # A genuine key=value list with a bare field still errors clearly.
         grammar = GeometryGrammar(kinds=(FLOPPY,))
         with pytest.raises(GeometryError, match="key=value"):
-            grammar.parse("tracks 80")
+            grammar.parse("tracks=80,sides")
 
 
 class TestGeometryFromDsc:

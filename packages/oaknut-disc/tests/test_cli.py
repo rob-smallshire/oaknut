@@ -2348,6 +2348,26 @@ class TestCreate:
         result = runner.invoke(cli, ["create", str(out)])
         assert result.exit_code != 0
         assert "geometry" in result.output.lower()
+        # Discoverability: point at where the geometries are listed.
+        assert "describe-filesystem" in result.output
+
+    def test_create_ambiguous_extension_points_to_describe(
+        self, runner: CliRunner, tmp_path: Path
+    ) -> None:
+        out = tmp_path / "new.adf"  # ADFS-S or -M? ambiguous
+        result = runner.invoke(cli, ["create", str(out)])
+        assert result.exit_code != 0
+        assert "describe-filesystem adfs" in result.output
+
+    def test_create_bad_geometry_lists_what_is_accepted(
+        self, runner: CliRunner, tmp_path: Path
+    ) -> None:
+        out = tmp_path / "new.adf"
+        result = runner.invoke(cli, ["create", str(out), "--geometry", "bogus"])
+        assert result.exit_code != 0
+        # Not a cryptic "key=value" complaint — the accepted forms.
+        assert "accepts:" in result.output
+        assert "presets l, m, s" in result.output
 
     def test_create_ssd_40_track_geometry(self, runner: CliRunner, tmp_path: Path) -> None:
         out = tmp_path / "small.ssd"
