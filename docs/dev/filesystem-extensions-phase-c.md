@@ -68,30 +68,39 @@ migrate faithfully — grouped here rather than half-migrated.
 - [ ] `freemap`
 - [ ] `validate`
 
-## ⚠ Open design issue — write-back path (blocks all mutate commands)
+## ✓ Resolved — write-back path (substrate done)
 
-Every read command above is migrated. The mutate commands cannot follow
-until the mount can *persist*. Today `Filesystem.open` reads the image
-into a private `bytearray` copy (see each adapter), so the underlying
-DFS/ADFS/AFS class mutates that copy and the changes are dropped when
-the mount falls out of scope — fine for read, useless for write.
+The mutating commands needed the mount to *persist*. Chosen approach
+(user steer): a **writable file-backed reader**, no flush ceremony.
 
-Two coupled problems:
+- [x] Writable `ImageReader`: `reader_for(..., writable=True)` maps the
+  file `ACCESS_WRITE`; `write()` and a live `buffer()` reach the file;
+  windows inherit writability. Read-only `buffer()` is a private copy.
+- [x] DFS/ADFS adapters build over `reader.buffer()` — writes persist
+  when writable (verified by reopen-and-read tests); interleaved ADFS-L
+  scatters back through the class's own `UnifiedDisc`.
+- [x] AFS-region write-back on a **linear** host (hard disc): the region
+  is a writable window; AFS builds over `buffer()` and flushes after
+  each mutation. Interleaved-floppy AFS *writes* are refused with a clear
+  message (the de-interleaved copy can't scatter back live) — reads are
+  unaffected.
+- [x] `resolve_mount(spec, writable=True)` opens writable and returns a
+  context-managed `ResolvedMount` that owns the live mapping (released on
+  exit); read-only mounts close at once.
 
-1. **Whole-image mounts** (DFS, ADFS host) need `open` to mutate a buffer
-   that is flushed back to the file on close — i.e. a writable
-   `ImageReader`/mount lifecycle (open → mutate → flush), gated on a
-   `Writable` capability so read-only filesystems (ZIP today) opt out.
-2. **Region mounts** (AFS in a reserved tail) are handed a
-   *de-interleaved* region buffer by `region_reader`. A write must be
-   **re-interleaved** back into the host image at the right logical
-   sectors — the write-side mirror of the geometry-aware recursion fix.
-   `region_reader` needs a write-back counterpart (materialise → mutate
-   → scatter back through the host `UnifiedDisc`).
+### Remaining write-command work — un-stub `set_acorn_meta` first
 
-Resolve the lifecycle + region-write-back design before migrating these.
+`Mount.write_bytes(path, data)` carries no load/exec, so writing an Acorn
+file with addresses = `write_bytes` + `set_acorn_meta`. `set_acorn_meta`
+is the keystone and is still stubbed (`NotImplementedError`) on all three
+mounts — un-stub it (DFS lock-bit only; ADFS/AFS full) and put/import/
+chmod/lock/set-load/set-exec all open up. `rm`/`mv` additionally need
+`remove`/`rename` (new core or capability methods); `mkdir`'s `-p`/
+`--title` need a richer `make_directory`; `title`/`opt` need setters on
+the Titled/Bootable capabilities.
 
-- [ ] `put`
+- [ ] `set_acorn_meta` on DFS/ADFS/AFS mounts (keystone)
+- [ ] `put`  (`write_bytes` + `set_acorn_meta`)
 - [ ] `import`
 - [ ] `cp`
 - [ ] `mv`
