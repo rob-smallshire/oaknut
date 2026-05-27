@@ -278,7 +278,7 @@ class _BaseDFS(Filesystem):
 
 
 class AcornDFS(_BaseDFS):
-    """Acorn DFS — the standard flat-catalogue BBC/Electron floppy format.
+    """Acorn DFS — the standard flat-catalogue BBC floppy format.
 
     A two-sector catalogue (sectors 0–1) of up to 31 files in a single
     ``$`` directory. Watford DDFS, which extends this layout, is detected
