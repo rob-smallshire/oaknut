@@ -41,17 +41,23 @@ oaknut-filesystem    (deps: extension, discimage, file, exception)   # was oaknu
 oaknut-dfs    oaknut-adfs   oaknut-afs   oaknut-zip      # each: deps filesystem (+ basic etc.)
    (register Filesystem extensions on the `oaknut.filesystem` entry-point axis)
 
-oaknut-disc          (deps: filesystem, asyoulikeit, click, exception)   # NO dfs/adfs/afs
+oaknut-disc          (deps: filesystem + dfs/adfs/afs/zip, asyoulikeit, click, exception)
 ```
 
-`oaknut-afs` keeps a dependency on `oaknut-adfs` only where it genuinely
-needs the host (partition *creation* / wfsinit); the read path should
-operate on a region window the coordinator supplies, so investigate
-decoupling it (non-blocking).
+**Dependency refinement (the one backward-compatibility concession).**
+`oaknut-disc` *keeps* its dependencies on the filesystem packages, so
+`pip install oaknut-disc` still yields a system usable with every
+supported filesystem — batteries included. The extensibility invariant
+is honoured at the **code** level instead: `oaknut-disc` *imports* no
+filesystem package and branches on none — it routes purely through the
+`oaknut.filesystem` coordinator and capability dispatch. So a build with
+a filesystem package absent degrades gracefully (proven by the
+registry-injection test, which simulates a partial install even though
+the packages are present). Code decoupling without install friction.
 
-End-user install ergonomics: `oaknut-disc` pulls only the base; a
-convenience extra (`oaknut-disc[all]`) or an `oaknut[all]` metapackage
-pulls the filesystem packages. The bare install must run.
+`oaknut-afs` keeps a dependency on `oaknut-adfs` only where it genuinely
+needs the host (partition *creation* / wfsinit); the read path already
+operates on a region window the coordinator supplies (Phase B).
 
 ## Phases
 
@@ -102,9 +108,14 @@ Tests: per-extension probe/open/capability units; the cascade on real
 reference images, incl. the combined `l3fs` disc (ADFS host + AFS region
 via recursion).
 
-### Phase C — rewire the CLI onto the contract, drop filesystem deps
+### Phase C — rewire the CLI onto the contract (code-decoupled, deps kept)
 
-- `oaknut-disc` deps: remove `oaknut-dfs/adfs/afs`; keep `oaknut-filesystem`.
+- `oaknut-disc` deps: add `oaknut-filesystem`; **keep** `oaknut-dfs/adfs/afs`
+  (batteries-included). The change is that the *code* imports and branches on
+  none of them — it dispatches through the coordinator and capabilities.
+  A reusable **mount-resolution substrate** (`oaknut/disc/mount.py`)
+  turns a `FILE_SPEC` into a mounted partition + in-partition path; every
+  command calls it instead of the per-filing-system `open_image`/`_navigate`.
 - Addressing (`cli_paths.py` rewrite): prefix = partition selector
   `<filesystem>[.<index>]`; the in-partition remainder is handed to the
   mounted filesystem to parse. Remove `FilingSystem`, `parse_prefix`'s
