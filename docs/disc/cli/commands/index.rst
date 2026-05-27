@@ -55,6 +55,11 @@ Inspection
 
    .. cli-example:: cmd_type
 
+.. oaknut-command:: oaknut.disc.cli:identify
+   :prog: disc identify
+
+   .. cli-example:: cmd_identify
+
 
 File transfer (host ↔ image)
 ----------------------------
@@ -276,3 +281,21 @@ formatters available to ``--as``. See
    :prog: disc describe-report-format
 
    .. cli-example:: cmd_describe_report_format
+
+
+Disc-format identification
+--------------------------
+
+These introspect the disc formats ``disc identify`` can recognise —
+one registered prober per format. The set grows as format packages
+are installed.
+
+.. oaknut-command:: oaknut.disc.cli:list-formats
+   :prog: disc list-formats
+
+   .. cli-example:: cmd_list_formats
+
+.. oaknut-command:: oaknut.disc.cli:describe-format
+   :prog: disc describe-format
+
+   .. cli-example:: cmd_describe_format
