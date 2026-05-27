@@ -1696,6 +1696,60 @@ def _expand_path_spec(handle, bare: str, fs: FilingSystem) -> list:
     return [node]
 
 
+def _expand_target_paths(mount, pattern: str) -> list[str]:
+    """Resolve *pattern* to a list of existing in-partition path strings.
+
+    A literal path resolves to a one-element list; an Acorn wildcard on
+    the *leaf* component expands against the parent directory's entries
+    (wildcards in directory components are unsupported). No match is an
+    error. The mount-based counterpart of :func:`_expand_path_spec`.
+    """
+    if _has_wildcard(pattern):
+        parent, leaf_pattern = _split_parent_leaf(pattern)
+        if _has_wildcard(parent):
+            raise click.ClickException(
+                f"wildcards in directory components are not supported: {pattern!r}"
+            )
+        parent = parent or mount.path_root()
+        if not mount.exists(parent) or not mount.stat(parent).is_dir:
+            raise click.ClickException(
+                f"parent directory of glob does not exist: {parent or '$'!r}"
+            )
+        matches = [
+            e.path for e in mount.iter_entries(parent) if _match_acorn(leaf_pattern, e.name)
+        ]
+        if not matches:
+            raise click.ClickException(f"no matches for {pattern!r}")
+        return matches
+    if not mount.exists(pattern):
+        raise click.ClickException(f"path not found: {pattern}")
+    return [pattern]
+
+
+def _walk_post_order_mount(mount, path: str):
+    """Yield every descendant path of *path*, children before parents."""
+    if not mount.stat(path).is_dir:
+        yield path
+        return
+    for child in mount.iter_entries(path):
+        yield from _walk_post_order_mount(mount, child.path)
+    yield path
+
+
+def _iter_target_paths(mount, pattern: str, *, recursive: bool):
+    """Enumerate in-partition paths for a bulk-mutating command on *mount*.
+
+    Expands wildcards on *pattern* and, when *recursive*, walks each
+    directory match post-order (children before the directory). The
+    mount-based counterpart of :func:`_iter_targets`.
+    """
+    for seed in _expand_target_paths(mount, pattern):
+        if recursive and mount.stat(seed).is_dir:
+            yield from _walk_post_order_mount(mount, seed)
+        else:
+            yield seed
+
+
 def _iter_targets(
     handle,
     bare: str,
@@ -2250,23 +2304,36 @@ def set_load(
     matches (directories themselves are skipped — they have no load
     address field).
     """
-    from oaknut.file import parse_address
+    from oaknut.file import AcornMeta, parse_address
+    from oaknut.filesystem import AcornMetadata
 
-    image, path = parse_file_spec(file_spec)
+    _image, path = parse_file_spec(file_spec)
     if not path:
         raise click.UsageError("PATH is required")
     address = parse_address(addr)
-    fs, bare = resolve_path(image, path)
-    with open_image(image, fs) as handle:
-        for target in _iter_targets(handle, bare, fs, recursive=recursive):
-            if target.is_dir():
+    with resolve_mount(file_spec, writable=not dry_run) as resolved:
+        mount = resolved.mount
+        if not isinstance(mount, AcornMetadata):
+            raise FSError(
+                f"{resolved.filesystem} files carry no load address",
+                exit_code=ExitCode.OS_FILE,
+            )
+        target_pattern = resolved.path or mount.path_root()
+        for target in _iter_target_paths(mount, target_pattern, recursive=recursive):
+            if mount.stat(target).is_dir:
                 continue  # load address is meaningless for a directory
             if dry_run:
-                click.echo(f"would set-load {target.path} {address:#010x}")
+                click.echo(f"would set-load {target} {address:#010x}")
                 continue
-            target.set_load_address(address)
-        if fs is FilingSystem.AFS and not dry_run:
-            handle.flush()
+            meta = mount.acorn_meta(target)
+            mount.set_acorn_meta(
+                target,
+                AcornMeta(
+                    load_address=address,
+                    exec_address=meta.exec_address,
+                    access=meta.access,
+                ),
+            )
 
 
 @cli.command(name="set-exec")
@@ -2296,23 +2363,36 @@ def set_exec(
     matches (directories themselves are skipped — they have no exec
     address field).
     """
-    from oaknut.file import parse_address
+    from oaknut.file import AcornMeta, parse_address
+    from oaknut.filesystem import AcornMetadata
 
-    image, path = parse_file_spec(file_spec)
+    _image, path = parse_file_spec(file_spec)
     if not path:
         raise click.UsageError("PATH is required")
     address = parse_address(addr)
-    fs, bare = resolve_path(image, path)
-    with open_image(image, fs) as handle:
-        for target in _iter_targets(handle, bare, fs, recursive=recursive):
-            if target.is_dir():
+    with resolve_mount(file_spec, writable=not dry_run) as resolved:
+        mount = resolved.mount
+        if not isinstance(mount, AcornMetadata):
+            raise FSError(
+                f"{resolved.filesystem} files carry no exec address",
+                exit_code=ExitCode.OS_FILE,
+            )
+        target_pattern = resolved.path or mount.path_root()
+        for target in _iter_target_paths(mount, target_pattern, recursive=recursive):
+            if mount.stat(target).is_dir:
                 continue
             if dry_run:
-                click.echo(f"would set-exec {target.path} {address:#010x}")
+                click.echo(f"would set-exec {target} {address:#010x}")
                 continue
-            target.set_exec_address(address)
-        if fs is FilingSystem.AFS and not dry_run:
-            handle.flush()
+            meta = mount.acorn_meta(target)
+            mount.set_acorn_meta(
+                target,
+                AcornMeta(
+                    load_address=meta.load_address,
+                    exec_address=address,
+                    access=meta.access,
+                ),
+            )
 
 
 def _require_acorn_meta(file_spec: str):
