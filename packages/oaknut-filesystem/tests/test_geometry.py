@@ -64,6 +64,30 @@ class TestGeometryGrammar:
         geom = grammar.parse("cylinders=100,heads=4,spt=33")
         assert geom.num_sectors == 100 * 4 * 33
 
+    def test_winchester_from_capacity(self):
+        import math
+
+        grammar = GeometryGrammar(kinds=(WINCHESTER,))
+        geom = grammar.parse("capacity=10MB")
+        # Default heads=4, spt=33; cylinders cover the requested capacity.
+        assert geom.heads == 4
+        assert geom.sectors_per_track == 33
+        assert geom.cylinders == math.ceil(10_000_000 / (4 * 33 * 256))
+
+    def test_winchester_capacity_with_explicit_heads_spt(self):
+        import math
+
+        grammar = GeometryGrammar(kinds=(WINCHESTER,))
+        geom = grammar.parse("capacity=20MB,heads=8,spt=32")
+        assert geom.heads == 8
+        assert geom.sectors_per_track == 32
+        assert geom.cylinders == math.ceil(20_000_000 / (8 * 32 * 256))
+
+    def test_winchester_capacity_rejected_without_kind(self):
+        floppy_only = GeometryGrammar(kinds=(FLOPPY,))
+        with pytest.raises(GeometryError, match="hard-disc"):
+            floppy_only.parse("capacity=10MB")
+
     def test_kind_not_accepted(self):
         floppy_only = GeometryGrammar(kinds=(FLOPPY,))
         with pytest.raises(GeometryError, match="hard-disc"):

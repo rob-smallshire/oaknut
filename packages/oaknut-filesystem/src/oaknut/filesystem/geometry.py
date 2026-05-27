@@ -200,7 +200,7 @@ class GeometryGrammar:
             return self.presets[key]
 
         params = _parse_params(spec)
-        if {"cylinders", "heads"} & params.keys():
+        if {"cylinders", "heads", "capacity"} & params.keys():
             if WINCHESTER not in self.kinds:
                 raise GeometryError("this filesystem does not accept hard-disc geometry")
             return self._winchester(params)
@@ -231,15 +231,28 @@ class GeometryGrammar:
         )
 
     def _winchester(self, params: dict[str, str]) -> Geometry:
+        import math
+
+        from oaknut.discimage import BYTES_PER_SECTOR
+        from oaknut.file.capacity import parse_capacity
+
         try:
+            heads = int(params.get("heads", "4"))
+            sectors_per_track = int(params.get("spt", params.get("sectors", "33")))
+            if "capacity" in params:
+                # Derive the cylinder count that covers the requested
+                # capacity at the chosen (or default) heads/SPT.
+                capacity_bytes = parse_capacity(params["capacity"])
+                per_cylinder = heads * sectors_per_track * BYTES_PER_SECTOR
+                cylinders = max(1, math.ceil(capacity_bytes / per_cylinder))
+            else:
+                cylinders = int(params["cylinders"])
             return winchester_geometry(
-                cylinders=int(params["cylinders"]),
-                heads=int(params["heads"]),
-                sectors_per_track=int(params.get("spt", params.get("sectors", "33"))),
+                cylinders=cylinders, heads=heads, sectors_per_track=sectors_per_track
             )
         except (KeyError, ValueError) as exc:
             raise GeometryError(
-                f"hard-disc geometry needs integer cylinders, heads, spt: {exc}"
+                f"hard-disc geometry needs a capacity, or integer cylinders/heads/spt: {exc}"
             ) from exc
 
 
