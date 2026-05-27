@@ -276,8 +276,9 @@ def ls(file_spec: str, show_access_byte: bool):
             meta = mount.acorn_meta(child.path)
             load_cell = address_cell(meta.load_address)
             exec_cell = address_cell(meta.exec_address)
-            attr_str = _format_access(Access(meta.access))
-            hex_cell = f"0x{int(meta.access):02X}"
+            if meta.access is not None:
+                attr_str = _format_access(Access(meta.access))
+                hex_cell = f"0x{int(meta.access):02X}"
         row = {
             "name": child.name,
             "type": "file",
@@ -421,7 +422,9 @@ def stat(file_spec: str):
         tc.add_column("length", "Length")
         row["length"] = entry.length
         tc.add_column("attr", "Attr")
-        row["attr"] = _format_access(Access(meta.access))
+        row["attr"] = (
+            _format_access(Access(meta.access)) if meta.access is not None else ""
+        )
     else:
         tc.add_column("length", "Length")
         row["length"] = entry.length
@@ -1550,7 +1553,7 @@ def _file_item(src_mount, src_path: str, rel_dst: str) -> dict:
         meta = src_mount.acorn_meta(src_path)
         load = meta.load_address or 0
         exec_addr = meta.exec_address or 0
-        access = int(meta.access)
+        access = int(meta.access) if meta.access is not None else 0
     return {
         "kind": "file",
         "dst": rel_dst,
