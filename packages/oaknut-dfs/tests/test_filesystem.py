@@ -52,6 +52,17 @@ class TestProbe:
         assert results[0].geometry is not None
         assert len(results[0].ambiguities) == 1
 
+    def test_identifies_truncated_image(self, tmp_path):
+        # A truncated DFS image (file omits trailing unused sectors, so the
+        # catalogue declares more than the file holds) is still recognised —
+        # the filing system reads it transparently (issue #1).
+        image_filepath = _make_dfs_image(tmp_path)
+        full = image_filepath.read_bytes()
+        truncated = tmp_path / "truncated.ssd"
+        truncated.write_bytes(full[: 136 * 256])  # keep only the first 136 sectors
+        results = identify(truncated)
+        assert results and results[0].filesystem == "acorn-dfs"
+
     def test_identifies_watford_dfs(self):
         results = identify(_watford_image_bytes(), suffix_hint=".ssd")
         assert results[0].filesystem == "watford-dfs"

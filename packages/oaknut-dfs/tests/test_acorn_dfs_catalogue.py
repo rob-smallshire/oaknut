@@ -1352,15 +1352,18 @@ class TestAcornDFSCatalogueMatches:
 
         assert not AcornDFSCatalogue.matches(surface)
 
-    def test_matches_rejects_sectors_exceeding_surface_size(self):
-        """Test that claimed sectors exceeding surface size is rejected."""
-        buffer = bytearray(102400)  # 400 sectors
+    def test_matches_accepts_truncated_image(self):
+        """A catalogue declaring more sectors than the surface holds is a
+        *truncated* image (the file omits trailing unused sectors), which
+        the filing system reads transparently (issue #1) — so it matches,
+        rather than being rejected as it once was."""
+        buffer = bytearray(102400)  # 400 sectors on disc
         buffer[0:8] = b"TESTDISC"
         buffer[256:260] = b"    "
         buffer[260] = 0
         buffer[261] = 0
         buffer[262] = 0x01  # High bits = 1
-        buffer[263] = 244  # Low byte = 244, total = 500 sectors (exceeds 400)
+        buffer[263] = 244  # Low byte = 244, declared total = 500 sectors (> 400)
 
         spec = SurfaceSpec(
             num_tracks=40,
@@ -1372,4 +1375,4 @@ class TestAcornDFSCatalogueMatches:
         disc = DiscImage(memoryview(buffer), [spec])
         surface = disc.surface(0)
 
-        assert not AcornDFSCatalogue.matches(surface)
+        assert AcornDFSCatalogue.matches(surface)
