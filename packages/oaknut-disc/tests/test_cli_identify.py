@@ -85,3 +85,32 @@ class TestContentFirstRouting:
         assert result.exit_code == 0
         # The DFS root lists the fixture's file (DFS upper-cases names).
         assert "HELLO" in result.output
+
+
+class TestExplicitDfsPrefix:
+    """The ``image:dfs:`` prefix, with and without a trailing path."""
+
+    def test_bare_prefix_lists_virtual_root(
+        self, runner: CliRunner, dfs_image_filepath
+    ):
+        # image:dfs: (empty path) lists the disc's virtual root, which
+        # for DFS holds the single $ directory.
+        result = runner.invoke(cli, ["ls", f"{dfs_image_filepath}:dfs:"])
+        assert result.exit_code == 0
+        assert "$" in result.output
+
+    def test_prefix_with_root_lists_files(
+        self, runner: CliRunner, dfs_image_filepath
+    ):
+        # image:dfs:$ lists inside $ — the files themselves.
+        result = runner.invoke(cli, ["ls", f"{dfs_image_filepath}:dfs:$"])
+        assert result.exit_code == 0
+        assert "HELLO" in result.output
+
+    def test_prefix_rejects_mismatched_content(
+        self, runner: CliRunner, adfs_image_filepath
+    ):
+        # Forcing dfs: on an ADFS image is a clean error, not garbage.
+        result = runner.invoke(cli, ["ls", f"{adfs_image_filepath}:dfs:"])
+        assert result.exit_code != 0
+        assert "cannot access as DFS" in result.output
