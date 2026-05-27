@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import sys
 import zipfile
+from collections.abc import Iterator
+from dataclasses import dataclass
 from pathlib import Path
 
 import click
@@ -42,6 +44,68 @@ from .models import (
     TOTAL_KEY,
 )
 from .parsing import build_inf_index, resolve_metadata
+
+
+@dataclass(frozen=True)
+class ResolvedEntry:
+    """One archive member with its Acorn metadata resolved.
+
+    The shared core behind :func:`list_archive` and the
+    ``oaknut.filesystem`` mount. *member* is the raw ZIP member name (use
+    it to read the bytes); *name* is the cleaned, addressable name (a
+    filename-encoded suffix such as ``,ff9`` stripped). *meta* is ``None``
+    when no Acorn metadata was recovered.
+    """
+
+    member: str
+    name: str
+    is_dir: bool
+    file_size: int
+    source: str
+    meta: AcornMeta | None
+
+
+def resolved_entries(
+    zf: zipfile.ZipFile, *, decode_filenames: bool = True
+) -> Iterator[ResolvedEntry]:
+    """Yield each archive member with its Acorn metadata resolved.
+
+    Skips ``.inf`` sidecars that were consumed as metadata for another
+    member. This is the single place that pairs members with the
+    metadata recovered from SparkFS extras, bundled ``.inf`` files, and
+    filename encoding — shared by the listing API and the filesystem
+    mount so the two cannot diverge.
+    """
+    inf_index, consumed_inf_filenames = build_inf_index(zf)
+    for info in zf.infolist():
+        if info.filename in consumed_inf_filenames:
+            continue
+        if info.is_dir():
+            source = SOURCE_DIR
+            meta = None
+            inf_entry = inf_index.get(info.filename)
+            if inf_entry is not None:
+                source, meta = inf_entry
+            yield ResolvedEntry(
+                member=info.filename,
+                name=info.filename,
+                is_dir=True,
+                file_size=0,
+                source=source,
+                meta=meta,
+            )
+            continue
+        metadata_source, clean_name, meta = resolve_metadata(
+            info, decode_filenames=decode_filenames, inf_index=inf_index
+        )
+        yield ResolvedEntry(
+            member=info.filename,
+            name=clean_name,
+            is_dir=False,
+            file_size=info.file_size,
+            source=metadata_source or "",
+            meta=meta,
+        )
 
 
 def sanitise_extract_path(base_dirpath: Path, member_path: str) -> Path:
@@ -268,51 +332,26 @@ def list_archive(
 
     entries = []
     with zipfile.ZipFile(zipfile_path, "r") as zf:
-        inf_index, consumed_inf_filenames = build_inf_index(zf)
-
-        for info in zf.infolist():
-            if info.filename in consumed_inf_filenames:
-                continue
-            if info.is_dir():
-                entry = {
-                    FILENAME_KEY: info.filename,
-                    IS_DIR_KEY: True,
-                    LOAD_ADDR_KEY: None,
-                    EXEC_ADDR_KEY: None,
-                    FILE_SIZE_KEY: 0,
-                    ATTR_KEY: None,
-                    FILETYPE_KEY: None,
-                    SOURCE_KEY: SOURCE_DIR,
-                }
-                inf_entry = inf_index.get(info.filename)
-                if inf_entry is not None:
-                    source_label, meta = inf_entry
-                    entry[SOURCE_KEY] = source_label
-                    entry[LOAD_ADDR_KEY] = meta.load_address
-                    entry[EXEC_ADDR_KEY] = meta.exec_address
-                    entry[ATTR_KEY] = meta.access
-                    entry[FILETYPE_KEY] = meta.infer_filetype()
-                entries.append(entry)
-                continue
-
-            metadata_source, clean_name, meta = resolve_metadata(info, inf_index=inf_index)
-
+        for resolved in resolved_entries(zf):
             entry = {
-                FILENAME_KEY: clean_name,
-                IS_DIR_KEY: False,
-                FILE_SIZE_KEY: info.file_size,
+                FILENAME_KEY: resolved.name,
+                IS_DIR_KEY: resolved.is_dir,
+                FILE_SIZE_KEY: resolved.file_size,
                 LOAD_ADDR_KEY: None,
                 EXEC_ADDR_KEY: None,
                 ATTR_KEY: None,
                 FILETYPE_KEY: None,
-                SOURCE_KEY: metadata_source or "",
+                SOURCE_KEY: resolved.source,
             }
-            if meta and meta.has_metadata:
+            meta = resolved.meta
+            # A directory's metadata comes from a sidecar (when present);
+            # a file's only counts when it actually carries metadata.
+            include_meta = meta is not None and (resolved.is_dir or meta.has_metadata)
+            if include_meta:
                 entry[LOAD_ADDR_KEY] = meta.load_address
                 entry[EXEC_ADDR_KEY] = meta.exec_address
                 entry[ATTR_KEY] = meta.access
                 entry[FILETYPE_KEY] = meta.infer_filetype()
-
             entries.append(entry)
 
     return entries
