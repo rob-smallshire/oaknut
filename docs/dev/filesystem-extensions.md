@@ -12,11 +12,11 @@ we never designed for: **the granularities of detection, selection, and
 implementation don't line up**, and several distinct concepts are
 conflated under one word ("prefix"/"family"/"format").
 
-| Concern | Today's granularity | Symptom |
-|---|---|---|
-| Detection (probers) | per *format* | `acorn_dfs`, `watford_dfs` are separate probers |
-| Selection (CLI prefix) | per *family* | only `dfs:` exists — you cannot ask for Watford |
-| Implementation (classes) | mixed | one `DFS` class hides Acorn/Watford behind a catalogue registry; one `ADFS` class hides S/M/L · old-/new-map · floppy/ST506 with no model |
+| Concern                  | Today's granularity | Symptom                                                                                                                                   |
+|--------------------------|---------------------|-------------------------------------------------------------------------------------------------------------------------------------------|
+| Detection (probers)      | per *format*        | `acorn_dfs`, `watford_dfs` are separate probers                                                                                           |
+| Selection (CLI prefix)   | per *family*        | only `dfs:` exists — you cannot ask for Watford                                                                                           |
+| Implementation (classes) | mixed               | one `DFS` class hides Acorn/Watford behind a catalogue registry; one `ADFS` class hides S/M/L · old-/new-map · floppy/ST506 with no model |
 
 `list-formats` advertises `acorn_dfs` and `watford_dfs`, but the user can
 only type `dfs:` — and `dfs:` silently *means* "any DFS variant". ADFS is
@@ -74,6 +74,9 @@ Physical image
   it. The byte-identical ambiguities (80T-single vs 40T-double,
   interleaved vs sequential) are *geometry* ambiguities. **ADFS-S/M/L are
   geometry** (same structures, different size) — not filesystem variants.
+  Floppy geometries enumerate as a handful of named presets; hard-disc
+  geometries span an open-ended cylinders/heads/SPT space — so geometry
+  selection is a *grammar*, not a fixed list (§10).
 - **Filesystem** — the *logical* structure: how sectors become files and
   directories (catalogue/directory/map formats). Acorn DFS, Watford DFS,
   Opus DDOS, ADFS, AFS, FAT are *peers*. Purely-logical sub-formats (ADFS
@@ -113,9 +116,11 @@ A `Filesystem` extension owns:
 - **probe(reader) → Identification?** — does this region look like me,
   with what confidence, evidence, and (when determinable) which variant.
 - **open(reader, variant?) → mount** — return a mounted handle.
-- **geometries & sub-formats** — the set it supports, declared for
-  detection, for `--geometry` selection, and for `disc create` (which
-  needs a geometry as a required input).
+- **geometry grammar & sub-formats** — the geometry *kinds* it accepts
+  (a grammar of named presets plus a parameterised CHS form, since hard
+  discs are open-ended — see §10), plus any internal logical sub-formats;
+  declared for detection, for `--geometry` selection, and for `disc
+  create` (which needs a geometry as a required input).
 - **capabilities** — a **small core** every filesystem provides (list,
   stat, read-bytes, write-bytes, exists) plus **opt-in capability
   protocols** the CLI feature-detects (`runtime_checkable`):
@@ -246,9 +251,12 @@ Incremental, behind a stable interface — no big bang:
 - **E. New formats.** Opus DDOS, DRDOS/FAT, new-map ADFS, full geometry
   resolution — all additive extensions.
 
-## 10. Decisions & open questions
+## 10. Decisions
 
-**Resolved in review:**
+All review questions are now resolved; implementation follows the §9
+sequence.
+
+**Core model:**
 
 - **One extension type.** Detection and operations are unified on a
   single `oaknut.filesystem` axis (§4); no separate prober axis. The
@@ -285,22 +293,30 @@ Incremental, behind a stable interface — no big bang:
   filesystems on the `oaknut.filesystem` axis. (`oaknut-identify` becomes
   `oaknut-filesystem`; namespace `oaknut.prober` → `oaknut.filesystem`.)
 
-**Recommended resolutions (for red-pen):**
+**Geometry & naming:**
 
-1. **Geometry knob → named presets the filesystem declares.** Each
-   filesystem enumerates its supported geometries (ADFS: `s`/`m`/`l`/`e`/
-   `f`/`hd`; DFS: `40t-ss`/`80t-ss`/`40t-ds`/`80t-ds`, interleave folded
-   in), shown by `describe-filesystem` and chosen with `--geometry`.
-   Presets are memorable, filesystem-scoped, and double as the `disc
-   create` vocabulary; raw `--sides`/`--tracks`/`--interleave` can be a
-   power-user fallback. *Recommend presets primary.*
+1. **Geometry → a filesystem-declared *grammar*, not a flat preset
+   list.** A fixed preset enum works for floppies (ADFS `s`/`m`/`l`;
+   DFS's small tracks×sides×density×interleave space) but **not** for
+   hard discs, whose cylinders/heads/SPT/sector-size space is
+   open-ended and can't be pre-enumerated. So `--geometry <spec>` is
+   interpreted by the chosen filesystem's grammar, admitting both **named
+   presets** (the enumerable, common cases — shown by
+   `describe-filesystem`, used by `disc create`) and a **parameterised
+   form** (e.g. `cylinders=…,heads=…,spt=…`). The grammars are likely
+   shared **geometry kinds** — `floppy` (tracks/sides/density/interleave)
+   and `winchester` (cylinders/heads/spt/sector-size) — that a filesystem
+   declares it accepts, rather than each reinventing one. `probe()`
+   proposes a geometry in the same grammar (#2); the resolved target is a
+   discimage `DiscFormat`.
 2. **`probe()` proposes the geometry.** The filesystem is the only thing
    that can read its own capacity hints (DFS catalogue sector count, ADFS
    disc record), so `probe()` returns the filesystem identity *plus* a
    candidate geometry and any byte-identical ambiguities — not a separate
-   blind geometry step. The discimage layer supplies the geometry *types*;
-   the filesystem says which fit. *Recommend probe-proposes.*
+   blind geometry step. The discimage layer supplies the geometry *kinds*;
+   the filesystem says which point fits.
 3. **"Family" (DFS) is not a code concept.** `acorn-dfs` and `watford-dfs`
-   are independent filesystems; "DFS" is at most a documentation grouping.
-   No family enum; today's `FilingSystem` enum is replaced by the
-   filesystem-key vocabulary plus partition selectors. *Recommend drop.*
+   are independent filesystems — historically related, implementation may
+   share code, but independent at the user level. "DFS" is at most a
+   documentation grouping. No family enum; today's `FilingSystem` enum is
+   replaced by the filesystem-key vocabulary plus partition selectors.
