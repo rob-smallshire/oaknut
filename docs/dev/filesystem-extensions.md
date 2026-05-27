@@ -97,11 +97,17 @@ A `Filesystem` extension owns:
   with what confidence, evidence, and (when determinable) which variant.
 - **open(reader, variant?) → mount** — return a mounted handle.
 - **variants** — the set it supports, for detection and for `--format`.
-- **capabilities** — the operations it supports, against a *common*
-  interface (list, stat, read-bytes, write-bytes, mkdir, …) so the CLI
-  can dispatch generically. Acorn-specific metadata (load/exec, access
-  bits, boot option) is an *optional* capability a foreign filesystem
-  like FAT simply doesn't advertise.
+- **capabilities** — a **small core** every filesystem provides (list,
+  stat, read-bytes, write-bytes, exists) plus **opt-in capability
+  protocols** the CLI feature-detects (`runtime_checkable`):
+  `HierarchicalDirectories`, `AcornMetadata` (load/exec/access),
+  `BootOption`/title, `UserDatabase` (AFS passwords/quota), `RegionHost`
+  (reserves partition regions). A command like `disc afs-users` becomes
+  "available when the mount provides `UserDatabase`", not "when fs is
+  AFS". Foreign filesystems (FAT) simply don't advertise the Acorn
+  protocols. (Decided — see §10.)
+- **path interpretation** — the filesystem **owns its own in-partition
+  path grammar and depth**; the CLI parses none of it (§6).
 
 The contract must be Acorn-agnostic so FAT fits without contortion.
 
@@ -167,6 +173,20 @@ resolves to a *partition* among those detection found; it does not assert
 or force a format (that is `--format`). This keeps the familiar
 `adfs:`/`afs:` working and survives the zero/one/many case.
 
+**One namespace; the filesystem owns its levels.** Partitions are only
+the *top* of the path — the levels at which the filesystem identity is
+established. Below a partition the mounted filesystem owns the grammar
+*and the depth*, and the CLI parses none of it. So depth varies by
+filesystem: flat `$.NAME` (DFS), a directory tree `$.dir.name`
+(ADFS/AFS), `\dir\name` (FAT) — and Opus DDOS adds up to **eight volumes
+(A–H) above its directories**, `D.F.JAZZ` meaning volume D, directory F,
+file JAZZ. A DDOS volume is just a deeper hierarchy level *within* one
+filesystem (homogeneous), not a partition (where the filesystem can
+change) — so it needs no new concept, only `HierarchicalDirectories`
+plus filesystem-owned paths. (Opus DDOS manual:
+`docs/dev/manuals/Opus_DDOS.pdf`; not implemented yet, noted for
+generality.)
+
 ## 7. CLI dispatch
 
 Commands resolve `(partition, filesystem, variant)` — partition from the
@@ -217,19 +237,19 @@ Incremental, behind a stable interface — no big bang:
   detail. It stays the motivating example for host-plus-foreign-tail
   recursion and the Acorn-agnostic contract, so the design must *admit*
   it later without rework; we build nothing FAT now.
+- **Capability interface = small core + opt-in protocols** (§4), not one
+  fat ABC. The filesystem also owns its in-partition path grammar/depth,
+  so Opus DDOS volumes are just a deeper hierarchy level, not a new
+  concept.
 
 **Still open:**
 
-1. **Capability interface shape** — one fat `Filesystem` ABC, or a small
-   core plus opt-in capability mixins (Acorn metadata, hierarchical dirs,
-   region-host)? FAT and DFS having very different surfaces argues for
-   mixins.
-2. **`--format` granularity** — force just the filesystem, or also the
+1. **`--format` granularity** — force just the filesystem, or also the
    **variant** (DFS single-vs-double/interleave, ADFS S/M/L)? Per selected
    partition or whole-image?
-3. **Where variant detection lives** — `probe()` returns a variant, vs a
+2. **Where variant detection lives** — `probe()` returns a variant, vs a
    separate variant-resolution step once the filesystem is known.
-4. **Is "family" (DFS) a code concept** at all, or just a loose grouping
+3. **Is "family" (DFS) a code concept** at all, or just a loose grouping
    of `--format` values? Leaning: not first-class.
-5. **Coordinator home** — does `identify()` (the cascade + result tree)
+4. **Coordinator home** — does `identify()` (the cascade + result tree)
    stay in `oaknut.identify`, or move into the unified `oaknut.filesystem`?
