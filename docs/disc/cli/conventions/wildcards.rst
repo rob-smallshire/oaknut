@@ -55,11 +55,10 @@ the pattern against both the bare filename and the fully-qualified
 
 On a partitioned hard disc, ``disc find`` emits each result with the
 partition selector that would feed back unchanged into a follow-up
-command::
+command:
 
-   $ disc find 'scsi0.dat:Library'
-   adfs:$.Apps.Library
-   afs:$.Library1
+.. cli-example:: partition_selectors
+   :section: find
 
 
 Filename length matters

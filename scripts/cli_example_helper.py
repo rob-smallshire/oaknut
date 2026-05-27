@@ -9,14 +9,19 @@ Two kinds of invocation:
 
 - :func:`show` — what the reader is meant to learn. Prints ``$ cmd``
   on its own line, then the command's combined stdout/stderr. For
-  ``disc`` subcommands that produce tabular reports (``ls``,
-  ``tree``, ``stat``, ``cat``, ``type``, ``find``, ``freemap``,
-  ``afs-plan``, ``afs-users``), ``--as display`` is appended to the
-  *executed* command so the reader sees the boxed terminal rendering
-  rather than the pipe-style TSV that ``asyoulikeit`` would otherwise
-  auto-pick when stdout is captured. The ``--as display`` flag is
-  stripped from the printed ``$ command`` line so the reader copies
-  exactly what they should type.
+  ``disc`` subcommands that produce tabular reports (``ls``, ``tree``,
+  ``stat``, ``find``, ``afs plan``, ``afs users``, …), ``--as display``
+  is appended to the *executed* command so the reader sees the boxed
+  terminal rendering rather than the pipe-style TSV that ``asyoulikeit``
+  would otherwise auto-pick when stdout is captured. The ``--as
+  display`` flag is stripped from the printed ``$ command`` line so the
+  reader copies exactly what they should type. A non-zero exit fails the
+  build, so a stale or broken example cannot slip through.
+
+- :func:`show_error` — the same transcript, but for a command that is
+  *meant* to fail (demonstrating an error message). Here a zero exit is
+  the build failure: an error example that stops erroring is itself
+  drift.
 
 - :func:`silent` — recipe scaffolding the reader is meant to ignore.
   Builds fixtures, populates discs, etc. The command runs but its
@@ -43,6 +48,7 @@ from pathlib import Path
 
 __all__ = [
     "show",
+    "show_error",
     "silent",
     "section",
     "in_tmp_dir",
@@ -84,8 +90,9 @@ CORPUS_ROOT = REPO_ROOT / "tests" / "data" / "images" / "cookbook"
 # therefore benefit from `--as display` at capture time. Subcommands
 # not on this list (`cat`, `type`, `freemap`, `put`, `get`, `cp`,
 # `mv`, `rm`, `mkdir`, `chmod`, `lock`, `unlock`, `set-*`,
-# `validate`, `create`, `compact`, `expand`, `afs-init`, `afs-merge`,
-# etc.) reject `--as` — passing it would make the recipe fail.
+# `validate`, `create`, `compact`, `dfs expand`, `afs init`,
+# `afs merge`, etc.) reject `--as` — passing it would make the recipe
+# fail. Grouped subcommands are spelled with the space (`afs plan`).
 _REPORT_SUBCOMMANDS = frozenset(
     {
         "ls",
@@ -96,8 +103,8 @@ _REPORT_SUBCOMMANDS = frozenset(
         "opt",
         "get-load",
         "get-exec",
-        "afs-plan",
-        "afs-users",
+        "afs plan",
+        "afs users",
         "list-reports",
         "describe-report",
         "list-report-formats",
@@ -124,7 +131,10 @@ def _needs_display_flag(command: str) -> bool:
         return False
     if len(tokens) < 2 or tokens[0] != "disc":
         return False
-    return tokens[1] in _REPORT_SUBCOMMANDS
+    # A top-level subcommand (`ls`) or a grouped one (`afs plan`).
+    if tokens[1] in _REPORT_SUBCOMMANDS:
+        return True
+    return len(tokens) >= 3 and f"{tokens[1]} {tokens[2]}" in _REPORT_SUBCOMMANDS
 
 
 def _capture_env() -> dict[str, str]:
@@ -177,6 +187,47 @@ def show(command: str) -> None:
             f"  exit code: {result.returncode}\n"
         )
         sys.exit(result.returncode)
+
+
+def show_error(command: str, *, returncode: int | None = None) -> None:
+    """Run a command expected to *fail* and show its ``$ command``/output.
+
+    For demonstrating error messages — the inverse of :func:`show`. The
+    transcript is captured identically (``$ command`` then combined
+    stdout/stderr), but the success condition is reversed: the command
+    must exit non-zero, so an error example that stops erroring fails the
+    docs build. Pass *returncode* to require a specific exit code rather
+    than just "any failure". No ``--as display`` is appended — errors
+    print as plain text.
+    """
+    lines = command.splitlines() or [""]
+    print(f"$ {lines[0]}")
+    for cont in lines[1:]:
+        print(f"> {cont}")
+
+    result = subprocess.run(
+        command,
+        shell=True,
+        capture_output=True,
+        text=True,
+        env=_capture_env(),
+    )
+    if result.stdout:
+        sys.stdout.write(result.stdout)
+    if result.stderr:
+        sys.stdout.write(result.stderr)
+
+    failed_as_expected = (
+        result.returncode != 0 if returncode is None else result.returncode == returncode
+    )
+    if not failed_as_expected:
+        expected = "non-zero" if returncode is None else str(returncode)
+        sys.stderr.write(
+            f"\nerror example did not fail as expected: {command}\n"
+            f"  expected exit: {expected}\n"
+            f"  actual exit: {result.returncode}\n"
+        )
+        sys.exit(1)
 
 
 def silent(command: str) -> None:

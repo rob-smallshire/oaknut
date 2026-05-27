@@ -133,12 +133,8 @@ partition (see the :doc:`glossary </glossary>` for the longer note).
 To address a particular partition, prefix the ``PATH_SPEC`` with the
 partition's *filesystem key* and a colon:
 
-.. code-block:: sh
-
-   disc ls scsi0.dat                       # default: the best-identified partition
-   disc ls 'scsi0.dat:adfs:$'              # the ADFS partition
-   disc ls 'scsi0.dat:afs:$'               # the AFS partition
-   disc cat 'scsi0.dat:afs:$.Library.Free'
+.. cli-example:: partition_selectors
+   :section: selectors
 
 The selector is the registered filesystem key — ``acorn-dfs``,
 ``watford-dfs``, ``adfs``, ``afs``, … — the same vocabulary
@@ -156,18 +152,16 @@ host, so a combined ADFS+AFS disc opens at its ADFS root). Because
 detection reads the bytes, an image whose extension is missing or wrong
 still opens correctly.
 
-If nothing recognises the image, the error lists what is installed::
+If nothing recognises the image, the error lists what is installed:
 
-   $ disc ls some.image
-   Error: no installed filesystem recognises 'some.image'. Installed
-   filesystems: acorn-dfs, adfs, afs, watford-dfs, zip. Force one with
-   --filesystem if you know what it is.
+.. cli-example:: partition_selectors
+   :section: unrecognised
 
 If you ask for a partition the image does not have, the error names the
-ones it does::
+ones it does:
 
-   $ disc ls 'games.ssd:adfs:$'
-   Error: no such partition 'adfs'; available: acorn-dfs
+.. cli-example:: partition_selectors
+   :section: wrong_partition
 
 
 Acorn star-aliases
