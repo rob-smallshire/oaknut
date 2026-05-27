@@ -69,6 +69,25 @@ class TestMount:
             assert len(mount.user_names()) >= 1
 
 
+class TestWritableRegion:
+    def test_write_through_hard_disc_window_persists(self, tmp_path):
+        # l3fs is a linear hard disc, so its AFS tail is a writable window
+        # onto the host: a write reaches the file. Copy the fixture so the
+        # mutation is isolated, write through the window, reopen, verify.
+        import shutil
+
+        image_filepath = tmp_path / "l3fs.dat"
+        shutil.copy(_L3FS_DAT, image_filepath)
+
+        afs = create_filesystem("afs")
+        with reader_for(image_filepath, writable=True) as reader:
+            mount = afs.open(_afs_region_reader(reader))
+            mount.write_bytes("$.NEWFILE", b"persisted")
+        with reader_for(image_filepath) as reader:
+            mount = afs.open(_afs_region_reader(reader))
+            assert mount.read_bytes("$.NEWFILE") == b"persisted"
+
+
 class TestNotAfs:
     def test_non_afs_region_returns_none(self):
         # A buffer whose sector 1 is not AFS0 is not AFS.

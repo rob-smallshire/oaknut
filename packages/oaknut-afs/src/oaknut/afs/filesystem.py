@@ -53,9 +53,14 @@ def _read_info(reader: ImageReader) -> InfoSector | None:
 
 
 def _window_disc(reader: ImageReader) -> UnifiedDisc:
-    """A UnifiedDisc over the whole region in *reader*, as linear sectors."""
+    """A UnifiedDisc over the whole region in *reader*, as linear sectors.
+
+    Built over the reader's ``buffer()``, so when the region is a writable
+    window onto the host (an AFS tail on a hard disc) AFS's mutations
+    reach the file; on a read-only reader it is a private copy.
+    """
     sectors = reader.size // BYTES_PER_SECTOR
-    buffer = memoryview(bytearray(reader.read(0, sectors * BYTES_PER_SECTOR)))
+    buffer = reader.buffer()[: sectors * BYTES_PER_SECTOR]
     spec = SurfaceSpec(
         num_tracks=1,
         sectors_per_track=sectors,
@@ -119,10 +124,15 @@ class _AFSMount:
 
     def write_bytes(self, path: str, data: bytes) -> None:
         self._navigate(path).write_bytes(data)
+        # AFS buffers writes; flush so the mutation reaches the (live)
+        # disc buffer immediately, matching the write-through DFS/ADFS
+        # mounts. On a writable host window this reaches the file.
+        self._afs.flush()
 
     # -- HierarchicalDirectories --
     def make_directory(self, path: str) -> None:
         self._navigate(path).mkdir()
+        self._afs.flush()
 
     # -- AcornMetadata --
     def acorn_meta(self, path: str) -> AcornMeta:

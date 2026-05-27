@@ -204,6 +204,19 @@ class GeometryGrammar:
             ) from exc
 
 
+def _is_linear(geometry: Geometry) -> bool:
+    """Whether logical sector *i* maps to byte ``i*256`` contiguously.
+
+    True for a hard disc's single linear surface; false for an
+    interleaved double-sided floppy whose two sides alternate per track.
+    """
+    specs = geometry.surface_specs
+    if len(specs) != 1:
+        return False
+    spec = specs[0]
+    return spec.num_tracks == 1 and spec.track_zero_offset_bytes == 0
+
+
 def region_reader(
     reader: ImageReader,
     geometry: Geometry | None,
@@ -212,16 +225,25 @@ def region_reader(
 ) -> ImageReader:
     """A reader over the *logical sector* run ``[start_sector, +num_sectors)``.
 
-    When *geometry* is ``None`` the host is linear (a hard disc, a
-    single-sided floppy), so the run is a contiguous byte window — cheap,
-    no copy. When a geometry is given (an interleaved floppy), the run's
-    bytes are scattered, so the host's :class:`~oaknut.discimage.UnifiedDisc`
-    is used to read the logical sectors into a de-interleaved, contiguous
-    view that a tail filesystem can address linearly.
+    When the host is linear (no geometry, or a single contiguous surface
+    — a hard disc), the run is a byte window that shares the backing, so
+    it is cheap and inherits the host's writability: writes to a tail
+    filesystem reach the file. When the host is interleaved (a
+    double-sided floppy) the run's bytes are scattered, so the host's
+    :class:`~oaknut.discimage.UnifiedDisc` de-interleaves them into a
+    contiguous view a tail filesystem can address linearly. That view is
+    a copy, so it is read-only: writing to an interleaved reserved region
+    would not reach the file, and is refused rather than silently lost.
     """
-    if geometry is None:
+    if geometry is None or _is_linear(geometry):
         return reader.window(
             start_sector * BYTES_PER_SECTOR, num_sectors * BYTES_PER_SECTOR
+        )
+    if reader.writable:
+        raise GeometryError(
+            "writing to an interleaved reserved region (e.g. AFS on a "
+            "double-sided floppy) is not yet supported; the region must be "
+            "de-interleaved into a copy, which cannot write back live"
         )
     buffer = memoryview(bytearray(reader.read(0, reader.size)))
     disc = UnifiedDisc(DiscImage(buffer, list(geometry.surface_specs)))
