@@ -107,13 +107,15 @@ A `Filesystem` extension owns:
 - **identity** — a stable hyphenated key (`acorn-dfs`, `watford-dfs`,
   `adfs`, `afs`, `fat`, …) and a human description (its docstring, as
   today). This key is the **single shared vocabulary**: `disc
-  list-formats` enumerates the keys, `disc describe-format <key>`
-  explains one, and `--format <key>` forces one. One name, three uses —
-  no parallel lists to keep in sync.
+  list-filesystems` enumerates the keys, `disc describe-filesystem
+  <key>` explains one, and `--filesystem <key>` forces one. One name,
+  three uses — no parallel lists to keep in sync.
 - **probe(reader) → Identification?** — does this region look like me,
   with what confidence, evidence, and (when determinable) which variant.
 - **open(reader, variant?) → mount** — return a mounted handle.
-- **variants** — the set it supports, for detection and for `--format`.
+- **geometries & sub-formats** — the set it supports, declared for
+  detection, for `--geometry` selection, and for `disc create` (which
+  needs a geometry as a required input).
 - **capabilities** — a **small core** every filesystem provides (list,
   stat, read-bytes, write-bytes, exists) plus **opt-in capability
   protocols** the CLI feature-detects (`runtime_checkable`):
@@ -172,13 +174,13 @@ hd.dat:                   list the image's partitions
   isn't there is a "no such partition" error — not a format clash. The
   old "image is ADFS format; cannot access as DFS" errors disappear.
 - **Format is automatic**, resolved per partition by detection.
-- **Forcing format is a command option, outside the path** — `--format
-  <key>` names a *filesystem* from the shared vocabulary (`--format
-  watford-dfs`). **Geometry is a separate layer**, so the rare
-  unresolvable physical choices (sides, interleave, track count) are a
-  *separate* knob — `--sides`/`--interleave`, or a named geometry — not
-  part of `--format`. Both layers also apply to `disc create`, where the
-  geometry is a required input (you cannot "create ADFS" without it).
+- **Forcing is a command option, outside the path.** `--filesystem
+  <key>` names a filesystem from the shared vocabulary (`--filesystem
+  watford-dfs`); `--geometry <preset>` selects the physical layout. They
+  are separate options because they are separate layers — there is
+  deliberately **no `--format`** conflating them. Both also apply to
+  `disc create`, where the geometry is a required input (you cannot
+  "create ADFS" without one).
 
 **Partition naming (decided).** A partition is selected by the
 *filesystem type it was detected as*, optionally suffixed with an index:
@@ -187,7 +189,7 @@ people mean by "the ADFS partition" or "the AFS partition", without
 needing to know the low-level layout — and `afs.0:`, `afs.1:`, … select
 the Nth (zero-based) when a disc holds several of one type. The name
 resolves to a *partition* among those detection found; it does not assert
-or force a format (that is `--format`). This keeps the familiar
+or force a filesystem (that is `--filesystem`). This keeps the familiar
 `adfs:`/`afs:` working and survives the zero/one/many case.
 
 **One namespace; the filesystem owns its levels.** Partitions are only
@@ -206,9 +208,10 @@ generality.)
 
 ## 7. CLI dispatch
 
-Commands resolve `(partition, filesystem, variant)` — partition from the
-path, filesystem+variant from detection or `--format` — then dispatch
-against the common `Filesystem` capability interface. The existing
+Commands resolve `(partition, filesystem, geometry)` — partition from
+the path, filesystem and geometry from detection or `--filesystem` /
+`--geometry` — then dispatch against the common `Filesystem` capability
+interface. The existing
 `if fs is DFS / elif ADFS / elif AFS` branches throughout the CLI migrate
 onto that interface incrementally; AFS-only commands become "commands
 gated on the AFS capability set".
@@ -234,7 +237,9 @@ Incremental, behind a stable interface — no big bang:
 - **B. Recursive partitions.** Add `ImageReader` windowing; ADFS exposes
   its tail region; fold the AFS prober into a tail-probe; populate
   `contained`.
-- **C. Addressing.** Prefix = partition only; add `--format`; retire the
+- **C. Addressing.** Prefix = partition only; add `--filesystem` /
+  `--geometry`; rename the phase-2 `list-formats`/`describe-format`
+  commands to `list-filesystems`/`describe-filesystem`; retire the
   format-assertion semantics and their errors.
 - **D. CLI on the interface.** Migrate command logic off the
   per-filing-system branches onto the capability interface.
@@ -264,22 +269,38 @@ Incremental, behind a stable interface — no big bang:
   sides, interleave, density — the discimage `DiscFormat`) sits beneath
   the *filesystem* (logical structure). The vague "variant" is dropped:
   it splits into geometry (modelled, orthogonal) and a filesystem's own
-  internal logical detail (§3). A mount is `(geometry, filesystem)`;
-  `--format` forces the filesystem, geometry is a separate knob.
+  internal logical detail (§3). A mount is `(geometry, filesystem)`.
+- **Terminology: `filesystem` and `geometry`, never `format`.** The two
+  layers are the only nouns. `--filesystem <key>` forces the filesystem,
+  `--geometry <preset>` the layout — there is **no `--format` option**
+  (an option named "format" that set a filesystem was exactly the
+  vagueness we are removing). "format" may appear in prose only as
+  shorthand for the complete `(filesystem, geometry)` tuple. The phase-2
+  `list-formats`/`describe-format` commands become
+  `list-filesystems`/`describe-filesystem`.
+- **No separate coordinator package.** `oaknut.identify` folds into
+  `oaknut.filesystem`: the base package houses the `Filesystem` contract,
+  capability protocols, `Partition`, the `Identification` tree, **and**
+  the `identify()` coordinator. Format packages depend on it and register
+  filesystems on the `oaknut.filesystem` axis. (`oaknut-identify` becomes
+  `oaknut-filesystem`; namespace `oaknut.prober` → `oaknut.filesystem`.)
 
-**Still open:**
+**Recommended resolutions (for red-pen):**
 
-1. **Geometry knob spelling** — how does the user force the byte-identical
-   geometry choices (sides/interleave/track-count) and choose geometry for
-   `disc create`? Separate flags (`--sides`, `--interleave`), or named
-   geometry presets (`adfs-l`, `dfs-80t-ss`) the filesystem declares and
-   `disc list-formats` could show alongside its filesystems?
-2. **Where geometry detection lives** — the interface is cleanly layered
-   (filesystem reads logical sectors), but *detecting* geometry leans on
-   filesystem hints (a DFS catalogue's sector count, an ADFS disc record).
-   Does `probe()` propose the geometry, or is there a separate
-   geometry-resolution step seeded by the filesystem's hints?
-3. **Is "family" (DFS) a code concept** at all, or just a loose grouping
-   of `--format` values? Leaning: not first-class.
-4. **Coordinator home** — does `identify()` (the cascade + result tree)
-   stay in `oaknut.identify`, or move into the unified `oaknut.filesystem`?
+1. **Geometry knob → named presets the filesystem declares.** Each
+   filesystem enumerates its supported geometries (ADFS: `s`/`m`/`l`/`e`/
+   `f`/`hd`; DFS: `40t-ss`/`80t-ss`/`40t-ds`/`80t-ds`, interleave folded
+   in), shown by `describe-filesystem` and chosen with `--geometry`.
+   Presets are memorable, filesystem-scoped, and double as the `disc
+   create` vocabulary; raw `--sides`/`--tracks`/`--interleave` can be a
+   power-user fallback. *Recommend presets primary.*
+2. **`probe()` proposes the geometry.** The filesystem is the only thing
+   that can read its own capacity hints (DFS catalogue sector count, ADFS
+   disc record), so `probe()` returns the filesystem identity *plus* a
+   candidate geometry and any byte-identical ambiguities — not a separate
+   blind geometry step. The discimage layer supplies the geometry *types*;
+   the filesystem says which fit. *Recommend probe-proposes.*
+3. **"Family" (DFS) is not a code concept.** `acorn-dfs` and `watford-dfs`
+   are independent filesystems; "DFS" is at most a documentation grouping.
+   No family enum; today's `FilingSystem` enum is replaced by the
+   filesystem-key vocabulary plus partition selectors. *Recommend drop.*
