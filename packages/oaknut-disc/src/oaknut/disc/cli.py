@@ -1582,16 +1582,7 @@ def cp(src: str, dst: str, force: bool, recursive: bool) -> None:
     access attributes are mapped best-effort (DFS only has the locked
     bit).
     """
-    src_image, src_path = parse_file_spec(src)
-    dst_image, dst_path = parse_file_spec(dst)
-    _cp_dispatch(
-        src_image,
-        src_path,
-        dst_image,
-        dst_path,
-        force=force,
-        recursive=recursive,
-    )
+    _cp_dispatch(src, dst, force=force, recursive=recursive)
 
 
 # ---------------------------------------------------------------------------
@@ -1791,129 +1782,108 @@ def _walk_post_order(node) -> Iterator:
     yield node
 
 
-def _cp_dispatch(
-    src_image: Path,
-    src_spec: str,
-    dst_image: Path,
-    dst_spec: str,
-    *,
-    force: bool,
-    recursive: bool,
-) -> None:
+def _cp_dispatch(src_spec: str, dst_spec: str, *, force: bool, recursive: bool) -> None:
     """Orchestrate a cp invocation.
 
-    Handles single-file copy (the existing cases), wildcard
-    expansion on the source, recursive directory copy, and the
-    combination of the two.  Source data is buffered in memory
-    during traversal so the source image is only held open while
-    we're reading; the destination is opened fresh afterwards.
+    Handles single-file copy, wildcard expansion on the source,
+    recursive directory copy, and their combinations, across any pair of
+    filesystems. The source is opened read-only and the destination
+    writable; source data is buffered into the copy plan during the read
+    pass, so an in-image copy (same file both sides) reads the original
+    bytes before any write.
     """
-    src_fs, src_bare = resolve_path(src_image, src_spec)
-    dst_fs, dst_bare_raw = resolve_path(dst_image, dst_spec)
-    dst_bare, dst_slash = _dst_ends_slash(dst_bare_raw)
+    with (
+        resolve_mount(src_spec) as src_resolved,
+        resolve_mount(dst_spec, writable=True) as dst_resolved,
+    ):
+        src_mount = src_resolved.mount
+        dst_mount = dst_resolved.mount
+        dst_bare, dst_slash = _dst_ends_slash(dst_resolved.path)
 
-    src_glob = _has_wildcard(src_bare)
-
-    # --- Read phase: open source, collect one or more copy items. ---
-    with open_image(src_image, src_fs) as src_handle:
         items = _collect_copy_items(
-            src_handle,
-            src_bare,
-            src_fs,
+            src_mount,
+            src_resolved.path,
+            dst_mount=dst_mount,
             dst_bare=dst_bare,
             dst_slash=dst_slash,
-            dst_image=dst_image,
-            dst_fs=dst_fs,
             recursive=recursive,
-            src_glob=src_glob,
         )
 
-    # --- Write phase: open destination, apply each item. ---
-    with open_image(dst_image, dst_fs) as dst_handle:
         for item in items:
-            kind = item["kind"]
-            dst_path = item["dst"]
-            if kind == "mkdir":
-                _ensure_dir_chain(dst_handle, dst_path, dst_fs)
-                continue
-            if kind == "file":
-                _write_copy_item(dst_handle, dst_fs, dst_path, item, force)
-        if dst_fs is FilingSystem.AFS:
-            dst_handle.flush()
+            if item["kind"] == "mkdir":
+                _ensure_dir_chain(dst_mount, item["dst"])
+            elif item["kind"] == "file":
+                _write_copy_item(dst_mount, item["dst"], item, force)
 
 
 def _collect_copy_items(
-    src_handle,
+    src_mount,
     src_bare: str,
-    src_fs: FilingSystem,
     *,
+    dst_mount,
     dst_bare: str,
     dst_slash: bool,
-    dst_image: Path,
-    dst_fs: FilingSystem,
     recursive: bool,
-    src_glob: bool,
 ) -> list[dict]:
     """Walk the source side once, returning a plan of copy items.
 
     Each item is either ``{"kind": "mkdir", "dst": path}`` or
     ``{"kind": "file", "dst": path, "data": bytes, "load": int,
-    "exec": int, "access": Access}``.  The plan is linear; the
-    write phase is free to execute items in order.
+    "exec": int, "access": int}``. The plan is linear; the write phase
+    executes items in order.
     """
-    from oaknut.file.access_mapping import access_from_stat
+    from oaknut.filesystem import HierarchicalDirectories
 
     items: list[dict] = []
+    src_is_dfs = not isinstance(src_mount, HierarchicalDirectories)
+    dst_is_dfs = not isinstance(dst_mount, HierarchicalDirectories)
 
-    src_is_dfs = src_fs is FilingSystem.DFS
-
-    if src_glob:
-        matches = _expand_glob(src_handle, src_bare, src_fs)
+    if _has_wildcard(src_bare):
+        matches = _expand_glob(src_mount, src_bare)
         if not matches:
             raise click.ClickException(f"no matches for {src_bare!r}")
-        dst_must_be_dir = len(matches) > 1 or any(m.is_dir() for m in matches)
-        _check_dst_is_dir(dst_image, dst_fs, dst_bare, dst_slash, required=dst_must_be_dir)
+        dst_must_be_dir = len(matches) > 1 or any(
+            src_mount.stat(m).is_dir for m in matches
+        )
+        _check_dst_is_dir(dst_mount, dst_bare, dst_slash, required=dst_must_be_dir)
         if dst_must_be_dir or dst_slash:
             items.append({"kind": "mkdir", "dst": dst_bare})
         for match in matches:
-            leaf = match.name
+            entry = src_mount.stat(match)
             # DFS "$" globbed as a parent? Flatten onto dst_bare.
-            transparent = src_is_dfs and match.is_dir() and leaf == "$"
-            sub_dst = dst_bare if transparent else _join(dst_bare, leaf)
-            if match.is_dir():
+            transparent = src_is_dfs and entry.is_dir and entry.name == "$"
+            sub_dst = dst_bare if transparent else _join(dst_bare, entry.name)
+            if entry.is_dir:
                 if not recursive:
                     click.echo(
-                        f"skipping directory {match.path} (use -r to copy recursively)",
+                        f"skipping directory {match} (use -r to copy recursively)",
                         err=True,
                     )
                     continue
-                _walk_tree(match, sub_dst, items, src_is_dfs=src_is_dfs)
+                _walk_tree(src_mount, match, sub_dst, items, src_is_dfs=src_is_dfs)
             else:
-                items.append(_file_item(match, sub_dst, access_from_stat(match.stat())))
-        if dst_fs is FilingSystem.DFS:
+                items.append(_file_item(src_mount, match, sub_dst))
+        if dst_is_dfs:
             _validate_dfs_items(items)
         return items
 
     # Non-glob: single source.
-    source = _navigate(src_handle, src_bare, src_fs)
-    if not source.exists():
+    if not src_mount.exists(src_bare):
         raise click.ClickException(f"path not found: {src_bare}")
+    source = src_mount.stat(src_bare)
 
-    # Figure out whether the destination should be treated as a
-    # target directory (and we copy source "into" it) or as the
-    # full target path.
-    dst_is_dir_like = dst_slash or _path_is_existing_dir(dst_image, dst_fs, dst_bare)
+    # Figure out whether the destination should be treated as a target
+    # directory (copy source "into" it) or as the full target path.
+    dst_is_dir_like = dst_slash or _path_is_existing_dir(dst_mount, dst_bare)
 
-    if source.is_dir():
+    if source.is_dir:
         if not recursive:
             raise click.ClickException(f"'{src_bare}' is a directory (use -r to copy recursively)")
-        # A source that IS the root (ADFS ``$``, AFS ``$``, or the
-        # DFS virtual root whose children are directory letters) is
-        # transparent on the copy — there's no sensible subdirectory
-        # to wrap it in on the destination; its contents should land
-        # at dst_bare directly.  The DFS ``$`` directory behaves the
-        # same way because it's the DFS default directory and maps
-        # one-for-one onto ADFS ``$`` during round-trip (issue #6).
+        # A source that IS the root (ADFS/AFS ``$``, or the DFS virtual
+        # root whose children are directory letters) is transparent —
+        # there's no sensible subdirectory to wrap it in; its contents
+        # land at dst_bare directly. The DFS ``$`` directory behaves the
+        # same (it maps one-for-one onto ADFS ``$``, issue #6).
         transparent = source.name in ("", "$")
         if transparent:
             rel = dst_bare
@@ -1925,8 +1895,8 @@ def _collect_copy_items(
         else:
             rel = dst_bare
             items.append({"kind": "mkdir", "dst": rel})
-        _walk_tree(source, rel, items, src_is_dfs=src_is_dfs)
-        if dst_fs is FilingSystem.DFS:
+        _walk_tree(src_mount, src_bare, rel, items, src_is_dfs=src_is_dfs)
+        if dst_is_dfs:
             _validate_dfs_items(items)
         return items
 
@@ -1936,27 +1906,27 @@ def _collect_copy_items(
         rel = _join(dst_bare, source.name)
     else:
         rel = dst_bare
-    items.append(_file_item(source, rel, access_from_stat(source.stat())))
-    if dst_fs is FilingSystem.DFS:
+    items.append(_file_item(src_mount, src_bare, rel))
+    if dst_is_dfs:
         _validate_dfs_items(items)
     return items
 
 
-def _expand_glob(handle, src_bare: str, fs: FilingSystem) -> list:
-    """Return children of the literal parent matching the leaf pattern.
+def _expand_glob(src_mount, src_bare: str) -> list[str]:
+    """Paths of children of the literal parent matching the leaf pattern.
 
-    Only the leaf component of ``src_bare`` may contain wildcards;
-    the parent directory path is navigated literally.
+    Only the leaf component of ``src_bare`` may contain wildcards; the
+    parent directory path is navigated literally.
     """
     parent, leaf_pattern = _split_parent_leaf(src_bare)
     if _has_wildcard(parent):
         raise click.ClickException(
             f"wildcards in directory components are not supported: {src_bare!r}"
         )
-    parent_node = _navigate(handle, parent, fs)
-    if not parent_node.exists() or not parent_node.is_dir():
+    parent = parent or src_mount.path_root()
+    if not src_mount.exists(parent) or not src_mount.stat(parent).is_dir:
         raise click.ClickException(f"parent directory of glob does not exist: {parent or '$'!r}")
-    return [c for c in parent_node.iterdir() if _match_acorn(leaf_pattern, c.name)]
+    return [e.path for e in src_mount.iter_entries(parent) if _match_acorn(leaf_pattern, e.name)]
 
 
 def _map_dst_path_for_dfs(path: str) -> str:
@@ -2018,41 +1988,46 @@ def _validate_dfs_items(items: list[dict]) -> None:
     items[:] = _remap_items_for_dfs(items)
 
 
-def _walk_tree(dir_node, dst_prefix: str, items: list[dict], *, src_is_dfs: bool = False) -> None:
-    """Depth-first walk: record each directory with a mkdir item
-    and each file with a file item.
+def _walk_tree(
+    src_mount, dir_path: str, dst_prefix: str, items: list[dict], *, src_is_dfs: bool
+) -> None:
+    """Depth-first walk of *dir_path*: a mkdir item per directory, a file
+    item per file.
 
-    When the source filesystem is DFS, a child directory named
-    ``$`` is treated as transparent — its contents are placed at
-    ``dst_prefix`` rather than under a ``$`` subdirectory — so the
-    DFS default directory collapses onto the destination root
-    during a DFS → ADFS/AFS copy.  DFS's other directory letters
-    (A..Z) become subdirectories on the destination as usual.
+    When the source is DFS, a child directory named ``$`` is transparent
+    — its contents land at ``dst_prefix`` rather than under a ``$``
+    subdirectory — so the DFS default directory collapses onto the
+    destination root in a DFS → ADFS/AFS copy. DFS's other letters become
+    subdirectories as usual.
     """
-    from oaknut.file.access_mapping import access_from_stat
-
-    for child in dir_node.iterdir():
-        # DFS "$" directory is transparent on the walk — see rule
-        # for issue #6 DFS↔ADFS round-trip.
-        if src_is_dfs and child.is_dir() and child.name == "$":
-            _walk_tree(child, dst_prefix, items, src_is_dfs=src_is_dfs)
+    for child in src_mount.iter_entries(dir_path):
+        if src_is_dfs and child.is_dir and child.name == "$":
+            _walk_tree(src_mount, child.path, dst_prefix, items, src_is_dfs=src_is_dfs)
             continue
         rel = _join(dst_prefix, child.name)
-        if child.is_dir():
+        if child.is_dir:
             items.append({"kind": "mkdir", "dst": rel})
-            _walk_tree(child, rel, items, src_is_dfs=src_is_dfs)
+            _walk_tree(src_mount, child.path, rel, items, src_is_dfs=src_is_dfs)
         else:
-            items.append(_file_item(child, rel, access_from_stat(child.stat())))
+            items.append(_file_item(src_mount, child.path, rel))
 
 
-def _file_item(source, rel_dst: str, access) -> dict:
-    """Build a ``file`` copy item."""
+def _file_item(src_mount, src_path: str, rel_dst: str) -> dict:
+    """Build a ``file`` copy item, reading data and metadata from the mount."""
+    from oaknut.filesystem import AcornMetadata
+
+    load = exec_addr = access = 0
+    if isinstance(src_mount, AcornMetadata):
+        meta = src_mount.acorn_meta(src_path)
+        load = meta.load_address or 0
+        exec_addr = meta.exec_address or 0
+        access = int(meta.access)
     return {
         "kind": "file",
         "dst": rel_dst,
-        "data": source.read_bytes(),
-        "load": getattr(source.stat(), "load_address", 0),
-        "exec": getattr(source.stat(), "exec_address", 0),
+        "data": src_mount.read_bytes(src_path),
+        "load": load,
+        "exec": exec_addr,
         "access": access,
     }
 
@@ -2063,20 +2038,16 @@ def _join(parent: str, leaf: str) -> str:
     return f"{parent}.{leaf}"
 
 
-def _path_is_existing_dir(image: Path, fs: FilingSystem, bare: str) -> bool:
-    """Is *bare* an existing directory on the destination image?"""
-    with open_image(image, fs) as handle:
-        node = _navigate(handle, bare, fs)
-        return node.exists() and node.is_dir()
+def _path_is_existing_dir(mount, bare: str) -> bool:
+    """Is *bare* an existing directory on the destination mount?"""
+    return mount.exists(bare) and mount.stat(bare).is_dir
 
 
-def _check_dst_is_dir(
-    image: Path, fs: FilingSystem, bare: str, slash: bool, *, required: bool
-) -> None:
+def _check_dst_is_dir(mount, bare: str, slash: bool, *, required: bool) -> None:
     """Enforce the "destination must be a directory" rule."""
     if slash:
         return
-    if _path_is_existing_dir(image, fs, bare):
+    if _path_is_existing_dir(mount, bare):
         return
     if required:
         raise click.ClickException(
@@ -2086,47 +2057,45 @@ def _check_dst_is_dir(
         )
 
 
-def _ensure_dir_chain(dst_handle, bare: str, fs: FilingSystem) -> None:
+def _ensure_dir_chain(dst_mount, bare: str) -> None:
     """Create *bare* and any missing parents on the destination.
 
-    DFS is flat — no true subdirectories exist to create.  The call
-    is a no-op there; writes later prompt directory-letter
-    registration automatically.
+    A flat catalogue (DFS) has no true subdirectories to create — the
+    call is a no-op there; a write later registers the directory letter
+    implicitly.
     """
-    if fs is FilingSystem.DFS:
+    from oaknut.filesystem import HierarchicalDirectories
+
+    if not isinstance(dst_mount, HierarchicalDirectories):
         return
     if not bare or bare == "$":
         return
-    target = _navigate(dst_handle, bare, fs)
-    target.mkdir(parents=True, exist_ok=True)
+    dst_mount.make_directory(bare, parents=True, exist_ok=True)
 
 
-def _write_copy_item(
-    dst_handle, dst_fs: FilingSystem, dst_path: str, item: dict, force: bool
-) -> None:
+def _write_copy_item(dst_mount, dst_path: str, item: dict, force: bool) -> None:
     """Write a file item to its destination path."""
+    from oaknut.file import AcornMeta
+    from oaknut.filesystem import AcornMetadata, HierarchicalDirectories
 
-    # Make sure the parent exists for hierarchical destinations.
-    # On DFS there are no real directories to create — the letter
-    # prefix comes into being implicitly when a file claims it — so
-    # we only need the ensure pass on ADFS/AFS.  Paths have already
-    # been validated against DFS's shape by the collect stage.
+    # Ensure the parent exists for hierarchical destinations; on a flat
+    # catalogue the letter prefix appears when a file claims it (and the
+    # collect stage has already validated the path against DFS's shape).
     parent, _leaf = _split_parent_leaf(dst_path)
-    if parent and dst_fs is not FilingSystem.DFS:
-        _ensure_dir_chain(dst_handle, parent, dst_fs)
+    if parent and isinstance(dst_mount, HierarchicalDirectories):
+        _ensure_dir_chain(dst_mount, parent)
 
-    dest = _navigate(dst_handle, dst_path, dst_fs)
-    if dest.exists():
+    if dst_mount.exists(dst_path):
         if not force:
             raise click.ClickException(f"'{dst_path}' already exists (use -f to overwrite)")
-        dest.unlink()
+        dst_mount.remove(dst_path, force=True)
 
-    dest.write_bytes(
-        item["data"],
-        load_address=item["load"],
-        exec_address=item["exec"],
-        access=item["access"],
-    )
+    dst_mount.write_bytes(dst_path, item["data"])
+    if isinstance(dst_mount, AcornMetadata):
+        dst_mount.set_acorn_meta(
+            dst_path,
+            AcornMeta(load_address=item["load"], exec_address=item["exec"], access=item["access"]),
+        )
 
 
 _alias("*COPY", "cp")

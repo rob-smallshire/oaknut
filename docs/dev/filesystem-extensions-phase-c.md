@@ -88,50 +88,28 @@ The mutating commands needed the mount to *persist*. Chosen approach
   context-managed `ResolvedMount` that owns the live mapping (released on
   exit); read-only mounts close at once.
 
-### Remaining write-command work — un-stub `set_acorn_meta` first
+### Write / mutate commands — migrated
 
-`Mount.write_bytes(path, data)` carries no load/exec, so writing an Acorn
-file with addresses = `write_bytes` + `set_acorn_meta`. `set_acorn_meta`
-is the keystone and is still stubbed (`NotImplementedError`) on all three
-mounts — un-stub it (DFS lock-bit only; ADFS/AFS full) and put/import/
-chmod/lock/set-load/set-exec all open up. `rm`/`mv` additionally need
-`remove`/`rename` (new core or capability methods); `mkdir`'s `-p`/
-`--title` need a richer `make_directory`; `title`/`opt` need setters on
-the Titled/Bootable capabilities.
+Capability additions made: `set_acorn_meta` un-stubbed (keystone — DFS
+lock-bit only, ADFS/AFS full); `remove`/`rename` on the Mount core;
+richer `make_directory` (parents/exist_ok/title); `Mount.join`; `Titled.
+set_title`, `Bootable.set_boot_option`, and a new `DirectoryTitled`
+capability. A mount-based wildcard/recursive target iterator
+(`_iter_target_paths`) and a shared `_mutate_access` helper back the
+metadata commands. Access turned out wire-canonical at the mount
+boundary (AFS exposes a translated wire `Access`; its `chmod` maps wire
+back to AFS bits), so no separate access-representation layer was needed.
 
-- [x] `set_acorn_meta` on DFS/ADFS/AFS mounts (keystone) — round-trip tested.
-- [x] `put`  (`write_bytes` + `set_acorn_meta`, writable context).
-
-A mount-based wildcard/recursive target iterator now exists
-(`_iter_target_paths` + `_expand_target_paths` + `_walk_post_order_mount`).
-
-- [x] `set-load` / `set-exec` (one address via `set_acorn_meta`).
-- [ ] `import` (bulk `write_bytes` + `set_acorn_meta`; reuses `make_directory`).
-
-Need a filesystem-aware **access representation** first (issue #12: AFS's
-access byte layout differs from the wire form, so generic `Access.L`
-bit-twiddling corrupts AFS). Add e.g. a canonical `locked: bool` to the
-capability, or a dedicated `Lockable`:
-
-- [ ] `chmod` (access), `lock` / `unlock`
-
-Still need new capability surface:
-
-- [ ] `rm` / `mv` — `remove` / `rename` (new core or capability methods)
-- [ ] `mkdir` — richer `make_directory` (`-p` parents/exist_ok, ADFS `--title`)
-- [ ] `title` / `opt` — setters on the Titled / Bootable capabilities
-- [ ] `import`
-- [ ] `cp`
-- [ ] `mv`
-- [ ] `rm`
-- [ ] `mkdir`  (gate on HierarchicalDirectories)
-- [ ] `chmod`  (gate on AcornMetadata)
-- [ ] `lock` / `unlock`
-- [ ] `title`  (gate on DiscMetadata)
-- [ ] `opt`    (gate on DiscMetadata)
-- [ ] `set-load` / `set-exec`  (gate on AcornMetadata; needs metadata write-back)
-- [ ] `compact`
-- [ ] `expand`
+- [x] `put`  (`write_bytes` + `set_acorn_meta`)
+- [x] `import`  (bulk; reuses `make_directory` / `join`)
+- [x] `set-load` / `set-exec`
+- [x] `chmod`, `lock` / `unlock`  (wire `Access` via `_mutate_access`)
+- [x] `rm` / `mv`  (`remove(force=)` / `rename`)
+- [x] `mkdir`  (gated on `HierarchicalDirectories`)
+- [x] `title`  (`Titled` / `DirectoryTitled`)
+- [x] `opt`    (`Bootable`)
+- [ ] `cp`  (cross-image copy: read mount → write mount)
+- [ ] `compact` / `expand`  (filesystem-specific admin; likely Phase E)
 
 ## Creation / format-specific admin (likely deferred to Phase E)
 
