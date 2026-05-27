@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from pathlib import Path
 
 import click
 from oaknut.filesystem import (
@@ -28,6 +29,7 @@ from oaknut.filesystem import (
     filesystem_names,
     identify,
     reader_for,
+    region_reader,
 )
 
 from .cli_paths import parse_file_spec
@@ -47,6 +49,7 @@ class ResolvedMount:
     path: str
     filesystem: str
     partition: str
+    image: Path
 
 
 def split_selector(in_image_path: str) -> tuple[str | None, str]:
@@ -79,18 +82,28 @@ def resolve_mount(
                 filesystem, force_geometry, proposed.geometry if proposed else None
             )
             mount = filesystem.open(reader, geometry)
-        return ResolvedMount(mount, in_path, force_filesystem, force_filesystem)
+        return ResolvedMount(mount, in_path, force_filesystem, force_filesystem, image_filepath)
 
     candidates = identify(image_filepath)
     if not candidates:
         raise click.ClickException(_unrecognised_message(image_filepath.name))
-    chosen, region = _select(candidates[0], selector)
+    host = candidates[0]
+    chosen, region = _select(host, selector)
     filesystem = create_filesystem(chosen.filesystem)
     with reader_for(image_filepath) as reader:
-        region_reader = reader if region is None else reader.window(region.offset, region.length)
+        if region is None:
+            region_view = reader
+        else:
+            # A reserved region is a logical-sector run of the host; read
+            # it through the host geometry (de-interleaving a floppy).
+            region_view = region_reader(
+                reader, host.geometry, region.start_sector, region.num_sectors
+            )
         geometry = _geometry(filesystem, force_geometry, chosen.geometry)
-        mount = filesystem.open(region_reader, geometry)
-    return ResolvedMount(mount, in_path, chosen.filesystem, chosen.partition.selector)
+        mount = filesystem.open(region_view, geometry)
+    return ResolvedMount(
+        mount, in_path, chosen.filesystem, chosen.partition.selector, image_filepath
+    )
 
 
 def _select(

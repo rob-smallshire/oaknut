@@ -57,21 +57,31 @@ def _propose_geometry(size: int) -> Geometry | None:
     return None
 
 
-def _reserved_regions(reader: ImageReader) -> tuple[Partition, ...]:
-    """The tail region ADFS reserves beyond its own extent, if any.
+# The old map records a reserved-tail info-sector pointer at &F6 of
+# sector 0 (the gap after the 82-entry free-start table). It is the
+# logical sector of the tail filesystem's info sector; the region
+# begins one sector before it. Zero on a disc with no reserved tail.
+# This is ADFS's own reservation record — read without interpreting
+# what occupies the region (AFS, DRDOS-FAT, …). Works for both a hard
+# disc (tail beyond the ADFS extent) and a floppy (tail carved within).
+_RESERVED_TAIL_POINTER_OFFSET = 0xF6
 
-    ADFS records its own size in the old map (total sectors at
-    0xFC–0xFE). When the image is larger, the excess tail is a reserved
-    region another filesystem occupies — found here without knowing
-    which, so ADFS stays ignorant of AFS/FAT.
-    """
+
+def _reserved_regions(reader: ImageReader) -> tuple[Partition, ...]:
+    """The tail region ADFS reserves for another filesystem, in logical sectors."""
     sector0 = reader.read(0, BYTES_PER_SECTOR)
     if len(sector0) < BYTES_PER_SECTOR:
         return ()
-    total_sectors = sector0[0xFC] | (sector0[0xFD] << 8) | (sector0[0xFE] << 16)
-    reserved_offset = total_sectors * BYTES_PER_SECTOR
-    if 0 < reserved_offset < reader.size:
-        return (Partition("", reserved_offset, reader.size - reserved_offset),)
+    pointer = int.from_bytes(
+        sector0[_RESERVED_TAIL_POINTER_OFFSET : _RESERVED_TAIL_POINTER_OFFSET + 4],
+        "little",
+    )
+    if pointer <= 0:
+        return ()
+    start_sector = pointer - 1
+    total_sectors = reader.size // BYTES_PER_SECTOR
+    if 0 < start_sector < total_sectors:
+        return (Partition("", start_sector, total_sectors - start_sector),)
     return ()
 
 

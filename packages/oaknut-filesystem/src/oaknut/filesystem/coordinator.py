@@ -13,6 +13,7 @@ from __future__ import annotations
 from dataclasses import replace
 
 import stevedore
+from oaknut.discimage import BYTES_PER_SECTOR
 from oaknut.extension import (
     create_extension,
     describe_extension,
@@ -25,8 +26,9 @@ from oaknut.filesystem.filesystem import (
     FILESYSTEM_NAMESPACE,
     Filesystem,
 )
+from oaknut.filesystem.geometry import Geometry, region_reader
 from oaknut.filesystem.identification import Confidence, Identification, Partition
-from oaknut.filesystem.reader import ImageSource, reader_for
+from oaknut.filesystem.reader import ImageReader, ImageSource, reader_for
 
 __all__ = [
     "identify",
@@ -91,14 +93,14 @@ def identify(
     with reader_for(source, suffix_hint=suffix_hint) as reader:
         active = _registered_filesystems() if filesystems is None else filesystems
         candidates = _probe_region(reader, active, reader.suffix)
-        whole = Partition(name="", offset=0, length=reader.size)
+        whole = Partition(name="", start_sector=0, num_sectors=reader.size // BYTES_PER_SECTOR)
         return [
             replace(c, partition=replace(whole, name=c.filesystem)) for c in candidates
         ]
 
 
 def _probe_region(
-    reader, filesystems: dict[str, Filesystem], suffix: str | None
+    reader: ImageReader, filesystems: dict[str, Filesystem], suffix: str | None
 ) -> list[Identification]:
     """Ranked candidates for the region in *reader*, recursion attached."""
     candidates: list[Identification] = []
@@ -108,28 +110,39 @@ def _probe_region(
             continue
         if identification.reserved_regions:
             identification = identification.with_contained(
-                _recurse_regions(identification.reserved_regions, reader, filesystems)
+                _recurse_regions(
+                    identification.reserved_regions,
+                    reader,
+                    identification.geometry,
+                    filesystems,
+                )
             )
         candidates.append(identification)
     return _rank(candidates, filesystems, suffix)
 
 
 def _recurse_regions(
-    regions: tuple[Partition, ...], reader, filesystems: dict[str, Filesystem]
+    regions: tuple[Partition, ...],
+    reader: ImageReader,
+    geometry: Geometry | None,
+    filesystems: dict[str, Filesystem],
 ) -> tuple[Identification, ...]:
-    """Identify each reserved region; name partitions by what's found there."""
+    """Identify each reserved region; name partitions by what's found there.
+
+    Each region is read through the host's geometry (de-interleaved when
+    the host is an interleaved floppy) so the tail filesystem sees a
+    contiguous logical view.
+    """
     contained: list[Identification] = []
     counts: dict[str, int] = {}
     for region in regions:
-        window = reader.window(region.offset, region.length)
-        sub = _probe_region(window, filesystems, None)
+        sub_reader = region_reader(reader, geometry, region.start_sector, region.num_sectors)
+        sub = _probe_region(sub_reader, filesystems, None)
         if sub:
-            best = sub[0]
-            name = best.filesystem
+            name = sub[0].filesystem
             index = counts.get(name, 0)
             counts[name] = index + 1
-            partition = Partition(name, region.offset, region.length, index)
-            contained.append(replace(best, partition=partition))
+            contained.append(replace(sub[0], partition=replace(region, name=name, index=index)))
         else:
             index = counts.get("", 0)
             counts[""] = index + 1
@@ -138,7 +151,7 @@ def _recurse_regions(
                     filesystem="",
                     confidence=Confidence.POSSIBLE,
                     evidence=("reserved region; no installed filesystem recognised it",),
-                    partition=Partition("", region.offset, region.length, index),
+                    partition=replace(region, name="", index=index),
                 )
             )
     return tuple(contained)

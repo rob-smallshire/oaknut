@@ -46,6 +46,7 @@ from oaknut.filesystem.geometry import (
     Geometry,
     GeometryGrammar,
     floppy_geometry,
+    region_reader,
     winchester_geometry,
 )
 from oaknut.filesystem.identification import Confidence, Identification, Partition
@@ -73,6 +74,7 @@ __all__ = [
     "GeometryGrammar",
     "floppy_geometry",
     "winchester_geometry",
+    "region_reader",
     "FLOPPY",
     "WINCHESTER",
     # identification

@@ -51,7 +51,7 @@ class TestProbe:
         adfs = next(r for r in results if r.filesystem == "adfs")
         assert len(adfs.contained) == 1
         region = adfs.contained[0]
-        assert region.partition.offset == 67584
+        assert region.partition.start_sector == 264  # logical sector of the tail
         assert region.filesystem == "afs"
 
 

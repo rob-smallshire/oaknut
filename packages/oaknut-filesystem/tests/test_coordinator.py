@@ -65,11 +65,11 @@ def _fss(*filesystems):
 class TestSingleRegion:
     def test_match_yields_one_candidate(self):
         fss = _fss(_FakeFilesystem("acorn-dfs", magic=b"DFS!"))
-        results = identify(b"DFS!" + b"\x00" * 100, filesystems=fss)
+        results = identify(b"DFS!" + b"\x00" * 508, filesystems=fss)  # 512 bytes = 2 sectors
         assert len(results) == 1
         assert results[0].filesystem == "acorn-dfs"
-        # The whole image is the candidate's partition.
-        assert results[0].partition == Partition("acorn-dfs", 0, 104)
+        # The whole image (in logical sectors) is the candidate's partition.
+        assert results[0].partition == Partition("acorn-dfs", 0, 2)
 
     def test_no_match_is_empty(self):
         fss = _fss(_FakeFilesystem("acorn-dfs", magic=b"DFS!"))
@@ -104,47 +104,45 @@ class TestRanking:
 
 class TestRecursion:
     def test_reserved_region_is_identified_and_named(self):
-        # Host matches at 0 and reserves bytes [512, 512+256); the tail
-        # filesystem's magic sits there.
+        # Host matches at sector 0 and reserves logical sectors [2, 4);
+        # the tail filesystem's magic sits at the region's first byte.
         image = bytearray(1024)
         image[0:4] = b"HOST"
-        image[512:516] = b"TAIL"
+        image[512:516] = b"TAIL"  # sector 2
         host = _FakeFilesystem(
             "adfs",
             magic=b"HOST",
             confidence=Confidence.STRONG,
-            reserved=(Partition("", 512, 256),),
+            reserved=(Partition("", 2, 2),),
         )
         tail = _FakeFilesystem("afs", magic=b"TAIL", confidence=Confidence.CERTAIN)
         results = identify(bytes(image), filesystems=_fss(host, tail))
         assert results[0].filesystem == "adfs"
         (contained,) = results[0].contained
         assert contained.filesystem == "afs"
-        # The contained partition is named by what was found, with the
-        # host-relative offset preserved.
-        assert contained.partition == Partition("afs", 512, 256, 0)
+        # The contained partition is named by what was found, keeping the
+        # host-relative logical-sector run.
+        assert contained.partition == Partition("afs", 2, 2, 0)
 
     def test_unidentified_reserved_region_is_reported(self):
         image = bytearray(1024)
         image[0:4] = b"HOST"
         # Nothing recognisable at the reserved region.
-        host = _FakeFilesystem(
-            "adfs", magic=b"HOST", reserved=(Partition("", 512, 256),)
-        )
+        host = _FakeFilesystem("adfs", magic=b"HOST", reserved=(Partition("", 2, 2),))
         results = identify(bytes(image), filesystems=_fss(host))
         (contained,) = results[0].contained
         assert contained.identified is False
-        assert contained.partition.offset == 512
+        assert contained.partition.start_sector == 2
 
     def test_two_tail_partitions_of_one_kind_are_indexed(self):
         image = bytearray(2048)
         image[0:4] = b"HOST"
-        image[512:516] = b"TAIL"
-        image[1024:1028] = b"TAIL"
+        image[512:516] = b"TAIL"  # sector 2
+        image[1024:1028] = b"TAIL"  # sector 4
         host = _FakeFilesystem(
             "adfs",
             magic=b"HOST",
-            reserved=(Partition("", 512, 256), Partition("", 1024, 256)),
+            reserved=(Partition("", 2, 2), Partition("", 4, 4)),
         )
         tail = _FakeFilesystem("afs", magic=b"TAIL")
         results = identify(bytes(image), filesystems=_fss(host, tail))

@@ -21,9 +21,14 @@ _L3FS_DAT = REFERENCE_IMAGES_DIRPATH / "l3fs" / "l3fs-wfsinit.dat"
 
 
 def _afs_region_reader(reader):
-    """The window over l3fs's AFS region, via the ADFS host's reserved region."""
-    region = create_filesystem("adfs").probe(reader).reserved_regions[0]
-    return reader.window(region.offset, region.length)
+    """A reader over l3fs's AFS region, via the ADFS host's reserved region."""
+    from oaknut.filesystem import region_reader
+
+    identification = create_filesystem("adfs").probe(reader)
+    region = identification.reserved_regions[0]
+    return region_reader(
+        reader, identification.geometry, region.start_sector, region.num_sectors
+    )
 
 
 class TestRegistration:

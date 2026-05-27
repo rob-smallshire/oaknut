@@ -35,7 +35,12 @@ class Confidence(enum.IntEnum):
 
 @dataclass(frozen=True)
 class Partition:
-    """A named byte region of an image.
+    """A named *logical sector* region within its parent.
+
+    Sectors, not bytes, so a region of an interleaved host (an ADFS-L
+    floppy's AFS tail) is contiguous: the bytes are scattered, but the
+    logical sectors are a run. The coordinator materialises the bytes
+    through the host's geometry (see :func:`region_reader`).
 
     *name* is the user-facing selector label — the filesystem the region
     is identified as (``"adfs"``, ``"afs"``) — and *index* disambiguates
@@ -43,8 +48,8 @@ class Partition:
     """
 
     name: str
-    offset: int
-    length: int
+    start_sector: int
+    num_sectors: int
     index: int = 0
 
     @property

@@ -92,7 +92,12 @@ class _AFSMount:
                 target = target / component
         return target
 
+    def _is_root(self, path: str) -> bool:
+        return path.strip() in ("", "$")
+
     def stat(self, path: str) -> Entry:
+        if self._is_root(path):
+            return Entry(name="$", is_dir=True, length=0, path="$")
         target = self._navigate(path)
         st = target.stat()
         return Entry(
@@ -107,7 +112,7 @@ class _AFSMount:
             )
 
     def exists(self, path: str) -> bool:
-        return self._navigate(path).exists()
+        return self._is_root(path) or self._navigate(path).exists()
 
     def read_bytes(self, path: str) -> bytes:
         return self._navigate(path).read_bytes()

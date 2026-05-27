@@ -19,12 +19,15 @@ from dataclasses import dataclass, field
 
 from oaknut.discimage import (
     BYTES_PER_SECTOR,
+    DiscImage,
     SurfaceSpec,
+    UnifiedDisc,
     interleaved_double_sided_specs,
     sequential_double_sided_specs,
     single_sided_spec,
 )
 from oaknut.filesystem.exceptions import GeometryError
+from oaknut.filesystem.reader import ImageReader
 
 #: The parameterised geometry kinds the built-in grammar understands.
 FLOPPY = "floppy"
@@ -199,3 +202,28 @@ class GeometryGrammar:
             raise GeometryError(
                 f"hard-disc geometry needs integer cylinders, heads, spt: {exc}"
             ) from exc
+
+
+def region_reader(
+    reader: ImageReader,
+    geometry: Geometry | None,
+    start_sector: int,
+    num_sectors: int,
+) -> ImageReader:
+    """A reader over the *logical sector* run ``[start_sector, +num_sectors)``.
+
+    When *geometry* is ``None`` the host is linear (a hard disc, a
+    single-sided floppy), so the run is a contiguous byte window — cheap,
+    no copy. When a geometry is given (an interleaved floppy), the run's
+    bytes are scattered, so the host's :class:`~oaknut.discimage.UnifiedDisc`
+    is used to read the logical sectors into a de-interleaved, contiguous
+    view that a tail filesystem can address linearly.
+    """
+    if geometry is None:
+        return reader.window(
+            start_sector * BYTES_PER_SECTOR, num_sectors * BYTES_PER_SECTOR
+        )
+    buffer = memoryview(bytearray(reader.read(0, reader.size)))
+    disc = UnifiedDisc(DiscImage(buffer, list(geometry.surface_specs)))
+    view = disc.sector_range(start_sector, num_sectors)
+    return ImageReader(bytes(view[:]))
