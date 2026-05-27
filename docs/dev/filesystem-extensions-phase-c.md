@@ -99,8 +99,21 @@ chmod/lock/set-load/set-exec all open up. `rm`/`mv` additionally need
 `--title` need a richer `make_directory`; `title`/`opt` need setters on
 the Titled/Bootable capabilities.
 
-- [ ] `set_acorn_meta` on DFS/ADFS/AFS mounts (keystone)
-- [ ] `put`  (`write_bytes` + `set_acorn_meta`)
+- [x] `set_acorn_meta` on DFS/ADFS/AFS mounts (keystone) — round-trip tested.
+- [x] `put`  (`write_bytes` + `set_acorn_meta`, writable context).
+
+Now unblocked (use `set_acorn_meta`; need a mount-based wildcard/recursive
+target iterator — the find walk is the model):
+
+- [ ] `chmod` (access), `lock` / `unlock` (L bit)
+- [ ] `set-load` / `set-exec` (one address)
+- [ ] `import` (bulk `write_bytes` + `set_acorn_meta`)
+
+Still need new capability surface:
+
+- [ ] `rm` / `mv` — `remove` / `rename` (new core or capability methods)
+- [ ] `mkdir` — richer `make_directory` (`-p` parents/exist_ok, ADFS `--title`)
+- [ ] `title` / `opt` — setters on the Titled / Bootable capabilities
 - [ ] `import`
 - [ ] `cp`
 - [ ] `mv`
