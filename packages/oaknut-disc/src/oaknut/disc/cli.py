@@ -33,10 +33,7 @@ from .cli_identify import (
     identify_command,
     list_formats_command,
 )
-from .cli_paths import (
-    FilingSystem,
-    parse_file_spec,
-)
+from .cli_paths import parse_file_spec
 from .mount import partition_selectors, resolve_mount
 
 # ---------------------------------------------------------------------------
@@ -119,20 +116,14 @@ def _alias(acorn_name: str, unix_name: str) -> None:
 
 
 def _format_access(access) -> str:
-    """Format an access attribute for display.
+    """Format a wire-form ``oaknut.file.Access`` for display.
 
-    DFS and ADFS use the wire-form ``oaknut.file.Access`` bit layout
-    and are rendered via :func:`oaknut.file.format_access_text`.  AFS
-    stores its access byte in a different bit layout
-    (:class:`oaknut.afs.access.AFSAccess`) — passing that through the
-    wire renderer would silently produce wrong strings (issue #12),
-    so an ``AFSAccess`` is routed through its own ``to_string``.
+    The mounts expose access canonically as a wire-form byte (each
+    filesystem maps its own on-disc layout to it — AFS included, issue
+    #12), so the CLI formats one representation through the wire renderer.
     """
-    from oaknut.afs.access import AFSAccess
     from oaknut.file import format_access_text
 
-    if isinstance(access, AFSAccess):
-        return access.to_string()
     return format_access_text(access)
 
 
@@ -159,69 +150,10 @@ def _access_byte_hex(stat_obj) -> str:
 # ---------------------------------------------------------------------------
 
 
-def _detect_dfs_format(image_filepath: Path):
-    """Detect DFS disc format from image size, by content not name.
-
-    Sidedness is the one thing the bytes cannot reveal: a single-sided
-    80-track image and an interleaved 40-track double-sided image are
-    the same length, so the ``.dsd`` extension is treated as the only
-    signal for double-sided. Everything else — ``.ssd``, or an image
-    whose *content* identified as DFS under a missing or wrong
-    extension — is read single-sided, sized to the file (so short or
-    padded images open too).
-    """
-    from oaknut.dfs import (
-        ACORN_DFS_40T_DOUBLE_SIDED_INTERLEAVED,
-        ACORN_DFS_40T_SINGLE_SIDED,
-        ACORN_DFS_80T_DOUBLE_SIDED_INTERLEAVED,
-        ACORN_DFS_80T_SINGLE_SIDED,
-    )
-    from oaknut.discimage import DiscFormat
-    from oaknut.discimage.formats import SurfaceSpec
-
-    size = image_filepath.stat().st_size
-    if size % 256 != 0:
-        raise click.ClickException(f"DFS image size ({size}) is not a multiple of 256 bytes")
-
-    if image_filepath.suffix.lower() == ".dsd":
-        if size <= 204800:
-            return ACORN_DFS_40T_DOUBLE_SIDED_INTERLEAVED
-        return ACORN_DFS_80T_DOUBLE_SIDED_INTERLEAVED
-
-    if size == 102400:
-        return ACORN_DFS_40T_SINGLE_SIDED
-    if size == 204800:
-        return ACORN_DFS_80T_SINGLE_SIDED
-    # Non-standard (short or padded) single-sided image — build a format
-    # sized to the file. The catalogue type is always Acorn DFS here.
-    total_sectors = size // 256
-    return DiscFormat(
-        surface_specs=[
-            SurfaceSpec(
-                num_tracks=1,
-                sectors_per_track=total_sectors,
-                bytes_per_sector=256,
-                track_zero_offset_bytes=0,
-                track_stride_bytes=size,
-            )
-        ],
-        catalogue_name="acorn-dfs",
-    )
-
-
 # ---------------------------------------------------------------------------
-# Image openers — context managers returning (fs_handle, filing_system)
+# Image openers — context managers for the format-specific admin commands
+# (create / generate-dsc / afs-*) that do not fit the generic mount path.
 # ---------------------------------------------------------------------------
-
-
-@contextmanager
-def _open_dfs(image_filepath: Path) -> Iterator:
-    """Open image as DFS, yielding the DFS handle."""
-    from oaknut.dfs import DFS
-
-    disc_format = _detect_dfs_format(image_filepath)
-    with DFS.from_file(image_filepath, disc_format) as dfs:
-        yield dfs
 
 
 @contextmanager
@@ -250,13 +182,6 @@ def _adfs_from_file(image_filepath: Path) -> Iterator:
 
 
 @contextmanager
-def _open_adfs(image_filepath: Path) -> Iterator:
-    """Open image as ADFS, yielding the ADFS handle."""
-    with _adfs_from_file(image_filepath) as adfs:
-        yield adfs
-
-
-@contextmanager
 def _open_afs(image_filepath: Path) -> Iterator:
     """Open image as ADFS, grab the AFS partition, yield it.
 
@@ -269,26 +194,6 @@ def _open_afs(image_filepath: Path) -> Iterator:
         adfs.open_afs_partition() as afs,
     ):
         yield afs
-
-
-@contextmanager
-def open_image(
-    image_filepath: Path,
-    fs: FilingSystem,
-) -> Iterator:
-    """Open an image for the given filing system.
-
-    Yields the appropriate handle (DFS, ADFS, or AFS).
-    """
-    if fs is FilingSystem.DFS:
-        with _open_dfs(image_filepath) as handle:
-            yield handle
-    elif fs is FilingSystem.ADFS:
-        with _open_adfs(image_filepath) as handle:
-            yield handle
-    elif fs is FilingSystem.AFS:
-        with _open_afs(image_filepath) as handle:
-            yield handle
 
 
 @contextmanager
