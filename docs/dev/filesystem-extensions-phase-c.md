@@ -44,16 +44,29 @@ reports its reserved tail via the &F6 pointer; the AFS mount root
 - [x] `ls` — on the substrate; capability dispatch (Titled/FreeSpace/
   AcornMetadata); DFS nameless-root model; works DFS/ADFS/AFS incl.
   AFS-on-interleaved-floppy.
-- [ ] `tree`
-- [ ] `stat`
+- [x] `tree` — whole-image tree from `partition_selectors()` + generic
+  `Mount.iter_entries`; partitions labelled by selector.
 - [ ] `cat`
 - [ ] `type`
 - [ ] `find`
-- [ ] `freemap`
-- [ ] `validate`
 - [ ] `get`
 - [ ] `export`
 - [ ] `get-load` / `get-exec`  (gate on AcornMetadata)
+
+### Needs a structural-summary capability decision (deferred)
+
+`stat` (disc summary), `freemap` and `validate` lean on the *physical*
+CHS geometry (cylinders/heads/spt) and per-partition cylinder ranges,
+free-space-map structure, and file counts. The generic `Geometry`
+deliberately linearises CHS into one winchester surface and exposes only
+`image_size`/`num_sectors`, so this detail is not reconstructable from
+the current contract. These need a deliberate capability addition (a
+`DiscSummary`/`Sized` surface and/or CHS-on-`Geometry`) before they can
+migrate faithfully — grouped here rather than half-migrated.
+
+- [ ] `stat` (disc-summary half; file-metadata half is contract-clean)
+- [ ] `freemap`
+- [ ] `validate`
 
 ## Write / mutate commands
 

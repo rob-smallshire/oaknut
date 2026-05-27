@@ -335,42 +335,6 @@ def _navigate_afs(afs, bare_path: str):
     return target
 
 
-def _image_has_afs(image_filepath: "Path") -> bool:
-    """Does the image carry an AFS partition alongside its ADFS one?
-
-    Cheap probe: opens the image as ADFS and checks ``afs_partition``.
-    Returns ``False`` for every non-ADFS format.
-    """
-    fs = detect_filing_system(image_filepath)
-    if fs is not FilingSystem.ADFS:
-        return False
-    with _open_adfs(image_filepath) as adfs:
-        return adfs.has_afs_partition
-
-
-def _iter_search_partitions(
-    image_filepath: "Path",
-    requested_fs: FilingSystem,
-    prefix_present: bool,
-) -> Iterator[FilingSystem]:
-    """Yield each partition a find-style command should search.
-
-    When the caller provided an explicit filing-system prefix
-    (``adfs:``, ``afs:``, ``dfs:``), yield just that.  Otherwise, on
-    a multi-partition image (ADFS + AFS on the same file), yield
-    both partitions so a no-prefix ``disc find`` covers the whole
-    image.  Single-partition images always yield one.
-    """
-    if prefix_present:
-        yield requested_fs
-        return
-    if requested_fs is FilingSystem.ADFS and _image_has_afs(image_filepath):
-        yield FilingSystem.ADFS
-        yield FilingSystem.AFS
-        return
-    yield requested_fs
-
-
 # ---------------------------------------------------------------------------
 # Click group
 # ---------------------------------------------------------------------------
@@ -879,17 +843,17 @@ def cat(file_spec: str) -> None:
     writes bytes verbatim, so files using Acorn ``\\r`` line endings
     will render unreadably on a Unix terminal.
     """
-    image, path = parse_file_spec(file_spec)
+    _image, path = parse_file_spec(file_spec)
     if not path:
         raise click.UsageError("PATH is required")
-    fs, bare = resolve_path(image, path)
-    with open_image(image, fs) as handle:
-        target = _navigate(handle, bare, fs)
-        if not target.exists():
-            raise FSError(f"path not found: {bare}", exit_code=ExitCode.OS_FILE)
-        if target.is_dir():
-            raise FSError(f"'{bare}' is a directory", exit_code=ExitCode.OS_FILE)
-        sys.stdout.buffer.write(target.read_bytes())
+    resolved = resolve_mount(file_spec)
+    mount = resolved.mount
+    target = resolved.path or mount.path_root()
+    if not mount.exists(target):
+        raise FSError(f"path not found: {target}", exit_code=ExitCode.OS_FILE)
+    if mount.stat(target).is_dir:
+        raise FSError(f"'{target}' is a directory", exit_code=ExitCode.OS_FILE)
+    sys.stdout.buffer.write(mount.read_bytes(target))
 
 
 # ---------------------------------------------------------------------------
@@ -946,18 +910,18 @@ def type_(file_spec: str, line_endings: str) -> None:
 
     Acorn alias: *TYPE.
     """
-    image, path = parse_file_spec(file_spec)
+    _image, path = parse_file_spec(file_spec)
     if not path:
         raise click.UsageError("PATH is required")
-    fs, bare = resolve_path(image, path)
-    with open_image(image, fs) as handle:
-        target = _navigate(handle, bare, fs)
-        if not target.exists():
-            raise FSError(f"path not found: {bare}", exit_code=ExitCode.OS_FILE)
-        if target.is_dir():
-            raise FSError(f"'{bare}' is a directory", exit_code=ExitCode.OS_FILE)
-        data = _translate_line_endings(target.read_bytes(), line_endings.lower())
-        sys.stdout.buffer.write(data)
+    resolved = resolve_mount(file_spec)
+    mount = resolved.mount
+    target = resolved.path or mount.path_root()
+    if not mount.exists(target):
+        raise FSError(f"path not found: {target}", exit_code=ExitCode.OS_FILE)
+    if mount.stat(target).is_dir:
+        raise FSError(f"'{target}' is a directory", exit_code=ExitCode.OS_FILE)
+    data = _translate_line_endings(mount.read_bytes(target), line_endings.lower())
+    sys.stdout.buffer.write(data)
 
 
 _alias("*TYPE", "type")
@@ -982,20 +946,32 @@ def find(file_spec: str):
     """
     from asyoulikeit.tabular_data import Report, Reports, TableContent
 
-    from .cli_paths import parse_prefix
+    from .mount import split_selector
 
     image, pattern = parse_file_spec(file_spec)
     if not pattern:
         raise click.UsageError("PATTERN is required")
-    prefix_present = parse_prefix(pattern)[0] is not None
-    fs, bare_pattern = resolve_path(image, pattern)
-    emit_prefix = _image_has_afs(image) if not prefix_present else True
+    selector, bare_pattern = split_selector(pattern)
+
+    if selector is not None:
+        # An explicit prefix scopes the search to that one partition; the
+        # mount resolution validates it ("no such partition" otherwise).
+        selectors = [selector]
+        emit_prefix = True
+    else:
+        # No prefix: search every identified partition. A multi-partition
+        # image labels each hit with its selector so a result feeds back
+        # into a follow-up command unchanged; a single-partition image
+        # keeps bare paths.
+        selectors = partition_selectors(image)
+        emit_prefix = len(selectors) > 1
 
     rows: list[dict] = []
-    for partition_fs in _iter_search_partitions(image, fs, prefix_present):
-        with open_image(image, partition_fs) as handle:
-            prefix = f"{partition_fs.value}:" if emit_prefix else ""
-            _find_recursive(handle.root, bare_pattern, prefix, rows)
+    for sel in selectors:
+        resolved = resolve_mount(f"{image}:{sel}:")
+        mount = resolved.mount
+        prefix = f"{sel}:" if emit_prefix else ""
+        _find_recursive(mount, mount.path_root(), bare_pattern, prefix, rows)
 
     table = TableContent(title="matches")
     table.add_column("path", "Path", header=True)
@@ -1016,21 +992,20 @@ def _match_acorn_wildcard(pattern: str, name: str) -> bool:
     return fnmatch.fnmatch(name.upper(), pattern.upper())
 
 
-def _find_recursive(node, pattern: str, prefix: str, rows: list[dict]) -> None:
-    """Walk a directory tree, collecting paths matching *pattern*.
+def _find_recursive(mount, path: str, pattern: str, prefix: str, rows: list[dict]) -> None:
+    """Walk *mount* from *path*, collecting entries matching *pattern*.
 
     ``prefix`` is prepended to each emitted path — empty on a
-    single-partition image, ``adfs:`` / ``afs:`` / ``dfs:`` on a
-    partitioned one — so every row is directly consumable by a
-    follow-up command.
+    single-partition image, ``adfs:`` / ``afs:`` on a partitioned one —
+    so every row is directly consumable by a follow-up command.
     """
-    for child in node.iterdir():
-        name = child.name
-        path_str = child.path
-        if _match_acorn_wildcard(pattern, name) or _match_acorn_wildcard(pattern, path_str):
-            rows.append({"path": f"{prefix}{path_str}"})
-        if child.is_dir():
-            _find_recursive(child, pattern, prefix, rows)
+    for child in mount.iter_entries(path):
+        if _match_acorn_wildcard(pattern, child.name) or _match_acorn_wildcard(
+            pattern, child.path
+        ):
+            rows.append({"path": f"{prefix}{child.path}"})
+        if child.is_dir:
+            _find_recursive(mount, child.path, pattern, prefix, rows)
 
 
 @cli.command()
