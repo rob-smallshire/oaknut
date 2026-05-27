@@ -16,6 +16,10 @@ from oaknut.disc.cli_paths import (
     validate_prefix_for_image,
 )
 
+from tests.fixtures import REFERENCE_IMAGES_DIRPATH  # noqa: E402
+
+_L3FS_DAT = REFERENCE_IMAGES_DIRPATH / "l3fs" / "l3fs-wfsinit.dat"
+
 
 class TestParsePrefix:
     def test_no_prefix(self) -> None:
@@ -110,6 +114,41 @@ class TestDetectFilingSystem:
         p.write_bytes(b"\x00" * 100)
         with pytest.raises(click.ClickException, match="cannot detect filing system"):
             detect_filing_system(p)
+
+
+class TestContentFirstDetection:
+    """Detection reads the bytes; the extension is only a fallback."""
+
+    def test_dfs_content_overrides_adfs_extension(self, dfs_image_filepath, tmp_path):
+        mystery = tmp_path / "mystery.adf"
+        mystery.write_bytes(dfs_image_filepath.read_bytes())
+        assert detect_filing_system(mystery) is FilingSystem.DFS
+
+    def test_adfs_content_overrides_dfs_extension(self, adfs_image_filepath, tmp_path):
+        mystery = tmp_path / "mystery.ssd"
+        mystery.write_bytes(adfs_image_filepath.read_bytes())
+        assert detect_filing_system(mystery) is FilingSystem.ADFS
+
+    def test_combined_disc_defaults_to_adfs_host(self):
+        # An ADFS+AFS disc routes to the ADFS host by default; AFS is
+        # reachable only via an explicit afs: prefix.
+        assert detect_filing_system(_L3FS_DAT) is FilingSystem.ADFS
+
+    def test_combined_disc_content_overrides_extension(self, tmp_path):
+        mystery = tmp_path / "mystery.ssd"
+        mystery.write_bytes(_L3FS_DAT.read_bytes())
+        assert detect_filing_system(mystery) is FilingSystem.ADFS
+
+    def test_unrecognised_content_falls_back_to_extension(self, tmp_path):
+        # Blank bytes match no prober; the extension decides.
+        blank = tmp_path / "blank.ssd"
+        blank.write_bytes(b"\x00" * 4096)
+        assert detect_filing_system(blank) is FilingSystem.DFS
+
+    def test_nonexistent_path_falls_back_to_extension(self, tmp_path):
+        # detect must stay total even for a path that is not a real file
+        # (identify cannot read it) — the extension still resolves.
+        assert detect_filing_system(tmp_path / "ghost.adl") is FilingSystem.ADFS
 
 
 class TestValidatePrefixForImage:

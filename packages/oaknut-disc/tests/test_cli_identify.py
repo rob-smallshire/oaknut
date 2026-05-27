@@ -71,3 +71,17 @@ class TestDescribeFormat:
     def test_unknown_format_is_rejected(self, runner: CliRunner):
         result = runner.invoke(cli, ["describe-format", "nonsense"])
         assert result.exit_code != 0
+
+
+class TestContentFirstRouting:
+    def test_ls_opens_a_misnamed_image_by_content(
+        self, runner: CliRunner, dfs_image_filepath, tmp_path
+    ):
+        # A DFS image wearing an ADFS .adf extension must still open as
+        # DFS — proof the open path routes on content, not the name.
+        misnamed = tmp_path / "mystery.adf"
+        misnamed.write_bytes(dfs_image_filepath.read_bytes())
+        result = runner.invoke(cli, ["ls", f"{misnamed}:$"])
+        assert result.exit_code == 0
+        # The DFS root lists the fixture's file (DFS upper-cases names).
+        assert "HELLO" in result.output

@@ -11,8 +11,10 @@ Supported prefixes:
 - ``adfs:`` — explicit ADFS
 - ``afs:``  — AFS tail partition (requires ADFS host image)
 
-When no prefix is present, the filing system is auto-detected
-from the image format.
+When no prefix is present, the filing system is auto-detected from
+the image's *content* (via :mod:`oaknut.identify`), falling back to
+the file extension when the content is not recognised — so a disc
+whose extension is missing or wrong still routes correctly.
 """
 
 from __future__ import annotations
@@ -28,6 +30,7 @@ import click
 # CLI never repeats (and cannot drift from) that knowledge.
 from oaknut.adfs import IMAGE_FORMAT_BY_EXTENSION as _ADFS_IMAGE_FORMATS
 from oaknut.dfs import IMAGE_FORMAT_BY_EXTENSION as _DFS_IMAGE_FORMATS
+from oaknut.identify import identify
 
 _FS_PREFIX_RE = re.compile(r"^(dfs|adfs|afs):", re.IGNORECASE)
 
@@ -69,8 +72,59 @@ def parse_prefix(text: str) -> tuple[FilingSystem | None, str]:
     return fs, bare
 
 
+# Default filing system per identified prober family. AFS is a tail
+# partition on an ADFS hard disc, so an AFS identification still routes
+# to its ADFS host by default; ``afs:`` selects the AFS partition.
+_FAMILY_TO_FILING_SYSTEM = {
+    "dfs": FilingSystem.DFS,
+    "adfs": FilingSystem.ADFS,
+    "afs": FilingSystem.ADFS,
+}
+
+
 def detect_filing_system(image_filepath: Path) -> FilingSystem:
-    """Guess the default filing system from image file extension.
+    """Detect the default filing system for an image, content first.
+
+    Identifies the image by its *content* — so a disc whose extension
+    is missing or wrong still routes correctly — and falls back to the
+    file extension when the content is not recognised (a blank image, or
+    a format no prober yet detects, such as new-map ADFS).
+
+    Returns the host filing system: an AFS tail partition routes to its
+    ADFS host by default, reachable as AFS only via an explicit ``afs:``
+    prefix.
+
+    Raises :class:`click.ClickException` when neither content nor
+    extension identifies the image.
+    """
+    by_content = _detect_filing_system_by_content(image_filepath)
+    if by_content is not None:
+        return by_content
+    return _detect_filing_system_by_extension(image_filepath)
+
+
+def _detect_filing_system_by_content(image_filepath: Path) -> FilingSystem | None:
+    """The best disc filing system from content, or None if unrecognised.
+
+    Walks the ranked identification candidates and returns the first
+    that maps to a mountable filing system. Returns ``None`` (deferring
+    to extension detection) when nothing is recognised or the path
+    cannot be read — the latter keeps the function total for callers
+    that probe a path that is not (yet) a real file.
+    """
+    try:
+        candidates = identify(image_filepath)
+    except OSError:
+        return None
+    for candidate in candidates:
+        filing_system = _FAMILY_TO_FILING_SYSTEM.get(candidate.family)
+        if filing_system is not None:
+            return filing_system
+    return None
+
+
+def _detect_filing_system_by_extension(image_filepath: Path) -> FilingSystem:
+    """Guess the filing system from the image file extension.
 
     Returns ``FilingSystem.DFS`` for ``.ssd``/``.dsd`` and
     ``FilingSystem.ADFS`` for ``.adf``/``.adl``/``.dat``.

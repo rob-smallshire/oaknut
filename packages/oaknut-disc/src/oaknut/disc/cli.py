@@ -162,10 +162,15 @@ def _access_byte_hex(stat_obj) -> str:
 
 
 def _detect_dfs_format(image_filepath: Path):
-    """Detect DFS disc format from file extension and size.
+    """Detect DFS disc format from image size, by content not name.
 
-    Handles standard sizes (40T/80T) and also short/truncated .ssd
-    images that contain fewer sectors than a full disc.
+    Sidedness is the one thing the bytes cannot reveal: a single-sided
+    80-track image and an interleaved 40-track double-sided image are
+    the same length, so the ``.dsd`` extension is treated as the only
+    signal for double-sided. Everything else — ``.ssd``, or an image
+    whose *content* identified as DFS under a missing or wrong
+    extension — is read single-sided, sized to the file (so short or
+    padded images open too).
     """
     from oaknut.dfs import (
         ACORN_DFS_40T_DOUBLE_SIDED_INTERLEAVED,
@@ -177,37 +182,33 @@ def _detect_dfs_format(image_filepath: Path):
     from oaknut.discimage.formats import SurfaceSpec
 
     size = image_filepath.stat().st_size
-    ext = image_filepath.suffix.lower()
+    if size % 256 != 0:
+        raise click.ClickException(f"DFS image size ({size}) is not a multiple of 256 bytes")
 
-    if ext == ".ssd":
-        if size == 102400:
-            return ACORN_DFS_40T_SINGLE_SIDED
-        if size == 204800:
-            return ACORN_DFS_80T_SINGLE_SIDED
-        # Non-standard (short or padded) SSD — build a format that
-        # matches the actual file size. The catalogue type is always
-        # Acorn DFS for .ssd files.
-        if size % 256 != 0:
-            raise click.ClickException(f"SSD image size ({size}) is not a multiple of 256 bytes")
-        total_sectors = size // 256
-        return DiscFormat(
-            surface_specs=[
-                SurfaceSpec(
-                    num_tracks=1,
-                    sectors_per_track=total_sectors,
-                    bytes_per_sector=256,
-                    track_zero_offset_bytes=0,
-                    track_stride_bytes=size,
-                )
-            ],
-            catalogue_name="acorn-dfs",
-        )
-    elif ext == ".dsd":
+    if image_filepath.suffix.lower() == ".dsd":
         if size <= 204800:
             return ACORN_DFS_40T_DOUBLE_SIDED_INTERLEAVED
         return ACORN_DFS_80T_DOUBLE_SIDED_INTERLEAVED
 
-    raise click.ClickException(f"cannot detect DFS format for '{image_filepath.name}'")
+    if size == 102400:
+        return ACORN_DFS_40T_SINGLE_SIDED
+    if size == 204800:
+        return ACORN_DFS_80T_SINGLE_SIDED
+    # Non-standard (short or padded) single-sided image — build a format
+    # sized to the file. The catalogue type is always Acorn DFS here.
+    total_sectors = size // 256
+    return DiscFormat(
+        surface_specs=[
+            SurfaceSpec(
+                num_tracks=1,
+                sectors_per_track=total_sectors,
+                bytes_per_sector=256,
+                track_zero_offset_bytes=0,
+                track_stride_bytes=size,
+            )
+        ],
+        catalogue_name="acorn-dfs",
+    )
 
 
 # ---------------------------------------------------------------------------
