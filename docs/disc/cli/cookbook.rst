@@ -76,6 +76,40 @@ filesystems, and where information is lost in either direction) live
 in :doc:`/api/patterns/metadata`.
 
 
+Browse a ZIP archive
+--------------------
+
+A ZIP archive is a filesystem too. ``disc`` recognises it by content
+like any disc, and the same ``ls`` / ``tree`` / ``cat`` / ``get``
+commands work against it — so a ZIP of RISC OS files is browsable
+without unpacking it first.
+
+.. cli-example:: browse_zip
+   :section: identify
+
+The archive here holds RISC OS files whose filetype is carried in the
+``,xxx`` filename suffix. ``disc`` presents the flat ZIP namespace as a
+directory tree — synthesising the ``Docs`` directory the archive only
+implies — and decodes the suffix into the filetyped load address:
+
+.. cli-example:: browse_zip
+   :section: ls
+
+.. cli-example:: browse_zip
+   :section: tree
+
+``disc get`` extracts a member to the host with its metadata sidecar, so
+the filetype survives the trip out:
+
+.. cli-example:: browse_zip
+   :section: get
+
+The mount is read-only: ``disc put`` / ``rm`` / ``mv`` into a ZIP are not
+supported. The metadata recovery itself — SparkFS extras, bundled
+``.inf`` sidecars, and filename encoding — belongs to the ``oaknut-zip``
+package, which the ZIP filesystem wraps.
+
+
 Archive a folder of SSDs to one ADFS hard disc
 ----------------------------------------------
 
