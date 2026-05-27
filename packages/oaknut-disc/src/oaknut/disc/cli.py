@@ -37,7 +37,6 @@ from .cli_paths import (
     FilingSystem,
     detect_filing_system,
     parse_file_spec,
-    parse_prefix,
     resolve_path,
 )
 from .mount import partition_selectors, resolve_mount
@@ -1479,73 +1478,40 @@ def rm(
     wildcards (``*``, ``#``); ``-r`` descends into directory matches
     and removes children before the directory itself.
     """
-    from oaknut.adfs.exceptions import ADFSFileLockedError
-    from oaknut.afs.exceptions import AFSFileLockedError
-    from oaknut.dfs.exceptions import FileLocked as DFSFileLocked
-
-    locked_errors: tuple[type[Exception], ...] = (
-        ADFSFileLockedError,
-        AFSFileLockedError,
-        DFSFileLocked,
-    )
+    from .mount import split_selector
 
     image, first_path = parse_file_spec(file_spec)
     all_paths: tuple[str, ...] = (first_path, *paths) if first_path else paths
     if not all_paths:
         raise click.UsageError("at least one PATH is required")
 
-    fs_type = detect_filing_system(image)
-    first_prefix: FilingSystem | None = None
-    per_path: list[tuple[FilingSystem, str]] = []
-    for p in all_paths:
-        fs, bare = resolve_path(image, p)
-        if first_prefix is None:
-            first_prefix = fs
-        per_path.append((fs, bare))
+    # Every path addresses the same image; the first path's selector
+    # picks the partition, and the rest must agree (mv/rm are single
+    # partition). Strip selectors to bare in-partition patterns.
+    selector, _ = split_selector(all_paths[0])
+    bare_patterns = [split_selector(p)[1] for p in all_paths]
+    prefix = f"{selector}:" if selector else ""
 
-    fs = first_prefix or fs_type
-    with open_image(image, fs) as handle:
-        for path_fs, bare in per_path:
+    with resolve_mount(f"{image}:{prefix}", writable=not dry_run) as resolved:
+        mount = resolved.mount
+        for pattern in bare_patterns:
             # --force downgrades "no matches" to a no-op.
             try:
-                targets = list(_iter_targets(handle, bare, path_fs, recursive=recursive))
+                targets = list(_iter_target_paths(mount, pattern, recursive=recursive))
             except click.ClickException:
                 if force:
                     continue
                 raise
 
             for target in targets:
-                if target.is_dir() and not recursive:
+                if mount.stat(target).is_dir and not recursive:
                     raise click.ClickException(
-                        f"'{target.path}' is a directory (use -r to remove recursively)"
+                        f"'{target}' is a directory (use -r to remove recursively)"
                     )
                 if dry_run:
-                    click.echo(f"would remove: {target.path}")
+                    click.echo(f"would remove: {target}")
                     continue
-                try:
-                    if target.is_dir():
-                        # ADFS / AFS need an explicit rmdir because
-                        # unlink refuses on directories.  DFS
-                        # "directories" are letter prefixes that
-                        # vanish implicitly once their files are
-                        # gone — no action needed.
-                        if hasattr(target, "rmdir"):
-                            target.rmdir()
-                    else:
-                        target.unlink()
-                except locked_errors:
-                    if not force:
-                        raise
-                    # --force overrides locks: drop the lock and retry.
-                    if hasattr(target, "unlock"):
-                        target.unlock()
-                    if target.is_dir() and hasattr(target, "rmdir"):
-                        target.rmdir()
-                    else:
-                        target.unlink()
-
-        if fs is FilingSystem.AFS and not dry_run:
-            handle.flush()
+                mount.remove(target, force=force)
 
 
 _alias("*DELETE", "rm")
@@ -1563,27 +1529,24 @@ def mv(src: str, dst: str, force: bool) -> None:
     renames a directory entry in place and cannot move across
     filesystems.
     """
-    src_image, bare_src = parse_file_spec(src)
-    dst_image, bare_dst = parse_file_spec(dst)
+    from .mount import split_selector
+
+    src_image, _ = parse_file_spec(src)
+    dst_image, dst_in = parse_file_spec(dst)
     if src_image.resolve() != dst_image.resolve():
         raise click.UsageError(
             f"mv source and destination must name the same image; got {src_image} and {dst_image}"
         )
-    image = src_image
+    _, bare_dst = split_selector(dst_in)
 
-    fs, bare_src = resolve_path(image, bare_src)
-    _, bare_dst = parse_prefix(bare_dst)
-
-    with open_image(image, fs) as handle:
-        source = _navigate(handle, bare_src, fs)
-        # Pre-check existence so the "path not found" diagnostic
-        # carries the user's original input rather than whatever the
-        # library uses internally (which may be a leaf component).
-        if not source.exists():
+    with resolve_mount(src, writable=True) as resolved:
+        mount = resolved.mount
+        bare_src = resolved.path
+        # Pre-check existence so the "path not found" diagnostic carries
+        # the user's original input rather than a library-internal leaf.
+        if not mount.exists(bare_src):
             raise FSError(f"path not found: {bare_src}", exit_code=ExitCode.OS_FILE)
-        source.rename(bare_dst)
-        if fs is FilingSystem.AFS:
-            handle.flush()
+        mount.rename(bare_src, bare_dst)
 
 
 _alias("*RENAME", "mv")

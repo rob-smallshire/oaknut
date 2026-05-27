@@ -129,6 +129,24 @@ class _AFSMount:
         # mounts. On a writable host window this reaches the file.
         self._afs.flush()
 
+    def remove(self, path: str, *, force: bool = False) -> None:
+        from oaknut.afs.exceptions import AFSFileLockedError
+
+        target = self._navigate(path)
+        delete = target.rmdir if target.stat().is_directory else target.unlink
+        try:
+            delete()
+        except AFSFileLockedError:
+            if not force:
+                raise
+            target.unlock()
+            delete()
+        self._afs.flush()
+
+    def rename(self, old_path: str, new_path: str) -> None:
+        self._navigate(old_path).rename(new_path)
+        self._afs.flush()
+
     # -- HierarchicalDirectories --
     def make_directory(self, path: str) -> None:
         self._navigate(path).mkdir()

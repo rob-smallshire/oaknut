@@ -73,6 +73,21 @@ class Mount(Protocol):
         """Write *data* to *path*, creating or replacing the file."""
         ...
 
+    def remove(self, path: str, *, force: bool = False) -> None:
+        """Delete the file or directory at *path*.
+
+        A directory is removed if the filesystem represents one (a flat
+        catalogue has none, so removing its notional directory is a
+        no-op). *force* overrides a lock — the filesystem unlocks the
+        entry first, owning its own locked-entry semantics so the access
+        byte's layout never leaks to the caller.
+        """
+        ...
+
+    def rename(self, old_path: str, new_path: str) -> None:
+        """Rename / move the entry at *old_path* to *new_path* in place."""
+        ...
+
 
 @runtime_checkable
 class HierarchicalDirectories(Protocol):

@@ -69,6 +69,12 @@ class _ZipMount:
     def write_bytes(self, path: str, data: bytes) -> None:  # pragma: no cover
         raise NotImplementedError("writing ZIP archives is not supported")
 
+    def remove(self, path: str, *, force: bool = False) -> None:  # pragma: no cover
+        raise NotImplementedError("writing ZIP archives is not supported")
+
+    def rename(self, old_path: str, new_path: str) -> None:  # pragma: no cover
+        raise NotImplementedError("writing ZIP archives is not supported")
+
 
 class Zip(Filesystem):
     """ZIP — archives that may carry Acorn files (SparkFS extras, RISC OS types).

@@ -133,6 +133,25 @@ class _DFSMount:
     def write_bytes(self, path: str, data: bytes) -> None:
         self._navigate(path).write_bytes(data)
 
+    def remove(self, path: str, *, force: bool = False) -> None:
+        from oaknut.dfs.exceptions import FileLocked
+
+        target = self._navigate(path)
+        # DFS directories are letter prefixes with no entry of their own;
+        # they vanish once their files are gone, so removing one is a no-op.
+        if target.is_dir():
+            return
+        try:
+            target.unlink()
+        except FileLocked:
+            if not force:
+                raise
+            target.unlock()
+            target.unlink()
+
+    def rename(self, old_path: str, new_path: str) -> None:
+        self._navigate(old_path).rename(new_path)
+
     # -- AcornMetadata --
     def acorn_meta(self, path: str) -> AcornMeta:
         stat = self._navigate(path).stat()

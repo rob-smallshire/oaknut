@@ -125,6 +125,22 @@ class _ADFSMount:
     def write_bytes(self, path: str, data: bytes) -> None:
         self._navigate(path).write_bytes(data)
 
+    def remove(self, path: str, *, force: bool = False) -> None:
+        from oaknut.adfs.exceptions import ADFSFileLockedError
+
+        target = self._navigate(path)
+        delete = target.rmdir if target.is_dir() else target.unlink
+        try:
+            delete()
+        except ADFSFileLockedError:
+            if not force:
+                raise
+            target.unlock()
+            delete()
+
+    def rename(self, old_path: str, new_path: str) -> None:
+        self._navigate(old_path).rename(new_path)
+
     # -- HierarchicalDirectories --
     def make_directory(self, path: str) -> None:
         self._navigate(path).mkdir()
