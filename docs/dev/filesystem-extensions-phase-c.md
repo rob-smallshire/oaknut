@@ -25,9 +25,31 @@ in `oaknut/disc/` is empty (bar the kept pyproject deps).
 - ( `list-report-formats` / `describe-report-format` / `list-reports` /
   `describe-report` are asyoulikeit output-format commands — out of scope. )
 
+## ⚠ Open design issue — geometry-aware recursion (blocks AFS-on-floppy)
+
+Discovered migrating `ls`. The recursion hands the tail filesystem a
+**raw-byte window** (`ImageReader.window`). That is correct only for
+*linear* geometries (hard discs, single-sided floppies), where logical
+sector N == byte N×256. On an **interleaved** disc (ADFS-L, DFS `.dsd`)
+the tail's logical sectors are scattered through the byte stream, so a
+contiguous byte window is not the region. `l3fs` (a linear hard disc)
+masked this; the ADFS-L+AFS floppy fixture exposes it.
+
+**Fix direction (needs a decision):** recursion must give the tail a
+view of the host's *logical sectors*, de-interleaved — e.g. the
+`RegionHost` materialises its reserved region as a linear byte view
+(reading its own logical sectors via the host geometry), and the
+coordinator recurses into *that* rather than slicing raw bytes. The
+`open(ImageReader)` contract can stay if the host supplies a linearised
+region reader. Resolve before resuming command migration past read-only
+linear cases. Also re-apply (lost in the revert): an AFS-mount root
+`exists`/`stat` fix, and ADFS reserved-region detection via the &F6
+pointer (works for floppy + hard disc, unlike total-sectors).
+
 ## Read commands (core + capability-gated)
 
-- [ ] `ls`
+- [~] `ls` — migrated on the substrate (works for DFS/ADFS/linear); blocked
+  on the interleave finding above for AFS-on-floppy. Reverted pending the fix.
 - [ ] `tree`
 - [ ] `stat`
 - [ ] `cat`
