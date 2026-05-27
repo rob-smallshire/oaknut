@@ -1398,13 +1398,13 @@ def put(
     decimal, not hex. See :doc:`/cli/conventions/metadata` for the
     full mapping and trade-offs.
     """
-    from oaknut.file import parse_address
+    from oaknut.file import AcornMeta, parse_address
+    from oaknut.filesystem import AcornMetadata
 
-    image, path = parse_file_spec(file_spec)
+    _image, path = parse_file_spec(file_spec)
     if not path:
         raise click.UsageError("PATH is required")
     host_path = Path(host_path) if host_path is not None else None
-    fs, bare = resolve_path(image, path)
 
     # Default addresses: 0xFFFF matches the convention for text/data
     # files on DFS and ADFS where the address is not meaningful.
@@ -1434,15 +1434,23 @@ def put(
     else:
         raise click.ClickException("HOST_PATH is required (or use - for stdin)")
 
-    with open_image(image, fs) as handle:
-        target = _navigate(handle, bare, fs)
-        target.write_bytes(
-            data,
-            load_address=resolved_load,
-            exec_address=resolved_exec,
-        )
-        if fs is FilingSystem.AFS:
-            handle.flush()
+    with resolve_mount(file_spec, writable=True) as resolved:
+        mount = resolved.mount
+        target = resolved.path or mount.path_root()
+        # The generic write carries no addresses; set them after, when the
+        # filesystem records Acorn metadata (DFS/ADFS/AFS), preserving the
+        # access the write established.
+        mount.write_bytes(target, data)
+        if isinstance(mount, AcornMetadata):
+            access = mount.acorn_meta(target).access
+            mount.set_acorn_meta(
+                target,
+                AcornMeta(
+                    load_address=resolved_load,
+                    exec_address=resolved_exec,
+                    access=access,
+                ),
+            )
 
 
 # ---------------------------------------------------------------------------
