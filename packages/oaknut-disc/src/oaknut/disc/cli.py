@@ -27,6 +27,7 @@ from oaknut.cli import (
     contributed_commands,
     kv_table,
     size_cell,
+    use_plain_help,
 )
 from oaknut.file.exceptions import FSError
 
@@ -2111,7 +2112,8 @@ _alias("*OPT4", "opt")
     help=(
         "Filesystem to create. Inferred from the filename extension when "
         "omitted (.ssd/.dsd → acorn-dfs; .ads/.adm/.adl/.adf/.dat → adfs). "
-        "Name a filesystem to override (e.g. watford-dfs)."
+        "Name a filesystem to override (e.g. watford-dfs); run "
+        "`disc list-filesystems` to see them all."
     ),
 )
 @click.option(
@@ -2141,8 +2143,9 @@ def create(
     extension (``.adf``: ADFS-S or -M?) or an open-ended one (``.dat``: a
     hard disc) has no default geometry and requires ``--geometry``.
 
-    Run ``disc describe-filesystem NAME`` to see the geometries a
-    filesystem accepts (its presets and parameterised forms).
+    Run ``disc list-filesystems`` to see the filesystems available, and
+    ``disc describe-filesystem NAME`` for the geometries each accepts (its
+    presets and parameterised forms).
     """
     from oaknut.filesystem import create_filesystem, creating_filesystem, filesystem_names
 
@@ -2358,3 +2361,8 @@ def _import_host_dir(mount, parent_path: str, host_dir: Path, meta_formats, verb
 # wraps the whole dispatch (including nested groups).
 for _contributed_command in contributed_commands():
     cli.add_command(_contributed_command)
+
+# With the whole tree assembled, render every command's help with RST
+# inline markup stripped — the docstrings keep their markup for the Sphinx
+# command reference, but a terminal sees plain text, not stray backticks.
+use_plain_help(cli)

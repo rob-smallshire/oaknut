@@ -23,6 +23,11 @@ from oaknut.cli.commands import (
     COMMAND_NAMESPACE,
     contributed_commands,
 )
+from oaknut.cli.help import (
+    PlainHelpFormatter,
+    strip_rst,
+    use_plain_help,
+)
 from oaknut.cli.reports import (
     SECTOR_SIZE,
     address_cell,
@@ -36,6 +41,9 @@ __all__ = [
     "COMMAND_KIND",
     "COMMAND_NAMESPACE",
     "contributed_commands",
+    "PlainHelpFormatter",
+    "strip_rst",
+    "use_plain_help",
     "SECTOR_SIZE",
     "address_cell",
     "kv_table",

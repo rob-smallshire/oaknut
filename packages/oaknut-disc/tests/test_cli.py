@@ -2369,6 +2369,15 @@ class TestCreate:
         assert "accepts:" in result.output
         assert "presets l, m, s" in result.output
 
+    def test_help_is_plain_text_and_points_to_discovery(self, runner: CliRunner) -> None:
+        result = runner.invoke(cli, ["create", "--help"])
+        assert result.exit_code == 0
+        # RST markup is stripped for the terminal — no stray backticks.
+        assert "`" not in result.output
+        # Points at both discovery commands.
+        assert "list-filesystems" in result.output
+        assert "describe-filesystem" in result.output
+
     def test_create_ssd_40_track_geometry(self, runner: CliRunner, tmp_path: Path) -> None:
         out = tmp_path / "small.ssd"
         result = runner.invoke(cli, ["create", str(out), "--geometry", "40t-ss"])
