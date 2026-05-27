@@ -84,8 +84,12 @@ filesystem, not a separate axis.
 
 A `Filesystem` extension owns:
 
-- **identity** — a stable name (`acorn-dfs`, `watford-dfs`, `adfs`,
-  `afs`, `fat`, …) and a human description (its docstring, as today).
+- **identity** — a stable hyphenated key (`acorn-dfs`, `watford-dfs`,
+  `adfs`, `afs`, `fat`, …) and a human description (its docstring, as
+  today). This key is the **single shared vocabulary**: `disc
+  list-formats` enumerates the keys, `disc describe-format <key>`
+  explains one, and `--format <key>` forces one. One name, three uses —
+  no parallel lists to keep in sync.
 - **probe(reader) → Identification?** — does this region look like me,
   with what confidence, evidence, and (when determinable) which variant.
 - **open(reader, variant?) → mount** — return a mounted handle.
@@ -103,18 +107,24 @@ The contract must be Acorn-agnostic so FAT fits without contortion.
 Identification becomes recursive and per-partition:
 
 1. Probe the whole image with every registered filesystem.
-2. The winner that *reserves a tail* (ADFS) exposes its tail region as a
-   windowed sub-reader.
-3. Recurse: probe the tail region with every filesystem. AFS, FAT, … are
-   found there by their own detection — **ADFS stays ignorant of what
-   occupies its tail** (no `oaknut-adfs → oaknut-afs/oaknut-fat`
-   dependency; the recursion lives in the coordinator).
-4. The result is the `Identification` tree, realising the `contained`
-   field we defined and left unused.
+2. A winner that reserves regions (ADFS reserves cylinders in its
+   free-space map) exposes those regions — **zero, one, or many** — as
+   windowed sub-readers. Never assume exactly one "tail": model it as a
+   collection of reserved regions. (Whether an ADFS host with several
+   foreign partitions ever shipped is beside the point — the cost of
+   modelling "many" is nil, and the cost of assuming "two" is a rewrite.)
+3. Recurse into each reserved region, probing it with every filesystem.
+   AFS, FAT, … are found there by their own detection — **ADFS stays
+   ignorant of what occupies its regions** (no `oaknut-adfs →
+   oaknut-afs/oaknut-fat` dependency; the recursion lives in the
+   coordinator).
+4. The result is the `Identification` tree, whose `contained` children
+   are already a collection — realising the field we defined and left
+   unused.
 
 This requires `ImageReader` to support **windowing** (a sub-region view),
-which is a small, clean addition. It also lets the AFS prober stop
-scanning the whole image for `AFS0` and instead probe the tail window.
+a small, clean addition. It also lets the AFS prober stop scanning the
+whole image for `AFS0` and instead probe each reserved-region window.
 
 ## 6. Addressing: partitions in the path, format in options
 
@@ -136,15 +146,20 @@ hd.dat:                   list the image's partitions
   isn't there is a "no such partition" error — not a format clash. The
   old "image is ADFS format; cannot access as DFS" errors disappear.
 - **Format is automatic**, resolved per partition by detection.
-- **Forcing format is a command option, outside the path** — e.g.
-  `--format watford-dfs`, `--format adfs-l`. This is where the
-  byte-identical ambiguities (DFS single-vs-double, interleave) and any
-  misdetection are resolved, without polluting the path grammar.
+- **Forcing format is a command option, outside the path** — `--format
+  <key>`, where `<key>` is a filesystem from the shared vocabulary
+  (`--format watford-dfs`, `--format acorn-dfs`). It overrides
+  misdetection without polluting the path grammar. *(Open: forcing a
+  finer **variant** — the byte-identical DFS single-vs-double/interleave
+  ambiguity, or ADFS S/M/L — may need a separate knob or a compound
+  value like `acorn-dfs:80t-double`; see §10.)*
 
-**Open:** how are partitions *named*? Naming the tail after its detected
-filesystem (`afs`, `fat`) is the most intuitive and is what users say,
-but it re-introduces a format flavour into a partition name. Alternatives:
-role-based (`host`/`tail`), or ordinal (`0`/`1`). See §10.
+**Open:** how are partitions *named*? Naming a partition after its
+detected filesystem (`afs`, `fat`) is intuitive and is what users say,
+but it smuggles a format flavour into a partition name *and* collides
+when a disc holds two partitions of the same kind (zero/one/many — §5).
+Alternatives: role-based (`host`/`tail`), ordinal (`0`/`1`), or
+filesystem-plus-index (`afs.0`, `afs.1`). See §10.
 
 ## 7. CLI dispatch
 
@@ -184,8 +199,9 @@ Incremental, behind a stable interface — no big bang:
 ## 10. Open questions
 
 1. **Partition naming** — by detected filesystem (`afs`, `fat`), by role
-   (`host`, `tail`), or ordinal? Trade intuition against the "partition ≠
-   format" principle.
+   (`host`, `tail`), ordinal (`0`/`1`), or filesystem-plus-index
+   (`afs.0`)? Must survive the zero/one/many case (a disc with two
+   partitions of the same filesystem) and keep "partition ≠ format".
 2. **Is "family" (DFS) a code concept** at all, or just a grouping of
    `--format` values / a detection convenience? Leaning: not a first-class
    runtime concept.
