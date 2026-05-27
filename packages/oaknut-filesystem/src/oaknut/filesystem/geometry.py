@@ -40,10 +40,18 @@ class Geometry:
 
     Pure geometry — no catalogue or filesystem. ``label`` is a short
     human description (e.g. ``"ADFS-L (80T DS interleaved)"``).
+
+    ``cylinders``/``heads``/``sectors_per_track`` are the optional CHS the
+    layout was built from — a hard disc's, carried so a filesystem can
+    *report* it (the surface specs themselves linearise CHS away). They
+    are ``None`` when the source did not record CHS.
     """
 
     surface_specs: tuple[SurfaceSpec, ...]
     label: str = ""
+    cylinders: int | None = None
+    heads: int | None = None
+    sectors_per_track: int | None = None
 
     def __post_init__(self) -> None:
         if not self.surface_specs:
@@ -121,7 +129,38 @@ def winchester_geometry(
         track_zero_offset_bytes=0,
         track_stride_bytes=total_sectors * bytes_per_sector,
     )
-    return Geometry((spec,), label=label or f"{cylinders}c/{heads}h/{sectors_per_track}s")
+    return Geometry(
+        (spec,),
+        label=label or f"{cylinders}c/{heads}h/{sectors_per_track}s",
+        cylinders=cylinders,
+        heads=heads,
+        sectors_per_track=sectors_per_track,
+    )
+
+
+#: A hard-disc ``.dsc`` sidecar is 22 bytes of SCSI MODE SENSE geometry:
+#: cylinders as a big-endian 16-bit at offset 13, head count at offset 15.
+#: SPT is not recorded and is conventionally 33 for Acorn SCSI discs.
+_DSC_SIZE = 22
+_DSC_DEFAULT_SPT = 33
+
+
+def geometry_from_dsc(dsc_bytes: bytes, *, sectors_per_track: int = _DSC_DEFAULT_SPT) -> Geometry:
+    """Build a hard-disc :class:`Geometry` from a 22-byte ``.dsc`` sidecar.
+
+    Geometry resolution, not filesystem identification: the ``.dsc``
+    carries the CHS a hard-disc image's bytes cannot, so the caller can
+    report it. Raises :class:`GeometryError` on a malformed sidecar.
+    """
+    if len(dsc_bytes) < _DSC_SIZE:
+        raise GeometryError(f".dsc sidecar must be at least {_DSC_SIZE} bytes")
+    cylinders = (dsc_bytes[13] << 8) | dsc_bytes[14]
+    heads = dsc_bytes[15]
+    if cylinders <= 0 or heads <= 0:
+        raise GeometryError(f"malformed .dsc geometry: {cylinders} cylinders, {heads} heads")
+    return winchester_geometry(
+        cylinders=cylinders, heads=heads, sectors_per_track=sectors_per_track
+    )
 
 
 def _parse_params(spec: str) -> dict[str, str]:

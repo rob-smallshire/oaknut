@@ -199,6 +199,29 @@ class _AFSMount:
     def free_bytes(self) -> int:
         return self._afs.free_sectors * 256
 
+    def _region_cylinders(self) -> int:
+        """Cylinders the AFS partition occupies (the tail, not the disc)."""
+        geom = self._afs.geometry
+        return geom.cylinders - self._afs.start_cylinder
+
+    # -- Sized --
+    def size_bytes(self) -> int:
+        # The AFS tail slice — geometry.total_sectors counts the whole
+        # disc, so derive the partition's own span from its cylinders.
+        return self._region_cylinders() * self._afs.geometry.sectors_per_cylinder * 256
+
+    # -- PhysicalGeometry --
+    def disc_geometry(self):
+        from oaknut.filesystem import DiscGeometry
+
+        spc = self._afs.geometry.sectors_per_cylinder
+        cylinders = self._region_cylinders()
+        return DiscGeometry(
+            label=f"{cylinders} cylinders × {spc} sectors/cylinder",
+            sectors_per_cylinder=spc,
+            total_sectors=cylinders * spc,
+        )
+
     # -- FreeMap --
     def free_map(self):
         from oaknut.filesystem import FreeMapData

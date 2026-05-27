@@ -27,10 +27,12 @@ from oaknut.filesystem import (
     Partition,
     create_filesystem,
     filesystem_names,
+    geometry_from_dsc,
     identify,
     reader_for,
     region_reader,
 )
+from oaknut.filesystem.exceptions import GeometryError
 
 from .cli_paths import parse_file_spec
 
@@ -105,6 +107,8 @@ def resolve_mount(
             geometry = _geometry(
                 filesystem, force_geometry, proposed.geometry if proposed else None
             )
+            if geometry is None:
+                geometry = _geometry_from_sidecar(image_filepath)
             mount = filesystem.open(reader, geometry)
             chosen_name = partition_name = force_filesystem
         else:
@@ -124,6 +128,11 @@ def resolve_mount(
                     reader, host.geometry, region.start_sector, region.num_sectors
                 )
             geometry = _geometry(filesystem, force_geometry, chosen.geometry)
+            if geometry is None and region is None:
+                # The whole-image host's geometry — a hard disc records its
+                # CHS only in the .dsc sidecar, not the content. (A reserved
+                # partition reads geometry from its own on-disc structure.)
+                geometry = _geometry_from_sidecar(image_filepath)
             mount = filesystem.open(region_view, geometry)
             chosen_name = chosen.filesystem
             partition_name = chosen.partition.selector
@@ -185,6 +194,22 @@ def _geometry(filesystem, force_geometry: str | None, proposed: Geometry | None)
     if force_geometry is None:
         return proposed
     return filesystem.geometry_grammar().parse(force_geometry)
+
+
+def _geometry_from_sidecar(image_filepath: Path) -> Geometry | None:
+    """The CHS geometry from an adjacent ``.dsc`` sidecar, if present.
+
+    A hard-disc image records its geometry only in the sidecar, so this
+    is geometry *resolution* (a separate layer) — identification stays
+    content-first. A malformed sidecar is ignored.
+    """
+    sidecar = image_filepath.with_suffix(".dsc")
+    if not sidecar.is_file():
+        return None
+    try:
+        return geometry_from_dsc(sidecar.read_bytes())
+    except (GeometryError, OSError):
+        return None
 
 
 def _unrecognised_message(name: str) -> str:

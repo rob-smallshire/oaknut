@@ -192,6 +192,48 @@ class FreeSpace(Protocol):
         ...
 
 
+@runtime_checkable
+class Sized(Protocol):
+    """The filesystem reports its own occupied size (its partition's span)."""
+
+    def size_bytes(self) -> int:
+        """The size of this filesystem's partition, in bytes.
+
+        For a filesystem sharing a disc (ADFS with an AFS tail) this is
+        its slice, not the whole image — so partition sizes sum to the
+        disc.
+        """
+        ...
+
+
+@dataclass(frozen=True)
+class DiscGeometry:
+    """A disc's physical geometry, for the ``stat`` summary.
+
+    *label* is a human description in the filesystem's own vocabulary
+    (ADFS speaks cylinders/heads/track; AFS speaks cylinders/sectors-per-
+    cylinder). *sectors_per_cylinder* lets the caller place a partition's
+    logical-sector span into a cylinder range without parsing the label.
+    """
+
+    label: str
+    sectors_per_cylinder: int
+    total_sectors: int
+
+
+@runtime_checkable
+class PhysicalGeometry(Protocol):
+    """The filesystem knows the disc's physical geometry (ADFS, AFS).
+
+    A flat-catalogue floppy filesystem (DFS) records no geometry and does
+    not advertise this.
+    """
+
+    def disc_geometry(self) -> DiscGeometry:
+        """The disc's physical geometry."""
+        ...
+
+
 @dataclass(frozen=True)
 class FreeMapData:
     """A filesystem's free space as partition-relative sector runs.

@@ -203,6 +203,10 @@ class _DFSMount:
     def free_bytes(self) -> int:
         return self._dfs.free_sectors * 256
 
+    # -- Sized --
+    def size_bytes(self) -> int:
+        return self._dfs.info["total_sectors"] * 256
+
     # -- FreeMap --
     def free_map(self):
         from oaknut.filesystem import FreeMapData

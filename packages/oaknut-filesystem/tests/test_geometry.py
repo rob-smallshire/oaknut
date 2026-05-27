@@ -6,6 +6,7 @@ from oaknut.filesystem import (
     GeometryError,
     GeometryGrammar,
     floppy_geometry,
+    geometry_from_dsc,
     winchester_geometry,
 )
 from oaknut.filesystem.geometry import FLOPPY, WINCHESTER
@@ -77,3 +78,29 @@ class TestGeometryGrammar:
         grammar = GeometryGrammar(kinds=(FLOPPY,))
         with pytest.raises(GeometryError, match="key=value"):
             grammar.parse("tracks 80")
+
+
+class TestGeometryFromDsc:
+    @staticmethod
+    def _dsc(cylinders: int, heads: int) -> bytes:
+        data = bytearray(22)
+        data[13] = (cylinders >> 8) & 0xFF
+        data[14] = cylinders & 0xFF
+        data[15] = heads
+        return bytes(data)
+
+    def test_parses_chs_and_records_it(self):
+        geom = geometry_from_dsc(self._dsc(296, 4))
+        # CHS is recorded for reporting, even though the layout linearises.
+        assert geom.cylinders == 296
+        assert geom.heads == 4
+        assert geom.sectors_per_track == 33  # not in the .dsc; the Acorn default
+        assert geom.num_sectors == 296 * 4 * 33
+
+    def test_short_sidecar_rejected(self):
+        with pytest.raises(GeometryError, match="22 bytes"):
+            geometry_from_dsc(b"\x00" * 10)
+
+    def test_zero_geometry_rejected(self):
+        with pytest.raises(GeometryError, match="malformed"):
+            geometry_from_dsc(self._dsc(0, 0))

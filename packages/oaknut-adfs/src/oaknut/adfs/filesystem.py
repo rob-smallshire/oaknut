@@ -92,9 +92,17 @@ class _ADFSMount:
     ``Titled``, ``Bootable``, ``FreeSpace`` and ``RegionHost``.
     """
 
-    def __init__(self, adfs: _ADFSDisc, reserved: tuple[Partition, ...]):
+    def __init__(
+        self,
+        adfs: _ADFSDisc,
+        reserved: tuple[Partition, ...],
+        geometry: "Geometry | None" = None,
+    ):
         self._adfs = adfs
         self._reserved = reserved
+        # The geometry the disc was opened with — carries hard-disc CHS
+        # from a .dsc sidecar that the content alone cannot supply.
+        self._geometry = geometry
 
     def path_root(self) -> str:
         return "$"
@@ -202,6 +210,35 @@ class _ADFSMount:
     def free_bytes(self) -> int:
         return self._adfs.free_space
 
+    # -- Sized --
+    def size_bytes(self) -> int:
+        # The ADFS slice — excludes any reserved AFS tail — so partition
+        # sizes sum to the whole disc.
+        return self._adfs.total_size
+
+    # -- PhysicalGeometry --
+    def disc_geometry(self):
+        from oaknut.filesystem import DiscGeometry
+
+        # A hard disc carries its CHS only in the .dsc sidecar, surfaced
+        # through the opened geometry; a floppy's CHS is implied by its
+        # size and recorded on the disc itself.
+        opened = self._geometry
+        if opened is not None and opened.cylinders is not None:
+            cylinders, heads, spt = (
+                opened.cylinders,
+                opened.heads,
+                opened.sectors_per_track,
+            )
+        else:
+            geom = self._adfs.geometry
+            cylinders, heads, spt = geom.cylinders, geom.heads, geom.sectors_per_track
+        return DiscGeometry(
+            label=f"{cylinders} cylinders × {heads} heads × {spt} sectors/track",
+            sectors_per_cylinder=heads * spt,
+            total_sectors=cylinders * heads * spt,
+        )
+
     # -- FreeMap --
     def free_map(self):
         from oaknut.filesystem import FreeMapData
@@ -267,11 +304,15 @@ class ADFS(Filesystem):
         )
 
     def open(self, reader: ImageReader, geometry: Geometry | None = None) -> _ADFSMount:
-        # ADFS determines its own geometry from image size, so the
-        # geometry argument is advisory here. Building over the reader's
-        # buffer() means mutations persist to the file when the reader is
-        # writable, and run against a private copy when it is not.
-        return _ADFSMount(_ADFSDisc.from_buffer(reader.buffer()), _reserved_regions(reader))
+        # ADFS addresses sectors linearly, so the disc reads correctly from
+        # the buffer regardless of geometry; the geometry is retained so
+        # the mount can *report* the hard-disc CHS a .dsc sidecar supplies.
+        # Building over the reader's buffer() means mutations persist to the
+        # file when the reader is writable, and run against a private copy
+        # when it is not.
+        return _ADFSMount(
+            _ADFSDisc.from_buffer(reader.buffer()), _reserved_regions(reader), geometry
+        )
 
     def geometry_grammar(self) -> GeometryGrammar:
         return GeometryGrammar(presets=dict(_ADFS_PRESETS), kinds=(FLOPPY, WINCHESTER))
