@@ -117,6 +117,14 @@ class _DFSMount:
             name=target.name, is_dir=st.is_directory, length=st.length, path=target.path
         )
 
+    def join(self, parent: str, name: str) -> str:
+        # DFS's root is the nameless catalogue; a file placed there lives
+        # in the default $ directory. Qualify it as $.NAME so write and
+        # lookup agree (a bare "NAME" writes to $ but doesn't resolve back).
+        if parent == "":
+            return f"$.{name}"
+        return (self._navigate(parent) / name).path
+
     def iter_entries(self, path: str) -> Iterable[Entry]:
         for child in self._navigate(path).iterdir():
             st = child.stat()

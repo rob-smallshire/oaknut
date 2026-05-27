@@ -51,6 +51,10 @@ class _ZipMount:
             name=info.filename, is_dir=info.is_dir(), length=info.file_size, path=info.filename
         )
 
+    def join(self, parent: str, name: str) -> str:
+        # ZIP member names are POSIX paths under a nameless root.
+        return f"{parent}/{name}" if parent else name
+
     def iter_entries(self, path: str) -> Iterable[Entry]:
         for info in self._archive.infolist():
             yield Entry(

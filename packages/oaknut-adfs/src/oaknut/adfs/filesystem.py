@@ -109,6 +109,9 @@ class _ADFSMount:
             name=target.name, is_dir=st.is_directory, length=st.length, path=target.path
         )
 
+    def join(self, parent: str, name: str) -> str:
+        return (self._navigate(parent) / name).path
+
     def iter_entries(self, path: str) -> Iterable[Entry]:
         for child in self._navigate(path).iterdir():
             st = child.stat()

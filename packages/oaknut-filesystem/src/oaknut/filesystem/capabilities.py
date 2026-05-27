@@ -57,6 +57,16 @@ class Mount(Protocol):
         """The :class:`Entry` for *path* (name, kind, length, full path)."""
         ...
 
+    def join(self, parent: str, name: str) -> str:
+        """The path of child *name* under directory *parent*.
+
+        The filesystem owns its path syntax (``$.A`` for Acorn, the root
+        sometimes nameless), so the CLI builds new paths through this
+        rather than concatenating — needed when creating a path that does
+        not exist yet (e.g. a bulk import target).
+        """
+        ...
+
     def iter_entries(self, path: str) -> Iterable[Entry]:
         """Yield the entries of the directory at *path*."""
         ...

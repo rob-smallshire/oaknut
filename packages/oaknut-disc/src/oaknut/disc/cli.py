@@ -2847,40 +2847,49 @@ def import_cmd(
     else:
         meta_formats = DEFAULT_IMPORT_META_FORMATS
 
-    fs = detect_filing_system(image)
-    with open_image(image, fs) as handle:
-        _import_host_dir(handle, handle.root, host_dir, meta_formats, verbose, fs)
-        if fs is FilingSystem.AFS:
-            handle.flush()
+    with resolve_mount(str(image), writable=True) as resolved:
+        mount = resolved.mount
+        _import_host_dir(mount, mount.path_root(), host_dir, meta_formats, verbose)
 
 
-def _import_host_dir(handle, target_dir, host_dir: Path, meta_formats, verbose, fs):
-    """Recursively import files from a host directory."""
+def _import_host_dir(mount, parent_path: str, host_dir: Path, meta_formats, verbose) -> None:
+    """Recursively import a host directory into *mount* under *parent_path*."""
+    from oaknut.file import AcornMeta, import_with_metadata
+    from oaknut.filesystem import AcornMetadata, HierarchicalDirectories
+
+    flat = not isinstance(mount, HierarchicalDirectories)
     for entry in sorted(host_dir.iterdir()):
         if entry.name.startswith("."):
             continue  # Skip hidden files and INF sidecars.
         if entry.suffix.lower() == ".inf":
             continue  # Skip INF sidecar files.
         if entry.is_file():
-            # Derive the in-image name from the host filename (strip metadata suffixes).
-            leaf = entry.stem if entry.suffix.lower() in (",inf",) else entry.name
-            # Strip any filename-encoded suffixes (,xxx or ,load,exec).
-            for sep in (",",):
-                if sep in leaf:
-                    leaf = leaf[: leaf.index(sep)]
-            target = target_dir / leaf
-            target.import_file(entry, meta_formats=meta_formats)
+            # Derive the in-image name from the host filename, stripping
+            # any filename-encoded metadata suffix (,xxx or ,load,exec).
+            leaf = entry.name.split(",", 1)[0]
+            target = mount.join(parent_path, leaf)
+            _clean, _label, meta = import_with_metadata(entry, meta_formats=meta_formats)
+            mount.write_bytes(target, entry.read_bytes())
+            if isinstance(mount, AcornMetadata):
+                mount.set_acorn_meta(
+                    target,
+                    AcornMeta(
+                        load_address=meta.load_address or 0,
+                        exec_address=meta.exec_address or 0,
+                        access=int(meta.access) if meta.access is not None else 0,
+                    ),
+                )
             if verbose:
-                click.echo(target.name, err=True)
+                click.echo(leaf, err=True)
         elif entry.is_dir():
-            if fs is FilingSystem.DFS:
-                # DFS is flat — import files from subdirectories directly.
-                _import_host_dir(handle, target_dir, entry, meta_formats, verbose, fs)
+            if flat:
+                # A flat catalogue (DFS) imports files from subdirectories
+                # directly into the same directory.
+                _import_host_dir(mount, parent_path, entry, meta_formats, verbose)
             else:
-                # ADFS/AFS — create a subdirectory and recurse.
-                sub = target_dir / entry.name
-                sub.mkdir(exist_ok=True)
-                _import_host_dir(handle, sub, entry, meta_formats, verbose, fs)
+                sub = mount.join(parent_path, entry.name)
+                mount.make_directory(sub, exist_ok=True)
+                _import_host_dir(mount, sub, entry, meta_formats, verbose)
 
 
 # ---------------------------------------------------------------------------
