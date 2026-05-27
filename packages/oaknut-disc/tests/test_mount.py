@@ -29,8 +29,13 @@ class TestResolveMount:
         assert isinstance(resolved, ResolvedMount)
         assert isinstance(resolved.mount, Mount)
         assert resolved.filesystem == "acorn-dfs"
-        names = {e.name for e in resolved.mount.iter_entries(resolved.mount.path_root())}
-        assert "HELLO" in names
+        # DFS has a nameless virtual root holding the populated directory
+        # letters; $ is the default one, a sibling of A, B, … The files
+        # live one level down, under their letter.
+        letters = {e.name for e in resolved.mount.iter_entries(resolved.mount.path_root())}
+        assert "$" in letters
+        files = {e.name for e in resolved.mount.iter_entries("$")}
+        assert "HELLO" in files
 
     def test_in_partition_path_is_returned(self, dfs_image_filepath):
         resolved = resolve_mount(f"{dfs_image_filepath}:$.HELLO")

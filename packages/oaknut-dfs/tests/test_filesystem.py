@@ -73,7 +73,10 @@ class TestMount:
             mount = filesystem.open(reader, identification.geometry)
 
             assert isinstance(mount, Mount)
-            assert mount.path_root() == "$"
+            # DFS's root is the nameless virtual catalogue holding the
+            # directory letters, not $ itself (a sibling of A, B, …).
+            assert mount.path_root() == ""
+            assert {entry.name for entry in mount.iter_entries("")} == {"$"}
             names = {entry.name for entry in mount.iter_entries("$")}
             assert {"HELLO", "DATA"} <= names
             assert mount.read_bytes("$.HELLO") == b"hello world"

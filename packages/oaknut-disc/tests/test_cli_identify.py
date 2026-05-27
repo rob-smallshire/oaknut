@@ -88,29 +88,35 @@ class TestContentFirstRouting:
 
 
 class TestExplicitDfsPrefix:
-    """The ``image:dfs:`` prefix, with and without a trailing path."""
+    """The ``image:acorn-dfs:`` partition prefix, with and without a path.
+
+    A prefix selects a partition by its filesystem name, so a DFS disc's
+    top partition is addressed as ``acorn-dfs:`` (the registered name),
+    not an ``dfs:`` family alias.
+    """
 
     def test_bare_prefix_lists_virtual_root(
         self, runner: CliRunner, dfs_image_filepath
     ):
-        # image:dfs: (empty path) lists the disc's virtual root, which
-        # for DFS holds the single $ directory.
-        result = runner.invoke(cli, ["ls", f"{dfs_image_filepath}:dfs:"])
+        # acorn-dfs: (empty path) lists the disc's nameless virtual root,
+        # which for DFS holds the populated directory letters.
+        result = runner.invoke(cli, ["ls", f"{dfs_image_filepath}:acorn-dfs:"])
         assert result.exit_code == 0
         assert "$" in result.output
 
     def test_prefix_with_root_lists_files(
         self, runner: CliRunner, dfs_image_filepath
     ):
-        # image:dfs:$ lists inside $ — the files themselves.
-        result = runner.invoke(cli, ["ls", f"{dfs_image_filepath}:dfs:$"])
+        # acorn-dfs:$ lists inside $ — the files themselves.
+        result = runner.invoke(cli, ["ls", f"{dfs_image_filepath}:acorn-dfs:$"])
         assert result.exit_code == 0
         assert "HELLO" in result.output
 
     def test_prefix_rejects_mismatched_content(
         self, runner: CliRunner, adfs_image_filepath
     ):
-        # Forcing dfs: on an ADFS image is a clean error, not garbage.
-        result = runner.invoke(cli, ["ls", f"{adfs_image_filepath}:dfs:"])
+        # An ADFS image has no acorn-dfs partition: a clean "no such
+        # partition" error, not garbage.
+        result = runner.invoke(cli, ["ls", f"{adfs_image_filepath}:acorn-dfs:"])
         assert result.exit_code != 0
-        assert "cannot access as DFS" in result.output
+        assert "no such partition 'acorn-dfs'" in result.output

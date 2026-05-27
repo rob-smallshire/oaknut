@@ -58,13 +58,14 @@ class TestLs:
         """
         result = runner.invoke(cli, ["ls", "--as", "display", str(dfs_image_filepath)])
         assert result.exit_code == 0
-        assert "DFS" in result.output
+        # The format is named by its extension key, not an ad-hoc label.
+        assert "acorn-dfs" in result.output
         # The bare listing carries directory rows, not file rows.
         # $ is the populated letter in the standard fixture.
         assert "$" in result.output
         assert "dir" in result.output
         # The files in $ should NOT appear at this level.
-        assert "HELLO" not in result.output
+        assert "Hello" not in result.output
 
     def test_ls_dfs_dollar_lists_files(
         self, runner: CliRunner, dfs_image_filepath: Path
@@ -80,7 +81,7 @@ class TestLs:
         assert result.exit_code == 0
         assert "Hello" in result.output
         assert "Games" in result.output
-        assert "ADFS" in result.output
+        assert "adfs" in result.output
 
     def test_ls_adfs_subdirectory(self, runner: CliRunner, adfs_image_filepath: Path) -> None:
         result = runner.invoke(cli, ["ls", f"{adfs_image_filepath}:$.Games"])
@@ -88,9 +89,13 @@ class TestLs:
         assert "Elite" in result.output
 
     def test_ls_afs_prefix(self, runner: CliRunner, afs_image_filepath: Path) -> None:
+        # The fixture is an ADFS-L (interleaved) floppy with an AFS tail
+        # partition, so this also exercises geometry-aware de-interleaving
+        # of the recursed region through the CLI.
         result = runner.invoke(cli, ["ls", "--as", "display", f"{afs_image_filepath}:afs:"])
         assert result.exit_code == 0
-        assert "AFS" in result.output
+        assert "afs" in result.output
+        assert "Greeting" in result.output
 
     def test_ls_nonexistent_path(self, runner: CliRunner, dfs_image_filepath: Path) -> None:
         result = runner.invoke(cli, ["ls", f"{dfs_image_filepath}:$.NOPE"])
@@ -98,9 +103,13 @@ class TestLs:
         assert "not found" in result.output
 
     def test_ls_prefix_mismatch(self, runner: CliRunner, dfs_image_filepath: Path) -> None:
+        # A prefix selects a *partition*, not a format. A DFS disc has no
+        # ``adfs`` partition, so the selector is rejected — and the error
+        # lists what partitions the disc actually does offer.
         result = runner.invoke(cli, ["ls", f"{dfs_image_filepath}:adfs:$"])
         assert result.exit_code != 0
-        assert "cannot access as ADFS" in result.output
+        assert "no such partition 'adfs'" in result.output
+        assert "acorn-dfs" in result.output
 
     def test_ls_machine_columns_are_numeric(
         self, runner: CliRunner, dfs_image_filepath: Path
@@ -3171,20 +3180,28 @@ class TestAfsMerge:
 
 
 class TestAfsPrefixErrors:
+    """A prefix names a *partition*, not a format, so addressing one a disc
+    does not have yields a uniform "no such partition" error that lists the
+    partitions the disc actually offers — never a format-assertion message.
+    """
+
     def test_afs_prefix_on_dfs(self, runner: CliRunner, dfs_image_filepath: Path) -> None:
         result = runner.invoke(cli, ["ls", f"{dfs_image_filepath}:afs:$"])
         assert result.exit_code != 0
-        assert "AFS partitions exist only on ADFS" in result.output
+        assert "no such partition 'afs'" in result.output
+        assert "acorn-dfs" in result.output
 
     def test_afs_on_disc_without_afs(self, runner: CliRunner, adfs_no_afs_filepath: Path) -> None:
         result = runner.invoke(cli, ["ls", f"{adfs_no_afs_filepath}:afs:$"])
         assert result.exit_code != 0
-        assert "no AFS partition" in result.output
+        assert "no such partition 'afs'" in result.output
+        assert "adfs" in result.output
 
     def test_dfs_prefix_on_adfs(self, runner: CliRunner, adfs_image_filepath: Path) -> None:
         result = runner.invoke(cli, ["ls", f"{adfs_image_filepath}:dfs:$"])
         assert result.exit_code != 0
-        assert "cannot access as DFS" in result.output
+        assert "no such partition 'dfs'" in result.output
+        assert "adfs" in result.output
 
 
 # ---------------------------------------------------------------------------
@@ -3278,7 +3295,7 @@ class TestGenerateDsc:
     CLI via ``ADFS.from_file``.
     """
 
-    def test_writes_dsc_and_unblocks_ls(
+    def test_writes_dsc_sidecar(
         self,
         runner: CliRunner,
         tmp_path: Path,
@@ -3290,11 +3307,13 @@ class TestGenerateDsc:
         cf_dat = tmp_path / "cf_test.dat"
         _make_cfbackup_style_dat(src, cf_dat)
 
-        # Sanity: no .dsc, ls fails.
+        # Content-first ls no longer needs the .dsc: identification reads
+        # the linear image directly. generate-dsc still synthesises the
+        # sidecar for ADFS.from_file consumers that do want explicit CHS.
         cf_dsc = cf_dat.with_suffix(".dsc")
         assert not cf_dsc.exists()
         ls_before = runner.invoke(cli, ["ls", str(cf_dat)])
-        assert ls_before.exit_code != 0
+        assert ls_before.exit_code == 0, ls_before.output
 
         # Generate the .dsc.  The fixture is built with the SCSI default
         # geometry (heads=4, spt=33), so reuse that to ensure the FSM

@@ -40,6 +40,7 @@ from .cli_paths import (
     parse_prefix,
     resolve_path,
 )
+from .mount import resolve_mount
 
 # ---------------------------------------------------------------------------
 # Alias-aware Click group
@@ -431,111 +432,81 @@ def ls(file_spec: str, show_access_byte: bool):
     Accepts a ``FILE_SPEC`` (the in-image ``PATH_SPEC`` is optional and defaults to the root).
     """
     from asyoulikeit.tabular_data import Importance, Report, Reports, TableContent
+    from oaknut.file import Access
+    from oaknut.filesystem import AcornMetadata, FreeSpace, Titled
 
-    image, in_image_path = parse_file_spec(file_spec)
-    fs, bare = resolve_path(image, in_image_path)
-    with open_image(image, fs) as handle:
-        target = _navigate(handle, bare, fs)
+    resolved = resolve_mount(file_spec)
+    mount = resolved.mount
+    target = resolved.path or mount.path_root()
 
-        if not target.exists() and not target.is_dir():
-            raise click.ClickException(f"path not found: {bare or '$'}")
+    if not mount.exists(target):
+        raise click.ClickException(f"path not found: {target}")
 
-        if target.is_file():
-            # Single file — just echo the bare name, same as before.
-            # Skipping the Reports envelope keeps `disc ls img $.file`
-            # shell-pipe-friendly without a header line to grep away.
-            click.echo(target.name)
-            return None
+    entry = mount.stat(target)
+    if not entry.is_dir:
+        # Single file — echo the bare name, pipe-friendly (no header).
+        click.echo(entry.name)
+        return None
 
-        entries = list(target.iterdir())
+    title_str = mount.title if isinstance(mount, Titled) else ""
+    table_title = resolved.image.name
+    if title_str:
+        table_title += f" — {title_str}"
+    # Parentheses, not brackets: the report title is rendered through
+    # Rich, which would silently consume ``[name]`` as console markup.
+    table_title += f" ({resolved.filesystem})"
 
-        # Build the display title and the "free space" description
-        # from filing-system-specific handle attributes.
-        if fs is FilingSystem.DFS:
-            title_str = getattr(handle, "title", "") or ""
-            free = getattr(handle, "free_sectors", None)
-            free_unit = "sectors"
-            fmt_name = "DFS"
-        elif fs is FilingSystem.AFS:
-            title_str = getattr(handle, "disc_name", "") or ""
-            free = getattr(handle, "free_sectors", None)
-            free_unit = "sectors"
-            fmt_name = "AFS"
-        else:
-            title_str = getattr(handle, "title", "") or ""
-            free = getattr(handle, "free_space", None)
-            free_unit = "bytes"
-            fmt_name = "ADFS"
+    description = (
+        f"Free: {mount.free_bytes():,} bytes" if isinstance(mount, FreeSpace) else None
+    )
 
-        table_title = f"{image.name}"
-        if title_str:
-            table_title += f" — {title_str}"
-        table_title += f" [{fmt_name}]"
+    table = TableContent(title=table_title, description=description)
+    table.add_column("name", "Name", header=True)
+    # ``type`` discriminates rows so the length column can carry bytes for
+    # files and an entry count for directories unambiguously.
+    table.add_column("type", "Type")
+    # Load/exec are display-focused; drop them from TSV by default so the
+    # piped view stays concise. --detailed restores them.
+    table.add_column("load", "Load", importance=Importance.DETAIL)
+    table.add_column("exec", "Exec", importance=Importance.DETAIL)
+    table.add_column("length", "Length")
+    table.add_column("attr", "Attr")
+    if show_access_byte:
+        table.add_column("hex", "Hex")
 
-        if free is not None:
-            description = f"Free: {free:,} {free_unit}"
-        else:
-            description = None
-
-        table = TableContent(title=table_title, description=description)
-        table.add_column("name", "Name", header=True)
-        # ``type`` is dir or file. It discriminates rows so the length
-        # column can carry bytes for files and entry-count for
-        # directories without an ambiguous name marker.
-        table.add_column("type", "Type")
-        # Load and exec are Acorn-specific addresses that matter in
-        # display-focused use and are available via get-load/get-exec
-        # on demand; drop them from TSV by default so the piped-output
-        # view stays concise.  --detailed restores them.
-        table.add_column("load", "Load", importance=Importance.DETAIL)
-        table.add_column("exec", "Exec", importance=Importance.DETAIL)
-        table.add_column("length", "Length")
-        table.add_column("attr", "Attr")
-        if show_access_byte:
-            # The user explicitly asked for the raw byte — treat it
-            # as essential so TSV shows it alongside Attr without
-            # requiring --detailed too.
-            table.add_column("hex", "Hex")
-
-        for child in entries:
-            if child.is_dir():
-                try:
-                    length_value: object = sum(1 for _ in child.iterdir())
-                except Exception:
-                    length_value = ""
-                row = {
-                    "name": child.name,
-                    "type": "dir",
-                    "load": "",
-                    "exec": "",
-                    "length": length_value,
-                    "attr": "",
-                }
-                if show_access_byte:
-                    row["hex"] = ""
-                table.add_row(**row)
-                continue
-            st = child.stat()
-            # Addresses: hex for humans, raw int for machine formatters.
-            # Length: always a decimal byte count — never hex.
-            load_cell = _address_cell(st.load_address) if hasattr(st, "load_address") else ""
-            exec_cell = _address_cell(st.exec_address) if hasattr(st, "exec_address") else ""
-            length_value = st.length if hasattr(st, "length") else ""
-            locked = getattr(st, "locked", False)
-            attr_str = "L" if locked else ""
-            if hasattr(st, "access"):
-                attr_str = _format_access(st.access)
+    has_acorn = isinstance(mount, AcornMetadata)
+    for child in mount.iter_entries(target):
+        if child.is_dir:
             row = {
                 "name": child.name,
-                "type": "file",
-                "load": load_cell,
-                "exec": exec_cell,
-                "length": length_value,
-                "attr": attr_str,
+                "type": "dir",
+                "load": "",
+                "exec": "",
+                "length": sum(1 for _ in mount.iter_entries(child.path)),
+                "attr": "",
             }
             if show_access_byte:
-                row["hex"] = _access_byte_hex(st)
+                row["hex"] = ""
             table.add_row(**row)
+            continue
+        load_cell = exec_cell = attr_str = hex_cell = ""
+        if has_acorn:
+            meta = mount.acorn_meta(child.path)
+            load_cell = _address_cell(meta.load_address)
+            exec_cell = _address_cell(meta.exec_address)
+            attr_str = _format_access(Access(meta.access))
+            hex_cell = f"0x{int(meta.access):02X}"
+        row = {
+            "name": child.name,
+            "type": "file",
+            "load": load_cell,
+            "exec": exec_cell,
+            "length": child.length,
+            "attr": attr_str,
+        }
+        if show_access_byte:
+            row["hex"] = hex_cell
+        table.add_row(**row)
 
     return Reports(entries=Report(data=table))
 

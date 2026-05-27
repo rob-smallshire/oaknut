@@ -100,7 +100,12 @@ class _DFSMount:
         self._dfs = dfs
 
     def path_root(self) -> str:
-        return "$"
+        # DFS has a *nameless* virtual root holding the populated
+        # directory letters ($, A, B, …) as siblings; $ is just the
+        # default one, not the root. So the root path is the empty
+        # string — a bare ``ls`` lists the directory letters, and
+        # ``:$`` drills into the default directory's files.
+        return ""
 
     def _navigate(self, path: str):
         return self._dfs.path(path)
