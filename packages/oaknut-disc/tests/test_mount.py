@@ -70,3 +70,24 @@ class TestResolveMount:
         mystery.write_bytes(b"not any known disc image at all")
         with pytest.raises(click.ClickException, match="no installed filesystem recognises"):
             resolve_mount(str(mystery))
+
+
+class TestWritableMount:
+    def test_writable_context_manager_persists(self, dfs_image_filepath):
+        # As a context manager the live mapping stays open for the write
+        # and is released on exit; the change is then visible on reopen.
+        with resolve_mount(f"{dfs_image_filepath}:$", writable=True) as resolved:
+            resolved.mount.write_bytes("$.GREET", b"hi")
+        resolved = resolve_mount(f"{dfs_image_filepath}:$")
+        assert resolved.mount.read_bytes("$.GREET") == b"hi"
+
+    def test_writable_afs_partition_on_hard_disc_persists(self, tmp_path):
+        import shutil
+
+        image_filepath = tmp_path / "l3fs.dat"
+        shutil.copy(_L3FS_DAT, image_filepath)
+        with resolve_mount(f"{image_filepath}:afs:$", writable=True) as resolved:
+            assert resolved.filesystem == "afs"
+            resolved.mount.write_bytes("$.NEWFILE", b"persisted")
+        resolved = resolve_mount(f"{image_filepath}:afs:$")
+        assert resolved.mount.read_bytes("$.NEWFILE") == b"persisted"

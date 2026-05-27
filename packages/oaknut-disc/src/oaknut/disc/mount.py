@@ -43,13 +43,31 @@ _SELECTOR_RE = re.compile(r"^([a-z][a-z0-9-]*(?:\.\d+)?):(.*)$", re.DOTALL)
 
 @dataclass(frozen=True)
 class ResolvedMount:
-    """A mounted partition and the path addressed within it."""
+    """A mounted partition and the path addressed within it.
+
+    For a writable mount the underlying reader (a live, file-backed
+    mapping) must stay open while the mount is used, so use this as a
+    context manager — ``with resolve_mount(spec, writable=True) as rm:``
+    — to release the mapping (and flush the OS write-back) on exit. A
+    read-only mount holds a private copy, so closing is a harmless no-op.
+    """
 
     mount: Mount
     path: str
     filesystem: str
     partition: str
     image: Path
+    _reader: object = None
+
+    def close(self) -> None:
+        if self._reader is not None:
+            self._reader.close()
+
+    def __enter__(self) -> "ResolvedMount":
+        return self
+
+    def __exit__(self, *exc_info) -> None:
+        self.close()
 
 
 def split_selector(in_image_path: str) -> tuple[str | None, str]:
@@ -63,46 +81,64 @@ def split_selector(in_image_path: str) -> tuple[str | None, str]:
 def resolve_mount(
     file_spec: str,
     *,
+    writable: bool = False,
     force_filesystem: str | None = None,
     force_geometry: str | None = None,
 ) -> ResolvedMount:
     """Resolve *file_spec* to a mounted partition and in-partition path.
 
     Identifies the image by content and mounts the selected partition.
-    *force_filesystem* / *force_geometry* override detection.
+    *force_filesystem* / *force_geometry* override detection. With
+    *writable* the image is opened for writing and the mount's mutations
+    reach the file; the returned :class:`ResolvedMount` then owns a live
+    mapping and must be used as a context manager so it is released. A
+    read-only mount holds a private copy, so the reader is closed at once.
     """
     image_filepath, in_image_path = parse_file_spec(file_spec)
     selector, in_path = split_selector(in_image_path)
 
-    if force_filesystem is not None:
-        filesystem = create_filesystem(force_filesystem)
-        with reader_for(image_filepath) as reader:
+    reader = reader_for(image_filepath, writable=writable)
+    try:
+        if force_filesystem is not None:
+            filesystem = create_filesystem(force_filesystem)
             proposed = filesystem.probe(reader)
             geometry = _geometry(
                 filesystem, force_geometry, proposed.geometry if proposed else None
             )
             mount = filesystem.open(reader, geometry)
-        return ResolvedMount(mount, in_path, force_filesystem, force_filesystem, image_filepath)
-
-    candidates = identify(image_filepath)
-    if not candidates:
-        raise click.ClickException(_unrecognised_message(image_filepath.name))
-    host = candidates[0]
-    chosen, region = _select(host, selector)
-    filesystem = create_filesystem(chosen.filesystem)
-    with reader_for(image_filepath) as reader:
-        if region is None:
-            region_view = reader
+            chosen_name = partition_name = force_filesystem
         else:
-            # A reserved region is a logical-sector run of the host; read
-            # it through the host geometry (de-interleaving a floppy).
-            region_view = region_reader(
-                reader, host.geometry, region.start_sector, region.num_sectors
-            )
-        geometry = _geometry(filesystem, force_geometry, chosen.geometry)
-        mount = filesystem.open(region_view, geometry)
+            candidates = identify(image_filepath)
+            if not candidates:
+                raise click.ClickException(_unrecognised_message(image_filepath.name))
+            host = candidates[0]
+            chosen, region = _select(host, selector)
+            filesystem = create_filesystem(chosen.filesystem)
+            if region is None:
+                region_view = reader
+            else:
+                # A reserved region is a logical-sector run of the host;
+                # read it through the host geometry (a window on a linear
+                # host, de-interleaved on a floppy).
+                region_view = region_reader(
+                    reader, host.geometry, region.start_sector, region.num_sectors
+                )
+            geometry = _geometry(filesystem, force_geometry, chosen.geometry)
+            mount = filesystem.open(region_view, geometry)
+            chosen_name = chosen.filesystem
+            partition_name = chosen.partition.selector
+    except BaseException:
+        reader.close()
+        raise
+
+    if not writable:
+        # The mount holds a private copy; the mapping is no longer needed.
+        reader.close()
+        return ResolvedMount(mount, in_path, chosen_name, partition_name, image_filepath)
+    # A writable mount maps the file live; keep the reader open until the
+    # caller closes the ResolvedMount.
     return ResolvedMount(
-        mount, in_path, chosen.filesystem, chosen.partition.selector, image_filepath
+        mount, in_path, chosen_name, partition_name, image_filepath, _reader=reader
     )
 
 
