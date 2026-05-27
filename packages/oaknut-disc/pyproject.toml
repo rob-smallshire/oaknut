@@ -34,7 +34,7 @@ dependencies = [
     # The [cli] extra pulls each filesystem's contributed-command module.
     "oaknut-dfs[cli]>=10.0",
     "oaknut-adfs[cli]>=10.0",
-    "oaknut-afs>=10.0",
+    "oaknut-afs[cli]>=10.0",
     "click>=8.1.7",
     "rich>=13.0",
     "asyoulikeit>=1.2.0",

@@ -2551,19 +2551,19 @@ class TestAfsPlan:
     def test_afs_plan_max(self, runner: CliRunner, adfs_no_afs_filepath: Path) -> None:
         # Display mode pins the report titles so the layout is
         # asserted as-is; TSV omits titles by design.
-        result = runner.invoke(cli, ["afs-plan", "--as", "display", str(adfs_no_afs_filepath)])
+        result = runner.invoke(cli, ["afs", "plan", "--as", "display", str(adfs_no_afs_filepath)])
         assert result.exit_code == 0
         assert "Disc geometry" in result.output
         assert "cylinders" in result.output
         assert "Proposed AFS partition" in result.output
-        assert "disc afs-init" in result.output
+        assert "disc afs init" in result.output
 
     def test_afs_plan_explicit_cylinders(
         self,
         runner: CliRunner,
         adfs_no_afs_filepath: Path,
     ) -> None:
-        result = runner.invoke(cli, ["afs-plan", str(adfs_no_afs_filepath), "--cylinders", "10"])
+        result = runner.invoke(cli, ["afs", "plan", str(adfs_no_afs_filepath), "--cylinders", "10"])
         assert result.exit_code == 0
         assert "10 cylinders" in result.output
 
@@ -2575,7 +2575,7 @@ class TestAfsPlan:
         # The existing-partition case now surfaces as a dedicated
         # "Existing AFS partition" report rather than a free-text
         # message; pin --as display to see the title.
-        result = runner.invoke(cli, ["afs-plan", "--as", "display", str(afs_image_filepath)])
+        result = runner.invoke(cli, ["afs", "plan", "--as", "display", str(afs_image_filepath)])
         assert result.exit_code == 0
         assert "Existing AFS partition" in result.output
 
@@ -2584,7 +2584,7 @@ class TestAfsPlan:
         runner: CliRunner,
         adfs_no_afs_filepath: Path,
     ) -> None:
-        result = runner.invoke(cli, ["afs-plan", str(adfs_no_afs_filepath), "--cylinders", "9999"])
+        result = runner.invoke(cli, ["afs", "plan", str(adfs_no_afs_filepath), "--cylinders", "9999"])
         assert result.exit_code != 0
 
     def test_afs_plan_as_json(
@@ -2594,7 +2594,7 @@ class TestAfsPlan:
     ) -> None:
         import json
 
-        result = runner.invoke(cli, ["afs-plan", str(adfs_no_afs_filepath), "--as", "json"])
+        result = runner.invoke(cli, ["afs", "plan", str(adfs_no_afs_filepath), "--as", "json"])
         assert result.exit_code == 0
         doc = json.loads(result.output)
         reports = doc["reports"]
@@ -2609,7 +2609,7 @@ class TestAfsPlan:
         assert plan_row["afs_region"]
         assert plan_row["start_cylinder"]
         assert plan_row["will_compact"] == "not required"
-        assert plan_row["suggested_command"].startswith("disc afs-init")
+        assert plan_row["suggested_command"].startswith("disc afs init")
 
     def test_afs_plan_as_json_already_partitioned(
         self,
@@ -2618,7 +2618,7 @@ class TestAfsPlan:
     ) -> None:
         import json
 
-        result = runner.invoke(cli, ["afs-plan", str(afs_image_filepath), "--as", "json"])
+        result = runner.invoke(cli, ["afs", "plan", str(afs_image_filepath), "--as", "json"])
         assert result.exit_code == 0
         doc = json.loads(result.output)
         reports = doc["reports"]
@@ -2633,7 +2633,7 @@ class TestAfsPlan:
         runner: CliRunner,
         adfs_no_afs_filepath: Path,
     ) -> None:
-        result = runner.invoke(cli, ["afs-plan", str(adfs_no_afs_filepath), "--as", "xml"])
+        result = runner.invoke(cli, ["afs", "plan", str(adfs_no_afs_filepath), "--as", "xml"])
         assert result.exit_code != 0
 
 
@@ -2642,7 +2642,7 @@ class TestAfsInit:
         result = runner.invoke(
             cli,
             [
-                "afs-init",
+                "afs", "init",
                 str(adfs_no_afs_filepath),
                 "--disc-name",
                 "NewAFS",
@@ -2658,7 +2658,7 @@ class TestAfsInit:
 
 class TestAfsUsers:
     def test_afs_users(self, runner: CliRunner, afs_image_filepath: Path) -> None:
-        result = runner.invoke(cli, ["afs-users", str(afs_image_filepath)])
+        result = runner.invoke(cli, ["afs", "users", str(afs_image_filepath)])
         assert result.exit_code == 0
         assert "Syst" in result.output
 
@@ -2667,13 +2667,13 @@ class TestAfsUsers:
     ) -> None:
         """The human display renders quotas in IEC units, not hex bytes."""
         add = runner.invoke(
-            cli, ["afs-useradd", str(afs_image_filepath), "ALICE", "--quota", "1048576"]
+            cli, ["afs", "useradd", str(afs_image_filepath), "ALICE", "--quota", "1048576"]
         )
         assert add.exit_code == 0, add.output
         # Pin --as display: under CliRunner there's no TTY to trigger the
         # display default, so the formatter would otherwise fall back to TSV.
         result = runner.invoke(
-            cli, ["afs-users", "--as", "display", str(afs_image_filepath)]
+            cli, ["afs", "users", "--as", "display", str(afs_image_filepath)]
         )
         assert result.exit_code == 0, result.output
         # ALICE's 1 MiB quota reads as a friendly unit, and the old
@@ -2685,7 +2685,7 @@ class TestAfsUsers:
         """--as json emits a parseable document listing every user."""
         import json as _json
 
-        result = runner.invoke(cli, ["afs-users", "--as", "json", str(afs_image_filepath)])
+        result = runner.invoke(cli, ["afs", "users", "--as", "json", str(afs_image_filepath)])
         assert result.exit_code == 0, result.output
         doc = _json.loads(result.output)
         payload = next(iter(doc["reports"].values()))
@@ -2707,17 +2707,17 @@ class TestAfsUsers:
         import json as _json
 
         add = runner.invoke(
-            cli, ["afs-useradd", str(afs_image_filepath), "ALICE", "--quota", "1048576"]
+            cli, ["afs", "useradd", str(afs_image_filepath), "ALICE", "--quota", "1048576"]
         )
         assert add.exit_code == 0, add.output
-        result = runner.invoke(cli, ["afs-users", "--as", "json", str(afs_image_filepath)])
+        result = runner.invoke(cli, ["afs", "users", "--as", "json", str(afs_image_filepath)])
         assert result.exit_code == 0, result.output
         payload = next(iter(_json.loads(result.output)["reports"].values()))
         alice_row = next(r for r in payload["rows"] if r["user"] == "ALICE")
         assert alice_row["quota"] == 1048576
 
     def test_afs_users_tsv_columns(self, runner: CliRunner, afs_image_filepath: Path) -> None:
-        result = runner.invoke(cli, ["afs-users", "--as", "tsv", str(afs_image_filepath)])
+        result = runner.invoke(cli, ["afs", "users", "--as", "tsv", str(afs_image_filepath)])
         assert result.exit_code == 0, result.output
         lines = [ln for ln in result.output.splitlines() if ln]
         # First non-data line is the "# User..." header.
@@ -2740,7 +2740,7 @@ class TestAfsUserDel:
         result = runner.invoke(
             cli,
             [
-                "afs-userdel",
+                "afs", "userdel",
                 str(afs_image_with_spare_slot),
                 "alice",
             ],
@@ -2760,7 +2760,7 @@ class TestAfsUserAdd:
         result = runner.invoke(
             cli,
             [
-                "afs-userdel",
+                "afs", "userdel",
                 str(afs_image_with_spare_slot),
                 "alice",
             ],
@@ -2771,7 +2771,7 @@ class TestAfsUserAdd:
         result = runner.invoke(
             cli,
             [
-                "afs-useradd",
+                "afs", "useradd",
                 str(afs_image_with_spare_slot),
                 "bob",
             ],
@@ -2779,7 +2779,7 @@ class TestAfsUserAdd:
         assert result.exit_code == 0
         assert result.output == ""
 
-        result = runner.invoke(cli, ["afs-users", str(afs_image_with_spare_slot)])
+        result = runner.invoke(cli, ["afs", "users", str(afs_image_with_spare_slot)])
         assert "bob" in result.output
 
 
@@ -2797,7 +2797,7 @@ class TestAfsPasswd:
     ) -> None:
         result = runner.invoke(
             cli,
-            ["afs-passwd", str(afs_image_with_spare_slot), "alice", "--password", "sw0rd"],
+            ["afs", "passwd", str(afs_image_with_spare_slot), "alice", "--password", "sw0rd"],
         )
         assert result.exit_code == 0, result.output
         assert _afs_user_password(afs_image_with_spare_slot, "alice") == "sw0rd"
@@ -2808,7 +2808,7 @@ class TestAfsPasswd:
         """--password is its own option, so a ':'/'=' password is fine."""
         result = runner.invoke(
             cli,
-            ["afs-passwd", str(afs_image_with_spare_slot), "alice", "--password", "p:s=w"],
+            ["afs", "passwd", str(afs_image_with_spare_slot), "alice", "--password", "p:s=w"],
         )
         assert result.exit_code == 0, result.output
         assert _afs_user_password(afs_image_with_spare_slot, "alice") == "p:s=w"
@@ -2818,7 +2818,7 @@ class TestAfsPasswd:
     ) -> None:
         result = runner.invoke(
             cli,
-            ["afs-passwd", str(afs_image_with_spare_slot), "ghost", "--password", "x"],
+            ["afs", "passwd", str(afs_image_with_spare_slot), "ghost", "--password", "x"],
         )
         assert result.exit_code != 0
 
@@ -2827,7 +2827,7 @@ class TestAfsPasswd:
     ) -> None:
         result = runner.invoke(
             cli,
-            ["afs-passwd", str(afs_image_with_spare_slot), "alice", "--password", "toolong"],
+            ["afs", "passwd", str(afs_image_with_spare_slot), "alice", "--password", "toolong"],
         )
         assert result.exit_code != 0
 
@@ -2841,7 +2841,7 @@ class TestAfsInitPasswords:
         result = runner.invoke(
             cli,
             [
-                "afs-init",
+                "afs", "init",
                 str(adfs_no_afs_filepath),
                 "--disc-name",
                 "PwInit",
@@ -2863,7 +2863,7 @@ class TestAfsInitPasswords:
         result = runner.invoke(
             cli,
             [
-                "afs-init",
+                "afs", "init",
                 str(adfs_no_afs_filepath),
                 "--disc-name",
                 "PwColon",
@@ -2885,7 +2885,7 @@ class TestAfsInitPasswords:
         result = runner.invoke(
             cli,
             [
-                "afs-init",
+                "afs", "init",
                 str(adfs_no_afs_filepath),
                 "--disc-name",
                 "PwBuilt",
@@ -2904,7 +2904,7 @@ class TestAfsInitPasswords:
         result = runner.invoke(
             cli,
             [
-                "afs-init",
+                "afs", "init",
                 str(adfs_no_afs_filepath),
                 "--disc-name",
                 "PwGhost",
@@ -2923,7 +2923,7 @@ class TestAfsInitPasswords:
         result = runner.invoke(
             cli,
             [
-                "afs-init",
+                "afs", "init",
                 str(adfs_no_afs_filepath),
                 "--disc-name",
                 "PwNoEq",
@@ -2943,7 +2943,7 @@ class TestAfsInitPasswords:
         result = runner.invoke(
             cli,
             [
-                "afs-init",
+                "afs", "init",
                 str(adfs_no_afs_filepath),
                 "--disc-name",
                 "PwDup",
@@ -3030,7 +3030,7 @@ class TestAfsMerge:
         result = runner.invoke(
             cli,
             [
-                "afs-merge",
+                "afs", "merge",
                 str(afs_image_filepath),
                 "--source",
                 str(source_filepath),
@@ -3060,7 +3060,7 @@ class TestAfsMerge:
         result = runner.invoke(
             cli,
             [
-                "afs-merge",
+                "afs", "merge",
                 str(afs_image_filepath),
                 "--source",
                 str(source_filepath),
@@ -3086,7 +3086,7 @@ class TestAfsMerge:
         result = runner.invoke(
             cli,
             [
-                "afs-merge",
+                "afs", "merge",
                 str(afs_image_filepath),
                 "--source",
                 str(source_filepath),
@@ -3112,7 +3112,7 @@ class TestAfsMerge:
         result = runner.invoke(
             cli,
             [
-                "afs-merge",
+                "afs", "merge",
                 str(afs_image_filepath),
                 "--source",
                 str(source_filepath),

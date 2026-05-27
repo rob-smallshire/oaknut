@@ -31,6 +31,11 @@ dependencies = [
     "oaknut-adfs>=10.0",
 ]
 
+# The `cli` extra pulls the shared CLI toolkit so this package can
+# contribute the `disc afs` subcommands; the library core never imports it.
+[project.optional-dependencies]
+cli = ["oaknut-cli>=10.0"]
+
 [project.urls]
 Homepage = "https://github.com/rob-smallshire/oaknut/tree/master/packages/oaknut-afs"
 Documentation = "https://rob-smallshire.github.io/oaknut/disc/api/reference/afs.html"
@@ -45,6 +50,10 @@ afs = "oaknut.afs.probers:AFSProber"
 # Filesystem contributed to the oaknut.filesystem axis.
 [project.entry-points."oaknut.filesystem"]
 afs = "oaknut.afs.filesystem:AFS"
+
+# Admin subcommands contributed to the `disc` CLI: `disc afs <subcommand>`.
+[project.entry-points."oaknut.command"]
+afs = "oaknut.afs.cli:afs"
 
 [dependency-groups]
 test = [

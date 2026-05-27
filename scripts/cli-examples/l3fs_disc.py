@@ -48,18 +48,18 @@ with in_tmp_dir():
     show("disc opt scsi0.dat EXEC")
 
     section("plan_afs")
-    show("disc afs-plan scsi0.dat")
+    show("disc afs plan scsi0.dat")
 
     section("init_afs")
     show(
-        "disc afs-init scsi0.dat --disc-name Server"
+        "disc afs init scsi0.dat --disc-name Server"
         " --user RJS:2MB"
         " --omit-user Welcome"
         " --emplace Library --emplace Library1"
     )
 
     section("inspect_afs")
-    show("disc afs-users scsi0.dat")
+    show("disc afs users scsi0.dat")
 
     section("verify")
     show("disc stat scsi0.dat")

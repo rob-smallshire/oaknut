@@ -495,7 +495,7 @@ class TestAfsInitErrors:
         result = runner.invoke(
             cli,
             [
-                "afs-init",
+                "afs", "init",
                 str(adfs_hard_no_afs_filepath),
                 "--disc-name",
                 "This Name Is Far Too Long For AFS",
@@ -518,7 +518,7 @@ class TestAfsInitErrors:
         result = runner.invoke(
             cli,
             [
-                "afs-init",
+                "afs", "init",
                 str(adfs_hard_with_afs_filepath),
                 "--disc-name",
                 "TwiceFS",
@@ -534,7 +534,7 @@ class TestAfsInitErrors:
 
 class TestAfsUserCommandErrors:
     def test_userdel_unknown_user(self, runner: CliRunner, afs_image_filepath: Path) -> None:
-        result = runner.invoke(cli, ["afs-userdel", str(afs_image_filepath), "nosuch"])
+        result = runner.invoke(cli, ["afs", "userdel", str(afs_image_filepath), "nosuch"])
         assert result.exception is None or isinstance(result.exception, SystemExit), (
             result.exception
         )
@@ -547,7 +547,7 @@ class TestAfsUserCommandErrors:
     ) -> None:
         # ADFS image with no AFS partition; useradd should fail with a
         # clean diagnostic, not a traceback.
-        result = runner.invoke(cli, ["afs-useradd", str(adfs_no_afs_filepath), "alice"])
+        result = runner.invoke(cli, ["afs", "useradd", str(adfs_no_afs_filepath), "alice"])
         assert result.exception is None or isinstance(result.exception, SystemExit), (
             result.exception
         )
