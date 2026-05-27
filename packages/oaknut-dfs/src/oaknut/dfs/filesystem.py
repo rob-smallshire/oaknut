@@ -207,6 +207,10 @@ class _DFSMount:
     def compact(self) -> int:
         return self._dfs.compact()
 
+    # -- Validatable --
+    def validate(self) -> list:
+        return self._dfs.validate()
+
 
 class _BaseDFS(Filesystem):
     """Shared behaviour for the flat-catalogue DFS-family filesystems."""

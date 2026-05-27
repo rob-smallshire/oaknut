@@ -206,6 +206,10 @@ class _ADFSMount:
     def compact(self) -> int:
         return self._adfs.compact()
 
+    # -- Validatable --
+    def validate(self) -> list:
+        return self._adfs.validate()
+
     # -- RegionHost --
     def reserved_regions(self) -> tuple[Partition, ...]:
         return self._reserved

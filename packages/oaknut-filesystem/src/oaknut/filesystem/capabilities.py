@@ -202,6 +202,20 @@ class Compactable(Protocol):
 
 
 @runtime_checkable
+class Validatable(Protocol):
+    """The filesystem can check its on-disc structure for defects."""
+
+    def validate(self) -> list:
+        """Return a list of structural defects (empty when clean).
+
+        The entries are the filesystem's own validation-error objects,
+        rendered by the CLI's error formatter; the caller treats them
+        opaquely.
+        """
+        ...
+
+
+@runtime_checkable
 class UserDatabase(Protocol):
     """The filesystem has user accounts (AFS passwords / quota)."""
 

@@ -35,7 +35,6 @@ from .cli_identify import (
 )
 from .cli_paths import (
     FilingSystem,
-    detect_filing_system,
     parse_file_spec,
     resolve_path,
 )
@@ -1215,12 +1214,17 @@ def validate(image: Path) -> None:
     (ADFS).
     """
     from oaknut.exception import render_error
+    from oaknut.filesystem import Validatable
 
     from .console import print_error
 
-    fs = detect_filing_system(image)
-    with open_image(image, fs) as handle:
-        errors = handle.validate()
+    with resolve_mount(str(image)) as resolved:
+        mount = resolved.mount
+        if not isinstance(mount, Validatable):
+            # A filesystem with no structural checks (AFS) is reported
+            # clean rather than erroring — nothing to find.
+            return
+        errors = mount.validate()
 
     if not errors:
         return

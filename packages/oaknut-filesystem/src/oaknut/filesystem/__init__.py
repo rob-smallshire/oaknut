@@ -25,6 +25,7 @@ from oaknut.filesystem.capabilities import (
     RegionHost,
     Titled,
     UserDatabase,
+    Validatable,
 )
 from oaknut.filesystem.coordinator import (
     create_filesystem,
@@ -71,6 +72,7 @@ __all__ = [
     "Bootable",
     "FreeSpace",
     "Compactable",
+    "Validatable",
     "UserDatabase",
     "RegionHost",
     # geometry
