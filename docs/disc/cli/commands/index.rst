@@ -254,6 +254,24 @@ Diagnostics
    .. cli-example:: cmd_generate_dsc
 
 
+Filesystem identification
+-------------------------
+
+These introspect the filesystems ``disc identify`` can recognise — one
+registered detector per filesystem. The set grows as filesystem
+packages are installed.
+
+.. oaknut-command:: oaknut.disc.cli:list-filesystems
+   :prog: disc list-filesystems
+
+   .. cli-example:: cmd_list_filesystems
+
+.. oaknut-command:: oaknut.disc.cli:describe-filesystem
+   :prog: disc describe-filesystem
+
+   .. cli-example:: cmd_describe_filesystem
+
+
 Meta-commands
 -------------
 
@@ -281,21 +299,3 @@ formatters available to ``--as``. See
    :prog: disc describe-report-format
 
    .. cli-example:: cmd_describe_report_format
-
-
-Disc-format identification
---------------------------
-
-These introspect the disc formats ``disc identify`` can recognise —
-one registered filesystem per format. The set grows as filesystem
-packages are installed.
-
-.. oaknut-command:: oaknut.disc.cli:list-formats
-   :prog: disc list-formats
-
-   .. cli-example:: cmd_list_formats
-
-.. oaknut-command:: oaknut.disc.cli:describe-format
-   :prog: disc describe-format
-
-   .. cli-example:: cmd_describe_format

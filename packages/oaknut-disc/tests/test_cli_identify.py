@@ -1,4 +1,4 @@
-"""CLI tests for `disc identify`, `list-formats`, and `describe-format`."""
+"""CLI tests for `disc identify`, `list-filesystems`, and `describe-filesystem`."""
 
 from click.testing import CliRunner
 from oaknut.disc.cli import cli
@@ -54,22 +54,22 @@ class TestIdentify:
         assert result.exit_code != 0
 
 
-class TestListFormats:
-    def test_lists_every_registered_format(self, runner: CliRunner):
-        result = runner.invoke(cli, ["list-formats"])
+class TestListFilesystems:
+    def test_lists_every_registered_filesystem(self, runner: CliRunner):
+        result = runner.invoke(cli, ["list-filesystems"])
         assert result.exit_code == 0
         for name in ("acorn-dfs", "watford-dfs", "adfs", "afs", "zip"):
             assert name in result.output
 
 
-class TestDescribeFormat:
-    def test_describes_a_known_format(self, runner: CliRunner):
-        result = runner.invoke(cli, ["describe-format", "afs"])
+class TestDescribeFilesystem:
+    def test_describes_a_known_filesystem(self, runner: CliRunner):
+        result = runner.invoke(cli, ["describe-filesystem", "afs"])
         assert result.exit_code == 0
         assert "Level 3 File Server" in result.output
 
-    def test_unknown_format_is_rejected(self, runner: CliRunner):
-        result = runner.invoke(cli, ["describe-format", "nonsense"])
+    def test_unknown_filesystem_is_rejected(self, runner: CliRunner):
+        result = runner.invoke(cli, ["describe-filesystem", "nonsense"])
         assert result.exit_code != 0
 
 

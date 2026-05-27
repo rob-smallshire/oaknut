@@ -1,6 +1,6 @@
-"""Example for ``disc describe-format`` — explain one recognised format.
+"""Example for ``disc describe-filesystem`` — explain one filesystem.
 
-Prints the full description of a single format the identifier knows,
+Prints the full description of a single recognised filesystem,
 including how it is told apart from look-alikes.
 """
 
@@ -13,4 +13,4 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from cli_example_helper import show  # noqa: E402
 
-show("disc describe-format adfs")
+show("disc describe-filesystem adfs")

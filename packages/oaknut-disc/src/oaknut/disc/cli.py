@@ -32,9 +32,9 @@ from oaknut.file.exceptions import FSError
 
 from . import __version__
 from .cli_identify import (
-    describe_format_command,
+    describe_filesystem_command,
     identify_command,
-    list_formats_command,
+    list_filesystems_command,
 )
 from .cli_paths import parse_file_spec
 from .mount import partition_selectors, resolve_mount
@@ -187,10 +187,10 @@ cli.add_command(list_reports_command(), name="list-reports")
 cli.add_command(describe_report_command(), name="describe-report")
 
 # Content-based identification: `identify` answers "what is this image?",
-# and the list/describe pair introspects the disc formats it can recognise.
+# and the list/describe pair introspects the filesystems it can recognise.
 cli.add_command(identify_command(), name="identify")
-cli.add_command(list_formats_command(), name="list-formats")
-cli.add_command(describe_format_command(), name="describe-format")
+cli.add_command(list_filesystems_command(), name="list-filesystems")
+cli.add_command(describe_filesystem_command(), name="describe-filesystem")
 
 
 # ---------------------------------------------------------------------------

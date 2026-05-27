@@ -138,7 +138,7 @@ partition's *filesystem key* and a colon:
 
 The selector is the registered filesystem key — ``acorn-dfs``,
 ``watford-dfs``, ``adfs``, ``afs``, … — the same vocabulary
-``disc list-formats`` prints and ``--filesystem`` accepts. Keys are
+``disc list-filesystems`` prints and ``--filesystem`` accepts. Keys are
 lower-case, which is exactly what keeps a selector distinct from an
 Acorn path (``$``, ``^`` and upper-case names never look like one). The
 selector sits between the ``IMAGE_SPEC`` colon and the bare in-image

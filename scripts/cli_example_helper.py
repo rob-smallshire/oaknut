@@ -110,8 +110,8 @@ _REPORT_SUBCOMMANDS = frozenset(
         "list-report-formats",
         "describe-report-format",
         "identify",
-        "list-formats",
-        "describe-format",
+        "list-filesystems",
+        "describe-filesystem",
     }
 )
 

@@ -2,16 +2,15 @@
 
 ``identify`` reports what an image actually is — by reading its bytes,
 not by trusting its extension — best guess first, with evidence. The
-``list-formats`` / ``describe-format`` pair introspects the filesystem
-axis, mirroring asyoulikeit's ``list-report-formats`` /
-``describe-report-format`` (the names are qualified because "format" is
-overloaded in this CLI: disc formats here, output formats there).
+``list-filesystems`` / ``describe-filesystem`` pair introspects the
+filesystem axis: which filesystems this build can recognise, and what
+each one is. (The ``--as`` output formatters are a separate axis,
+introspected by ``list-report-formats`` / ``describe-report-format``.)
 
 All three draw on the :mod:`oaknut.filesystem` coordinator: every
 installed filesystem package contributes its own detector, so the set
-of recognisable formats grows automatically with what is installed.
-Each is a factory returning a Click command so the host group assigns
-the final name.
+grows automatically with what is installed. Each is a factory returning
+a Click command so the host group assigns the final name.
 """
 
 from __future__ import annotations
@@ -45,7 +44,7 @@ def _flatten(
 
 
 def identify_command() -> click.Command:
-    """A command that identifies a disc image's format(s) by content."""
+    """A command that identifies a disc image's filesystem(s) by content."""
 
     @click.command()
     @click.argument(
@@ -53,10 +52,10 @@ def identify_command() -> click.Command:
         type=click.Path(exists=True, dir_okay=False, path_type=Path),
     )
     @report_output(
-        reports={"candidates": "Ranked format-identification candidates with evidence."}
+        reports={"candidates": "Ranked filesystem-identification candidates with evidence."}
     )
     def identify_image(image_filepath: Path):
-        """Identify a disc image's format(s) by content, best guess first.
+        """Identify a disc image's filesystem(s) by content, best guess first.
 
         Reads the image rather than trusting its file extension, so it
         works even when the name is missing or wrong. Each candidate
@@ -68,7 +67,7 @@ def identify_command() -> click.Command:
         candidates = list(_flatten(identify(image_filepath)))
         table = TableContent(
             title=image_filepath.name,
-            description=None if candidates else "no known disc format recognised",
+            description=None if candidates else "no known filesystem recognised",
         )
         table.add_column("confidence", "Confidence")
         table.add_column("filesystem", "Filesystem")
@@ -87,37 +86,37 @@ def identify_command() -> click.Command:
     return identify_image
 
 
-def list_formats_command() -> click.Command:
-    """A command that lists the disc formats the identifier can recognise."""
+def list_filesystems_command() -> click.Command:
+    """A command that lists the filesystems this build can recognise."""
 
     @click.command()
-    @report_output(reports={"formats": "Disc formats this tool can recognise."})
-    def list_formats():
-        """List the disc formats the identifier can recognise."""
-        table = TableContent(title="Recognised disc formats")
+    @report_output(reports={"filesystems": "Filesystems this build can recognise."})
+    def list_filesystems():
+        """List the filesystems this build can recognise."""
+        table = TableContent(title="Recognised filesystems")
         table.add_column("name", "Name")
         table.add_column("description", "Description")
         for name in sorted(filesystem_names()):
             table.add_row(
                 name=name, description=describe_filesystem(name, single_line=True)
             )
-        return Reports(formats=Report(data=table))
+        return Reports(filesystems=Report(data=table))
 
-    return list_formats
+    return list_filesystems
 
 
-def describe_format_command() -> click.Command:
-    """A command that prints one recognised disc format's full description."""
+def describe_filesystem_command() -> click.Command:
+    """A command that prints one recognised filesystem's full description."""
 
     @click.command()
     @click.argument(
         "name", type=click.Choice(sorted(filesystem_names()), case_sensitive=False)
     )
-    @report_output(reports={"format": "The full description of one recognised disc format."})
-    def describe_format(name: str):
-        """Describe one recognised disc format in detail."""
+    @report_output(reports={"filesystem": "The full description of one recognised filesystem."})
+    def describe_filesystem_cmd(name: str):
+        """Describe one recognised filesystem in detail."""
         return Reports(
-            format=Report(data=ScalarContent(value=describe_filesystem(name), title=name))
+            filesystem=Report(data=ScalarContent(value=describe_filesystem(name), title=name))
         )
 
-    return describe_format
+    return describe_filesystem_cmd
