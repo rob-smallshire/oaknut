@@ -77,10 +77,13 @@ Physical image
 
 ## 4. Filesystem as an extension
 
-Promote the filesystem itself to the extension unit, on a new axis
-(`oaknut.filesystem`), built on the existing `oaknut.extension`
-framework. The current `Prober` becomes the **detection facet** of a
-filesystem, not a separate axis.
+There is **one** extension type — the filesystem — with detection and
+operations unified, not split across a separate prober axis. Promote the
+filesystem to the extension unit on a single axis (`oaknut.filesystem`,
+replacing today's `oaknut.prober`), built on `oaknut.extension`. The
+current `Prober` collapses into the filesystem's `probe()` method, and
+the `identify()` cascade becomes a coordinator that calls `probe()`
+across the registered filesystems.
 
 A `Filesystem` extension owns:
 
@@ -134,9 +137,9 @@ partitions; the prefix is simply the first component of the path.
 
 ```
 IMAGE:PARTITION:IN-PARTITION-PATH
-hd.dat:adfs:$.Apps        the ADFS host partition
-hd.dat:afs:$.Library      the AFS tail partition
-hd.dat:fat:\AUTOEXEC.BAT  a FAT tail (DRDOS), with native separators
+hd.dat:adfs:$.Apps        first ADFS partition
+hd.dat:afs:$.Library      first AFS partition  (≡ afs.0:)
+hd.dat:afs.1:$.Stuff      the second AFS partition, if present
 floppy.ssd:$.MENU         single-partition disc — partition omitted
 hd.dat:                   list the image's partitions
 ```
@@ -154,12 +157,15 @@ hd.dat:                   list the image's partitions
   ambiguity, or ADFS S/M/L — may need a separate knob or a compound
   value like `acorn-dfs:80t-double`; see §10.)*
 
-**Open:** how are partitions *named*? Naming a partition after its
-detected filesystem (`afs`, `fat`) is intuitive and is what users say,
-but it smuggles a format flavour into a partition name *and* collides
-when a disc holds two partitions of the same kind (zero/one/many — §5).
-Alternatives: role-based (`host`/`tail`), ordinal (`0`/`1`), or
-filesystem-plus-index (`afs.0`, `afs.1`). See §10.
+**Partition naming (decided).** A partition is selected by the
+*filesystem type it was detected as*, optionally suffixed with an index:
+`adfs:` / `afs:` select the **first** partition of that type — what
+people mean by "the ADFS partition" or "the AFS partition", without
+needing to know the low-level layout — and `afs.0:`, `afs.1:`, … select
+the Nth (zero-based) when a disc holds several of one type. The name
+resolves to a *partition* among those detection found; it does not assert
+or force a format (that is `--format`). This keeps the familiar
+`adfs:`/`afs:` working and survives the zero/one/many case.
 
 ## 7. CLI dispatch
 
@@ -196,25 +202,34 @@ Incremental, behind a stable interface — no big bang:
 - **E. New formats.** Opus DDOS, DRDOS/FAT, new-map ADFS, full
   variant/geometry resolution — all additive extensions.
 
-## 10. Open questions
+## 10. Decisions & open questions
 
-1. **Partition naming** — by detected filesystem (`afs`, `fat`), by role
-   (`host`, `tail`), ordinal (`0`/`1`), or filesystem-plus-index
-   (`afs.0`)? Must survive the zero/one/many case (a disc with two
-   partitions of the same filesystem) and keep "partition ≠ format".
-2. **Is "family" (DFS) a code concept** at all, or just a grouping of
-   `--format` values / a detection convenience? Leaning: not a first-class
-   runtime concept.
-3. **Backward compatibility** — `adfs:`/`afs:` already ship as prefixes.
-   Keep them working as partition names during/after migration?
-4. **`--format` scope** — does it force a named partition's filesystem,
-   its variant, or both? Per-partition or whole-image?
-5. **Capability interface shape** — one fat `Filesystem` ABC, or a small
+**Resolved in review:**
+
+- **One extension type.** Detection and operations are unified on a
+  single `oaknut.filesystem` axis (§4); no separate prober axis. The
+  prober becomes `probe()`.
+- **Partition naming.** `<format>[.<index>]` — `afs:` is the first AFS
+  partition, `afs.1:` the second; the selector picks a *partition*, never
+  forces a format (§6). `adfs:`/`afs:` therefore stay working
+  (backward compatible).
+- **FAT is not in scope yet** — too little known about its on-disc
+  detail. It stays the motivating example for host-plus-foreign-tail
+  recursion and the Acorn-agnostic contract, so the design must *admit*
+  it later without rework; we build nothing FAT now.
+
+**Still open:**
+
+1. **Capability interface shape** — one fat `Filesystem` ABC, or a small
    core plus opt-in capability mixins (Acorn metadata, hierarchical dirs,
-   tail-host)?
-6. **Where variant detection lives** — `Filesystem.probe` returns a
-   variant, vs a separate variant-resolution step.
-7. **Package/axis naming** — `oaknut.filesystem`? Does `oaknut.identify`
-   fold into it, or stay as the detection coordinator over it?
-8. **Foreign filesystems** — is FAT in-scope for oaknut to read/write, or
-   only to *identify* (so `disc identify` names it but operations defer)?
+   region-host)? FAT and DFS having very different surfaces argues for
+   mixins.
+2. **`--format` granularity** — force just the filesystem, or also the
+   **variant** (DFS single-vs-double/interleave, ADFS S/M/L)? Per selected
+   partition or whole-image?
+3. **Where variant detection lives** — `probe()` returns a variant, vs a
+   separate variant-resolution step once the filesystem is known.
+4. **Is "family" (DFS) a code concept** at all, or just a loose grouping
+   of `--format` values? Leaning: not first-class.
+5. **Coordinator home** — does `identify()` (the cascade + result tree)
+   stay in `oaknut.identify`, or move into the unified `oaknut.filesystem`?
