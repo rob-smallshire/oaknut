@@ -56,8 +56,8 @@ Separate four concepts that we have been merging:
 Physical image
   └─ Partition scheme        how the image divides into regions
        └─ Partition(s)       a byte region of the image (host, tail, …)
-            └─ Filesystem     the read/write implementation occupying it
-                 └─ Variant   that filesystem's concrete on-disc parameters
+            └─ Geometry       bytes → logical sectors: 40/80T · 1/2 sides · interleave · density
+                 └─ Filesystem  logical sectors → files & dirs, on that geometry
 ```
 
 - **Partition scheme** — most discs are whole-disc (one partition). The
@@ -67,13 +67,30 @@ Physical image
 - **Partition** — a `(offset, length)` window into the image, with a
   stable identity. Identification is **per-partition**, so the answer to
   "what is this image?" is a *tree*, not a single value.
-- **Filesystem** — the pluggable unit (see §4). Acorn DFS, Watford DFS,
-  Opus DDOS, ADFS, AFS, FAT are *peers*. (DFS is a family of sibling
-  filesystems; ADFS is one filesystem with many variants — the model
-  must accommodate both.)
-- **Variant** — the concrete parameters needed to read *and write*
-  byte-exactly. Richer than today's `DiscFormat` (geometry + catalogue
-  name): also map type, media, interleave, the unresolvable ambiguities.
+- **Geometry** — the *physical* mapping from image bytes to logical
+  sectors: track count, sides, interleave, density, sector size. This is
+  exactly `oaknut.discimage`'s `DiscFormat`/`SurfaceSpec`, and it sits
+  *beneath* the filesystem, which reads logical sectors and is blind to
+  it. The byte-identical ambiguities (80T-single vs 40T-double,
+  interleaved vs sequential) are *geometry* ambiguities. **ADFS-S/M/L are
+  geometry** (same structures, different size) — not filesystem variants.
+- **Filesystem** — the *logical* structure: how sectors become files and
+  directories (catalogue/directory/map formats). Acorn DFS, Watford DFS,
+  Opus DDOS, ADFS, AFS, FAT are *peers*. Purely-logical sub-formats (ADFS
+  old-map vs new-map) are the filesystem's *own internal* concern — one
+  extension may handle several, or they may be separate extensions where
+  little code is shared; an encapsulation choice, **not a modelled axis**.
+
+We deliberately drop "variant" as a single catch-all: it was conflating
+*geometry* (orthogonal, physical, already modelled) with a filesystem's
+*internal logical detail*. Both layers are **required inputs**, not just
+detection outputs — which is why **"create an ADFS image" is
+underspecified**: you must choose a geometry (S/M/L, or a hard-disc
+capacity/CHS) *and* a logical format (old-map vs new-map). Today's
+`ADFS.create_file` forces the geometry (you pass `ADFS_S/M/L`) and
+assumes old-map. Creation is the **symmetric twin of identification**:
+identify *detects* the `(geometry, filesystem)` pair, create *specifies*
+it; both directions need both layers.
 
 ## 4. Filesystem as an extension
 
@@ -156,12 +173,12 @@ hd.dat:                   list the image's partitions
   old "image is ADFS format; cannot access as DFS" errors disappear.
 - **Format is automatic**, resolved per partition by detection.
 - **Forcing format is a command option, outside the path** — `--format
-  <key>`, where `<key>` is a filesystem from the shared vocabulary
-  (`--format watford-dfs`, `--format acorn-dfs`). It overrides
-  misdetection without polluting the path grammar. *(Open: forcing a
-  finer **variant** — the byte-identical DFS single-vs-double/interleave
-  ambiguity, or ADFS S/M/L — may need a separate knob or a compound
-  value like `acorn-dfs:80t-double`; see §10.)*
+  <key>` names a *filesystem* from the shared vocabulary (`--format
+  watford-dfs`). **Geometry is a separate layer**, so the rare
+  unresolvable physical choices (sides, interleave, track count) are a
+  *separate* knob — `--sides`/`--interleave`, or a named geometry — not
+  part of `--format`. Both layers also apply to `disc create`, where the
+  geometry is a required input (you cannot "create ADFS" without it).
 
 **Partition naming (decided).** A partition is selected by the
 *filesystem type it was detected as*, optionally suffixed with an index:
@@ -199,9 +216,10 @@ gated on the AFS capability set".
 ## 8. Identification result model
 
 `identify()` returns a per-partition tree. Each node carries: the
-partition (region + identity), the matched filesystem, the **variant**
-when determinable, a confidence, human-readable evidence, the unresolved
-**ambiguities** (e.g. interleaved vs sequential), and `contained`
+partition (region + identity), the matched filesystem, the resolved
+**geometry** (a `DiscFormat`) when determinable, a confidence,
+human-readable evidence, the unresolved **ambiguities** (e.g. interleaved
+vs sequential — geometry the bytes can't settle), and `contained`
 children. This is the single structure the CLI, `disc identify`, and the
 round-trip tooling all consume.
 
@@ -209,9 +227,10 @@ round-trip tooling all consume.
 
 Incremental, behind a stable interface — no big bang:
 
-- **A. Contracts.** Define `Filesystem`, `Variant`, `Partition`, and the
-  per-partition `Identification` tree. Wrap existing `DFS`/`ADFS`/`AFS`
-  as `Filesystem` extensions via adapters; keep the CLI working unchanged.
+- **A. Contracts.** Define `Filesystem`, `Partition`, and the
+  per-partition `Identification` tree; `Geometry` largely exists already
+  as `DiscFormat`. Wrap existing `DFS`/`ADFS`/`AFS` as `Filesystem`
+  extensions via adapters; keep the CLI working unchanged.
 - **B. Recursive partitions.** Add `ImageReader` windowing; ADFS exposes
   its tail region; fold the AFS prober into a tail-probe; populate
   `contained`.
@@ -219,8 +238,8 @@ Incremental, behind a stable interface — no big bang:
   format-assertion semantics and their errors.
 - **D. CLI on the interface.** Migrate command logic off the
   per-filing-system branches onto the capability interface.
-- **E. New formats.** Opus DDOS, DRDOS/FAT, new-map ADFS, full
-  variant/geometry resolution — all additive extensions.
+- **E. New formats.** Opus DDOS, DRDOS/FAT, new-map ADFS, full geometry
+  resolution — all additive extensions.
 
 ## 10. Decisions & open questions
 
@@ -241,14 +260,25 @@ Incremental, behind a stable interface — no big bang:
   fat ABC. The filesystem also owns its in-partition path grammar/depth,
   so Opus DDOS volumes are just a deeper hierarchy level, not a new
   concept.
+- **Two orthogonal layers, no "variant".** *Geometry* (physical: tracks,
+  sides, interleave, density — the discimage `DiscFormat`) sits beneath
+  the *filesystem* (logical structure). The vague "variant" is dropped:
+  it splits into geometry (modelled, orthogonal) and a filesystem's own
+  internal logical detail (§3). A mount is `(geometry, filesystem)`;
+  `--format` forces the filesystem, geometry is a separate knob.
 
 **Still open:**
 
-1. **`--format` granularity** — force just the filesystem, or also the
-   **variant** (DFS single-vs-double/interleave, ADFS S/M/L)? Per selected
-   partition or whole-image?
-2. **Where variant detection lives** — `probe()` returns a variant, vs a
-   separate variant-resolution step once the filesystem is known.
+1. **Geometry knob spelling** — how does the user force the byte-identical
+   geometry choices (sides/interleave/track-count) and choose geometry for
+   `disc create`? Separate flags (`--sides`, `--interleave`), or named
+   geometry presets (`adfs-l`, `dfs-80t-ss`) the filesystem declares and
+   `disc list-formats` could show alongside its filesystems?
+2. **Where geometry detection lives** — the interface is cleanly layered
+   (filesystem reads logical sectors), but *detecting* geometry leans on
+   filesystem hints (a DFS catalogue's sector count, an ADFS disc record).
+   Does `probe()` propose the geometry, or is there a separate
+   geometry-resolution step seeded by the filesystem's hints?
 3. **Is "family" (DFS) a code concept** at all, or just a loose grouping
    of `--format` values? Leaning: not first-class.
 4. **Coordinator home** — does `identify()` (the cascade + result tree)
