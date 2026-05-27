@@ -119,8 +119,40 @@ Candidates for a future "filesystem-contributed command" axis.
 
 ## Cleanup (end of Phase C)
 
-- [ ] remove `FilingSystem`, `detect_filing_system`, `parse_prefix`'s
-  format role, `validate_prefix_for_image`, `open_image`, `_navigate`.
+- [x] metadata write-back on the DFS/ADFS/AFS mounts (`set_acorn_meta`).
+- [x] removed `detect_filing_system`, `_navigate`, `_iter_targets`,
+  `_expand_path_spec`, `open_image`, `_open_dfs`/`_open_adfs`,
+  `_detect_dfs_format`, `parse_prefix`'s use, and the `FilingSystem` enum
+  from `cli.py` — **no command branches on filesystem type any more.**
 - [ ] retire the legacy `oaknut.prober` axis + `oaknut-identify` package
   and every package's `[oaknut.prober]` entry points.
-- [ ] metadata write-back on the DFS/ADFS/AFS mounts (un-stub `set_acorn_meta`).
+- [ ] `cli_paths.py` still defines `FilingSystem`/`resolve_path`/
+  `parse_prefix`; remove once the afs-*/create commands migrate.
+
+## Status
+
+**Every generic command is migrated** onto the content-first mount +
+capability substrate: ls, tree, cat, type, find, get, export,
+get-load/exec, put, import, set-load/exec, chmod, lock/unlock, rm, mv,
+mkdir, title, opt, cp, compact, validate, freemap, stat. The CLI no
+longer branches on filesystem type for any of them.
+
+Capabilities grown this phase: `Mount` (+ join/remove/rename), writable
+`ImageReader`, `set_acorn_meta`, richer `make_directory`, `Titled.
+set_title`, `DirectoryTitled`, `Bootable.set_boot_option`, `Sized`,
+`PhysicalGeometry`/`DiscGeometry`, `FreeMap`/`FreeMapData`, `Compactable`,
+`Validatable`, plus `.dsc` geometry resolution.
+
+Remaining (the format-specific admin / creation axis — Phase E):
+
+- [ ] `create`  (rework around `--filesystem` + `--geometry`)
+- [ ] `generate-dsc`  (ADFS hard-disc sidecar)
+- [ ] `expand`  (DFS truncated-image padding)
+- [ ] `afs-init` / `afs-plan` / `afs-users` / `afs-useradd` /
+  `afs-userdel` / `afs-passwd` / `afs-merge`
+
+These create images or administer one filesystem's private structures;
+they do not open-and-operate an existing partition, so they belong on a
+"filesystem-contributed command" axis rather than the Mount substrate.
+They are the only remaining direct importers of `oaknut.dfs/adfs/afs` in
+`oaknut-disc`.
