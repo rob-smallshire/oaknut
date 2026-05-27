@@ -301,22 +301,6 @@ def open_image_for_afs_write(image_filepath: Path) -> Iterator:
         yield adfs, afs
 
 
-def _navigate(handle, bare_path: str, fs: FilingSystem):
-    """Navigate to a path within the filesystem handle.
-
-    Returns the path object at *bare_path*, or the filesystem's root
-    when *bare_path* is empty. For ADFS and AFS that root is ``$``;
-    for DFS it is the nameless virtual root whose children are the
-    single-character directories (``$`` and ``A``--``Z``), not ``$``
-    itself.
-    """
-    if not bare_path:
-        return handle.root
-    if fs is FilingSystem.AFS:
-        return _navigate_afs(handle, bare_path)
-    return handle.path(bare_path)
-
-
 def _navigate_afs(afs, bare_path: str):
     """Navigate AFS using its root / operator since AFS.path() may not exist."""
     if bare_path == "$" or not bare_path:
@@ -1436,34 +1420,6 @@ def _dst_ends_slash(bare: str) -> tuple[str, bool]:
     return bare, False
 
 
-def _expand_path_spec(handle, bare: str, fs: FilingSystem) -> list:
-    """Resolve a path specification to a list of existing path objects.
-
-    Literal paths resolve to a one-element list.  Acorn wildcards
-    (``*``, ``#``, ``?``) on the leaf component expand against the
-    parent directory's children.  No-match is an error.
-    """
-    if _has_wildcard(bare):
-        parent, leaf_pattern = _split_parent_leaf(bare)
-        if _has_wildcard(parent):
-            raise click.ClickException(
-                f"wildcards in directory components are not supported: {bare!r}"
-            )
-        parent_node = _navigate(handle, parent, fs)
-        if not parent_node.exists() or not parent_node.is_dir():
-            raise click.ClickException(
-                f"parent directory of glob does not exist: {parent or '$'!r}"
-            )
-        matches = [c for c in parent_node.iterdir() if _match_acorn(leaf_pattern, c.name)]
-        if not matches:
-            raise click.ClickException(f"no matches for {bare!r}")
-        return matches
-    node = _navigate(handle, bare, fs)
-    if not node.exists():
-        raise click.ClickException(f"path not found: {bare}")
-    return [node]
-
-
 def _expand_target_paths(mount, pattern: str) -> list[str]:
     """Resolve *pattern* to a list of existing in-partition path strings.
 
@@ -1558,42 +1514,6 @@ def _mutate_access(file_spec: str, *, recursive: bool, dry_run: bool, verb, tran
                     access=int(transform(Access(meta.access))),
                 ),
             )
-
-
-def _iter_targets(
-    handle,
-    bare: str,
-    fs: FilingSystem,
-    *,
-    recursive: bool,
-) -> Iterator:
-    """Enumerate targets for a bulk-mutating command.
-
-    Expands Acorn wildcards on ``bare`` and, when ``recursive`` is
-    true, walks each directory match in post-order (children first,
-    then the directory itself).  When ``recursive`` is false, each
-    match is yielded once — callers decide whether to accept
-    directory matches.
-
-    Post-order is the right traversal order for ``rm -r`` (children
-    must be deleted before their parent) and also works for
-    ``chmod`` / ``lock`` / ``set-*`` where order doesn't matter.
-    """
-    for seed in _expand_path_spec(handle, bare, fs):
-        if seed.is_dir() and recursive:
-            yield from _walk_post_order(seed)
-        else:
-            yield seed
-
-
-def _walk_post_order(node) -> Iterator:
-    """Yield every descendant of ``node``, children before parents."""
-    if node.is_file():
-        yield node
-        return
-    for child in node.iterdir():
-        yield from _walk_post_order(child)
-    yield node
 
 
 def _cp_dispatch(src_spec: str, dst_spec: str, *, force: bool, recursive: bool) -> None:
