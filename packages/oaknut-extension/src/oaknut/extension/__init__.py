@@ -20,7 +20,7 @@ appears automatically — there is no central registry to edit.
 This module is the clone-and-own foundation for the family: it is
 deliberately domain-agnostic, knowing nothing about discs, files, or
 formats. Per-axis packages build a thin convenience layer on top (see
-``oaknut.identify`` for the prober axis).
+``oaknut.filesystem`` for the filesystem axis).
 """
 
 from __future__ import annotations

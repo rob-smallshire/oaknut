@@ -287,8 +287,8 @@ Disc-format identification
 --------------------------
 
 These introspect the disc formats ``disc identify`` can recognise —
-one registered prober per format. The set grows as format packages
-are installed.
+one registered filesystem per format. The set grows as filesystem
+packages are installed.
 
 .. oaknut-command:: oaknut.disc.cli:list-formats
    :prog: disc list-formats

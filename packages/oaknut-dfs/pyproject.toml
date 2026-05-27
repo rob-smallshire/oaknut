@@ -25,7 +25,6 @@ classifiers = [
 dependencies = [
     "oaknut-file>=10.0",
     "oaknut-discimage>=10.0",
-    "oaknut-identify>=10.0",
     "oaknut-filesystem>=10.0",
     "oaknut-basic>=10.0",
     "typename>=1.0.4",
@@ -43,15 +42,9 @@ Documentation = "https://rob-smallshire.github.io/oaknut/disc/api/reference/dfs.
 Repository = "https://github.com/rob-smallshire/oaknut"
 Issues = "https://github.com/rob-smallshire/oaknut/issues"
 
-# Probers contributed to the oaknut.identify cascade. Discovered at
-# runtime via entry points, so the format detector ships with the
-# format it detects. (Legacy axis; retired in Phase C.)
-[project.entry-points."oaknut.prober"]
-acorn_dfs = "oaknut.dfs.probers:AcornDFSProber"
-watford_dfs = "oaknut.dfs.probers:WatfordDFSProber"
-
-# Filesystems contributed to the oaknut.filesystem axis — the new
-# unified extension contract (detection + operations).
+# Filesystems contributed to the oaknut.filesystem axis — the unified
+# extension contract (detection + operations). Discovered at runtime via
+# entry points, so the detector ships with the format it detects.
 [project.entry-points."oaknut.filesystem"]
 acorn-dfs = "oaknut.dfs.filesystem:AcornDFS"
 watford-dfs = "oaknut.dfs.filesystem:WatfordDFS"

@@ -11,7 +11,6 @@ page per package. Layered bottom-up: read :doc:`file` and
    file
    extension
    discimage
-   identify
    dfs
    adfs
    afs

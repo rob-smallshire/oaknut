@@ -63,7 +63,6 @@ oaknut-exception = { workspace = true }
 oaknut-file  = { workspace = true }
 oaknut-extension = { workspace = true }
 oaknut-discimage = { workspace = true }
-oaknut-identify = { workspace = true }
 oaknut-filesystem = { workspace = true }
 oaknut-cli   = { workspace = true }
 oaknut-basic = { workspace = true }
@@ -87,7 +86,6 @@ workspace = [
     "oaknut-file",
     "oaknut-extension",
     "oaknut-discimage",
-    "oaknut-identify",
     "oaknut-filesystem",
     "oaknut-cli",
     "oaknut-basic",
@@ -142,9 +140,6 @@ filename = "packages/oaknut-extension/src/oaknut/extension/__init__.py"
 filename = "packages/oaknut-discimage/src/oaknut/discimage/__init__.py"
 
 [[tool.bumpversion.files]]
-filename = "packages/oaknut-identify/src/oaknut/identify/__init__.py"
-
-[[tool.bumpversion.files]]
 filename = "packages/oaknut-filesystem/src/oaknut/filesystem/__init__.py"
 
 [[tool.bumpversion.files]]
@@ -179,7 +174,6 @@ testpaths = [
     "packages/oaknut-file/tests",
     "packages/oaknut-extension/tests",
     "packages/oaknut-discimage/tests",
-    "packages/oaknut-identify/tests",
     "packages/oaknut-filesystem/tests",
     "packages/oaknut-cli/tests",
     "packages/oaknut-basic/tests",

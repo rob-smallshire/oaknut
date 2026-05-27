@@ -25,7 +25,6 @@ classifiers = [
 dependencies = [
     "oaknut-exception>=10.7",
     "oaknut-file>=10.0",
-    "oaknut-identify>=10.0",
     "oaknut-filesystem>=10.0",
     "oaknut-cli>=10.0",
     # The filesystem packages stay as dependencies so `pip install

@@ -124,10 +124,13 @@ Candidates for a future "filesystem-contributed command" axis.
   `_expand_path_spec`, `open_image`, `_open_dfs`/`_open_adfs`,
   `_detect_dfs_format`, `parse_prefix`'s use, and the `FilingSystem` enum
   from `cli.py` — **no command branches on filesystem type any more.**
-- [ ] retire the legacy `oaknut.prober` axis + `oaknut-identify` package
-  and every package's `[oaknut.prober]` entry points.
-- [ ] `cli_paths.py` still defines `FilingSystem`/`resolve_path`/
-  `parse_prefix`; remove once the afs-*/create commands migrate.
+- [x] retired the legacy `oaknut.prober` axis + `oaknut-identify` package
+  and every package's `[oaknut.prober]` entry points. `disc identify` /
+  `list-formats` / `describe-format` now draw on the `oaknut.filesystem`
+  coordinator, which already backed every other path.
+- [x] `cli_paths.py` shrank to the fused `IMAGE_SPEC:PATH_SPEC` colon
+  parser; `FilingSystem`/`resolve_path`/`parse_prefix` and the rest of the
+  routing block are gone (partition selection lives in `mount.py`).
 
 ## Status
 

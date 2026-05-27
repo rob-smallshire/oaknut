@@ -3,17 +3,17 @@
 
 The entry-point plug-in framework shared by every extensible *axis* of
 the oaknut family. An axis is one extension point — a family of
-interchangeable plug-ins that all answer the same question. The first
-axis is :doc:`probers <identify>` (disc-image identification); others
-will follow.
+interchangeable plug-ins that all answer the same question. The primary
+axis is ``oaknut.filesystem`` (each plug-in detects and operates on one
+disc format); ``oaknut.command`` (CLI subcommands) is another.
 
 A concrete extension subclasses :class:`~oaknut.extension.Extension`,
-declares a ``kind`` (a short identifier such as ``"prober"``), and is
+declares a ``kind`` (a short identifier such as ``"filesystem"``), and is
 registered under the ``oaknut.<kind>`` entry-point namespace in its
 package's ``pyproject.toml``::
 
-    [project.entry-points."oaknut.prober"]
-    acorn_dfs = "oaknut.dfs.probers:AcornDFSProber"
+    [project.entry-points."oaknut.filesystem"]
+    acorn-dfs = "oaknut.dfs.filesystem:AcornDFS"
 
 Consumers discover and load extensions with the functions below, which
 wrap `stevedore <https://docs.openstack.org/stevedore/>`_. Discovery is

@@ -1,7 +1,7 @@
 """Unit tests for the generic extension framework.
 
 End-to-end entry-point *discovery* is exercised where real plug-ins
-are registered (see the prober tests in oaknut-identify / oaknut-dfs).
+are registered (see the filesystem tests in oaknut-dfs / oaknut-adfs).
 Here we cover the axis-agnostic behaviour: the Extension contract,
 namespace formation, docstring-driven descriptions, and the
 not-found error path.
@@ -37,7 +37,7 @@ class _Undocumented(Extension):  # noqa: D101 — intentionally has no docstring
 
 class TestNamespace:
     def test_namespace_uses_oaknut_prefix(self):
-        assert namespace_for("prober") == "oaknut.prober"
+        assert namespace_for("filesystem") == "oaknut.filesystem"
 
     def test_namespace_for_arbitrary_kind(self):
         assert namespace_for("widget") == "oaknut.widget"
