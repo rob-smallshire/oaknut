@@ -281,8 +281,7 @@ class AcornDFS(_BaseDFS):
     """Acorn DFS — the standard flat-catalogue BBC floppy format.
 
     A two-sector catalogue (sectors 0–1) of up to 31 files in a single
-    ``$`` directory. Watford DDFS, which extends this layout, is detected
-    separately and excluded here.
+    ``$`` directory.
     """
 
     _catalogue = AcornDFSCatalogue

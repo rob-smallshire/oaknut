@@ -113,7 +113,10 @@ def _geometry_table(name: str) -> TableContent:
     """The geometries a filesystem accepts for ``disc create --geometry``.
 
     One row per named preset (with the image size it yields), plus a row
-    per parameterised form the filesystem's grammar admits.
+    per parameterised form the filesystem's grammar admits. Rows are
+    ordered by increasing image size, then by the ``--geometry`` spec in
+    the first column; the open-ended parameterised forms have no fixed
+    size, so they sort last.
     """
     grammar = create_filesystem(name).geometry_grammar()
     has_any = bool(grammar.preset_names()) or bool(grammar.kinds)
@@ -123,16 +126,32 @@ def _geometry_table(name: str) -> TableContent:
     )
     table.add_column("spec", "--geometry")
     table.add_column("result", "Result")
-    for preset in grammar.preset_names():
-        table.add_row(spec=preset, result=format_capacity(grammar.presets[preset].image_size))
-    if WINCHESTER in grammar.kinds:
-        table.add_row(spec="capacity=SIZE", result="hard disc of the given size")
-        table.add_row(spec="cylinders=N,heads=N,spt=N", result="hard disc, explicit geometry")
-    if FLOPPY in grammar.kinds:
-        table.add_row(
-            spec="tracks=N,sides=N[,interleave=interleaved|sequential]",
-            result="custom floppy",
+
+    # (sort size, spec, result); parameterised forms get an infinite size
+    # so they follow the fixed-size presets, ordered by spec.
+    rows: list[tuple[float, str, str]] = [
+        (
+            float(grammar.presets[preset].image_size),
+            preset,
+            format_capacity(grammar.presets[preset].image_size),
         )
+        for preset in grammar.preset_names()
+    ]
+    if WINCHESTER in grammar.kinds:
+        rows.append((float("inf"), "capacity=SIZE", "hard disc of the given size"))
+        rows.append(
+            (float("inf"), "cylinders=N,heads=N,spt=N", "hard disc, explicit geometry")
+        )
+    if FLOPPY in grammar.kinds:
+        rows.append(
+            (
+                float("inf"),
+                "tracks=N,sides=N[,interleave=interleaved|sequential]",
+                "custom floppy",
+            )
+        )
+    for _size, spec, result in sorted(rows, key=lambda row: (row[0], row[1])):
+        table.add_row(spec=spec, result=result)
     return table
 
 

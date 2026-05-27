@@ -87,6 +87,14 @@ class TestDescribeFilesystem:
         assert result.exit_code == 0
         assert "80t-ds" in result.output
 
+    def test_geometries_ordered_by_size_then_identifier(self, runner: CliRunner):
+        out = runner.invoke(cli, ["describe-filesystem", "acorn-dfs"]).output
+        # Increasing size; the 200 KiB tie (40t-ds, 80t-ss) breaks on the
+        # first-column spec, and the open-ended parameterised form sorts last.
+        order = ["40t-ss", "40t-ds", "80t-ss", "80t-ds", "tracks=N"]
+        positions = [out.index(token) for token in order]
+        assert positions == sorted(positions)
+
 
 class TestContentFirstRouting:
     def test_ls_opens_a_misnamed_image_by_content(
