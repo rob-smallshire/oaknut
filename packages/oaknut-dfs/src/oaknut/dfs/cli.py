@@ -18,7 +18,7 @@ import click
 
 @click.group()
 def dfs() -> None:
-    """Acorn DFS / Watford DDFS administration."""
+    """Acorn DFS / Watford DFS administration."""
 
 
 @dfs.command()

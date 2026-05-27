@@ -1,6 +1,6 @@
 """DFS-family filesystems as oaknut.filesystem extensions.
 
-Acorn DFS and Watford DDFS are *peer* filesystems that share this
+Acorn DFS and Watford DFS are *peer* filesystems that share this
 package's flat-catalogue implementation. Each is registered on the
 ``oaknut.filesystem`` axis (see ``pyproject.toml``); this module adapts
 the existing :class:`~oaknut.dfs.DFS` class to the
@@ -293,7 +293,7 @@ class AcornDFS(_BaseDFS):
 
 
 class WatfordDFS(_BaseDFS):
-    """Watford DDFS — the 62-file extended-catalogue BBC floppy format.
+    """Watford DFS — the 62-file extended-catalogue BBC floppy format.
 
     Up to 62 named files, each in one of 27 sibling directories
     ($ and A–Z). Directories are managed automatically: created when the
@@ -302,5 +302,5 @@ class WatfordDFS(_BaseDFS):
 
     _catalogue = WatfordDFSCatalogue
     _confidence = Confidence.STRONG
-    _evidence = "Watford DDFS extended catalogue (0xAA marker, synced metadata)"
+    _evidence = "Watford DFS extended catalogue (0xAA marker, synced metadata)"
     priority = 10

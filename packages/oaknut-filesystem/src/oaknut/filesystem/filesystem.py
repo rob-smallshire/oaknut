@@ -1,7 +1,7 @@
 """The Filesystem extension contract.
 
 A :class:`Filesystem` is the unit of extension — Acorn DFS, Watford
-DDFS, Opus DDOS, ADFS, AFS, … as peers, registered on the
+DFS, Opus DDOS, ADFS, AFS, … as peers, registered on the
 ``oaknut.filesystem`` entry-point axis. It unifies *detection* and
 *operations*: there is no separate prober. Each filesystem knows how to
 recognise itself (:meth:`probe`), open a region (:meth:`open`), and which

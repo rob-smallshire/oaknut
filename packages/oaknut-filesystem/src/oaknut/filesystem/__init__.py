@@ -1,6 +1,6 @@
 """The pluggable filesystem contract for the oaknut family.
 
-A *filesystem* (Acorn DFS, Watford DDFS, ADFS, AFS, …) is the unit of
+A *filesystem* (Acorn DFS, Watford DFS, ADFS, AFS, …) is the unit of
 extension, registered on the ``oaknut.filesystem`` entry-point axis. Each
 :class:`Filesystem` detects itself (:meth:`Filesystem.probe`), opens a
 region into a :class:`Mount` exposing a small core plus opt-in capability

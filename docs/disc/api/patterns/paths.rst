@@ -107,7 +107,7 @@ slash-join, equality) preserve the literal form, just as pathlib
 does.
 
 **DFS — single-character directories under a nameless root.**
-A DFS catalogue holds up to 31 file entries (62 on Watford DDFS).
+A DFS catalogue holds up to 31 file entries (62 on Watford DFS).
 Each lives in one of 27 directories — ``$`` and ``A``–``Z`` — and
 all 27 are children of a nameless root. ``$`` is the default
 directory DFS assumes when a path omits one (per the Acorn DFS

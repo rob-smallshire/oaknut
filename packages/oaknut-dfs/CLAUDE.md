@@ -9,7 +9,7 @@ package.
 
 ## Scope after the shared-layer refactor
 
-`oaknut-dfs` hosts Acorn DFS, Watford DDFS, and Opus DDOS support —
+`oaknut-dfs` hosts Acorn DFS, Watford DFS, and Opus DDOS support —
 the flat-catalogue filesystems used on BBC Micro and Acorn Electron
 floppies (.ssd / .dsd). It depends on:
 
@@ -40,7 +40,7 @@ Every module below lives under `src/oaknut/dfs/`:
   `oaknut.adfs`.
 - `acorn_dfs_catalogue.py` — concrete `Catalogue` subclass for the
   standard Acorn DFS catalogue layout (sectors 0-1, 31 files).
-- `watford_dfs_catalogue.py` — concrete subclass for Watford DDFS
+- `watford_dfs_catalogue.py` — concrete subclass for Watford DFS
   (62 files, extended catalogue in sectors 2-3).
 - `catalogued_surface.py` — wraps a `Surface` with a `Catalogue`,
   giving the mid-level API that `dfs.py` builds on.

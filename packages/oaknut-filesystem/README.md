@@ -3,7 +3,7 @@
 The pluggable **filesystem contract** for the oaknut family — the base every
 Acorn (and, in principle, foreign) filesystem plugs into.
 
-A *filesystem* is the unit of extension: Acorn DFS, Watford DDFS, Opus DDOS,
+A *filesystem* is the unit of extension: Acorn DFS, Watford DFS, Opus DDOS,
 ADFS, AFS, … are peers, registered on the `oaknut.filesystem` entry-point axis
 (built on `oaknut-extension`). Each one:
 

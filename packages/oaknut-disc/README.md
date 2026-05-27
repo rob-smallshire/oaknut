@@ -13,7 +13,7 @@
 
 `disc` is a unified command-line tool for inspecting, extracting from, and
 modifying [Acorn computer](https://en.wikipedia.org/wiki/Acorn_Computers) disc
-images — Acorn DFS and Watford DDFS floppies, ADFS floppies and hard discs, and
+images — Acorn DFS and Watford DFS floppies, ADFS floppies and hard discs, and
 Acorn Level 3 File Server (AFS) partitions — through one consistent interface.
 
 It speaks DFS, ADFS, and AFS transparently, with a filing-system prefix

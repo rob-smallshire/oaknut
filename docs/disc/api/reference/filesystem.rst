@@ -2,7 +2,7 @@
 =====================
 
 The pluggable filesystem contract shared by the disc family. A
-*filesystem* (Acorn DFS, Watford DDFS, ADFS, AFS, …) is the unit of
+*filesystem* (Acorn DFS, Watford DFS, ADFS, AFS, …) is the unit of
 extension, registered on the ``oaknut.filesystem`` entry-point axis.
 Each :class:`~oaknut.filesystem.Filesystem` detects itself
 (:meth:`~oaknut.filesystem.Filesystem.probe`), opens a region into a

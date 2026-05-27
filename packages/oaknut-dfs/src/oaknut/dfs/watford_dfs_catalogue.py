@@ -890,7 +890,7 @@ class WatfordDFSCatalogue(Catalogue):
         return self.MAX_FILES
 
     def validate(self) -> list["DFSValidationError"]:
-        """Validate Watford DDFS catalogue integrity.
+        """Validate Watford DFS catalogue integrity.
 
         Returns a list of :class:`DFSValidationError` instances — empty
         when the catalogue is consistent.
