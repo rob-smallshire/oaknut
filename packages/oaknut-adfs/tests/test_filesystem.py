@@ -43,14 +43,15 @@ class TestProbe:
         assert results[0].contained == ()
 
     def test_reserved_tail_is_recursed(self):
-        # The l3fs hard disc reserves a tail (an AFS region). ADFS reports
-        # it; with AFS not yet on this axis it is recursed but unidentified.
+        # The l3fs hard disc reserves a tail; ADFS reports it and the
+        # coordinator recurses in. With oaknut-afs installed it resolves
+        # to AFS (this asserts ADFS's region-finding, not AFS itself).
         results = identify(_L3FS_DAT)
         adfs = next(r for r in results if r.filesystem == "adfs")
         assert len(adfs.contained) == 1
         region = adfs.contained[0]
         assert region.partition.offset == 67584
-        assert region.identified is False
+        assert region.filesystem == "afs"
 
 
 class TestMount:

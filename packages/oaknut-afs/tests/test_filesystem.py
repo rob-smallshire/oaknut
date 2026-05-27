@@ -1,0 +1,70 @@
+"""Tests for the AFS filesystem extension and its discovery by recursion."""
+
+from oaknut.filesystem import (
+    AcornMetadata,
+    Confidence,
+    DiscMetadata,
+    HierarchicalDirectories,
+    Mount,
+    UserDatabase,
+    create_filesystem,
+    filesystem_names,
+    identify,
+    reader_for,
+)
+
+from tests.fixtures import REFERENCE_IMAGES_DIRPATH  # noqa: E402
+
+# A real ADFS hard disc with an AFS tail partition.
+_L3FS_DAT = REFERENCE_IMAGES_DIRPATH / "l3fs" / "l3fs-wfsinit.dat"
+
+
+def _afs_region_reader(reader):
+    """The window over l3fs's AFS region, via the ADFS host's reserved region."""
+    region = create_filesystem("adfs").probe(reader).reserved_regions[0]
+    return reader.window(region.offset, region.length)
+
+
+class TestRegistration:
+    def test_afs_registered(self):
+        assert "afs" in filesystem_names()
+
+
+class TestRecursiveDiscovery:
+    def test_afs_found_only_inside_the_adfs_host(self):
+        # The whole-disc candidates must be ADFS only; AFS appears solely
+        # as the recursed tail, never as a top-level filesystem.
+        results = identify(_L3FS_DAT)
+        assert [r.filesystem for r in results] == ["adfs"]
+        (tail,) = results[0].contained
+        assert tail.filesystem == "afs"
+        assert tail.confidence is Confidence.CERTAIN
+        assert tail.partition.selector == "afs"
+
+
+class TestMount:
+    def test_open_region_and_read(self):
+        with reader_for(_L3FS_DAT) as reader:
+            mount = create_filesystem("afs").open(_afs_region_reader(reader))
+            names = {e.name for e in mount.iter_entries("$")}
+            # The shipped l3fs disc has these user directories.
+            assert "HOLMES" in names
+
+    def test_capabilities(self):
+        with reader_for(_L3FS_DAT) as reader:
+            mount = create_filesystem("afs").open(_afs_region_reader(reader))
+            assert isinstance(mount, Mount)
+            assert isinstance(mount, HierarchicalDirectories)
+            assert isinstance(mount, AcornMetadata)
+            assert isinstance(mount, UserDatabase)
+            # AFS has user accounts but no *OPT-style disc boot metadata.
+            assert not isinstance(mount, DiscMetadata)
+            assert len(mount.user_names()) >= 1
+
+
+class TestNotAfs:
+    def test_non_afs_region_returns_none(self):
+        # A buffer whose sector 1 is not AFS0 is not AFS.
+        afs = create_filesystem("afs")
+        with reader_for(b"\x00" * 2048) as reader:
+            assert afs.probe(reader) is None

@@ -96,6 +96,7 @@ class AFS:
         sec1: int,
         sec2: int,
         *,
+        region_base: int = 0,
         user: str = "Syst",
         enforce_quota: bool = True,
     ) -> None:
@@ -110,6 +111,14 @@ class AFS:
         self._d = unified_disc
         self._sec1 = sec1
         self._sec2 = sec2
+        # On-disc addresses (SINs, map extents, info-sector pointers) are
+        # absolute physical-disc sectors. When the backing disc is a
+        # window over just this AFS region (the recursive identifier
+        # mounts it that way), region_base is the absolute sector the
+        # window starts at, subtracted at the disc-access chokepoints.
+        # Zero — the default — means the backing disc is the whole disc
+        # and absolute addresses index it directly (the historical case).
+        self._region_base = region_base
         # Write-back buffer must be initialised before _read_and_verify_info
         # because _read_sector checks it.
         self._pending_writes: dict[int, bytes] = {}
@@ -408,6 +417,20 @@ class AFS:
     # Read primitives
     # ------------------------------------------------------------------
 
+    def _disc_sector(self, sector: int) -> int:
+        """Translate an absolute on-disc sector to a backing-disc index.
+
+        Subtracts :attr:`_region_base` (zero unless the backing disc is a
+        window over just this AFS region) and bounds-checks the result.
+        """
+        relative = sector - self._region_base
+        if relative < 0 or relative >= self._disc.num_sectors:
+            raise AFSError(
+                f"sector {sector:#x} outside disc range "
+                f"0..{self._disc.num_sectors - 1:#x}"
+            )
+        return relative
+
     def _read_sector(self, sector: int) -> bytes:
         """Read one 256-byte sector by absolute address.
 
@@ -417,11 +440,7 @@ class AFS:
         """
         if sector in self._pending_writes:
             return self._pending_writes[sector]
-        if sector < 0 or sector >= self._disc.num_sectors:
-            raise AFSError(
-                f"sector {sector:#x} outside disc range 0..{self._disc.num_sectors - 1:#x}"
-            )
-        view = self._disc.sector_range(sector, 1)
+        view = self._disc.sector_range(self._disc_sector(sector), 1)
         data = bytes(view[:])
         if len(data) != MAP_SECTOR_SIZE:
             raise AFSError(
@@ -541,10 +560,9 @@ class AFS:
         """
         if len(data) != MAP_SECTOR_SIZE:
             raise ValueError(f"sector write must be {MAP_SECTOR_SIZE} bytes, got {len(data)}")
-        if sector < 0 or sector >= self._disc.num_sectors:
-            raise AFSError(
-                f"sector {sector:#x} outside disc range 0..{self._disc.num_sectors - 1:#x}"
-            )
+        # Validate the address translates into range; keep the buffer
+        # keyed by the absolute sector for a consistent flush.
+        self._disc_sector(sector)
         self._pending_writes[sector] = bytes(data)
 
     def _write_object_bytes(self, sin: SystemInternalName, data: bytes) -> None:
@@ -990,7 +1008,7 @@ class AFS:
         if self._bitmap_shadow_cache is not None:
             self._bitmap_shadow_cache.flush()
         for sector, data in sorted(self._pending_writes.items()):
-            view = self._disc.sector_range(sector, 1)
+            view = self._disc.sector_range(self._disc_sector(sector), 1)
             view[:] = data
         self._pending_writes.clear()
 

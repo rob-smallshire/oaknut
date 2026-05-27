@@ -27,6 +27,7 @@ dependencies = [
     "oaknut-file>=10.0",
     "oaknut-discimage>=10.0",
     "oaknut-identify>=10.0",
+    "oaknut-filesystem>=10.0",
     "oaknut-adfs>=10.0",
 ]
 
@@ -36,9 +37,14 @@ Documentation = "https://rob-smallshire.github.io/oaknut/disc/api/reference/afs.
 Repository = "https://github.com/rob-smallshire/oaknut"
 Issues = "https://github.com/rob-smallshire/oaknut/issues"
 
-# Probers contributed to the oaknut.identify cascade.
+# Probers contributed to the oaknut.identify cascade. (Legacy axis;
+# retired in Phase C.)
 [project.entry-points."oaknut.prober"]
 afs = "oaknut.afs.probers:AFSProber"
+
+# Filesystem contributed to the oaknut.filesystem axis.
+[project.entry-points."oaknut.filesystem"]
+afs = "oaknut.afs.filesystem:AFS"
 
 [dependency-groups]
 test = [
