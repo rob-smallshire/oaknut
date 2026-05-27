@@ -54,7 +54,7 @@ the pattern against both the bare filename and the fully-qualified
    disc find 'image.adl:$.Games.*'     # everything directly under $.Games
 
 On a partitioned hard disc, ``disc find`` emits each result with the
-dispatch prefix that would feed back unchanged into a follow-up
+partition selector that would feed back unchanged into a follow-up
 command::
 
    $ disc find 'scsi0.dat:Library'

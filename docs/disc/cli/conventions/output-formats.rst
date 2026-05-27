@@ -123,8 +123,8 @@ Some commands logically return more than one piece of information:
   geometry + total size) and one ``partition_N`` block per
   filesystem partition (``partition_1`` for DFS or ADFS,
   ``partition_2`` for AFS on a dual-partition image).
-- ``disc afs-plan`` returns several blocks (geometry, occupancy,
-  suggested ``afs-init`` invocation, …).
+- ``disc afs plan`` returns several blocks (geometry, occupancy,
+  suggested ``afs init`` invocation, …).
 
 Each sub-report has a stable name. You can ask for just the parts
 you want:

@@ -207,7 +207,7 @@ line at the OS prompt.
 .. cli-example:: l3fs_disc
    :section: plan_afs
 
-The ``afs-plan`` command is a dry-run that shows the disc's geometry,
+The ``afs plan`` command is a dry-run that shows the disc's geometry,
 how many sectors ADFS currently occupies, and what an AFS partition built
 from the remaining free space would look like. Nothing is written
 — the step is there to let you review the proposed shape before
@@ -218,12 +218,12 @@ committing. Skip it if you know what you want.
 .. cli-example:: l3fs_disc
    :section: init_afs
 
-The ``afs-init`` command carves out the AFS partition for real, adds
+The ``afs init`` command carves out the AFS partition for real, adds
 an ``RJS`` regular user, omits the provided-by-default ``Welcome``
 account, and emplaces two shipped library images.
 
-Note the absence of ``--cylinders``: when omitted, ``afs-init``
-claims the existing free space, which is exactly what ``afs-plan``
+Note the absence of ``--cylinders``: when omitted, ``afs init``
+claims the existing free space, which is exactly what ``afs plan``
 suggested. Pass an explicit value if you want a smaller AFS region
 and ADFS retained beyond what is strictly necessary.
 
@@ -236,7 +236,7 @@ contents land in a directory of the same name on the AFS partition.
 .. cli-example:: l3fs_disc
    :section: inspect_afs
 
-The ``disc afs-users`` command confirms the resulting account list:
+The ``disc afs users`` command confirms the resulting account list:
 ``Syst``, ``Boot``, and ``RJS`` are present; ``Welcome`` is not. The
 ``Syst`` and ``Boot`` accounts are not created explicitly — they
 are built-ins and arrive for free with every freshly-initialised
@@ -255,10 +255,10 @@ colon-delimited spec could not represent — and are set with their own
 To ship the disc with the system account already protected, add it at
 initialisation::
 
-    disc afs-init scsi0.dat --disc-name Server --user-password Syst=secret
+    disc afs init scsi0.dat --disc-name Server --user-password Syst=secret
 
 ``NAME`` matches a ``--user`` or a built-in; set a password later with
-``disc afs-passwd IMAGE NAME --password VALUE``.
+``disc afs passwd IMAGE NAME --password VALUE``.
 
 **7. Verify the dual-partition shape and walk the disc.**
 

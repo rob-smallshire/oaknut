@@ -64,7 +64,7 @@ prose with the ``:term:`` role.
    cylinder
       A vertical group of tracks at the same radial position across
       all surfaces of a disc. ADFS hard-disc geometry is reported in
-      cylinders, and ``disc afs-plan`` / ``disc afs-init`` size the
+      cylinders, and ``disc afs plan`` / ``disc afs init`` size the
       :term:`AFS` partition by cylinder boundary because the Level 3
       File Server's allocation tables address whole cylinders.
 
@@ -153,7 +153,7 @@ prose with the ``:term:`` role.
       The Level 3 File Server's disc-initialisation utility, which
       partitions an :term:`ADFS` hard disc and writes the
       :term:`AFS` :term:`info sector`. ``oaknut.afs.wfsinit``
-      reproduces this work in pure Python; ``disc afs-init`` is the
+      reproduces this work in pure Python; ``disc afs init`` is the
       user-facing entry point.
 
    xattr
