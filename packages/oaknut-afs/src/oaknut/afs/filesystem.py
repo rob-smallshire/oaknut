@@ -264,7 +264,7 @@ class _AFSMount:
 class AFS(Filesystem):
     """AFS — the Acorn Level 3 File Server's private on-disc format.
 
-    Recognised by the ``AFS0`` info sector in the tail region of an ADFS
+    Recognised by the AFS0 info sector in the tail region of an ADFS
     hard disc, with a redundant second copy one cylinder on. The
     coordinator finds it by recursing into the region ADFS reserves, so
     this filesystem operates on a window of just that region.

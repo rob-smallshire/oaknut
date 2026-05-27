@@ -141,7 +141,7 @@ class _ZipMount:
 class Zip(Filesystem):
     """ZIP — archives that may carry Acorn files (SparkFS extras, RISC OS types).
 
-    Detected by the unambiguous ``PK`` signature. The mount browses the
+    Detected by the unambiguous PK signature. The mount browses the
     archive read-only and surfaces the Acorn metadata this package's
     archive API recovers.
     """

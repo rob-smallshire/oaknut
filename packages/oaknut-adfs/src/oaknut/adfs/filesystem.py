@@ -266,8 +266,8 @@ class _ADFSMount:
 class ADFS(Filesystem):
     """ADFS — Acorn's hierarchical filing system (floppies and hard discs).
 
-    Detects the old-map layout by its root-directory signature (``Hugo``
-    at 0x201, ``Nick`` at 0x401), corroborated by the free-space-map
+    Detects the old-map layout by its root-directory signature ('Hugo'
+    at 0x201, 'Nick' at 0x401), corroborated by the free-space-map
     checksums. A reserved tail region — where an AFS (Level 3 File
     Server) or DRDOS FAT filesystem may live — is reported for the
     coordinator to recurse into; ADFS itself stays ignorant of it.

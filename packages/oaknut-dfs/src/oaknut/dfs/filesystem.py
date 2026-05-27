@@ -280,10 +280,9 @@ class _BaseDFS(Filesystem):
 class AcornDFS(_BaseDFS):
     """Acorn DFS — the standard flat-catalogue BBC floppy format.
 
-    Up to 31 named files, each in one of 27 directories with
-    single-character names, ``$`` and ``A``–``Z``. Directories are
-    managed automatically: created when the first file is added and
-    deleted when the last file is removed.
+    Up to 31 named files, each in one of 27 sibling directories
+    ($ and A–Z). Directories are managed automatically: created when the
+    first file is added and deleted when the last file is removed.
     """
 
     _catalogue = AcornDFSCatalogue
@@ -297,7 +296,7 @@ class WatfordDFS(_BaseDFS):
     """Watford DDFS — the 62-file extended-catalogue BBC floppy format.
 
     Reuses Acorn's opening sectors but adds a second catalogue in sectors
-    2–3, marked by twelve ``0xAA`` bytes and metadata synced across both
+    2–3, marked by twelve 0xAA bytes and metadata synced across both
     sections. Rated above Acorn DFS, which excludes these discs.
     """
 
