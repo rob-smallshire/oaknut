@@ -31,6 +31,12 @@ dependencies = [
     "typename>=1.0.4",
 ]
 
+# The `cli` extra pulls the shared CLI toolkit (which brings Click and
+# asyoulikeit) so this package can contribute `disc dfs` subcommands. The
+# library core never imports it, so a bare install stays CLI-free.
+[project.optional-dependencies]
+cli = ["oaknut-cli>=10.0"]
+
 [project.urls]
 Homepage = "https://github.com/rob-smallshire/oaknut/tree/master/packages/oaknut-dfs"
 Documentation = "https://rob-smallshire.github.io/oaknut/disc/api/reference/dfs.html"
@@ -49,6 +55,11 @@ watford_dfs = "oaknut.dfs.probers:WatfordDFSProber"
 [project.entry-points."oaknut.filesystem"]
 acorn-dfs = "oaknut.dfs.filesystem:AcornDFS"
 watford-dfs = "oaknut.dfs.filesystem:WatfordDFS"
+
+# Admin subcommands contributed to the `disc` CLI on the oaknut.command
+# axis: `disc dfs <subcommand>`. Loaded only with the [cli] extra.
+[project.entry-points."oaknut.command"]
+dfs = "oaknut.dfs.cli:dfs"
 
 [tool.setuptools.dynamic]
 version = { attr = "oaknut.dfs.__version__" }

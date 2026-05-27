@@ -184,8 +184,8 @@ Whole-image operations
 
    .. cli-example:: cmd_compact
 
-.. oaknut-command:: oaknut.disc.cli:expand
-   :prog: disc expand
+.. oaknut-command:: oaknut.dfs.cli:expand
+   :prog: disc dfs expand
 
    .. cli-example:: cmd_expand
 

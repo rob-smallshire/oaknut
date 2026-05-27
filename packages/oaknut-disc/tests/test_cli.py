@@ -3174,14 +3174,14 @@ class TestExpand:
 
     def test_expand_truncated_ssd(self, runner: CliRunner, tmp_path: Path) -> None:
         filepath = self._make_truncated_ssd(tmp_path)
-        result = runner.invoke(cli, ["expand", str(filepath)])
+        result = runner.invoke(cli, ["dfs", "expand", str(filepath)])
         assert result.exit_code == 0
         assert filepath.stat().st_size == 204800
         assert result.output == ""
 
     def test_expand_with_explicit_format(self, runner: CliRunner, tmp_path: Path) -> None:
         filepath = self._make_truncated_ssd(tmp_path, num_sectors=20)
-        result = runner.invoke(cli, ["expand", str(filepath), "--format", "ssd"])
+        result = runner.invoke(cli, ["dfs", "expand", str(filepath), "--format", "ssd"])
         assert result.exit_code == 0
         assert filepath.stat().st_size == 204800
 
@@ -3189,7 +3189,7 @@ class TestExpand:
         self, runner: CliRunner, dfs_image_filepath: Path
     ) -> None:
         original_size = dfs_image_filepath.stat().st_size
-        result = runner.invoke(cli, ["expand", str(dfs_image_filepath)])
+        result = runner.invoke(cli, ["dfs", "expand", str(dfs_image_filepath)])
         assert result.exit_code == 0
         assert result.output == ""
         assert dfs_image_filepath.stat().st_size == original_size
@@ -3197,12 +3197,12 @@ class TestExpand:
     def test_expand_not_sector_aligned(self, runner: CliRunner, tmp_path: Path) -> None:
         filepath = tmp_path / "bad.ssd"
         filepath.write_bytes(b"\x00" * 257)
-        result = runner.invoke(cli, ["expand", str(filepath)])
+        result = runner.invoke(cli, ["dfs", "expand", str(filepath)])
         assert result.exit_code != 0
 
     def test_expand_nonexistent_file(self, runner: CliRunner, tmp_path: Path) -> None:
         filepath = tmp_path / "nonexistent.ssd"
-        result = runner.invoke(cli, ["expand", str(filepath)])
+        result = runner.invoke(cli, ["dfs", "expand", str(filepath)])
         assert result.exit_code != 0
 
     def test_expand_dsd(self, runner: CliRunner, tmp_path: Path) -> None:
@@ -3214,7 +3214,7 @@ class TestExpand:
         data = full_filepath.read_bytes()
         truncated_filepath = tmp_path / "truncated.dsd"
         truncated_filepath.write_bytes(data[:20480])
-        result = runner.invoke(cli, ["expand", str(truncated_filepath)])
+        result = runner.invoke(cli, ["dfs", "expand", str(truncated_filepath)])
         assert result.exit_code == 0
         assert truncated_filepath.stat().st_size == 409600
 

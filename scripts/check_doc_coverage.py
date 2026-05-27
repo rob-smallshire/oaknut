@@ -150,17 +150,39 @@ def check_api(inventory_filepath: Path, packages: list[str]) -> int:
 # commands — disc CLI subcommands vs the command reference
 # ---------------------------------------------------------------------------
 
-_OAKNUT_COMMAND_RE = re.compile(
-    r"^\.\. oaknut-command:: oaknut\.disc\.cli:(\S+)\s*$", re.MULTILINE
-)
+# An ``.. oaknut-command:: <module>:<name>`` directive — the module may be
+# any package's CLI now that filesystem packages contribute commands
+# (oaknut.dfs.cli, oaknut.afs.cli, …), not only oaknut.disc.cli. Commands
+# are keyed by their user-facing ``:prog:`` path instead (see below).
+_OAKNUT_COMMAND_RE = re.compile(r"^\.\. oaknut-command:: (\S+)\s*$", re.MULTILINE)
+_PROG_RE = re.compile(r"^\s*:prog:\s*disc\s+(.+?)\s*$", re.MULTILINE)
 _CLI_EXAMPLE_RE = re.compile(r"cli-example:: (\S+)")
 
 
 def cli_command_names() -> set[str]:
-    """Primary ``disc`` subcommands (excluding Acorn ``*`` star-aliases)."""
+    """Every leaf ``disc`` subcommand as a space-joined path.
+
+    Descends into contributed groups (``disc afs init`` →
+    ``"afs init"``) and excludes the groups themselves and Acorn ``*``
+    star-aliases — only leaf commands carry docs and an example.
+    """
+    import click
     from oaknut.disc.cli import cli
 
-    return {name for name in cli.commands if not name.startswith("*")}
+    names: set[str] = set()
+
+    def walk(group: click.Group, prefix: str) -> None:
+        for name, command in group.commands.items():
+            if name.startswith("*"):
+                continue
+            path = f"{prefix}{name}"
+            if isinstance(command, click.Group):
+                walk(command, f"{path} ")
+            else:
+                names.add(path)
+
+    walk(cli, "")
+    return names
 
 
 def documented_commands(reference_filepath: Path) -> dict[str, list[str]]:
@@ -168,7 +190,9 @@ def documented_commands(reference_filepath: Path) -> dict[str, list[str]]:
 
     A command's block runs from its ``.. oaknut-command::`` line up to
     the next one (or end of file) — where its ``:prog:`` line, prose,
-    and ``.. cli-example::`` directives live.
+    and ``.. cli-example::`` directives live. The command is keyed by its
+    ``:prog:`` path minus the leading ``disc`` (``disc afs init`` →
+    ``"afs init"``), matching :func:`cli_command_names`.
     """
     text = reference_filepath.read_text()
     matches = list(_OAKNUT_COMMAND_RE.finditer(text))
@@ -176,7 +200,12 @@ def documented_commands(reference_filepath: Path) -> dict[str, list[str]]:
     for index, match in enumerate(matches):
         block_start = match.end()
         block_end = matches[index + 1].start() if index + 1 < len(matches) else len(text)
-        documented[match.group(1)] = _CLI_EXAMPLE_RE.findall(text[block_start:block_end])
+        block = text[block_start:block_end]
+        prog_match = _PROG_RE.search(block)
+        # Key by the user-facing command path; fall back to the directive
+        # target's name if a block omits :prog:.
+        key = prog_match.group(1).strip() if prog_match else match.group(1).partition(":")[2]
+        documented[key] = _CLI_EXAMPLE_RE.findall(block)
     return documented
 
 
