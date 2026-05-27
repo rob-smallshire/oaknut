@@ -23,6 +23,12 @@ from oaknut.cli.commands import (
     COMMAND_NAMESPACE,
     contributed_commands,
 )
+from oaknut.cli.reports import (
+    SECTOR_SIZE,
+    address_cell,
+    kv_table,
+    size_cell,
+)
 
 __version__ = "11.2.0"
 
@@ -30,4 +36,8 @@ __all__ = [
     "COMMAND_KIND",
     "COMMAND_NAMESPACE",
     "contributed_commands",
+    "SECTOR_SIZE",
+    "address_cell",
+    "kv_table",
+    "size_cell",
 ]

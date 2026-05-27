@@ -24,7 +24,13 @@ from asyoulikeit.cli import (
     report_output,
 )
 from exit_codes import ExitCode
-from oaknut.cli import contributed_commands
+from oaknut.cli import (
+    SECTOR_SIZE,
+    address_cell,
+    contributed_commands,
+    kv_table,
+    size_cell,
+)
 from oaknut.file.capacity import format_capacity
 from oaknut.file.exceptions import FSError
 
@@ -343,8 +349,8 @@ def ls(file_spec: str, show_access_byte: bool):
         load_cell = exec_cell = attr_str = hex_cell = ""
         if has_acorn:
             meta = mount.acorn_meta(child.path)
-            load_cell = _address_cell(meta.load_address)
-            exec_cell = _address_cell(meta.exec_address)
+            load_cell = address_cell(meta.load_address)
+            exec_cell = address_cell(meta.exec_address)
             attr_str = _format_access(Access(meta.access))
             hex_cell = f"0x{int(meta.access):02X}"
         row = {
@@ -484,9 +490,9 @@ def stat(file_spec: str):
     if isinstance(mount, AcornMetadata) and not entry.is_dir:
         meta = mount.acorn_meta(bare)
         tc.add_column("load", "Load")
-        row["load"] = _address_cell(meta.load_address)
+        row["load"] = address_cell(meta.load_address)
         tc.add_column("exec", "Exec")
-        row["exec"] = _address_cell(meta.exec_address)
+        row["exec"] = address_cell(meta.exec_address)
         tc.add_column("length", "Length")
         row["length"] = entry.length
         tc.add_column("attr", "Attr")
@@ -501,9 +507,6 @@ def stat(file_spec: str):
 
 
 _alias("*INFO", "stat")
-
-
-_SECTOR_SIZE = 256
 
 
 def _stat_disc(file_spec: str, image_filepath: Path):
@@ -555,7 +558,7 @@ def _stat_disc(file_spec: str, image_filepath: Path):
         )
         range_text = None
         if spc:
-            cylinders = (mount.size_bytes() // _SECTOR_SIZE) // spc
+            cylinders = (mount.size_bytes() // SECTOR_SIZE) // spc
             range_text = f"cylinders {running_cylinder}-{running_cylinder + cylinders - 1}"
             running_cylinder += cylinders
         block = _partition_block(
@@ -567,11 +570,11 @@ def _stat_disc(file_spec: str, image_filepath: Path):
 
 def _disc_envelope(geometry):
     """The ``disc`` envelope block: physical geometry and total size."""
-    return _kv_table(
+    return kv_table(
         "Disc",
         [
             ("geometry", "Geometry", geometry.label),
-            ("size", "Size", _size_cell(geometry.total_sectors)),
+            ("size", "Size", size_cell(geometry.total_sectors)),
         ],
     )
 
@@ -599,9 +602,9 @@ def _partition_block(mount, title: str, *, geometry: bool = False, range_text: s
     if range_text is not None:
         pairs.append(("range", "Range", range_text))
     if isinstance(mount, Sized):
-        pairs.append(("size", "Size", _size_cell(mount.size_bytes() // _SECTOR_SIZE)))
+        pairs.append(("size", "Size", size_cell(mount.size_bytes() // SECTOR_SIZE)))
     if isinstance(mount, FreeSpace):
-        pairs.append(("free", "Free", _size_cell(mount.free_bytes() // _SECTOR_SIZE)))
+        pairs.append(("free", "Free", size_cell(mount.free_bytes() // SECTOR_SIZE)))
     if isinstance(mount, Bootable):
         boot = mount.boot_option
         pairs.append(("boot_option", "Boot option", f"{boot.name} ({boot.value})"))
@@ -613,51 +616,12 @@ def _partition_block(mount, title: str, *, geometry: bool = False, range_text: s
             for _ in mount.iter_entries(letter.path)
         )
         pairs.append(("files", "Files", files))
-    return _kv_table(title, pairs)
+    return kv_table(title, pairs)
 
 
-def _size_cell(sectors: int) -> ByAudience:
-    """A capacity as an audience-aware cell.
-
-    Humans read friendly IEC units (``800.0 KiB``); machine formatters
-    get the raw byte count as an integer, so the presentation base is
-    irrelevant to a consumer. Replaces the old composite
-    ``"X bytes (Y sectors)"`` string — the sector count is derivable
-    from the geometry the same report already carries.
-    """
-    num_bytes = sectors * _SECTOR_SIZE
-    return ByAudience(machine=num_bytes, human=format_capacity(num_bytes))
-
-
-def _address_cell(address: int) -> ByAudience:
-    """A 32-bit Acorn address as an audience-aware cell.
-
-    Humans read the conventional ``0x``-prefixed 8-hex-digit form;
-    machine formatters (JSON, TSV) get the raw integer, so a consumer
-    never has to parse a base back out of a string.
-    """
-    return ByAudience(machine=address, human=f"0x{address:08X}")
-
-
-def _kv_table(title: str, pairs: list[tuple[str, str, object]]):
-    """Build a transposed single-row table from (key, label, value) tuples.
-
-    Each tuple becomes a column whose sole row holds the value. A value
-    may be a plain string, an integer (for machine-readable counts), or
-    a :class:`~asyoulikeit.ByAudience` cell that renders one way for
-    humans and another for machine formatters. Transposed presentation
-    turns the one-row table into a key-value report in the display
-    formatter.
-    """
-    from asyoulikeit.tabular_data import TableContent
-
-    tc = TableContent(title=title, present_transposed=True)
-    row: dict = {}
-    for i, (key, label, value) in enumerate(pairs):
-        tc.add_column(key, label, header=(i == 0))
-        row[key] = value
-    tc.add_row(**row)
-    return tc
+# size_cell / address_cell / kv_table now live in oaknut.cli (imported at
+# the top), so both the generic commands here and the filesystem-contributed
+# ones render output through them without a dependency cycle.
 
 
 @cli.command()
@@ -2032,7 +1996,7 @@ def get_load(file_spec: str):
     meta = _require_acorn_meta(file_spec)
     return Reports(
         load=Report(
-            data=ScalarContent(value=_address_cell(meta.load_address), title="Load"),
+            data=ScalarContent(value=address_cell(meta.load_address), title="Load"),
         ),
     )
 
@@ -2058,7 +2022,7 @@ def get_exec(file_spec: str):
     meta = _require_acorn_meta(file_spec)
     return Reports(
         exec=Report(
-            data=ScalarContent(value=_address_cell(meta.exec_address), title="Exec"),
+            data=ScalarContent(value=address_cell(meta.exec_address), title="Exec"),
         ),
     )
 
@@ -2584,7 +2548,7 @@ def _build_afs_plan_reports(document: dict):
     sections: dict = {}
     geom = document["geometry"]
     sections["geometry"] = Report(
-        data=_kv_table(
+        data=kv_table(
             "Disc geometry",
             [
                 (
@@ -2605,7 +2569,7 @@ def _build_afs_plan_reports(document: dict):
 
     adfs_state = document["adfs"]
     sections["adfs_state"] = Report(
-        data=_kv_table(
+        data=kv_table(
             "ADFS occupancy",
             [
                 ("used_sectors", "Used sectors", str(adfs_state["used_sectors"])),
@@ -2621,7 +2585,7 @@ def _build_afs_plan_reports(document: dict):
         if "disc_name" in existing:
             pairs.append(("disc_name", "Disc name", existing["disc_name"]))
             pairs.append(("start_cylinder", "Start cylinder", str(existing["start_cylinder"])))
-        sections["existing_afs"] = Report(data=_kv_table("Existing AFS partition", pairs))
+        sections["existing_afs"] = Report(data=kv_table("Existing AFS partition", pairs))
         return Reports(sections)
 
     p = document["plan"]
@@ -2643,7 +2607,7 @@ def _build_afs_plan_reports(document: dict):
     ]
     if "suggested_command" in document:
         plan_pairs.append(("suggested_command", "Suggested command", document["suggested_command"]))
-    sections["plan"] = Report(data=_kv_table("Proposed AFS partition", plan_pairs))
+    sections["plan"] = Report(data=kv_table("Proposed AFS partition", plan_pairs))
     return Reports(sections)
 
 
