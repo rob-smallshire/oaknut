@@ -233,7 +233,10 @@ round-trip tooling all consume.
 
 ## 9. Migration / sequencing
 
-Incremental, behind a stable interface — no big bang:
+The concrete execution plan — target dependency graph, per-phase
+deliverables, signatures, and test strategy — lives in
+[`filesystem-extensions-plan.md`](filesystem-extensions-plan.md). In
+outline, incremental and behind a stable interface — no big bang:
 
 - **A. Contracts.** Define `Filesystem`, `Partition`, and the
   per-partition `Identification` tree; `Geometry` largely exists already
@@ -263,8 +266,19 @@ sequence.
   prober becomes `probe()`.
 - **Partition naming.** `<format>[.<index>]` — `afs:` is the first AFS
   partition, `afs.1:` the second; the selector picks a *partition*, never
-  forces a format (§6). `adfs:`/`afs:` therefore stay working
-  (backward compatible).
+  forces a format (§6). The familiar `adfs:`/`afs:` spellings survive —
+  but as partition selectors with new semantics, not an API-compat promise.
+- **Major version bump; no backward compatibility.** The old format-prefix
+  semantics, the `FilingSystem` enum, the format-assertion errors, and the
+  per-filesystem `from_file` signatures may all change freely.
+- **Extensibility invariant (headline quality).** An installation works
+  correctly for exactly the filesystems installed. The base package
+  (`oaknut-filesystem`) and the CLI (`oaknut-disc`) depend on **no**
+  filesystem package and import none at module load — filesystems are
+  discovered only via entry points. Removing `oaknut-adfs` leaves
+  everything working except handling ADFS (and AFS, which needs the ADFS
+  host); an unhandled image degrades to a clear message, never a crash.
+  A subset-install test guards this.
 - **FAT is not in scope yet** — too little known about its on-disc
   detail. It stays the motivating example for host-plus-foreign-tail
   recursion and the Acorn-agnostic contract, so the design must *admit*
