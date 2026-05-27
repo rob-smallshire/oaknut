@@ -1304,12 +1304,13 @@ def _mutate_access(file_spec: str, *, recursive: bool, dry_run: bool, verb, tran
                 click.echo(verb(target))
                 continue
             meta = mount.acorn_meta(target)
+            current = Access(meta.access) if meta.access is not None else Access(0)
             mount.set_acorn_meta(
                 target,
                 AcornMeta(
                     load_address=meta.load_address,
                     exec_address=meta.exec_address,
-                    access=int(transform(Access(meta.access))),
+                    access=int(transform(current)),
                 ),
             )
 

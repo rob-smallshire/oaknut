@@ -175,4 +175,6 @@ Exceptions
 
 .. autoexception:: oaknut.filesystem.GeometryError
 
+.. autoexception:: oaknut.filesystem.ReadOnlyFilesystemError
+
 .. autoexception:: oaknut.filesystem.FilesystemExtensionError

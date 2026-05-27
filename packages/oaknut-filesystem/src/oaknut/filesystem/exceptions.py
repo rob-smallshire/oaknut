@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from oaknut.exception import DataError
+from oaknut.exception import DataError, ExitCode
 from oaknut.extension import ExtensionError
 
 
@@ -12,6 +12,18 @@ class FilesystemError(DataError):
 
 class GeometryError(FilesystemError):
     """A geometry specification could not be parsed, or is invalid."""
+
+
+class ReadOnlyFilesystemError(FilesystemError):
+    """A mutating operation was attempted on a read-only mount.
+
+    Raised by a :class:`~oaknut.filesystem.Mount` whose backing
+    filesystem cannot be written (a ZIP archive, say). Carries the
+    "operation not permitted" exit code so the CLI reports a clear
+    refusal rather than a generic data error.
+    """
+
+    _exit_code = ExitCode.NO_PERM
 
 
 class FilesystemExtensionError(ExtensionError):

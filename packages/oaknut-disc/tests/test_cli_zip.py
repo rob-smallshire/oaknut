@@ -51,3 +51,45 @@ class TestBrowseZip:
         assert out.read_bytes() == b"sprite data"
         # The filetype is preserved in the .inf sidecar's load address.
         assert "FFFFF900" in out.with_suffix(".inf").read_text().upper()
+
+
+class TestReadOnlyRefusal:
+    """Mutating commands refuse cleanly — a clear message and a non-zero,
+    "not permitted" exit code, never a traceback."""
+
+    def _refuses(self, result) -> None:
+        assert result.exit_code != 0
+        assert "read-only" in result.output.lower()
+        # A clean refusal, not a crash: no traceback leaked through.
+        assert "Traceback" not in result.output
+
+    def test_put_refused(self, runner: CliRunner, tmp_path):
+        host = tmp_path / "h.txt"
+        host.write_text("data")
+        result = runner.invoke(
+            cli, ["put", f"{_filetype_zip(tmp_path)}:New", str(host)]
+        )
+        self._refuses(result)
+
+    def test_rm_refused(self, runner: CliRunner, tmp_path):
+        result = runner.invoke(cli, ["rm", f"{_filetype_zip(tmp_path)}:Sprites"])
+        self._refuses(result)
+
+    def test_mv_refused(self, runner: CliRunner, tmp_path):
+        z = _filetype_zip(tmp_path)
+        result = runner.invoke(cli, ["mv", f"{z}:Sprites", f"{z}:Other"])
+        self._refuses(result)
+
+    def test_set_load_refused(self, runner: CliRunner, tmp_path):
+        result = runner.invoke(
+            cli, ["set-load", f"{_filetype_zip(tmp_path)}:Sprites", "0x8000"]
+        )
+        self._refuses(result)
+
+    def test_chmod_refused_even_without_access_bits(self, runner: CliRunner, tmp_path):
+        # Sprites has a filetype but no access bits (access=None); chmod must
+        # reach the read-only refusal, not crash on Access(None).
+        result = runner.invoke(
+            cli, ["chmod", f"{_filetype_zip(tmp_path)}:Sprites", "WR/R"]
+        )
+        self._refuses(result)

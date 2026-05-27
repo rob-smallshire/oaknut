@@ -19,6 +19,7 @@ from __future__ import annotations
 import io
 import zipfile
 from collections.abc import Iterable
+from typing import NoReturn
 
 from oaknut.file import AcornMeta
 from oaknut.filesystem import (
@@ -29,6 +30,7 @@ from oaknut.filesystem import (
     GeometryGrammar,
     Identification,
     ImageReader,
+    ReadOnlyFilesystemError,
 )
 
 from .api import resolved_entries
@@ -38,6 +40,16 @@ _SIGNATURES = {
     b"PK\x05\x06": "empty archive",
     b"PK\x07\x08": "spanned archive",
 }
+
+
+def _read_only(action: str) -> NoReturn:
+    """Refuse a mutating operation — the ZIP mount is read-only.
+
+    Raises :class:`~oaknut.filesystem.ReadOnlyFilesystemError` (not a bare
+    ``NotImplementedError``) so the CLI boundary reports a clear message
+    and a "not permitted" exit code rather than a traceback.
+    """
+    raise ReadOnlyFilesystemError(f"cannot {action}: ZIP archives are read-only")
 
 
 class _ZipMount:
@@ -113,17 +125,17 @@ class _ZipMount:
     def acorn_meta(self, path: str) -> AcornMeta:
         return self._meta.get(path, AcornMeta())
 
-    def set_acorn_meta(self, path: str, meta: AcornMeta) -> None:  # pragma: no cover
-        raise NotImplementedError("writing ZIP archives is not supported")
+    def set_acorn_meta(self, path: str, meta: AcornMeta) -> None:
+        _read_only("change metadata")
 
-    def write_bytes(self, path: str, data: bytes) -> None:  # pragma: no cover
-        raise NotImplementedError("writing ZIP archives is not supported")
+    def write_bytes(self, path: str, data: bytes) -> None:
+        _read_only("write files")
 
-    def remove(self, path: str, *, force: bool = False) -> None:  # pragma: no cover
-        raise NotImplementedError("writing ZIP archives is not supported")
+    def remove(self, path: str, *, force: bool = False) -> None:
+        _read_only("remove files")
 
-    def rename(self, old_path: str, new_path: str) -> None:  # pragma: no cover
-        raise NotImplementedError("writing ZIP archives is not supported")
+    def rename(self, old_path: str, new_path: str) -> None:
+        _read_only("rename files")
 
 
 class Zip(Filesystem):

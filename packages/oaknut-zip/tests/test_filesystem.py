@@ -2,9 +2,12 @@
 
 import zipfile
 
+import pytest
+from oaknut.file import AcornMeta
 from oaknut.filesystem import (
     Confidence,
     Mount,
+    ReadOnlyFilesystemError,
     create_filesystem,
     filesystem_names,
     identify,
@@ -98,6 +101,23 @@ class TestHierarchy:
 
             walk(mount.path_root())
             assert set(seen) == {"hello.txt", "dir", "dir/inner.dat"}
+
+
+class TestReadOnly:
+    """Every mutating operation refuses with ReadOnlyFilesystemError."""
+
+    def test_mutations_raise_read_only(self, tmp_path):
+        filesystem = create_filesystem("zip")
+        with reader_for(_make_zip(tmp_path)) as reader:
+            mount = filesystem.open(reader)
+            with pytest.raises(ReadOnlyFilesystemError):
+                mount.write_bytes("new.txt", b"data")
+            with pytest.raises(ReadOnlyFilesystemError):
+                mount.remove("hello.txt")
+            with pytest.raises(ReadOnlyFilesystemError):
+                mount.rename("hello.txt", "bye.txt")
+            with pytest.raises(ReadOnlyFilesystemError):
+                mount.set_acorn_meta("hello.txt", AcornMeta())
 
 
 class TestMetadata:
