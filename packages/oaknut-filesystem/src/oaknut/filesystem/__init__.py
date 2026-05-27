@@ -15,11 +15,13 @@ tree — depending on, and importing, no concrete filesystem package.
 
 from oaknut.filesystem.capabilities import (
     AcornMetadata,
-    DiscMetadata,
+    Bootable,
     Entry,
+    FreeSpace,
     HierarchicalDirectories,
     Mount,
     RegionHost,
+    Titled,
     UserDatabase,
 )
 from oaknut.filesystem.coordinator import (
@@ -61,7 +63,9 @@ __all__ = [
     "Entry",
     "HierarchicalDirectories",
     "AcornMetadata",
-    "DiscMetadata",
+    "Titled",
+    "Bootable",
+    "FreeSpace",
     "UserDatabase",
     "RegionHost",
     # geometry

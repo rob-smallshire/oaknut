@@ -79,7 +79,7 @@ class _ADFSMount:
     """A :class:`~oaknut.filesystem.Mount` over an :class:`ADFS` instance.
 
     Implements the core plus ``HierarchicalDirectories``, ``AcornMetadata``,
-    ``DiscMetadata`` and ``RegionHost``.
+    ``Titled``, ``Bootable``, ``FreeSpace`` and ``RegionHost``.
     """
 
     def __init__(self, adfs: _ADFSDisc, reserved: tuple[Partition, ...]):
@@ -92,10 +92,19 @@ class _ADFSMount:
     def _navigate(self, path: str):
         return self._adfs.path(path)
 
+    def stat(self, path: str) -> Entry:
+        target = self._navigate(path)
+        st = target.stat()
+        return Entry(
+            name=target.name, is_dir=st.is_directory, length=st.length, path=target.path
+        )
+
     def iter_entries(self, path: str) -> Iterable[Entry]:
         for child in self._navigate(path).iterdir():
-            stat = child.stat()
-            yield Entry(name=child.name, is_dir=stat.is_directory, length=stat.length)
+            st = child.stat()
+            yield Entry(
+                name=child.name, is_dir=st.is_directory, length=st.length, path=child.path
+            )
 
     def exists(self, path: str) -> bool:
         return self._navigate(path).exists()
@@ -122,7 +131,7 @@ class _ADFSMount:
     def set_acorn_meta(self, path: str, meta: AcornMeta) -> None:  # pragma: no cover
         raise NotImplementedError("ADFS metadata write-back is wired in Phase C")
 
-    # -- DiscMetadata --
+    # -- Titled / Bootable --
     @property
     def title(self) -> str:
         return self._adfs.title
@@ -130,6 +139,10 @@ class _ADFSMount:
     @property
     def boot_option(self):
         return self._adfs.boot_option
+
+    # -- FreeSpace --
+    def free_bytes(self) -> int:
+        return self._adfs.free_space
 
     # -- RegionHost --
     def reserved_regions(self) -> tuple[Partition, ...]:

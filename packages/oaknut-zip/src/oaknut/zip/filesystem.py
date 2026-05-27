@@ -45,12 +45,19 @@ class _ZipMount:
     def path_root(self) -> str:
         return ""
 
+    def stat(self, path: str) -> Entry:
+        info = self._archive.getinfo(path)
+        return Entry(
+            name=info.filename, is_dir=info.is_dir(), length=info.file_size, path=info.filename
+        )
+
     def iter_entries(self, path: str) -> Iterable[Entry]:
         for info in self._archive.infolist():
             yield Entry(
                 name=info.filename,
                 is_dir=info.is_dir(),
                 length=info.file_size,
+                path=info.filename,
             )
 
     def exists(self, path: str) -> bool:

@@ -92,10 +92,19 @@ class _AFSMount:
                 target = target / component
         return target
 
+    def stat(self, path: str) -> Entry:
+        target = self._navigate(path)
+        st = target.stat()
+        return Entry(
+            name=st.name, is_dir=st.is_directory, length=st.length, path=target.path
+        )
+
     def iter_entries(self, path: str) -> Iterable[Entry]:
         for child in self._navigate(path).iterdir():
-            stat = child.stat()
-            yield Entry(name=stat.name, is_dir=stat.is_directory, length=stat.length)
+            st = child.stat()
+            yield Entry(
+                name=st.name, is_dir=st.is_directory, length=st.length, path=child.path
+            )
 
     def exists(self, path: str) -> bool:
         return self._navigate(path).exists()
@@ -121,6 +130,15 @@ class _AFSMount:
 
     def set_acorn_meta(self, path: str, meta: AcornMeta) -> None:  # pragma: no cover
         raise NotImplementedError("AFS metadata write-back is wired in Phase C")
+
+    # -- Titled --
+    @property
+    def title(self) -> str:
+        return self._afs.title
+
+    # -- FreeSpace --
+    def free_bytes(self) -> int:
+        return self._afs.free_sectors * 256
 
     # -- UserDatabase --
     def user_names(self) -> tuple[str, ...]:

@@ -3,10 +3,11 @@
 from oaknut.dfs import ACORN_DFS_80T_SINGLE_SIDED, DFS
 from oaknut.filesystem import (
     AcornMetadata,
+    Bootable,
     Confidence,
-    DiscMetadata,
     HierarchicalDirectories,
     Mount,
+    Titled,
     create_filesystem,
     filesystem_names,
     identify,
@@ -85,7 +86,8 @@ class TestMount:
             mount = filesystem.open(reader, filesystem.probe(reader).geometry)
             # DFS carries Acorn metadata and a disc title/boot option …
             assert isinstance(mount, AcornMetadata)
-            assert isinstance(mount, DiscMetadata)
+            assert isinstance(mount, Titled)
+            assert isinstance(mount, Bootable)
             # … but is flat, so it is not hierarchical.
             assert not isinstance(mount, HierarchicalDirectories)
 

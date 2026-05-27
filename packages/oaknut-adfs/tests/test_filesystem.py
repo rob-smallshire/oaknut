@@ -3,11 +3,12 @@
 from oaknut.adfs import ADFS, ADFS_S
 from oaknut.filesystem import (
     AcornMetadata,
+    Bootable,
     Confidence,
-    DiscMetadata,
     HierarchicalDirectories,
     Mount,
     RegionHost,
+    Titled,
     create_filesystem,
     filesystem_names,
     identify,
@@ -72,7 +73,8 @@ class TestMount:
             assert isinstance(mount, Mount)
             assert isinstance(mount, HierarchicalDirectories)
             assert isinstance(mount, AcornMetadata)
-            assert isinstance(mount, DiscMetadata)
+            assert isinstance(mount, Titled)
+            assert isinstance(mount, Bootable)
             assert isinstance(mount, RegionHost)
             assert mount.title == "TESTDISC"
             assert mount.reserved_regions() == ()  # a floppy reserves nothing

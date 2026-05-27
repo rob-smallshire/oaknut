@@ -2,10 +2,11 @@
 
 from oaknut.filesystem import (
     AcornMetadata,
+    Bootable,
     Confidence,
-    DiscMetadata,
     HierarchicalDirectories,
     Mount,
+    Titled,
     UserDatabase,
     create_filesystem,
     filesystem_names,
@@ -57,8 +58,9 @@ class TestMount:
             assert isinstance(mount, HierarchicalDirectories)
             assert isinstance(mount, AcornMetadata)
             assert isinstance(mount, UserDatabase)
-            # AFS has user accounts but no *OPT-style disc boot metadata.
-            assert not isinstance(mount, DiscMetadata)
+            assert isinstance(mount, Titled)  # AFS has a disc name
+            # … but no *OPT-style boot option.
+            assert not isinstance(mount, Bootable)
             assert len(mount.user_names()) >= 1
 
 

@@ -90,7 +90,8 @@ def _propose_geometry(size: int) -> tuple[Geometry | None, tuple[Geometry, ...]]
 class _DFSMount:
     """A :class:`~oaknut.filesystem.Mount` over a :class:`DFS` instance.
 
-    Implements the core plus ``AcornMetadata`` and ``DiscMetadata``; DFS
+    Implements the core plus ``AcornMetadata``, ``Titled``, ``Bootable``
+    and ``FreeSpace``; DFS
     is flat (a fixed root/letter/file shape), so it does *not* advertise
     ``HierarchicalDirectories``.
     """
@@ -104,10 +105,19 @@ class _DFSMount:
     def _navigate(self, path: str):
         return self._dfs.path(path)
 
+    def stat(self, path: str) -> Entry:
+        target = self._navigate(path)
+        st = target.stat()
+        return Entry(
+            name=target.name, is_dir=st.is_directory, length=st.length, path=target.path
+        )
+
     def iter_entries(self, path: str) -> Iterable[Entry]:
         for child in self._navigate(path).iterdir():
-            stat = child.stat()
-            yield Entry(name=child.name, is_dir=stat.is_directory, length=stat.length)
+            st = child.stat()
+            yield Entry(
+                name=child.name, is_dir=st.is_directory, length=st.length, path=child.path
+            )
 
     def exists(self, path: str) -> bool:
         return self._navigate(path).exists()
@@ -131,7 +141,7 @@ class _DFSMount:
         # Metadata write-back is wired with the CLI in Phase C.
         raise NotImplementedError("DFS metadata write-back is not yet implemented")
 
-    # -- DiscMetadata --
+    # -- Titled / Bootable --
     @property
     def title(self) -> str:
         return self._dfs.title
@@ -139,6 +149,10 @@ class _DFSMount:
     @property
     def boot_option(self):
         return self._dfs.boot_option
+
+    # -- FreeSpace --
+    def free_bytes(self) -> int:
+        return self._dfs.free_sectors * 256
 
 
 class _BaseDFS(Filesystem):

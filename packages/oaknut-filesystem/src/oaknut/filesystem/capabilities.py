@@ -34,6 +34,10 @@ class Entry:
     name: str
     is_dir: bool
     length: int = 0
+    #: The entry's full in-partition path, so a caller can address it
+    #: (e.g. fetch its metadata) without re-joining in the filesystem's
+    #: own syntax. Empty only for a bare, unaddressed entry.
+    path: str = ""
 
 
 @runtime_checkable
@@ -47,6 +51,10 @@ class Mount(Protocol):
 
     def path_root(self) -> str:
         """The root path string (e.g. ``"$"`` for Acorn filesystems)."""
+        ...
+
+    def stat(self, path: str) -> Entry:
+        """The :class:`Entry` for *path* (name, kind, length, full path)."""
         ...
 
     def iter_entries(self, path: str) -> Iterable[Entry]:
@@ -93,17 +101,31 @@ class AcornMetadata(Protocol):
 
 
 @runtime_checkable
-class DiscMetadata(Protocol):
-    """The disc carries a title and a boot option."""
+class Titled(Protocol):
+    """The disc carries a title / name (DFS, ADFS, AFS)."""
 
     @property
     def title(self) -> str:
         """The disc title / name."""
         ...
 
+
+@runtime_checkable
+class Bootable(Protocol):
+    """The disc carries a ``*OPT 4`` boot option (DFS, ADFS)."""
+
     @property
     def boot_option(self) -> "BootOption":
-        """The disc's *OPT 4 boot option."""
+        """The disc's ``*OPT 4`` boot option."""
+        ...
+
+
+@runtime_checkable
+class FreeSpace(Protocol):
+    """The filesystem reports its free space (ADFS, AFS)."""
+
+    def free_bytes(self) -> int:
+        """Free space remaining, in bytes."""
         ...
 
 
