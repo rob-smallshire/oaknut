@@ -92,6 +92,23 @@ class TestMount:
             mount = filesystem.open(reader, filesystem.probe(reader).geometry)
             assert mount.read_bytes("$.GREET") == b"hi there"
 
+    def test_set_acorn_meta_round_trips(self, tmp_path):
+        from oaknut.file import Access, AcornMeta
+
+        image_filepath = _make_dfs_image(tmp_path)
+        filesystem = create_filesystem("acorn-dfs")
+        with reader_for(image_filepath, writable=True) as reader:
+            mount = filesystem.open(reader, filesystem.probe(reader).geometry)
+            mount.set_acorn_meta(
+                "$.HELLO", AcornMeta(load_address=0x2000, exec_address=0x3000, access=int(Access.L))
+            )
+        with reader_for(image_filepath) as reader:
+            mount = filesystem.open(reader, filesystem.probe(reader).geometry)
+            meta = mount.acorn_meta("$.HELLO")
+            assert meta.load_address == 0x2000
+            assert meta.exec_address == 0x3000
+            assert meta.access & Access.L
+
     def test_capabilities(self, tmp_path):
         image_filepath = _make_dfs_image(tmp_path)
         filesystem = create_filesystem("acorn-dfs")

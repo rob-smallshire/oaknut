@@ -87,6 +87,26 @@ class TestWritableRegion:
             mount = afs.open(_afs_region_reader(reader))
             assert mount.read_bytes("$.NEWFILE") == b"persisted"
 
+    def test_set_acorn_meta_round_trips(self, tmp_path):
+        import shutil
+
+        from oaknut.file import AcornMeta
+
+        image_filepath = tmp_path / "l3fs.dat"
+        shutil.copy(_L3FS_DAT, image_filepath)
+        afs = create_filesystem("afs")
+        with reader_for(image_filepath, writable=True) as reader:
+            mount = afs.open(_afs_region_reader(reader))
+            mount.write_bytes("$.METAF", b"data")
+            mount.set_acorn_meta(
+                "$.METAF", AcornMeta(load_address=0x8000, exec_address=0x9000, access=0)
+            )
+        with reader_for(image_filepath) as reader:
+            mount = afs.open(_afs_region_reader(reader))
+            meta = mount.acorn_meta("$.METAF")
+            assert meta.load_address == 0x8000
+            assert meta.exec_address == 0x9000
+
 
 class TestNotAfs:
     def test_non_afs_region_returns_none(self):

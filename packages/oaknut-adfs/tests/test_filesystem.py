@@ -80,6 +80,22 @@ class TestMount:
             assert mount.exists("$.NEWDIR")
             assert mount.read_bytes("$.GREET") == b"hi there"
 
+    def test_set_acorn_meta_round_trips(self, tmp_path):
+        from oaknut.file import AcornMeta
+
+        filesystem = create_filesystem("adfs")
+        image_filepath = _make_adfs_image(tmp_path)
+        with reader_for(image_filepath, writable=True) as reader:
+            mount = filesystem.open(reader, filesystem.probe(reader).geometry)
+            mount.set_acorn_meta(
+                "$.HELLO", AcornMeta(load_address=0xABCD, exec_address=0x1234, access=0x0F)
+            )
+        with reader_for(image_filepath) as reader:
+            mount = filesystem.open(reader, filesystem.probe(reader).geometry)
+            meta = mount.acorn_meta("$.HELLO")
+            assert meta.load_address == 0xABCD
+            assert meta.exec_address == 0x1234
+
     def test_capabilities(self, tmp_path):
         filesystem = create_filesystem("adfs")
         with reader_for(_make_adfs_image(tmp_path)) as reader:

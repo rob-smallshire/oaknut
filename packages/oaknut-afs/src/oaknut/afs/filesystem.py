@@ -143,8 +143,14 @@ class _AFSMount:
             access=int(stat.access),
         )
 
-    def set_acorn_meta(self, path: str, meta: AcornMeta) -> None:  # pragma: no cover
-        raise NotImplementedError("AFS metadata write-back is wired in Phase C")
+    def set_acorn_meta(self, path: str, meta: AcornMeta) -> None:
+        target = self._navigate(path)
+        if meta.load_address is not None:
+            target.set_load_address(meta.load_address)
+        if meta.exec_address is not None:
+            target.set_exec_address(meta.exec_address)
+        target.chmod(int(meta.access))
+        self._afs.flush()
 
     # -- Titled --
     @property

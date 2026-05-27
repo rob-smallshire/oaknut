@@ -142,9 +142,20 @@ class _DFSMount:
             access=int(stat.access),
         )
 
-    def set_acorn_meta(self, path: str, meta: AcornMeta) -> None:  # pragma: no cover
-        # Metadata write-back is wired with the CLI in Phase C.
-        raise NotImplementedError("DFS metadata write-back is not yet implemented")
+    def set_acorn_meta(self, path: str, meta: AcornMeta) -> None:
+        from oaknut.file import Access
+
+        target = self._navigate(path)
+        if meta.load_address is not None:
+            target.set_load_address(meta.load_address)
+        if meta.exec_address is not None:
+            target.set_exec_address(meta.exec_address)
+        # DFS records only the lock bit; the other access flags have no
+        # representation in its catalogue.
+        if meta.access & Access.L:
+            target.lock()
+        else:
+            target.unlock()
 
     # -- Titled / Bootable --
     @property
