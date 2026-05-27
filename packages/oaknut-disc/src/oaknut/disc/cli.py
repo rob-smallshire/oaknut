@@ -2110,28 +2110,21 @@ def mkdir(file_spec: str, p: bool, dir_title: str | None) -> None:
     directory's title, which only ADFS supports — passing it for an
     AFS directory is an error (DFS has no directories at all).
     """
-    from oaknut.file import TitleNotSupportedError
+    from oaknut.filesystem import HierarchicalDirectories
 
-    image, path = parse_file_spec(file_spec)
+    _image, path = parse_file_spec(file_spec)
     if not path:
         raise click.UsageError("PATH is required")
-    fs, bare = resolve_path(image, path)
-    if fs is FilingSystem.DFS:
-        raise click.ClickException("mkdir is not supported for DFS images")
-    with open_image(image, fs) as handle:
-        target = _navigate(handle, bare, fs)
-        # Reject an unsupported --title before creating anything, so a
-        # failed title doesn't leave an untitled directory behind.
-        if dir_title is not None and not target.supports_title:
-            raise TitleNotSupportedError(
-                f"'{bare}' cannot have a title: "
-                "only ADFS directories carry one"
+    with resolve_mount(file_spec, writable=True) as resolved:
+        mount = resolved.mount
+        # mkdir is available when the filesystem nests directories; a flat
+        # catalogue (DFS) does not advertise the capability.
+        if not isinstance(mount, HierarchicalDirectories):
+            raise click.ClickException(
+                f"mkdir is not supported for {resolved.filesystem} images"
             )
-        target.mkdir(parents=p, exist_ok=p)
-        if dir_title is not None:
-            target.title = dir_title
-        if fs is FilingSystem.AFS:
-            handle.flush()
+        target = resolved.path or mount.path_root()
+        mount.make_directory(target, parents=p, exist_ok=p, title=dir_title)
 
 
 _alias("*CDIR", "mkdir")

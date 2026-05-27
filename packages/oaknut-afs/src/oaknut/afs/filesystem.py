@@ -148,8 +148,21 @@ class _AFSMount:
         self._afs.flush()
 
     # -- HierarchicalDirectories --
-    def make_directory(self, path: str) -> None:
-        self._navigate(path).mkdir()
+    def make_directory(
+        self,
+        path: str,
+        *,
+        parents: bool = False,
+        exist_ok: bool = False,
+        title: str | None = None,
+    ) -> None:
+        if title is not None:
+            # Reject before creating anything, so a failed title does not
+            # leave an untitled directory behind. AFS directories have none.
+            from oaknut.file import TitleNotSupportedError
+
+            raise TitleNotSupportedError("only ADFS directories carry a title")
+        self._navigate(path).mkdir(parents=parents, exist_ok=exist_ok)
         self._afs.flush()
 
     # -- AcornMetadata --

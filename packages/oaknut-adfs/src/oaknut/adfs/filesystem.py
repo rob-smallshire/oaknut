@@ -142,8 +142,19 @@ class _ADFSMount:
         self._navigate(old_path).rename(new_path)
 
     # -- HierarchicalDirectories --
-    def make_directory(self, path: str) -> None:
-        self._navigate(path).mkdir()
+    def make_directory(
+        self,
+        path: str,
+        *,
+        parents: bool = False,
+        exist_ok: bool = False,
+        title: str | None = None,
+    ) -> None:
+        target = self._navigate(path)
+        target.mkdir(parents=parents, exist_ok=exist_ok)
+        # ADFS directories carry a title.
+        if title is not None:
+            target.title = title
 
     # -- AcornMetadata --
     def acorn_meta(self, path: str) -> AcornMeta:

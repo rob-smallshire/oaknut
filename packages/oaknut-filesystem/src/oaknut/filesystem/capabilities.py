@@ -97,8 +97,21 @@ class HierarchicalDirectories(Protocol):
     top-level directory only).
     """
 
-    def make_directory(self, path: str) -> None:
-        """Create a directory at *path*."""
+    def make_directory(
+        self,
+        path: str,
+        *,
+        parents: bool = False,
+        exist_ok: bool = False,
+        title: str | None = None,
+    ) -> None:
+        """Create a directory at *path*.
+
+        *parents* creates missing ancestors; *exist_ok* tolerates an
+        existing directory. *title* sets the new directory's title where
+        the filesystem supports per-directory titles (ADFS) and is
+        rejected (before anything is created) where it does not (AFS).
+        """
         ...
 
 

@@ -110,7 +110,7 @@ class TestMkdirErrors:
             result.exception
         )
         assert result.exit_code == 1
-        assert "not supported for DFS" in result.output
+        assert "not supported for acorn-dfs" in result.output
 
 
 # ---------------------------------------------------------------------------

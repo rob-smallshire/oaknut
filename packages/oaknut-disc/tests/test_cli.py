@@ -1042,15 +1042,17 @@ class TestTitleCapability:
         assert "Documents" in read_result.output
 
     def test_mkdir_title_afs_rejected_without_orphan(
-        self, runner: CliRunner, afs_image_filepath: Path
+        self, runner: CliRunner, partitioned_image_with_files: Path
     ) -> None:
+        # A hard-disc AFS partition (writable, unlike an interleaved
+        # floppy), so the title rejection is what fires, not a write guard.
         result = runner.invoke(
-            cli, ["mkdir", f"{afs_image_filepath}:afs:$.Lib", "--title", "Nope"]
+            cli, ["mkdir", f"{partitioned_image_with_files}:afs:$.Lib", "--title", "Nope"]
         )
         assert result.exit_code == 65
         assert "title" in result.output.lower()
         # The directory must not have been created (atomic failure).
-        listing = runner.invoke(cli, ["ls", f"{afs_image_filepath}:afs:$"])
+        listing = runner.invoke(cli, ["ls", f"{partitioned_image_with_files}:afs:$"])
         assert "Lib" not in listing.output
 
 
@@ -2268,7 +2270,8 @@ class TestMkdir:
     def test_mkdir_dfs_errors(self, runner: CliRunner, dfs_image_filepath: Path) -> None:
         result = runner.invoke(cli, ["mkdir", f"{dfs_image_filepath}:$.Dir"])
         assert result.exit_code != 0
-        assert "not supported for DFS" in result.output
+        # DFS is flat — it does not advertise hierarchical directories.
+        assert "not supported for acorn-dfs" in result.output
 
     def test_mkdir_p_existing(self, runner: CliRunner, adfs_image_filepath: Path) -> None:
         result = runner.invoke(cli, ["mkdir", "-p", f"{adfs_image_filepath}:$.Games"])
