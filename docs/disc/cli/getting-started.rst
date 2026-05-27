@@ -73,14 +73,17 @@ Acorn-era disc images out in the wild are.
 
 .. cli-example:: getting_started
 
-The ``.ssd`` extension is enough for ``disc create`` to pick the
-right format — the same is true of ``.dsd`` (DFS double-sided),
+The ``.ssd`` extension is enough for ``disc create`` to infer both
+the filesystem and the geometry — a single-sided 80-track Acorn DFS
+floppy. The same holds for ``.dsd`` (DFS double-sided) and
 ``.ads`` / ``.adm`` / ``.adl`` (ADFS floppies, small / medium /
-large), and ``.dat`` (ADFS hard discs, which also need
-``--capacity 10MB`` or similar — see :doc:`cookbook` for the
-walkthrough that builds a Level 3 File Server disc). Pass
-``--format`` explicitly only when the extension is unconventional
-or ambiguous.
+large). An ambiguous extension (``.adf`` — ADFS-S or -M?) or an
+open-ended one (``.dat``, a hard disc) has no default geometry, so it
+needs ``--geometry``; a hard disc takes ``--geometry capacity=10MB``
+(or a ``cylinders=…,heads=…,spt=…`` form) — see :doc:`cookbook` for
+the walkthrough that builds a Level 3 File Server disc. Override the
+inferred choices with ``--filesystem`` and ``--geometry`` when you
+need to.
 
 The disc is empty but the catalogue and boot option are already in
 place. Two sectors of the 800 total are "used" — sectors 0 and 1

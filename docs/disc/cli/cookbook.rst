@@ -158,9 +158,10 @@ ADFS envelope plus the file-server executable shipped on
    :section: envelope
 
 Here ``disc create`` reserves the file on the host and writes the
-ADFS catalogue + free-space map. The ``--format adfs-hard`` option
-picks the hard-disc geometry family, ``--capacity 10MB`` sizes it,
-and ``--title`` sets the on-disc title that ``*CAT`` will display.
+ADFS catalogue + free-space map. The ``.dat`` extension selects ADFS;
+``--geometry capacity=10MB`` sizes the hard disc (``disc`` derives a
+cylinders/heads/sectors layout for that capacity); and ``--title``
+sets the on-disc title that ``*CAT`` will display.
 
 The command is silent on success — see :doc:`conventions/exit-codes`
 for the broader contract.
