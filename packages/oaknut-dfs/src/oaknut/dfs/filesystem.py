@@ -189,9 +189,15 @@ class _DFSMount:
     def title(self) -> str:
         return self._dfs.title
 
+    def set_title(self, title: str) -> None:
+        self._dfs.title = title
+
     @property
     def boot_option(self):
         return self._dfs.boot_option
+
+    def set_boot_option(self, option) -> None:
+        self._dfs.boot_option = option
 
     # -- FreeSpace --
     def free_bytes(self) -> int:

@@ -990,8 +990,12 @@ class TestTitleCapability:
         assert read_result.exit_code == 0
         assert "NewName" in read_result.output
 
-    def test_disc_title_afs(self, runner: CliRunner, afs_image_filepath: Path) -> None:
-        spec = f"{afs_image_filepath}:afs:"
+    def test_disc_title_afs(
+        self, runner: CliRunner, partitioned_image_with_files: Path
+    ) -> None:
+        # A hard-disc AFS partition is writable (an interleaved floppy
+        # would refuse the write earlier).
+        spec = f"{partitioned_image_with_files}:afs:"
         set_result = runner.invoke(cli, ["title", spec, "AfsRenamed"])
         assert set_result.exit_code == 0
         read_result = runner.invoke(cli, ["title", spec])
@@ -1020,12 +1024,13 @@ class TestTitleCapability:
         assert "title" in result.output.lower()
 
     def test_directory_title_afs_rejected(
-        self, runner: CliRunner, afs_image_filepath: Path
+        self, runner: CliRunner, partitioned_image_with_files: Path
     ) -> None:
-        # Create the directory first so the error is purely about the
-        # title capability, not a missing path.
-        runner.invoke(cli, ["mkdir", f"{afs_image_filepath}:afs:$.Lib"])
-        result = runner.invoke(cli, ["title", f"{afs_image_filepath}:afs:$.Lib", "Nope"])
+        # A hard-disc AFS partition (writable) so the error is purely
+        # about the title capability. $.GAMES exists in the fixture.
+        result = runner.invoke(
+            cli, ["title", f"{partitioned_image_with_files}:afs:$.GAMES", "Nope"]
+        )
         assert result.exit_code == 65
         assert "title" in result.output.lower()
 

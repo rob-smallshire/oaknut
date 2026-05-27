@@ -2445,34 +2445,39 @@ def title(file_spec: str, new_title: str | None):
     from asyoulikeit.scalar_data import ScalarContent
     from asyoulikeit.tabular_data import Report, Reports
     from oaknut.file import TitleNotSupportedError
+    from oaknut.filesystem import DirectoryTitled, Titled
 
-    image, path = parse_file_spec(file_spec)
-    fs, bare = resolve_path(image, path)
-    with open_image(image, fs) as handle:
-        # No in-image path → the disc/partition title (handle.title,
-        # supported on every filesystem). A path → that directory's
-        # title, which only ADFS directories carry.
-        target_is_directory = bool(bare)
-        entity = _navigate(handle, bare, fs) if target_is_directory else handle
+    _image, _path = parse_file_spec(file_spec)
+    with resolve_mount(file_spec, writable=new_title is not None) as resolved:
+        mount = resolved.mount
+        bare = resolved.path
+        # No in-image path → the disc/partition title (every filesystem
+        # is Titled). A path → that directory's title, which only an
+        # ADFS-style DirectoryTitled filesystem carries.
+        if bare:
+            if not isinstance(mount, DirectoryTitled):
+                raise TitleNotSupportedError(
+                    f"'{bare}' cannot have a title: only ADFS directories carry one"
+                )
+            if new_title is None:
+                current = mount.directory_title(bare)
+            else:
+                mount.set_directory_title(bare, new_title)
+                current = None
+        else:
+            if not isinstance(mount, Titled):
+                raise click.ClickException(
+                    f"{resolved.filesystem} images carry no disc title"
+                )
+            if new_title is None:
+                current = mount.title
+            else:
+                mount.set_title(new_title)
+                current = None
 
-        if new_title is None:
-            current = entity.title
-            return Reports(
-                title=Report(
-                    data=ScalarContent(value=current, title="Title"),
-                ),
-            )
-
-        # Fail before mutating when the directory can't carry a title.
-        if target_is_directory and not entity.supports_title:
-            raise TitleNotSupportedError(
-                f"'{bare}' cannot have a title: "
-                "only ADFS directories carry one"
-            )
-        entity.title = new_title
-        if fs is FilingSystem.AFS:
-            handle.flush()
-    return None
+    if current is None:
+        return None
+    return Reports(title=Report(data=ScalarContent(value=current, title="Title")))
 
 
 _alias("*TITLE", "title")
@@ -2537,21 +2542,25 @@ def opt(image: Path, boot_option: int | None):
     """
     from asyoulikeit.scalar_data import ScalarContent
     from asyoulikeit.tabular_data import Report, Reports
+    from oaknut.filesystem import Bootable
 
-    fs = detect_filing_system(image)
-    if boot_option is None:
-        with open_image(image, fs) as handle:
-            bo = handle.boot_option
-        return Reports(
-            boot_option=Report(
-                data=ScalarContent(
-                    value=f"{bo.value} ({bo.name})",
-                    title="Boot option",
+    with resolve_mount(str(image), writable=boot_option is not None) as resolved:
+        mount = resolved.mount
+        if not isinstance(mount, Bootable):
+            raise click.ClickException(
+                f"{resolved.filesystem} images carry no boot option"
+            )
+        if boot_option is None:
+            bo = mount.boot_option
+            return Reports(
+                boot_option=Report(
+                    data=ScalarContent(
+                        value=f"{bo.value} ({bo.name})",
+                        title="Boot option",
+                    ),
                 ),
-            ),
-        )
-    with open_image(image, fs) as handle:
-        handle.boot_option = boot_option
+            )
+        mount.set_boot_option(boot_option)
     return None
 
 

@@ -16,6 +16,7 @@ tree — depending on, and importing, no concrete filesystem package.
 from oaknut.filesystem.capabilities import (
     AcornMetadata,
     Bootable,
+    DirectoryTitled,
     Entry,
     FreeSpace,
     HierarchicalDirectories,
@@ -65,6 +66,7 @@ __all__ = [
     "HierarchicalDirectories",
     "AcornMetadata",
     "Titled",
+    "DirectoryTitled",
     "Bootable",
     "FreeSpace",
     "UserDatabase",

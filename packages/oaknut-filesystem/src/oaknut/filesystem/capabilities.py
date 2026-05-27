@@ -147,6 +147,27 @@ class Titled(Protocol):
         """The disc title / name."""
         ...
 
+    def set_title(self, title: str) -> None:
+        """Set the disc title / name."""
+        ...
+
+
+@runtime_checkable
+class DirectoryTitled(Protocol):
+    """Directories carry their own title, distinct from the disc's (ADFS).
+
+    Its absence marks a filesystem whose directories have no title field
+    (DFS, AFS) — setting one there is rejected.
+    """
+
+    def directory_title(self, path: str) -> str:
+        """The title of the directory at *path*."""
+        ...
+
+    def set_directory_title(self, path: str, title: str) -> None:
+        """Set the title of the directory at *path*."""
+        ...
+
 
 @runtime_checkable
 class Bootable(Protocol):
@@ -155,6 +176,10 @@ class Bootable(Protocol):
     @property
     def boot_option(self) -> "BootOption":
         """The disc's ``*OPT 4`` boot option."""
+        ...
+
+    def set_boot_option(self, option: "BootOption | int") -> None:
+        """Set the disc's ``*OPT 4`` boot option."""
         ...
 
 

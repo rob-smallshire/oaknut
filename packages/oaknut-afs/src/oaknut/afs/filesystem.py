@@ -191,6 +191,10 @@ class _AFSMount:
     def title(self) -> str:
         return self._afs.title
 
+    def set_title(self, title: str) -> None:
+        self._afs.title = title
+        self._afs.flush()
+
     # -- FreeSpace --
     def free_bytes(self) -> int:
         return self._afs.free_sectors * 256

@@ -181,9 +181,22 @@ class _ADFSMount:
     def title(self) -> str:
         return self._adfs.title
 
+    def set_title(self, title: str) -> None:
+        self._adfs.title = title
+
+    # -- DirectoryTitled --
+    def directory_title(self, path: str) -> str:
+        return self._navigate(path).title
+
+    def set_directory_title(self, path: str, title: str) -> None:
+        self._navigate(path).title = title
+
     @property
     def boot_option(self):
         return self._adfs.boot_option
+
+    def set_boot_option(self, option) -> None:
+        self._adfs.boot_option = option
 
     # -- FreeSpace --
     def free_bytes(self) -> int:
