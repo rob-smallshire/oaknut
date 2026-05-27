@@ -78,3 +78,50 @@ class TestReaderFor:
     def test_unsupported_source_rejected(self):
         with pytest.raises(TypeError):
             reader_for(1234)
+
+
+class TestWritable:
+    def test_default_reader_is_not_writable(self):
+        with reader_for(b"hello") as reader:
+            assert reader.writable is False
+
+    def test_write_through_file_persists(self, tmp_path):
+        image_filepath = tmp_path / "disc.ssd"
+        image_filepath.write_bytes(bytes(16))
+        with reader_for(image_filepath, writable=True) as reader:
+            assert reader.writable is True
+            reader.write(4, b"\xde\xad\xbe\xef")
+        # Reopened from disk, the bytes are there — the write hit the file.
+        assert image_filepath.read_bytes()[4:8] == b"\xde\xad\xbe\xef"
+
+    def test_buffer_is_a_live_window_when_writable(self, tmp_path):
+        # The adapter builds its filesystem class over buffer(); mutating
+        # that buffer must reach the file.
+        image_filepath = tmp_path / "disc.ssd"
+        image_filepath.write_bytes(bytes(8))
+        with reader_for(image_filepath, writable=True) as reader:
+            buffer = reader.buffer()
+            buffer[0:2] = b"\x01\x02"
+        assert image_filepath.read_bytes()[0:2] == b"\x01\x02"
+
+    def test_buffer_is_a_private_copy_when_read_only(self):
+        # A read-only reader hands out a copy, so a stray write cannot
+        # corrupt a shared (possibly ACCESS_READ) backing.
+        reader = ImageReader(b"abcd")
+        buffer = reader.buffer()
+        buffer[0:1] = b"Z"
+        assert reader.read(0, 4) == b"abcd"
+
+    def test_write_on_read_only_reader_raises(self):
+        reader = ImageReader(b"abcd")
+        with pytest.raises(ValueError, match="read-only"):
+            reader.write(0, b"Z")
+
+    def test_window_inherits_writability(self, tmp_path):
+        image_filepath = tmp_path / "disc.ssd"
+        image_filepath.write_bytes(bytes(16))
+        with reader_for(image_filepath, writable=True) as reader:
+            window = reader.window(8, 4)
+            assert window.writable is True
+            window.write(0, b"\xaa\xbb")
+        assert image_filepath.read_bytes()[8:10] == b"\xaa\xbb"
