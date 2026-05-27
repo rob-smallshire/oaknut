@@ -2289,110 +2289,89 @@ class TestMkdir:
 
 
 class TestCreate:
-    def test_create_ssd(self, runner: CliRunner, tmp_path: Path) -> None:
+    def test_create_ssd_inferred(self, runner: CliRunner, tmp_path: Path) -> None:
         out = tmp_path / "new.ssd"
-        result = runner.invoke(cli, ["create", str(out), "--format", "ssd"])
+        result = runner.invoke(cli, ["create", str(out)])
         assert result.exit_code == 0
         assert out.exists()
         # `disc create` is silent on success (Unix convention); the
         # file appearing on disc is the success signal.
         assert result.output == ""
+        # .ssd defaults to an 80-track single-sided floppy.
+        assert out.stat().st_size == 204800
 
-    def test_create_adfs_l(self, runner: CliRunner, tmp_path: Path) -> None:
+    def test_create_adfs_l_inferred(self, runner: CliRunner, tmp_path: Path) -> None:
         out = tmp_path / "new.adl"
-        result = runner.invoke(cli, ["create", str(out), "--format", "adfs-l"])
+        result = runner.invoke(cli, ["create", str(out)])
+        assert result.exit_code == 0
+        assert out.stat().st_size == 655360  # ADFS-L = 80 × 2 × 16 × 256
+
+    def test_create_watford_via_filesystem_override(
+        self, runner: CliRunner, tmp_path: Path
+    ) -> None:
+        # Watford isn't a default creator; reach it with --filesystem.
+        out = tmp_path / "wat.ssd"
+        result = runner.invoke(cli, ["create", str(out), "--filesystem", "watford-dfs"])
         assert result.exit_code == 0
         assert out.exists()
 
-    def test_create_adfs_hard_with_mib(self, runner: CliRunner, tmp_path: Path) -> None:
+    def test_create_adfs_hard_with_capacity_mib(
+        self, runner: CliRunner, tmp_path: Path
+    ) -> None:
         out = tmp_path / "new.dat"
-        result = runner.invoke(
-            cli, ["create", str(out), "--format", "adfs-hard", "--capacity", "5MiB"]
-        )
+        result = runner.invoke(cli, ["create", str(out), "--geometry", "capacity=5MiB"])
         assert result.exit_code == 0
-        assert out.exists()
         # 5 MiB = 5,242,880 bytes; image rounds up to whole cylinders.
         assert out.stat().st_size >= 5 * 1024 * 1024
 
-    def test_create_adfs_hard_with_mb(self, runner: CliRunner, tmp_path: Path) -> None:
-        out = tmp_path / "new.dat"
-        result = runner.invoke(
-            cli, ["create", str(out), "--format", "adfs-hard", "--capacity", "5 MB"]
-        )
-        assert result.exit_code == 0
-        assert out.exists()
-
-    def test_create_adfs_hard_bare_bytes(self, runner: CliRunner, tmp_path: Path) -> None:
-        out = tmp_path / "new.dat"
-        result = runner.invoke(
-            cli, ["create", str(out), "--format", "adfs-hard", "--capacity", "1048576"]
-        )
-        assert result.exit_code == 0
-        assert out.exists()
-
-    def test_create_adfs_hard_requires_capacity(self, runner: CliRunner, tmp_path: Path) -> None:
-        out = tmp_path / "new.dat"
-        result = runner.invoke(cli, ["create", str(out), "--format", "adfs-hard"])
-        assert result.exit_code != 0
-        assert "capacity" in result.output.lower()
-
-    def test_create_ssd_default_is_80_tracks(
+    def test_create_adfs_hard_with_capacity_bare_bytes(
         self, runner: CliRunner, tmp_path: Path
     ) -> None:
-        out = tmp_path / "default.ssd"
-        result = runner.invoke(cli, ["create", str(out), "--format", "ssd"])
+        out = tmp_path / "new.dat"
+        result = runner.invoke(cli, ["create", str(out), "--geometry", "capacity=1048576"])
         assert result.exit_code == 0
-        assert out.stat().st_size == 204800  # 80 tracks × 10 sectors × 256 bytes
+        assert out.exists()
 
-    def test_create_ssd_40_tracks(self, runner: CliRunner, tmp_path: Path) -> None:
-        out = tmp_path / "small.ssd"
+    def test_create_adfs_hard_explicit_chs(self, runner: CliRunner, tmp_path: Path) -> None:
+        out = tmp_path / "chs.dat"
         result = runner.invoke(
-            cli, ["create", str(out), "--format", "ssd", "--tracks", "40"]
+            cli, ["create", str(out), "--geometry", "cylinders=100,heads=4,spt=33"]
         )
+        assert result.exit_code == 0
+        assert out.stat().st_size == 100 * 4 * 33 * 256
+
+    def test_create_adfs_hard_requires_geometry(
+        self, runner: CliRunner, tmp_path: Path
+    ) -> None:
+        # A hard disc is open-ended — no default geometry.
+        out = tmp_path / "new.dat"
+        result = runner.invoke(cli, ["create", str(out)])
+        assert result.exit_code != 0
+        assert "geometry" in result.output.lower()
+
+    def test_create_ssd_40_track_geometry(self, runner: CliRunner, tmp_path: Path) -> None:
+        out = tmp_path / "small.ssd"
+        result = runner.invoke(cli, ["create", str(out), "--geometry", "40t-ss"])
         assert result.exit_code == 0
         assert out.stat().st_size == 102400  # 40 tracks × 10 sectors × 256 bytes
 
-    def test_create_ssd_80_tracks_explicit(
-        self, runner: CliRunner, tmp_path: Path
-    ) -> None:
-        out = tmp_path / "big.ssd"
-        result = runner.invoke(
-            cli, ["create", str(out), "--format", "ssd", "--tracks", "80"]
-        )
-        assert result.exit_code == 0
-        assert out.stat().st_size == 204800
-
-    def test_create_dsd_40_tracks(self, runner: CliRunner, tmp_path: Path) -> None:
+    def test_create_dsd_40_track_geometry(self, runner: CliRunner, tmp_path: Path) -> None:
         out = tmp_path / "small.dsd"
-        result = runner.invoke(
-            cli, ["create", str(out), "--format", "dsd", "--tracks", "40"]
-        )
+        result = runner.invoke(cli, ["create", str(out), "--geometry", "40t-ds"])
         assert result.exit_code == 0
         # 40T DSD: 2 sides × 40 tracks × 10 sectors × 256 bytes
         assert out.stat().st_size == 204800
 
-    def test_create_tracks_rejected_for_adfs(
+    def test_create_unknown_extension_needs_filesystem(
         self, runner: CliRunner, tmp_path: Path
     ) -> None:
-        out = tmp_path / "new.adl"
-        result = runner.invoke(
-            cli,
-            ["create", str(out), "--format", "adfs-l", "--tracks", "40"],
-        )
+        out = tmp_path / "mystery.bin"
+        result = runner.invoke(cli, ["create", str(out)])
         assert result.exit_code != 0
-        assert "tracks" in result.output.lower()
-
-    def test_create_tracks_rejects_invalid_value(
-        self, runner: CliRunner, tmp_path: Path
-    ) -> None:
-        out = tmp_path / "new.ssd"
-        result = runner.invoke(
-            cli, ["create", str(out), "--format", "ssd", "--tracks", "60"]
-        )
-        assert result.exit_code != 0
+        assert "--filesystem" in result.output
 
     def test_create_ads_infers_adfs_s(self, runner: CliRunner, tmp_path: Path) -> None:
-        """`.ads` infers ADFS-S (640 sectors) without an explicit --format."""
+        """`.ads` infers ADFS-S (640 sectors) without any options."""
         out = tmp_path / "small.ads"
         result = runner.invoke(cli, ["create", str(out)])
         assert result.exit_code == 0
@@ -2408,7 +2387,7 @@ class TestCreate:
         self, runner: CliRunner, tmp_path: Path
     ) -> None:
         """Regression: an extension `disc create` accepts must also be
-        recognised by the filing-system detection the other commands use."""
+        recognised by the content-first identification the other commands use."""
         out = tmp_path / "small.ads"
         assert runner.invoke(cli, ["create", str(out)]).exit_code == 0
         result = runner.invoke(cli, ["freemap", str(out)])
@@ -2416,12 +2395,12 @@ class TestCreate:
         assert "Traceback" not in result.output
 
     def test_create_adf_is_ambiguous(self, runner: CliRunner, tmp_path: Path) -> None:
-        """`.adf` is recognised as ADFS for reading but its size is
-        ambiguous, so creating one needs an explicit --format."""
+        """`.adf` is ADFS, but S-vs-M is ambiguous, so creating one needs
+        an explicit --geometry."""
         out = tmp_path / "amb.adf"
         result = runner.invoke(cli, ["create", str(out)])
         assert result.exit_code != 0
-        assert "infer" in result.output.lower()
+        assert "geometry" in result.output.lower()
 
 
 # ---------------------------------------------------------------------------

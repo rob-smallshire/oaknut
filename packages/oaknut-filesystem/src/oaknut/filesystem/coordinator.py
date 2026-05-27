@@ -35,6 +35,7 @@ __all__ = [
     "filesystem_names",
     "describe_filesystem",
     "create_filesystem",
+    "creating_filesystem",
 ]
 
 
@@ -62,6 +63,24 @@ def create_filesystem(name: str) -> Filesystem:
         name=name,
         exception_type=FilesystemExtensionError,
     )
+
+
+def creating_filesystem(
+    suffix: str, *, filesystems: dict[str, Filesystem] | None = None
+) -> str | None:
+    """The filesystem that creates *suffix* images by default, or ``None``.
+
+    ``disc create`` infers the filesystem from the target's extension via
+    each filesystem's ``creates`` set. Returns ``None`` when no installed
+    filesystem is the default creator for the extension (so the user must
+    pass ``--filesystem``).
+    """
+    suffix = suffix.lower()
+    active = _registered_filesystems() if filesystems is None else filesystems
+    for name, filesystem in active.items():
+        if suffix in filesystem.creates:
+            return name
+    return None
 
 
 def _registered_filesystems() -> dict[str, Filesystem]:

@@ -22,7 +22,7 @@ with in_tmp_dir():
     show("disc title demo.ssd")
 
     # Per-directory title — ADFS only.
-    silent("disc create games.adl --format adfs-l --title Games")
+    silent("disc create games.adl --title Games")
     silent("disc mkdir 'games.adl:$.Elite'")
     show("disc title 'games.adl:$.Elite' Frontier")
     show("disc title 'games.adl:$.Elite'")

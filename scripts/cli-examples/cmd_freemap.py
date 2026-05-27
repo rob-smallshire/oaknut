@@ -18,7 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from cli_example_helper import in_tmp_dir, show, silent  # noqa: E402
 
 with in_tmp_dir():
-    silent("disc create --format ssd --tracks 40 --title Planet planet.ssd")
+    silent("disc create planet.ssd --geometry 40t-ss --title Planet")
     silent("head -c 12 /dev/zero | disc put 'planet.ssd:$.!BOOT' -")
     silent("head -c 2304 /dev/zero | disc put 'planet.ssd:$.LOADER' -")
     silent("head -c 9216 /dev/zero | disc put 'planet.ssd:$.PLANET' -")

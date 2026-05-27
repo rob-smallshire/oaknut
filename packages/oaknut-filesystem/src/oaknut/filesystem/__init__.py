@@ -34,6 +34,7 @@ from oaknut.filesystem.capabilities import (
 )
 from oaknut.filesystem.coordinator import (
     create_filesystem,
+    creating_filesystem,
     describe_filesystem,
     filesystem_names,
     identify,
@@ -104,6 +105,7 @@ __all__ = [
     "filesystem_names",
     "describe_filesystem",
     "create_filesystem",
+    "creating_filesystem",
     # reader
     "ImageReader",
     "ImageSource",

@@ -11,9 +11,11 @@ physical geometries it supports (:meth:`geometry_grammar`).
 from __future__ import annotations
 
 from abc import abstractmethod
+from pathlib import Path
 
 from oaknut.extension import Extension, namespace_for
 from oaknut.filesystem.capabilities import Mount
+from oaknut.filesystem.exceptions import FilesystemError
 from oaknut.filesystem.geometry import Geometry, GeometryGrammar
 from oaknut.filesystem.identification import Identification
 from oaknut.filesystem.reader import ImageReader
@@ -46,6 +48,13 @@ class Filesystem(Extension):
     #: Ordering hint among same-confidence, same-extension candidates;
     #: higher wins (e.g. Watford outranks Acorn DFS, which excludes it).
     priority: int = 0
+    #: Extensions this filesystem is the *default creator* for — ``disc
+    #: create`` infers the filesystem from the target's extension via
+    #: this. A subset of (or disjoint from) :attr:`extensions`: a niche
+    #: variant (Watford) or a non-standalone filesystem (AFS, made inside
+    #: an ADFS disc) leaves it empty and is reached only via
+    #: ``--filesystem``.
+    creates: frozenset[str] = frozenset()
 
     @classmethod
     def _kind(cls) -> str:
@@ -81,3 +90,23 @@ class Filesystem(Extension):
         ``disc create`` and ``describe-filesystem``.
         """
         raise NotImplementedError
+
+    def default_geometry(self, suffix: str) -> Geometry | None:
+        """The geometry to create a *suffix* image with, or ``None``.
+
+        ``None`` means there is no sensible default for this extension —
+        it is ambiguous (ADFS ``.adf`` could be S or M) or open-ended (a
+        hard disc) — so ``disc create`` requires an explicit
+        ``--geometry``. The default implementation has none.
+        """
+        return None
+
+    def create(self, filepath: Path, geometry: Geometry, *, title: str) -> None:
+        """Create a new empty image of this filesystem at *filepath*.
+
+        Filesystems that are not created standalone (AFS lives inside an
+        ADFS disc; archives) do not override this and decline.
+        """
+        raise FilesystemError(
+            f"{self.name} images cannot be created with `disc create`"
+        )

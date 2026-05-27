@@ -10,7 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from cli_example_helper import in_tmp_dir, show, silent  # noqa: E402
 
 with in_tmp_dir():
-    silent("disc create scsi0.dat --capacity 10MB --title Server")
+    silent("disc create scsi0.dat --geometry capacity=10MB --title Server")
     silent("disc afs-init scsi0.dat --disc-name Server")
     show("disc afs-useradd scsi0.dat ALICE --quota 1048576")
     show("disc afs-users scsi0.dat")

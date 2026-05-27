@@ -37,7 +37,7 @@ with in_tmp_dir():
     shutil.copy(SOURCE, "FS3v126.ssd")
 
     section("envelope")
-    show("disc create scsi0.dat --capacity 10MB --title Server")
+    show("disc create scsi0.dat --geometry capacity=10MB --title Server")
 
     section("install_fs")
     show("disc cp 'FS3v126.ssd:$.FS3v126' 'scsi0.dat:$.FS3v126'")

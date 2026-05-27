@@ -261,6 +261,21 @@ class _BaseDFS(Filesystem):
     def geometry_grammar(self) -> GeometryGrammar:
         return GeometryGrammar(presets=dict(_GEOMETRY_PRESETS), kinds=(FLOPPY,))
 
+    def default_geometry(self, suffix: str) -> Geometry | None:
+        # The conventional 80-track shapes; .ssd single-sided, .dsd double.
+        return {
+            ".ssd": _GEOMETRY_PRESETS["80t-ss"],
+            ".dsd": _GEOMETRY_PRESETS["80t-ds"],
+        }.get(suffix.lower())
+
+    def create(self, filepath, geometry: Geometry, *, title: str) -> None:
+        disc_format = DiscFormat(
+            surface_specs=list(geometry.surface_specs),
+            catalogue_name=self._catalogue.CATALOGUE_NAME,
+        )
+        with DFS.create_file(filepath, disc_format, title=title):
+            pass
+
 
 class AcornDFS(_BaseDFS):
     """Acorn DFS — the standard flat-catalogue BBC/Electron floppy format.
@@ -273,6 +288,8 @@ class AcornDFS(_BaseDFS):
     _catalogue = AcornDFSCatalogue
     _confidence = Confidence.PROBABLE
     _evidence = "well-formed Acorn DFS catalogue in sectors 0–1"
+    #: The default creator for plain DFS floppies.
+    creates = frozenset({".ssd", ".dsd"})
 
 
 class WatfordDFS(_BaseDFS):

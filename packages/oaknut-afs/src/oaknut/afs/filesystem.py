@@ -308,3 +308,11 @@ class AFS(Filesystem):
     def geometry_grammar(self) -> GeometryGrammar:
         # AFS geometry is dictated by its host, not independently chosen.
         return GeometryGrammar(kinds=(WINCHESTER,))
+
+    def create(self, filepath, geometry: Geometry, *, title: str) -> None:
+        # AFS is not a standalone image — it lives in the tail of an ADFS
+        # disc, added with afs-init.
+        raise FilesystemError(
+            "an AFS partition is created inside an ADFS disc with `disc afs-init`, "
+            "not with `disc create`"
+        )

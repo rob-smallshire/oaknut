@@ -25,6 +25,7 @@ from oaknut.filesystem import (
     Confidence,
     Entry,
     Filesystem,
+    FilesystemError,
     Geometry,
     GeometryGrammar,
     Identification,
@@ -273,6 +274,10 @@ class ADFS(Filesystem):
     """
 
     extensions = frozenset({".adf", ".ads", ".adm", ".adl", ".dat"})
+    #: ADFS is the default creator for all its extensions, including the
+    #: hard-disc .dat (AFS, which also reads .dat, is made inside an ADFS
+    #: disc by afs-init, not by `disc create`).
+    creates = frozenset({".adf", ".ads", ".adm", ".adl", ".dat"})
 
     def probe(self, reader: ImageReader) -> Identification | None:
         sectors = reader.read(0, _MAP_BYTES)
@@ -316,3 +321,37 @@ class ADFS(Filesystem):
 
     def geometry_grammar(self) -> GeometryGrammar:
         return GeometryGrammar(presets=dict(_ADFS_PRESETS), kinds=(FLOPPY, WINCHESTER))
+
+    def default_geometry(self, suffix: str) -> Geometry | None:
+        # The single-shape floppy extensions map to their preset; .adf is
+        # ambiguous (S or M) and .dat is an open-ended hard disc, so both
+        # need an explicit --geometry.
+        return {
+            ".ads": _ADFS_PRESETS["s"],
+            ".adm": _ADFS_PRESETS["m"],
+            ".adl": _ADFS_PRESETS["l"],
+        }.get(suffix.lower())
+
+    def create(self, filepath, geometry: Geometry, *, title: str) -> None:
+        from oaknut.adfs import ADFS_L, ADFS_M, ADFS_S
+
+        if geometry.cylinders is not None:
+            # Hard disc: create from the CHS the geometry carries.
+            with _ADFSDisc.create_file(
+                filepath,
+                cylinders=geometry.cylinders,
+                heads=geometry.heads,
+                sectors_per_track=geometry.sectors_per_track,
+                title=title,
+            ):
+                pass
+            return
+        # Floppy: match the geometry's size to a named ADFS format.
+        by_size = {fmt.total_bytes: fmt for fmt in (ADFS_S, ADFS_M, ADFS_L)}
+        adfs_format = by_size.get(geometry.image_size)
+        if adfs_format is None:
+            raise FilesystemError(
+                f"no ADFS floppy format for a {geometry.image_size}-byte image"
+            )
+        with _ADFSDisc.create_file(filepath, adfs_format, title=title):
+            pass

@@ -2208,113 +2208,69 @@ _alias("*OPT4", "opt")
 
 # Sentinel for "an ADFS hard disc", whose size comes from --capacity
 # rather than a fixed-geometry format constant.
-_ADFS_HARD_DISC = object()
-
-
 @cli.command()
 @click.argument("host_path", type=click.Path(path_type=Path))
 @click.option(
-    "--format",
-    "fmt",
-    type=click.Choice(
-        ["ssd", "dsd", "adfs-s", "adfs-m", "adfs-l", "adfs-hard"],
-        case_sensitive=False,
-    ),
+    "--filesystem",
+    "filesystem_name",
     default=None,
     help=(
-        "Disc image format. Inferred from the filename extension when "
-        "omitted: .ssd, .dsd, .ads, .adm, .adl, or .dat (adfs-hard)."
+        "Filesystem to create. Inferred from the filename extension when "
+        "omitted (.ssd/.dsd → acorn-dfs; .ads/.adm/.adl/.adf/.dat → adfs). "
+        "Name a filesystem to override (e.g. watford-dfs)."
+    ),
+)
+@click.option(
+    "--geometry",
+    "geometry_spec",
+    default=None,
+    help=(
+        "Physical geometry. Inferred from the extension when omitted; an "
+        "ambiguous (.adf) or open-ended (.dat hard disc) extension needs "
+        "it. A preset (e.g. l, 80t-ds) or parameterised form "
+        "(capacity=10MB, cylinders=296,heads=4,spt=33)."
     ),
 )
 @click.option("--title", "disc_title", default="", help="Disc title.")
-@click.option(
-    "--tracks",
-    type=click.Choice(["40", "80"]),
-    default=None,
-    help=(
-        "Track count for SSD/DSD. Defaults to 80. Acorn DFS floppies "
-        "are standardised at 40 or 80 tracks; other counts are rejected."
-    ),
-)
-@click.option(
-    "--capacity",
-    default=None,
-    help="Capacity (hard disc). Accepts e.g. 10MB, 40MiB, 1024kB, or plain bytes.",
-)
 def create(
     host_path: Path,
-    fmt: str | None,
+    filesystem_name: str | None,
+    geometry_spec: str | None,
     disc_title: str,
-    tracks: str | None,
-    capacity: str | None,
 ) -> None:
-    """Create a new empty disc image."""
-    from oaknut.adfs import ADFS, ADFS_L, ADFS_M, ADFS_S, ADFSFormat
-    from oaknut.adfs import IMAGE_FORMAT_BY_EXTENSION as _ADFS_BY_EXT
-    from oaknut.dfs import (
-        ACORN_DFS_40T_DOUBLE_SIDED_INTERLEAVED,
-        ACORN_DFS_40T_SINGLE_SIDED,
-        ACORN_DFS_80T_DOUBLE_SIDED_INTERLEAVED,
-        ACORN_DFS_80T_SINGLE_SIDED,
-        DFS,
-    )
-    from oaknut.dfs import IMAGE_FORMAT_BY_EXTENSION as _DFS_BY_EXT
-    from oaknut.discimage import DiscFormat
+    """Create a new empty disc image.
 
-    # Resolve a concrete target: a DFS DiscFormat, an ADFS ADFSFormat,
-    # or the _ADFS_HARD_DISC sentinel. --format (CLI vocabulary) wins;
-    # otherwise infer from the extension using the library mappings.
-    if fmt is not None:
-        target = {
-            "ssd": ACORN_DFS_80T_SINGLE_SIDED,
-            "dsd": ACORN_DFS_80T_DOUBLE_SIDED_INTERLEAVED,
-            "adfs-s": ADFS_S,
-            "adfs-m": ADFS_M,
-            "adfs-l": ADFS_L,
-            "adfs-hard": _ADFS_HARD_DISC,
-        }[fmt]
+    The filesystem and geometry are inferred from HOST_PATH's extension —
+    ``.ssd`` → Acorn DFS 80T single-sided, ``.adl`` → ADFS-L, and so on —
+    with ``--filesystem`` and ``--geometry`` to override. An ambiguous
+    extension (``.adf``: ADFS-S or -M?) or an open-ended one (``.dat``: a
+    hard disc) has no default geometry and requires ``--geometry``.
+    """
+    from oaknut.filesystem import create_filesystem, creating_filesystem, filesystem_names
+
+    suffix = host_path.suffix.lower()
+    name = filesystem_name or creating_filesystem(suffix)
+    if name is None:
+        installed = ", ".join(sorted(filesystem_names())) or "(none)"
+        raise click.ClickException(
+            f"cannot infer a filesystem to create from extension {suffix!r}; "
+            f"pass --filesystem (installed: {installed})"
+        )
+
+    filesystem = create_filesystem(name)
+    grammar = filesystem.geometry_grammar()
+    if geometry_spec is not None:
+        geometry = grammar.parse(geometry_spec)
     else:
-        ext = host_path.suffix.lower()
-        if ext in _DFS_BY_EXT:
-            target = _DFS_BY_EXT[ext]
-        elif ext == ".dat":
-            target = _ADFS_HARD_DISC
-        elif _ADFS_BY_EXT.get(ext) is not None:
-            target = _ADFS_BY_EXT[ext]
-        else:
-            # Unrecognised, or recognised-but-ambiguous (.adf).
-            raise click.ClickException(
-                f"cannot infer disc format from extension {ext!r}; "
-                "pass --format explicitly"
-            )
+        geometry = filesystem.default_geometry(suffix)
+    if geometry is None:
+        presets = ", ".join(grammar.preset_names()) or "none"
+        raise click.ClickException(
+            f"{name} has no default geometry for {suffix!r}; pass --geometry "
+            f"(presets: {presets}; or e.g. capacity=10MB)"
+        )
 
-    # --tracks only applies to DFS floppies; for those, --tracks 40
-    # selects the 40-track variant of the same shape.
-    if tracks is not None and not isinstance(target, DiscFormat):
-        raise click.ClickException("--tracks applies only to ssd/dsd formats")
-    if tracks == "40":
-        if target is ACORN_DFS_80T_SINGLE_SIDED:
-            target = ACORN_DFS_40T_SINGLE_SIDED
-        elif target is ACORN_DFS_80T_DOUBLE_SIDED_INTERLEAVED:
-            target = ACORN_DFS_40T_DOUBLE_SIDED_INTERLEAVED
-
-    if target is _ADFS_HARD_DISC:
-        from oaknut.file.capacity import parse_capacity
-
-        if capacity is None:
-            raise click.ClickException("--capacity is required for adfs-hard")
-        try:
-            capacity_bytes = parse_capacity(capacity)
-        except ValueError as exc:
-            raise click.ClickException(str(exc))
-        with ADFS.create_file(host_path, capacity=capacity_bytes, title=disc_title):
-            pass
-    elif isinstance(target, DiscFormat):
-        with DFS.create_file(host_path, target, title=disc_title):
-            pass
-    elif isinstance(target, ADFSFormat):
-        with ADFS.create_file(host_path, target, title=disc_title):
-            pass
+    filesystem.create(host_path, geometry, title=disc_title)
 
 
 @cli.command()
