@@ -133,9 +133,9 @@ def _access_byte_hex(stat_obj) -> str:
     Used by ``ls --access-byte`` (issue #10). Every :class:`oaknut.file.Stat`
     exposes ``.access`` as a canonical :class:`oaknut.file.Access` value
     regardless of the underlying filesystem family — for AFS this is the
-    wire-form byte ``access_from_afs_bits`` synthesises from the on-disc
-    bits, not the on-disc byte itself, so the displayed value round-trips
-    through ``disc chmod path 0x..`` cleanly.
+    wire-form byte its on-disc access translates to (via
+    :meth:`AFSAccess.to_acorn`), not the on-disc byte itself, so the
+    displayed value round-trips through ``disc chmod path 0x..`` cleanly.
 
     The ``0x`` prefix makes the value unambiguously hex and directly
     copy-pasteable into ``disc chmod`` — a bare ``13`` would also parse,

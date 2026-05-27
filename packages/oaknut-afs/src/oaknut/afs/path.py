@@ -308,8 +308,6 @@ class AFSPath(AcornPath):
         The root directory has no parent entry and is a special case;
         asking for its ``stat`` raises :class:`AFSPathError`.
         """
-        from oaknut.file.access_mapping import access_from_afs_bits
-
         afs = self._require_afs()
         if self.is_root():
             raise AFSPathError("cannot stat the root directory")
@@ -322,7 +320,7 @@ class AFSPath(AcornPath):
             length=length,
             load_address=entry.load_address,
             exec_address=entry.exec_address,
-            access=access_from_afs_bits(int(entry.access)),
+            access=entry.access.to_acorn(),
             is_directory=entry.is_directory,
             date=entry.date,
             afs_access=entry.access,
@@ -377,16 +375,15 @@ class AFSPath(AcornPath):
         placed in freshly-allocated sectors. Allocator-level rollback
         on space exhaustion is handled by the lower layers.
 
-        ``access`` accepts four forms:
+        ``access`` accepts:
 
           - ``None``: filesystem default — owner R+W, no public, unlocked.
           - :class:`oaknut.file.Access` (canonical wire form): translated
             to the AFS on-disc layout via
-            :func:`oaknut.file.access_mapping.access_to_afs_bits`.
-            ``Access.LWR`` is the canonical "locked owner R+W" combination.
+            :meth:`oaknut.afs.access.AFSAccess.from_acorn`. ``Access.LWR``
+            is the canonical "locked owner R+W" combination.
           - :class:`oaknut.afs.access.AFSAccess`: used verbatim.
-          - ``int``: raw on-disc byte (interpreted via
-            :meth:`AFSAccess.from_byte`).
+          - ``int``: read as a canonical wire-form access byte.
 
         ``date`` defaults to today's date.
         """
@@ -394,24 +391,14 @@ class AFSPath(AcornPath):
 
         from oaknut.afs.access import AFSAccess
         from oaknut.afs.types import AfsDate
-        from oaknut.file.access_mapping import access_to_afs_bits
 
         afs = self._require_afs()
         if self.is_root():
             raise AFSPathError("cannot write_bytes to the root directory")
 
-        # Normalise the unified `access` argument to an AFSAccess.
-        if access is None:
-            # ACCDEF at Uade01:271 — owner R+W, no public access,
-            # unlocked. Matches what the ROM's create path defaults to.
-            access = AFSAccess.from_string("WR/")
-        elif isinstance(access, AFSAccess):
-            pass
-        elif isinstance(access, Access):
-            # Canonical wire-form Access — translate to AFS on-disc bits.
-            access = AFSAccess.from_byte(access_to_afs_bits(access))
-        elif isinstance(access, int):
-            access = AFSAccess.from_byte(access)
+        # ACCDEF at Uade01:271 — owner R+W, no public, unlocked: the ROM's
+        # create default. Any supplied access is normalised at the boundary.
+        access = AFSAccess.from_string("WR/") if access is None else _to_afs_access(access)
         if date is None:
             date = AfsDate(datetime.date.today())
 
@@ -527,7 +514,6 @@ class AFSPath(AcornPath):
         from oaknut.afs.directory import build_directory_bytes
         from oaknut.afs.exceptions import AFSDirectoryEntryExistsError
         from oaknut.afs.types import AfsDate
-        from oaknut.file.access_mapping import access_to_afs_bits
 
         afs = self._require_afs()
         if self.is_root():
@@ -547,21 +533,13 @@ class AFSPath(AcornPath):
                 )
             raise AFSPathError(f"{self.path!r} already exists as a file")
 
-        # Normalise the `access` argument to an AFSAccess the same way
-        # write_bytes does — None → default, AFSAccess verbatim, canonical
-        # wire-form Access (what merge forwards from a source entry) and
-        # raw int translated to the on-disc layout — then force the
-        # directory-type bit on, since this object is a directory.
+        # Normalise the access at the boundary (the same helper write_bytes
+        # uses — what merge forwards is a source entry's wire Access), then
+        # force the directory-type bit on, since this object is a directory.
         if access is None:
             access = AFSAccess.from_string("D/")
         else:
-            if isinstance(access, AFSAccess):
-                pass
-            elif isinstance(access, Access):
-                access = AFSAccess.from_byte(access_to_afs_bits(access))
-            else:
-                access = AFSAccess.from_byte(int(access))
-            access |= AFSAccess.DIRECTORY
+            access = _to_afs_access(access) | AFSAccess.DIRECTORY
         if date is None:
             date = AfsDate(datetime.date.today())
 
@@ -624,21 +602,17 @@ class AFSPath(AcornPath):
     # ------------------------------------------------------------------
 
     @resolving_io
-    def chmod(self, access: "int | AFSAccess") -> None:
+    def chmod(self, access: "Access | AFSAccess | int") -> None:
         """Set the access attributes of this file or directory.
 
-        ``access`` may be:
+        ``access`` accepts an :class:`AFSAccess` (used directly), a
+        canonical :class:`oaknut.file.Access`, or an ``int`` read as that
+        wire byte (matching :meth:`ADFSPath.chmod`); the wire ``E`` bit,
+        which has no AFS counterpart, is dropped.
 
-        - an :class:`AFSAccess` — used directly (disc bit layout).
-        - an ``int`` — interpreted as an :class:`oaknut.file.Access`
-          (wire / NFS bit layout, matching
-          :meth:`ADFSPath.chmod`) and translated to the AFS on-disc
-          layout.  Bits that have no AFS counterpart (``E``) are
-          silently dropped.
-
-        The :attr:`AFSAccess.DIRECTORY` bit is always forced to
-        match the object's actual type; ``chmod`` cannot convert a
-        file to a directory or vice versa.
+        The :attr:`AFSAccess.DIRECTORY` bit is always forced to match the
+        object's actual type; ``chmod`` cannot convert a file to a
+        directory or vice versa.
         """
         from oaknut.afs.access import AFSAccess
         from oaknut.afs.directory import update_entry_fields
@@ -647,7 +621,7 @@ class AFSPath(AcornPath):
         if self.is_root():
             raise AFSPathError("cannot chmod the root directory")
 
-        new_access = _coerce_access(access)
+        new_access = _to_afs_access(access)
 
         _, entry = afs._resolve(self)
         if entry.is_directory:
@@ -877,29 +851,18 @@ class AFSPath(AcornPath):
 # ---------------------------------------------------------------------------
 
 
-def _coerce_access(access: "int | AFSAccess") -> "AFSAccess":
-    """Normalise a ``chmod`` argument to an :class:`AFSAccess`.
+def _to_afs_access(access: "Access | AFSAccess | int") -> "AFSAccess":
+    """Normalise a write-API access argument to an :class:`AFSAccess`.
 
-    An :class:`AFSAccess` is used directly; any other ``int`` is
-    interpreted as an :class:`oaknut.file.Access` (wire / NFS bit
-    layout) and translated to the on-disc AFS layout.
+    The single coercion boundary for the AFS path API: an
+    :class:`AFSAccess` is used verbatim; a canonical
+    :class:`oaknut.file.Access` (or a bare ``int`` read as that wire
+    byte) is translated to the on-disc layout via
+    :meth:`AFSAccess.from_acorn`. Callers handle ``None`` themselves —
+    each write method has its own default.
     """
     from oaknut.afs.access import AFSAccess
-    from oaknut.file import Access as WireAccess
 
     if isinstance(access, AFSAccess):
         return access
-    wire = WireAccess(int(access))
-    result = AFSAccess(0)
-    if wire & WireAccess.L:
-        result |= AFSAccess.LOCKED
-    if wire & WireAccess.R:
-        result |= AFSAccess.OWNER_READ
-    if wire & WireAccess.W:
-        result |= AFSAccess.OWNER_WRITE
-    if wire & WireAccess.PR:
-        result |= AFSAccess.PUBLIC_READ
-    if wire & WireAccess.PW:
-        result |= AFSAccess.PUBLIC_WRITE
-    # Access.E has no AFS equivalent; silently dropped.
-    return result
+    return AFSAccess.from_acorn(Access(int(access)))

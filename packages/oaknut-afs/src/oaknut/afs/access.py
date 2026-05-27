@@ -38,6 +38,10 @@ metadata round-trips correctly.
 from __future__ import annotations
 
 from enum import IntFlag
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from oaknut.file import Access
 
 # ---------------------------------------------------------------------------
 # Bit positions — the on-disc layout.
@@ -173,6 +177,58 @@ class AFSAccess(IntFlag):
             result |= cls.PUBLIC_READ
         _reject_unexpected(public, "WR", text)
 
+        return result
+
+    # -----------------------------------------------------------------
+    # Wire-format conversion — the single source of truth for translating
+    # between AFS's on-disc layout and the canonical, cross-filesystem
+    # oaknut.file.Access (which uses a different bit layout).
+    # -----------------------------------------------------------------
+
+    @classmethod
+    def from_acorn(cls, access: "Access") -> "AFSAccess":
+        """Translate a canonical :class:`oaknut.file.Access` to AFS bits.
+
+        Owner/public read-write and the locked bit map across. The wire
+        ``E`` (execute-only) bit has no AFS counterpart and is dropped.
+        The directory-type bit is a property of the *object*, not its
+        access, so it is never set here — the directory serialiser owns it.
+        """
+        from oaknut.file import Access
+
+        wire = Access(int(access))
+        result = cls(0)
+        if wire & Access.R:
+            result |= cls.OWNER_READ
+        if wire & Access.W:
+            result |= cls.OWNER_WRITE
+        if wire & Access.L:
+            result |= cls.LOCKED
+        if wire & Access.PR:
+            result |= cls.PUBLIC_READ
+        if wire & Access.PW:
+            result |= cls.PUBLIC_WRITE
+        return result
+
+    def to_acorn(self) -> "Access":
+        """Translate this on-disc access to a canonical :class:`Access`.
+
+        The directory-type bit has no wire-form counterpart and is
+        dropped — directory-ness is carried by the object, not its access.
+        """
+        from oaknut.file import Access
+
+        result = Access(0)
+        if self & AFSAccess.OWNER_READ:
+            result |= Access.R
+        if self & AFSAccess.OWNER_WRITE:
+            result |= Access.W
+        if self & AFSAccess.LOCKED:
+            result |= Access.L
+        if self & AFSAccess.PUBLIC_READ:
+            result |= Access.PR
+        if self & AFSAccess.PUBLIC_WRITE:
+            result |= Access.PW
         return result
 
     # -----------------------------------------------------------------

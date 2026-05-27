@@ -110,15 +110,12 @@ class TestAFSStatExtras:
     def test_afs_stat_canonical_access_matches_afs_access(
         self, afs_image_filepath: Path
     ) -> None:
-        from oaknut.file.access_mapping import access_from_afs_bits
-
         with ADFS.from_file(afs_image_filepath) as adfs:
             afs = adfs.afs_partition
             st = (afs.root / "Greeting").stat()
-        # The canonical Access view must equal the synthesised version
-        # of the raw afs_access byte — that's the whole point of the
-        # protocol field.
-        assert st.access == access_from_afs_bits(int(st.afs_access))
+        # The canonical Access view must equal the on-disc byte translated
+        # to wire form — that's the whole point of the protocol field.
+        assert st.access == st.afs_access.to_acorn()
 
     def test_directory_entry_still_reachable(self, afs_image_filepath: Path) -> None:
         from oaknut.afs.directory import DirectoryEntry

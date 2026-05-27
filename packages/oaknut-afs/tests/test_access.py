@@ -116,3 +116,45 @@ class TestCompose:
         )
         assert int(composed) == 0x1D
         assert composed.to_string() == "LWR/R"
+
+
+class TestAcornWireConversion:
+    """from_acorn / to_acorn — the single source of truth for translating
+    between AFS's on-disc layout and the canonical oaknut.file.Access."""
+
+    def test_from_acorn_maps_owner_public_and_lock(self) -> None:
+        from oaknut.file import Access
+
+        afs = AFSAccess.from_acorn(Access.L | Access.W | Access.R | Access.PR)
+        assert afs == (
+            AFSAccess.LOCKED
+            | AFSAccess.OWNER_WRITE
+            | AFSAccess.OWNER_READ
+            | AFSAccess.PUBLIC_READ
+        )
+
+    def test_from_acorn_drops_execute_and_sets_no_directory_bit(self) -> None:
+        from oaknut.file import Access
+
+        afs = AFSAccess.from_acorn(Access.R | Access.E)
+        assert afs == AFSAccess.OWNER_READ  # E has no AFS counterpart
+        assert not (afs & AFSAccess.DIRECTORY)  # type is not an access concern
+
+    def test_to_acorn_inverse_of_from_acorn(self) -> None:
+        from oaknut.file import Access
+
+        for wire in (
+            Access(0),
+            Access.R,
+            Access.WR,
+            Access.LWR,
+            Access.R | Access.PR,
+            Access.W | Access.R | Access.PR | Access.PW | Access.L,
+        ):
+            assert AFSAccess.from_acorn(wire).to_acorn() == wire
+
+    def test_to_acorn_drops_directory_bit(self) -> None:
+        afs = AFSAccess.DIRECTORY | AFSAccess.OWNER_READ | AFSAccess.LOCKED
+        from oaknut.file import Access
+
+        assert afs.to_acorn() == (Access.R | Access.L)
