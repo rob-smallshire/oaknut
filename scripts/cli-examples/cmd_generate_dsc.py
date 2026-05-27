@@ -1,4 +1,4 @@
-"""Example for ``disc generate-dsc`` — synthesise a .dsc geometry sidecar.
+"""Example for ``disc adfs generate-dsc`` — synthesise a .dsc geometry sidecar.
 
 Demonstrated against an ADFS hard-disc ``.dat`` image that has no
 existing ``.dsc`` next to it — the command writes a 22-byte geometry
@@ -17,5 +17,5 @@ from cli_example_helper import in_tmp_dir, show, silent  # noqa: E402
 with in_tmp_dir():
     silent("disc create scsi0.dat --geometry capacity=10MB --title Server")
     silent("rm scsi0.dsc")
-    show("disc generate-dsc scsi0.dat --heads 4 --sectors-per-track 33")
+    show("disc adfs generate-dsc scsi0.dat --heads 4 --sectors-per-track 33")
     show("ls scsi0.*")

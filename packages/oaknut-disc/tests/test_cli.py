@@ -3270,6 +3270,7 @@ class TestGenerateDsc:
         result = runner.invoke(
             cli,
             [
+                "adfs",
                 "generate-dsc",
                 str(cf_dat),
                 "--heads",
@@ -3309,7 +3310,7 @@ class TestGenerateDsc:
         cf_dat = tmp_path / "cf.dat"
         _make_cfbackup_style_dat(src, cf_dat)
 
-        result = runner.invoke(cli, ["generate-dsc", str(cf_dat)])
+        result = runner.invoke(cli, ["adfs", "generate-dsc", str(cf_dat)])
         assert result.exit_code == 0, result.output
         assert (cf_dat.with_suffix(".dsc")).exists()
         # The note about truncation should appear on stderr.
@@ -3328,7 +3329,7 @@ class TestGenerateDsc:
         cf_dsc.write_bytes(b"\x00" * 22)
         result = runner.invoke(
             cli,
-            ["generate-dsc", str(cf_dat), "--heads", "4", "--sectors-per-track", "33"],
+            ["adfs", "generate-dsc", str(cf_dat), "--heads", "4", "--sectors-per-track", "33"],
         )
         assert result.exit_code != 0
         assert "refusing to overwrite" in result.output
@@ -3346,6 +3347,7 @@ class TestGenerateDsc:
         result = runner.invoke(
             cli,
             [
+                "adfs",
                 "generate-dsc",
                 str(cf_dat),
                 "--heads",
@@ -3366,7 +3368,7 @@ class TestGenerateDsc:
     ) -> None:
         bogus = tmp_path / "wrong.bin"
         bogus.write_bytes(b"\x00" * 1024)
-        result = runner.invoke(cli, ["generate-dsc", str(bogus)])
+        result = runner.invoke(cli, ["adfs", "generate-dsc", str(bogus)])
         assert result.exit_code != 0
         assert ".dat" in result.output
 
@@ -3377,7 +3379,7 @@ class TestGenerateDsc:
     ) -> None:
         bad = tmp_path / "odd.dat"
         bad.write_bytes(b"\x00" * 1023)
-        result = runner.invoke(cli, ["generate-dsc", str(bad)])
+        result = runner.invoke(cli, ["adfs", "generate-dsc", str(bad)])
         assert result.exit_code != 0
         assert "256" in result.output
 
@@ -3405,6 +3407,7 @@ class TestGenerateDsc:
         result = runner.invoke(
             cli,
             [
+                "adfs",
                 "generate-dsc",
                 str(cf_dat),
                 "--heads",
@@ -3423,7 +3426,7 @@ class TestGenerateDsc:
     ) -> None:
         bad = tmp_path / "junk.dat"
         bad.write_bytes(b"\x00" * 4096)  # checksums won't validate
-        result = runner.invoke(cli, ["generate-dsc", str(bad)])
+        result = runner.invoke(cli, ["adfs", "generate-dsc", str(bad)])
         assert result.exit_code != 0
         assert "ADFS Old Map" in result.output
 
@@ -3464,7 +3467,7 @@ class TestGenerateDsc:
 
         # Sanity: the truncated file should hold the full Deep tree.
         # generate-dsc + tree should walk it cleanly.
-        result_gen = runner.invoke(cli, ["generate-dsc", str(cf_dat)])
+        result_gen = runner.invoke(cli, ["adfs", "generate-dsc", str(cf_dat)])
         assert result_gen.exit_code == 0, result_gen.output
 
         result_tree = runner.invoke(cli, ["tree", str(cf_dat)])

@@ -33,7 +33,7 @@ dependencies = [
     # branches on none of them — it routes through oaknut.filesystem.
     # The [cli] extra pulls each filesystem's contributed-command module.
     "oaknut-dfs[cli]>=10.0",
-    "oaknut-adfs>=10.0",
+    "oaknut-adfs[cli]>=10.0",
     "oaknut-afs>=10.0",
     "click>=8.1.7",
     "rich>=13.0",

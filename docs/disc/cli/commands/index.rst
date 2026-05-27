@@ -248,8 +248,8 @@ AFS (Acorn Level 3 File Server)
 Diagnostics
 -----------
 
-.. oaknut-command:: oaknut.disc.cli:generate-dsc
-   :prog: disc generate-dsc
+.. oaknut-command:: oaknut.adfs.cli:generate_dsc
+   :prog: disc adfs generate-dsc
 
    .. cli-example:: cmd_generate_dsc
 
