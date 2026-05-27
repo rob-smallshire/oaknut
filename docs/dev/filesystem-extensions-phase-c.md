@@ -68,7 +68,28 @@ migrate faithfully — grouped here rather than half-migrated.
 - [ ] `freemap`
 - [ ] `validate`
 
-## Write / mutate commands
+## ⚠ Open design issue — write-back path (blocks all mutate commands)
+
+Every read command above is migrated. The mutate commands cannot follow
+until the mount can *persist*. Today `Filesystem.open` reads the image
+into a private `bytearray` copy (see each adapter), so the underlying
+DFS/ADFS/AFS class mutates that copy and the changes are dropped when
+the mount falls out of scope — fine for read, useless for write.
+
+Two coupled problems:
+
+1. **Whole-image mounts** (DFS, ADFS host) need `open` to mutate a buffer
+   that is flushed back to the file on close — i.e. a writable
+   `ImageReader`/mount lifecycle (open → mutate → flush), gated on a
+   `Writable` capability so read-only filesystems (ZIP today) opt out.
+2. **Region mounts** (AFS in a reserved tail) are handed a
+   *de-interleaved* region buffer by `region_reader`. A write must be
+   **re-interleaved** back into the host image at the right logical
+   sectors — the write-side mirror of the geometry-aware recursion fix.
+   `region_reader` needs a write-back counterpart (materialise → mutate
+   → scatter back through the host `UnifiedDisc`).
+
+Resolve the lifecycle + region-write-back design before migrating these.
 
 - [ ] `put`
 - [ ] `import`
