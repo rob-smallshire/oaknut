@@ -349,20 +349,19 @@ without any wrapping:
 .. cli-example:: checksum_each_file
    :section: cksum
 
-CRC32 is a long way short of a cryptographic hash, but it's the right
-tool for "did this transfer intact?" (the case the recipe most often
-serves) and it has one virtue worth keeping in mind for an Acorn
-project: it can be computed on the original hardware. A table built
-on a modern host can be verified by a BBC Micro reading the disc, and
-vice versa — no platform-specific tooling stands between the two
-worlds.
+CRC32 is a compact fingerprint — perfect for "did this transfer
+intact?" or "are these two files the same?" — and it has a virtue
+worth keeping in mind for an Acorn project: it can be computed on
+the original hardware too. A table built on a modern host can be
+verified by a BBC Micro reading the disc, and vice versa.
 
 An MD5 from ``md5sum``
 ~~~~~~~~~~~~~~~~~~~~~~
 
-When you want a cryptographic hash, ``md5sum`` (GNU coreutils — or
-``shasum -a 256`` if you want SHA-256) is the natural reach. The
-output column carries one quirk worth knowing about:
+``md5sum`` (GNU coreutils) is the natural reach when you want a
+longer fingerprint — a 32-character hex digest that downstream
+tooling and published archives commonly cite. Same shape as
+``cksum``, with one quirk worth knowing about in the output:
 
 .. cli-example:: checksum_each_file
    :section: md5sum
