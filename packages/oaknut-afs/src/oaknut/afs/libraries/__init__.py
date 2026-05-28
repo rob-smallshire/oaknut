@@ -7,6 +7,8 @@ are named for their target AFS directory:
 - ``Library.adl``   — BBC Model B/B+ client libraries + shared Utils
 - ``Library1.adl``  — Master 128/Compact client libraries
 - ``ArthurLib.adl`` — Archimedes client libraries
+- ``Utils.adl``     — shared utilities, packaged on their own so an
+                      install can place them in a dedicated directory
 
 At runtime :func:`emplace_library` opens the image (shipped or
 user-supplied), creates the target directory on the AFS partition,
@@ -25,7 +27,7 @@ if TYPE_CHECKING:
     from oaknut.afs.afs import AFS
 
 # Shipped image names (without extension) — the canned library set.
-SHIPPED_LIBRARIES: tuple[str, ...] = ("Library", "Library1", "ArthurLib")
+SHIPPED_LIBRARIES: tuple[str, ...] = ("Library", "Library1", "ArthurLib", "Utils")
 
 
 def is_shipped(name: str) -> bool:

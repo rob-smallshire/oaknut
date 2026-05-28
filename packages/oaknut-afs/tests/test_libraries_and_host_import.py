@@ -12,8 +12,8 @@ from oaknut.afs.libraries import open_shipped, shipped_available
 
 
 class TestShippedLibraries:
-    def test_three_shipped_libraries(self) -> None:
-        assert len(SHIPPED_LIBRARIES) == 3
+    def test_four_shipped_libraries(self) -> None:
+        assert len(SHIPPED_LIBRARIES) == 4
 
     def test_all_available_after_build(self) -> None:
         for name in SHIPPED_LIBRARIES:
@@ -25,6 +25,49 @@ class TestShippedLibraries:
             assert len(names) > 0
             # Library images are pure ADFS content — no Passwords file.
             assert "Passwords" not in names
+
+    @pytest.mark.parametrize("name", SHIPPED_LIBRARIES)
+    def test_every_file_has_load_or_exec_address(self, name: str) -> None:
+        """Regression guard: a build that loses the Pi Econet Bridge xattrs
+        zeros every load and exec address, which renders the library useless
+        as an L3FS install. Assert per-file that *something* survived — a
+        legitimate ``CopyFiles`` may carry ``load = 0`` (a BASIC program
+        relocatable at boot) while still having a non-zero exec address.
+        """
+        with open_shipped(name) as adfs:
+            files_seen = 0
+            for entry in adfs.root.iterdir():
+                if not entry.is_file():
+                    continue
+                files_seen += 1
+                meta = entry.stat()
+                assert meta.load_address != 0 or meta.exec_address != 0, (
+                    f"{name}.adl:{entry.name} has zero load and zero exec address — "
+                    "the build dropped the Pi Econet Bridge metadata"
+                )
+            assert files_seen > 0, f"{name}.adl appears to be empty"
+
+    @pytest.mark.parametrize("name", SHIPPED_LIBRARIES)
+    def test_load_addresses_match_source_xattrs(self, name: str) -> None:
+        """Sample one well-known file per image and check the load address
+        equals the upstream Pi Econet Bridge ``user.econet_load`` value.
+        Catches both a complete-loss regression *and* a subtle byte-order
+        or scaling error that would slip past the looser "non-zero" check.
+        """
+        # (filename, expected load address) — values come straight from the
+        # upstream tarball at https://zxnet.co.uk/beeb/econet-fs.tar.
+        # FFFFDD00 is the BBC client library module load address.
+        expected = {
+            "Library": ("FindLib", 0xFFFFDD00),
+            "Library1": ("Discs", 0xFFFFDD00),
+            "ArthurLib": ("SetFree", 0xFFFFFC40),
+            "Utils": ("TreeCopy", 0xFFFF1B00),
+        }
+        sample_name, sample_load = expected[name]
+        with open_shipped(name) as adfs:
+            entry = adfs.root / sample_name
+            assert entry.exists(), f"sample file {sample_name} missing from {name}.adl"
+            assert entry.stat().load_address == sample_load
 
 
 class TestSanitiseName:
