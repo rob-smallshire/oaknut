@@ -372,11 +372,22 @@ The for-each output is text; the rest of the shell's text tools work
 normally — ``awk`` to rename columns, ``sort`` for ordering, ``grep
 -v`` to drop rows by pattern.
 
-Other shapes
-~~~~~~~~~~~~
 
-For tools that only take a real file path (``file(1)``, image
-viewers, hashers without stdin support), use ``--mode materialise``:
-each file's bytes land on a host temp file before the command runs.
-Swap ``> checksums.tsv`` for ``--as json > checksums.json`` when
-downstream tooling prefers JSON; ``--as display`` for a boxed table.
+Files containing a string
+-------------------------
+
+To find every file on a disc whose bytes match a pattern, pair ``disc
+for-each`` with ``grep -c``. The match count for each file becomes the
+output column:
+
+.. cli-example:: grep_each_file
+   :section: count
+
+For just the paths of the files that matched, pipe through ``awk``:
+
+.. cli-example:: grep_each_file
+   :section: paths
+
+``($2+0) > 0`` forces a numeric comparison: counts of one or more
+match; the ``# Path / Output`` header and the zero-count rows both
+coerce to ``0`` and drop out.
