@@ -135,8 +135,7 @@ class AFS:
             from oaknut.file.exceptions import FilesystemClosedError
 
             raise FilesystemClosedError(
-                "AFS handle is closed; "
-                "I/O outside the with block is not supported"
+                "AFS handle is closed; I/O outside the with block is not supported"
             )
 
     @property
@@ -426,8 +425,7 @@ class AFS:
         relative = sector - self._region_base
         if relative < 0 or relative >= self._disc.num_sectors:
             raise AFSError(
-                f"sector {sector:#x} outside disc range "
-                f"0..{self._disc.num_sectors - 1:#x}"
+                f"sector {sector:#x} outside disc range 0..{self._disc.num_sectors - 1:#x}"
             )
         return relative
 

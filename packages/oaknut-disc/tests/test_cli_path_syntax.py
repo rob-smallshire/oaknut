@@ -81,9 +81,7 @@ class TestImagePathTrailing:
     def test_set_load_fused_roundtrips(self, runner: CliRunner, adfs_image_filepath: Path):
         result = runner.invoke(cli, ["set-load", f"{adfs_image_filepath}:$.Hello", "0x3B00"])
         assert result.exit_code == 0, result.output
-        gl = runner.invoke(
-            cli, ["get-load", "--as", "display", f"{adfs_image_filepath}:$.Hello"]
-        )
+        gl = runner.invoke(cli, ["get-load", "--as", "display", f"{adfs_image_filepath}:$.Hello"])
         assert "0x00003B00" in gl.output
 
     def test_get_fused(

@@ -545,7 +545,10 @@ class TestResolveMetadataWithInf:
     def test_inf_used_when_no_sparkfs(self):
         info = self._make_info("FILE")
         inf_index = {
-            "FILE": ("inf-pieb", AcornMeta(load_address=0xFFFFDD00, exec_address=0xFFFFDD00, access=3))
+            "FILE": (
+                "inf-pieb",
+                AcornMeta(load_address=0xFFFFDD00, exec_address=0xFFFFDD00, access=3),
+            )
         }
         source, clean, meta = resolve_metadata(info, inf_index=inf_index)
         assert source == "inf-pieb"
@@ -555,7 +558,10 @@ class TestResolveMetadataWithInf:
         extra = build_sparkfs_extra(0xFFFF0E10, 0xFFFF0E10, 0x03)
         info = self._make_info("FILE", extra=extra)
         inf_index = {
-            "FILE": ("inf-pieb", AcornMeta(load_address=0xFFFFDD00, exec_address=0xFFFFDD00, access=3))
+            "FILE": (
+                "inf-pieb",
+                AcornMeta(load_address=0xFFFFDD00, exec_address=0xFFFFDD00, access=3),
+            )
         }
         source, clean, meta = resolve_metadata(info, inf_index=inf_index)
         assert source == "sparkfs"
@@ -564,7 +570,10 @@ class TestResolveMetadataWithInf:
     def test_inf_beats_filename_encoding(self):
         info = self._make_info("FILE,ffb")
         inf_index = {
-            "FILE,ffb": ("inf-trad", AcornMeta(load_address=0xFFFF0E10, exec_address=0xFFFF0E10, access=3))
+            "FILE,ffb": (
+                "inf-trad",
+                AcornMeta(load_address=0xFFFF0E10, exec_address=0xFFFF0E10, access=3),
+            )
         }
         source, clean, meta = resolve_metadata(info, inf_index=inf_index)
         assert source == "inf-trad"

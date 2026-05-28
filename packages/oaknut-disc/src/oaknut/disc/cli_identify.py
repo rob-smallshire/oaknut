@@ -101,9 +101,7 @@ def list_filesystems_command() -> click.Command:
         table.add_column("name", "Name")
         table.add_column("description", "Description")
         for name in sorted(filesystem_names()):
-            table.add_row(
-                name=name, description=describe_filesystem(name, single_line=True)
-            )
+            table.add_row(name=name, description=describe_filesystem(name, single_line=True))
         return Reports(filesystems=Report(data=table))
 
     return list_filesystems
@@ -139,9 +137,7 @@ def _geometry_table(name: str) -> TableContent:
     ]
     if WINCHESTER in grammar.kinds:
         rows.append((float("inf"), "capacity=SIZE", "hard disc of the given size"))
-        rows.append(
-            (float("inf"), "cylinders=N,heads=N,spt=N", "hard disc, explicit geometry")
-        )
+        rows.append((float("inf"), "cylinders=N,heads=N,spt=N", "hard disc, explicit geometry"))
     if FLOPPY in grammar.kinds:
         rows.append(
             (
@@ -159,9 +155,7 @@ def describe_filesystem_command() -> click.Command:
     """A command that prints one recognised filesystem's full description."""
 
     @click.command()
-    @click.argument(
-        "name", type=click.Choice(sorted(filesystem_names()), case_sensitive=False)
-    )
+    @click.argument("name", type=click.Choice(sorted(filesystem_names()), case_sensitive=False))
     @report_output(
         reports={
             "filesystem": "The full description of one recognised filesystem.",

@@ -113,9 +113,7 @@ class _DFSMount:
     def stat(self, path: str) -> Entry:
         target = self._navigate(path)
         st = target.stat()
-        return Entry(
-            name=target.name, is_dir=st.is_directory, length=st.length, path=target.path
-        )
+        return Entry(name=target.name, is_dir=st.is_directory, length=st.length, path=target.path)
 
     def join(self, parent: str, name: str) -> str:
         # DFS's root is the nameless catalogue; a file placed there lives
@@ -128,9 +126,7 @@ class _DFSMount:
     def iter_entries(self, path: str) -> Iterable[Entry]:
         for child in self._navigate(path).iterdir():
             st = child.stat()
-            yield Entry(
-                name=child.name, is_dir=st.is_directory, length=st.length, path=child.path
-            )
+            yield Entry(name=child.name, is_dir=st.is_directory, length=st.length, path=child.path)
 
     def exists(self, path: str) -> bool:
         return self._navigate(path).exists()

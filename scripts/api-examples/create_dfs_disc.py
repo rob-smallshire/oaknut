@@ -29,11 +29,10 @@ def populate_disc(filepath: Path) -> None:
     """
     with DFS.create_file(filepath, title="MyDisc", boot_option=2) as dfs:
         (dfs.root / "$.README").write_text(
-            "Welcome to MyDisc.\n"
-            "Run *EXEC $.README at the prompt.\n",
+            "Welcome to MyDisc.\nRun *EXEC $.README at the prompt.\n",
         )
         (dfs.root / "$.PROG").write_bytes(
-            b"\xa9\x41\x20\xee\xff\x60",   # LDA #'A' : JSR &FFEE : RTS
+            b"\xa9\x41\x20\xee\xff\x60",  # LDA #'A' : JSR &FFEE : RTS
             load_address=0x1900,
             exec_address=0x1900,
         )
@@ -60,11 +59,7 @@ def main(workdir: Path) -> None:
             for entry in letter.iterdir():
                 st = entry.stat()
                 lock = " (locked)" if st.access & Access.L else ""
-                print(
-                    f"  {entry.path:14s} "
-                    f"load={st.load_address:#010x} "
-                    f"size={st.length:>5d}{lock}"
-                )
+                print(f"  {entry.path:14s} load={st.load_address:#010x} size={st.length:>5d}{lock}")
 
 
 if __name__ == "__main__":

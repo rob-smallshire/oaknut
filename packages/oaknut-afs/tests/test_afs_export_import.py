@@ -51,9 +51,7 @@ class TestExportFile:
 
 
 class TestImportFile:
-    def test_import_with_inf_sidecar_round_trips_metadata(
-        self, tmp_path: Path
-    ) -> None:
+    def test_import_with_inf_sidecar_round_trips_metadata(self, tmp_path: Path) -> None:
         adfs = build_synthetic_adfs_with_afs()
         afs = adfs.afs_partition
         host = tmp_path / "Hello"
@@ -92,9 +90,7 @@ class TestImportFile:
 
 
 class TestRoundTrip:
-    def test_export_then_import_preserves_data_and_addresses(
-        self, tmp_path: Path
-    ) -> None:
+    def test_export_then_import_preserves_data_and_addresses(self, tmp_path: Path) -> None:
         adfs = build_synthetic_adfs_with_afs()
         afs = adfs.afs_partition
         original = afs.root / "Original"
@@ -116,9 +112,7 @@ class TestRoundTrip:
         assert st.load_address == 0x1234
         assert st.exec_address == 0xCAFE
 
-    def test_export_then_import_preserves_locked_attribute(
-        self, tmp_path: Path
-    ) -> None:
+    def test_export_then_import_preserves_locked_attribute(self, tmp_path: Path) -> None:
         adfs = build_synthetic_adfs_with_afs()
         afs = adfs.afs_partition
         original = afs.root / "Locked"

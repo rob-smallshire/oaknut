@@ -132,9 +132,7 @@ def _resolve_command(target: str) -> click.Command:
     """
     module_path, _, name = target.partition(":")
     if not module_path or not name:
-        raise ValueError(
-            f"oaknut-command target must be 'module:name', got {target!r}"
-        )
+        raise ValueError(f"oaknut-command target must be 'module:name', got {target!r}")
     module = importlib.import_module(module_path)
 
     try:
@@ -353,12 +351,10 @@ def _build_description_paragraph(text: str) -> nodes.paragraph:
 
     para = nodes.paragraph()
     pos = 0
-    pattern = re.compile(
-        rf"{_OPTION_TOKEN_RE.pattern}|{_ACORN_STAR_RE.pattern}"
-    )
+    pattern = re.compile(rf"{_OPTION_TOKEN_RE.pattern}|{_ACORN_STAR_RE.pattern}")
     for match in pattern.finditer(clean):
         if match.start() > pos:
-            para += nodes.Text(clean[pos:match.start()])
+            para += nodes.Text(clean[pos : match.start()])
         para += nodes.literal(text=match.group(0))
         pos = match.end()
     if pos < len(clean):
@@ -366,9 +362,7 @@ def _build_description_paragraph(text: str) -> nodes.paragraph:
     return para
 
 
-def _build_deflist_item(
-    term: nodes.term, description: str | None
-) -> nodes.definition_list_item:
+def _build_deflist_item(term: nodes.term, description: str | None) -> nodes.definition_list_item:
     item = nodes.definition_list_item()
     item += term
     definition = nodes.definition()
@@ -413,9 +407,7 @@ class OaknutCommandDirective(SphinxDirective):
         title_text = self.options.get("title") or prog
 
         section = nodes.section()
-        section["ids"] = [
-            nodes.make_id(f"oaknut-command-{prog.replace(' ', '-')}")
-        ]
+        section["ids"] = [nodes.make_id(f"oaknut-command-{prog.replace(' ', '-')}")]
         section += nodes.title(text=title_text)
 
         # 1. Description.
@@ -431,26 +423,15 @@ class OaknutCommandDirective(SphinxDirective):
         section += usage_node
 
         # 3. Arguments.
-        args = [
-            p for p in command.params
-            if isinstance(p, click.Argument)
-        ]
+        args = [p for p in command.params if isinstance(p, click.Argument)]
         if args and "hide-arguments" not in self.options:
             section += nodes.rubric(text="Arguments")
             section += self._build_arguments_deflist(args)
 
         # 4. Options.
-        all_opts = [
-            p for p in command.params
-            if isinstance(p, click.Option) and not p.hidden
-        ]
-        visible_opts = [
-            o for o in all_opts
-            if not _is_hidden_report_output_option(o)
-        ]
-        has_hidden_report_opts = any(
-            _is_hidden_report_output_option(o) for o in all_opts
-        )
+        all_opts = [p for p in command.params if isinstance(p, click.Option) and not p.hidden]
+        visible_opts = [o for o in all_opts if not _is_hidden_report_output_option(o)]
+        has_hidden_report_opts = any(_is_hidden_report_output_option(o) for o in all_opts)
         if (visible_opts or has_hidden_report_opts) and "hide-options" not in self.options:
             section += nodes.rubric(text="Options")
             if visible_opts:
@@ -483,10 +464,7 @@ class OaknutCommandDirective(SphinxDirective):
 
     def _build_usage_line(self, prog: str, command: click.Command) -> str:
         parts = [prog]
-        has_options = any(
-            isinstance(p, click.Option) and not p.hidden
-            for p in command.params
-        )
+        has_options = any(isinstance(p, click.Option) and not p.hidden for p in command.params)
         if has_options:
             parts.append("[OPTIONS]")
         for arg in command.params:
@@ -502,9 +480,7 @@ class OaknutCommandDirective(SphinxDirective):
             parts.append(token)
         return " ".join(parts)
 
-    def _build_arguments_deflist(
-        self, args: list[click.Argument]
-    ) -> nodes.definition_list:
+    def _build_arguments_deflist(self, args: list[click.Argument]) -> nodes.definition_list:
         dl = nodes.definition_list()
         for arg in args:
             term = _build_argument_term(arg)
@@ -515,9 +491,7 @@ class OaknutCommandDirective(SphinxDirective):
             dl += _build_deflist_item(term, description)
         return dl
 
-    def _build_options_deflist(
-        self, opts: list[click.Option]
-    ) -> nodes.definition_list:
+    def _build_options_deflist(self, opts: list[click.Option]) -> nodes.definition_list:
         dl = nodes.definition_list()
         for opt in opts:
             term = _build_option_term(opt)

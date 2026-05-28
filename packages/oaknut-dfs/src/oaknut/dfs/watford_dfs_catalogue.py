@@ -900,33 +900,23 @@ class WatfordDFSCatalogue(Catalogue):
         disc_info = self.get_disc_info()
         if disc_info.num_files > self.MAX_FILES:
             errors.append(
-                DFSValidationError(
-                    f"Too many files: {disc_info.num_files} > {self.MAX_FILES}"
-                )
+                DFSValidationError(f"Too many files: {disc_info.num_files} > {self.MAX_FILES}")
             )
 
         sector2 = self._surface.sector_range(2, 1)
         if not all(sector2[i] == 0xAA for i in range(12)):
-            errors.append(
-                DFSValidationError("Missing Watford DFS marker in sector 2")
-            )
+            errors.append(DFSValidationError("Missing Watford DFS marker in sector 2"))
 
         sector1 = self._surface.sector_range(1, 1)
         sector3 = self._surface.sector_range(3, 1)
         if sector1[4] != sector3[4]:
-            errors.append(
-                DFSValidationError("Cycle number mismatch between catalog sections")
-            )
+            errors.append(DFSValidationError("Cycle number mismatch between catalog sections"))
         if sector1[6] != sector3[6]:
             errors.append(
-                DFSValidationError(
-                    "Boot option/sector count mismatch between catalog sections"
-                )
+                DFSValidationError("Boot option/sector count mismatch between catalog sections")
             )
         if sector1[7] != sector3[7]:
-            errors.append(
-                DFSValidationError("Sector count mismatch between catalog sections")
-            )
+            errors.append(DFSValidationError("Sector count mismatch between catalog sections"))
 
         files = self.list_files()
         sector_map: dict[int, str] = {}
@@ -955,9 +945,7 @@ class WatfordDFSCatalogue(Catalogue):
         names = [f.path.upper() for f in files]
         duplicates = [name for name in set(names) if names.count(name) > 1]
         if duplicates:
-            errors.append(
-                DFSValidationError(f"Duplicate filenames: {', '.join(duplicates)}")
-            )
+            errors.append(DFSValidationError(f"Duplicate filenames: {', '.join(duplicates)}"))
 
         return errors
 

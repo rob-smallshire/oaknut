@@ -1281,8 +1281,7 @@ class ADFS:
             from oaknut.file.exceptions import FilesystemClosedError
 
             raise FilesystemClosedError(
-                "ADFS handle is closed; "
-                "I/O outside the with block is not supported"
+                "ADFS handle is closed; I/O outside the with block is not supported"
             )
 
     @property
@@ -1678,9 +1677,7 @@ class ADFS:
         if self._afs_partition_cache is None:
             sec1, sec2 = self._fsm.afs_info_pointers
             if sec1 == 0 and sec2 == 0:
-                raise AFSNotPresentError(
-                    "disc has no AFS partition (no info-sector pointers)"
-                )
+                raise AFSNotPresentError("disc has no AFS partition (no info-sector pointers)")
             self._afs_partition_cache = AFS(self._disc, sec1, sec2)
         return self._afs_partition_cache
 

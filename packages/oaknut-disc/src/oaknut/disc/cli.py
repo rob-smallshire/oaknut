@@ -239,9 +239,7 @@ def ls(compound_path: str, show_access_byte: bool):
     # Rich, which would silently consume ``[name]`` as console markup.
     table_title += f" ({resolved.filesystem})"
 
-    description = (
-        f"Free: {mount.free_bytes():,} bytes" if isinstance(mount, FreeSpace) else None
-    )
+    description = f"Free: {mount.free_bytes():,} bytes" if isinstance(mount, FreeSpace) else None
 
     table = TableContent(title=table_title, description=description)
     table.add_column("name", "Name", header=True)
@@ -423,9 +421,7 @@ def stat(compound_path: str):
         tc.add_column("length", "Length")
         row["length"] = entry.length
         tc.add_column("attr", "Attr")
-        row["attr"] = (
-            _format_access(Access(meta.access)) if meta.access is not None else ""
-        )
+        row["attr"] = _format_access(Access(meta.access)) if meta.access is not None else ""
     else:
         tc.add_column("length", "Length")
         row["length"] = entry.length
@@ -721,9 +717,7 @@ def _find_recursive(mount, path: str, pattern: str, prefix: str, rows: list[dict
     so every row is directly consumable by a follow-up command.
     """
     for child in mount.iter_entries(path):
-        if _match_acorn_wildcard(pattern, child.name) or _match_acorn_wildcard(
-            pattern, child.path
-        ):
+        if _match_acorn_wildcard(pattern, child.name) or _match_acorn_wildcard(pattern, child.path):
             rows.append({"path": f"{prefix}{child.path}"})
         if child.is_dir:
             _find_recursive(mount, child.path, pattern, prefix, rows)
@@ -746,9 +740,7 @@ _FOR_EACH_MODES = ("content", "inner-path", "compound-path", "materialise")
     ),
 )
 @report_output(
-    reports={
-        "results": "Per-file capture: path and the command's stdout, one row per match."
-    }
+    reports={"results": "Per-file capture: path and the command's stdout, one row per match."}
 )
 def for_each(compound_path: str, command_argv: tuple[str, ...], mode: str):
     """Run a command for each file matching an inner-path pattern.
@@ -832,17 +824,14 @@ def _collect_matches(mount, path: str, pattern: str, prefix: str, out: list) -> 
     """
     for child in mount.iter_entries(path):
         if not child.is_dir and (
-            _match_acorn_wildcard(pattern, child.name)
-            or _match_acorn_wildcard(pattern, child.path)
+            _match_acorn_wildcard(pattern, child.name) or _match_acorn_wildcard(pattern, child.path)
         ):
             out.append((f"{prefix}{child.path}", mount, child.path))
         if child.is_dir:
             _collect_matches(mount, child.path, pattern, prefix, out)
 
 
-def _for_each_run(
-    outer_filepath, matches: list, command_argv: list[str], mode: str
-) -> list[dict]:
+def _for_each_run(outer_filepath, matches: list, command_argv: list[str], mode: str) -> list[dict]:
     """Run the per-file command for each match in the chosen *mode*.
 
     Returns a list of result rows (each ``{"path": ..., "output": ...}``).
@@ -893,9 +882,7 @@ def _trim(stdout: bytes) -> str:
     return stdout.decode("utf-8", errors="replace").rstrip("\n")
 
 
-def _materialise(
-    content: bytes, tmp_dir: Path, source_path: str, ordinal: int
-) -> Path:
+def _materialise(content: bytes, tmp_dir: Path, source_path: str, ordinal: int) -> Path:
     """Write *content* to a sanitised file under *tmp_dir*, return its path.
 
     The basename keeps a recognisable trace of *source_path* (the leaf
@@ -945,9 +932,7 @@ def materialise(compound_path: str, command_argv: tuple[str, ...]) -> None:
     with resolve_mount(compound_path) as resolved:
         mount = resolved.mount
         if not mount.exists(resolved.path):
-            raise FSError(
-                f"path not found: {resolved.path}", exit_code=ExitCode.OS_FILE
-            )
+            raise FSError(f"path not found: {resolved.path}", exit_code=ExitCode.OS_FILE)
         if mount.stat(resolved.path).is_dir:
             raise FSError(
                 f"cannot materialise a directory: {resolved.path}",
@@ -1473,9 +1458,7 @@ def _expand_target_paths(mount, pattern: str) -> list[str]:
             raise click.ClickException(
                 f"parent directory of glob does not exist: {parent or '$'!r}"
             )
-        matches = [
-            e.path for e in mount.iter_entries(parent) if _match_acorn(leaf_pattern, e.name)
-        ]
+        matches = [e.path for e in mount.iter_entries(parent) if _match_acorn(leaf_pattern, e.name)]
         if not matches:
             raise click.ClickException(f"no matches for {pattern!r}")
         return matches
@@ -1611,9 +1594,7 @@ def _collect_copy_items(
         matches = _expand_glob(src_mount, src_bare)
         if not matches:
             raise click.ClickException(f"no matches for {src_bare!r}")
-        dst_must_be_dir = len(matches) > 1 or any(
-            src_mount.stat(m).is_dir for m in matches
-        )
+        dst_must_be_dir = len(matches) > 1 or any(src_mount.stat(m).is_dir for m in matches)
         _check_dst_is_dir(dst_mount, dst_bare, dst_slash, required=dst_must_be_dir)
         if dst_must_be_dir or dst_slash:
             items.append({"kind": "mkdir", "dst": dst_bare})
@@ -1900,9 +1881,7 @@ def mkdir(compound_path: str, p: bool, dir_title: str | None) -> None:
         # mkdir is available when the filesystem nests directories; a flat
         # catalogue (DFS) does not advertise the capability.
         if not isinstance(mount, HierarchicalDirectories):
-            raise click.ClickException(
-                f"mkdir is not supported for {resolved.filesystem} images"
-            )
+            raise click.ClickException(f"mkdir is not supported for {resolved.filesystem} images")
         target = resolved.path or mount.path_root()
         mount.make_directory(target, parents=p, exist_ok=p, title=dir_title)
 
@@ -2230,9 +2209,7 @@ def title(compound_path: str, new_title: str | None):
                 current = None
         else:
             if not isinstance(mount, Titled):
-                raise click.ClickException(
-                    f"{resolved.filesystem} images carry no disc title"
-                )
+                raise click.ClickException(f"{resolved.filesystem} images carry no disc title")
             if new_title is None:
                 current = mount.title
             else:
@@ -2311,9 +2288,7 @@ def opt(image: Path, boot_option: int | None):
     with resolve_mount(str(image), writable=boot_option is not None) as resolved:
         mount = resolved.mount
         if not isinstance(mount, Bootable):
-            raise click.ClickException(
-                f"{resolved.filesystem} images carry no boot option"
-            )
+            raise click.ClickException(f"{resolved.filesystem} images carry no boot option")
         if boot_option is None:
             bo = mount.boot_option
             return Reports(
@@ -2419,9 +2394,7 @@ def compact(image: Path) -> None:
     with resolve_mount(str(image), writable=True) as resolved:
         mount = resolved.mount
         if not isinstance(mount, Compactable):
-            raise click.ClickException(
-                f"{resolved.filesystem} images cannot be compacted"
-            )
+            raise click.ClickException(f"{resolved.filesystem} images cannot be compacted")
         mount.compact()
 
 
@@ -2466,9 +2439,7 @@ def export_cmd(image: Path, host_dir: Path, meta_format: str, owner: int, verbos
 
     resolved = resolve_mount(str(image))
     mount = resolved.mount
-    _export_recursive(
-        mount, mount.path_root(), host_dir, resolved_meta_format, owner, verbose
-    )
+    _export_recursive(mount, mount.path_root(), host_dir, resolved_meta_format, owner, verbose)
 
 
 def _export_recursive(

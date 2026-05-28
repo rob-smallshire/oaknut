@@ -55,6 +55,7 @@ def builtin_account_system_flag(name: str) -> bool:
             f"valid names are {', '.join(sorted(BUILTIN_ACCOUNT_NAMES))}"
         ) from None
 
+
 # Mirror of the limits the passwords-file encoder enforces
 # (passwords.py:_LEN_USER_ID / _LEN_PASSWORD).  Kept local so
 # InitSpec/UserSpec can validate eagerly without importing from the

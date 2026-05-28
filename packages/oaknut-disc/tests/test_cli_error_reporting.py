@@ -495,7 +495,8 @@ class TestAfsInitErrors:
         result = runner.invoke(
             cli,
             [
-                "afs", "init",
+                "afs",
+                "init",
                 str(adfs_hard_no_afs_filepath),
                 "--disc-name",
                 "This Name Is Far Too Long For AFS",
@@ -518,7 +519,8 @@ class TestAfsInitErrors:
         result = runner.invoke(
             cli,
             [
-                "afs", "init",
+                "afs",
+                "init",
                 str(adfs_hard_with_afs_filepath),
                 "--disc-name",
                 "TwiceFS",

@@ -389,7 +389,6 @@ class DFSPath(AcornPath):
             access=access,
         )
 
-
     @resolving_io
     def touch(
         self,
@@ -641,8 +640,7 @@ class DFS:
             from oaknut.file.exceptions import FilesystemClosedError
 
             raise FilesystemClosedError(
-                "DFS handle is closed; "
-                "I/O outside the with block is not supported"
+                "DFS handle is closed; I/O outside the with block is not supported"
             )
 
     @property

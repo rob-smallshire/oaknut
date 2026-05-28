@@ -25,18 +25,12 @@ _API_EXAMPLES_DIRPATH = _REPO_ROOT / "scripts" / "api-examples"
 def _discover_recipes() -> list[Path]:
     if not _API_EXAMPLES_DIRPATH.is_dir():
         return []
-    return sorted(
-        p
-        for p in _API_EXAMPLES_DIRPATH.glob("*.py")
-        if not p.name.startswith("_")
-    )
+    return sorted(p for p in _API_EXAMPLES_DIRPATH.glob("*.py") if not p.name.startswith("_"))
 
 
 def _import_recipe(filepath: Path):
     """Import a recipe file as a module without polluting sys.modules globally."""
-    spec = importlib.util.spec_from_file_location(
-        f"_api_example_{filepath.stem}", filepath
-    )
+    spec = importlib.util.spec_from_file_location(f"_api_example_{filepath.stem}", filepath)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module

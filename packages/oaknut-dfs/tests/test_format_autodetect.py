@@ -68,16 +68,11 @@ class TestDfsCreateFileAutoDetect:
         # File must have the canonical 80-track single-sided size.
         assert filepath.stat().st_size == ACORN_DFS_80T_SINGLE_SIDED.image_size
 
-    def test_dsd_extension_defaults_to_80t_double_interleaved(
-        self, tmp_path: Path
-    ) -> None:
+    def test_dsd_extension_defaults_to_80t_double_interleaved(self, tmp_path: Path) -> None:
         filepath = tmp_path / "fresh.dsd"
         with DFS.create_file(filepath):
             pass
-        assert (
-            filepath.stat().st_size
-            == ACORN_DFS_80T_DOUBLE_SIDED_INTERLEAVED.image_size
-        )
+        assert filepath.stat().st_size == ACORN_DFS_80T_DOUBLE_SIDED_INTERLEAVED.image_size
 
     def test_unknown_extension_raises(self, tmp_path: Path) -> None:
         from oaknut.dfs.exceptions import DFSFormatError

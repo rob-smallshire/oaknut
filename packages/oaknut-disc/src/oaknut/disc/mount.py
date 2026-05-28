@@ -167,9 +167,7 @@ def partition_selectors(outer_filepath: Path) -> list[str]:
     ]
 
 
-def _select(
-    best: Identification, selector: str | None
-) -> tuple[Identification, Partition | None]:
+def _select(best: Identification, selector: str | None) -> tuple[Identification, Partition | None]:
     """Pick the addressed partition from the best candidate's tree.
 
     Returns ``(identification, region)`` where *region* is ``None`` for
@@ -184,9 +182,7 @@ def _select(
     available = [best.partition.selector] + [
         c.partition.selector for c in best.contained if c.identified
     ]
-    raise click.ClickException(
-        f"no such partition {selector!r}; available: {', '.join(available)}"
-    )
+    raise click.ClickException(f"no such partition {selector!r}; available: {', '.join(available)}")
 
 
 def _geometry(filesystem, force_geometry: str | None, proposed: Geometry | None):

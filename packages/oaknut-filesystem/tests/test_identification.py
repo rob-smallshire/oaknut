@@ -5,12 +5,7 @@ from oaknut.filesystem import Confidence, Identification, Partition
 
 class TestConfidence:
     def test_ordering(self):
-        assert (
-            Confidence.CERTAIN
-            > Confidence.STRONG
-            > Confidence.PROBABLE
-            > Confidence.POSSIBLE
-        )
+        assert Confidence.CERTAIN > Confidence.STRONG > Confidence.PROBABLE > Confidence.POSSIBLE
 
 
 class TestPartition:

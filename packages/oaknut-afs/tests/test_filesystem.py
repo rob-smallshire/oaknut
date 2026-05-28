@@ -26,9 +26,7 @@ def _afs_region_reader(reader):
 
     identification = create_filesystem("adfs").probe(reader)
     region = identification.reserved_regions[0]
-    return region_reader(
-        reader, identification.geometry, region.start_sector, region.num_sectors
-    )
+    return region_reader(reader, identification.geometry, region.start_sector, region.num_sectors)
 
 
 class TestRegistration:

@@ -44,9 +44,7 @@ class TestUnifiedAccessAcceptance:
 
     def test_dfs_accepts_explicit_flag_combination(self, dfs_image_filepath: Path) -> None:
         with _open_dfs(dfs_image_filepath) as dfs:
-            (dfs.root / "$.ACC").write_bytes(
-                b"x", access=Access.L | Access.R | Access.W
-            )
+            (dfs.root / "$.ACC").write_bytes(b"x", access=Access.L | Access.R | Access.W)
             assert (dfs.root / "$.ACC").stat().access & Access.L
 
     def test_adfs_accepts_lwr_constant(self, adfs_image_filepath: Path) -> None:
@@ -54,9 +52,7 @@ class TestUnifiedAccessAcceptance:
             (adfs.root / "Locked").write_bytes(b"x", access=Access.LWR)
             assert (adfs.root / "Locked").stat().access & Access.L
 
-    def test_adfs_accepts_explicit_flag_combination(
-        self, adfs_image_filepath: Path
-    ) -> None:
+    def test_adfs_accepts_explicit_flag_combination(self, adfs_image_filepath: Path) -> None:
         with ADFS.from_file(adfs_image_filepath) as adfs:
             (adfs.root / "Acc").write_bytes(b"x", access=Access.L | Access.R)
             assert (adfs.root / "Acc").stat().access & Access.L
@@ -69,9 +65,7 @@ class TestUnifiedAccessAcceptance:
 
             assert (afs.root / "Locked").stat().afs_access & AFSAccess.LOCKED
 
-    def test_afs_accepts_explicit_flag_combination(
-        self, afs_image_filepath: Path
-    ) -> None:
+    def test_afs_accepts_explicit_flag_combination(self, afs_image_filepath: Path) -> None:
         with ADFS.from_file(afs_image_filepath) as adfs:
             afs = adfs.afs_partition
             (afs.root / "Acc").write_bytes(b"x", access=Access.L | Access.PR)

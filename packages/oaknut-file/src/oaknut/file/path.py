@@ -121,7 +121,7 @@ class AcornPath:
         before reading or writing.
         """
         resolved: list[str] = list(self._root_parts())
-        for part in self.parts[len(self._root_parts()):]:
+        for part in self.parts[len(self._root_parts()) :]:
             if set(part) == {"^"}:
                 for _ in part:
                     if len(resolved) > len(self._root_parts()):
@@ -132,7 +132,7 @@ class AcornPath:
         if tuple(resolved) == self.parts:
             return self
         path = self._root()
-        for part in resolved[len(self._root_parts()):]:
+        for part in resolved[len(self._root_parts()) :]:
             path = path._join_name(part)
         return path
 
@@ -196,17 +196,13 @@ class AcornPath:
         """
         from oaknut.file.exceptions import TitleNotSupportedError
 
-        raise TitleNotSupportedError(
-            "this filesystem's directories do not have a title"
-        )
+        raise TitleNotSupportedError("this filesystem's directories do not have a title")
 
     @title.setter
     def title(self, value: str) -> None:
         from oaknut.file.exceptions import TitleNotSupportedError
 
-        raise TitleNotSupportedError(
-            "this filesystem's directories do not have a title"
-        )
+        raise TitleNotSupportedError("this filesystem's directories do not have a title")
 
     # ------------------------------------------------------------------
     # Abstract querying primitives
@@ -350,14 +346,10 @@ class AcornPath:
         """
         if self.exists():
             if self.is_dir():
-                raise self.DirectoryError(
-                    f"{self.path!r} is a directory, cannot touch"
-                )
+                raise self.DirectoryError(f"{self.path!r} is a directory, cannot touch")
             if exist_ok:
                 return
-            raise self.EntryExistsError(
-                f"{self.path!r} already exists"
-            )
+            raise self.EntryExistsError(f"{self.path!r} already exists")
         self.write_bytes(b"", access=access)
 
     def copy_to(self, dst: "AcornPath") -> None:

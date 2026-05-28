@@ -38,25 +38,19 @@ def _build_disc(tmp_path: Path) -> Path:
 
 def _tsv_rows(output: str) -> dict[str, str]:
     """Parse a CliRunner-captured TSV into a {path: output} dict."""
-    rows = [
-        line for line in output.strip().splitlines() if line and not line.startswith("#")
-    ]
+    rows = [line for line in output.strip().splitlines() if line and not line.startswith("#")]
     return dict(line.split("\t", 1) for line in rows)
 
 
 class TestContentMode:
-    def test_pipes_each_file_through_command(
-        self, runner: CliRunner, tmp_path: Path
-    ) -> None:
+    def test_pipes_each_file_through_command(self, runner: CliRunner, tmp_path: Path) -> None:
         img = _build_disc(tmp_path)
         result = runner.invoke(cli, ["for-each", f"{img}:*", "--", *_BYTELEN])
         assert result.exit_code == 0, result.output
         rows = _tsv_rows(result.output)
         assert rows == {"$.A": "1", "$.BB": "2", "$.CCC": "3"}
 
-    def test_tsv_header_has_path_and_output(
-        self, runner: CliRunner, tmp_path: Path
-    ) -> None:
+    def test_tsv_header_has_path_and_output(self, runner: CliRunner, tmp_path: Path) -> None:
         img = _build_disc(tmp_path)
         result = runner.invoke(cli, ["for-each", f"{img}:*", "--", *_BYTELEN])
         assert result.exit_code == 0
@@ -80,9 +74,7 @@ class TestContentMode:
         rows = _tsv_rows(result.output)
         assert rows == {"$.A": "1", "B.B": "2"}
 
-    def test_directories_are_skipped_by_default(
-        self, runner: CliRunner, tmp_path: Path
-    ) -> None:
+    def test_directories_are_skipped_by_default(self, runner: CliRunner, tmp_path: Path) -> None:
         # On DFS the directory letters are dir entries; for-each must not
         # try to pipe their (non-existent) content into the command.
         img = _build_disc(tmp_path)
@@ -151,9 +143,7 @@ class TestInnerPathMode:
 class TestCompoundPathMode:
     """``--mode compound-path``: full IMAGE:PATH per match — chains with `disc` itself."""
 
-    def test_substitutes_brace_with_full_spec(
-        self, runner: CliRunner, tmp_path: Path
-    ) -> None:
+    def test_substitutes_brace_with_full_spec(self, runner: CliRunner, tmp_path: Path) -> None:
         img = _build_disc(tmp_path)
         result = runner.invoke(
             cli, ["for-each", f"{img}:*", "--mode", "compound-path", "--", *_ECHO_ARGV, "{}"]
@@ -166,17 +156,21 @@ class TestCompoundPathMode:
             "$.CCC": f"{img}:$.CCC",
         }
 
-    def test_composes_with_disc_cat(
-        self, runner: CliRunner, tmp_path: Path
-    ) -> None:
+    def test_composes_with_disc_cat(self, runner: CliRunner, tmp_path: Path) -> None:
         # The headline composition: every match fed through `disc cat` via
         # its COMPOUND_PATH. The output column is each file's content.
         img = _build_disc(tmp_path)
         result = runner.invoke(
             cli,
             [
-                "for-each", f"{img}:*", "--mode", "compound-path",
-                "--", "disc", "cat", "{}",
+                "for-each",
+                f"{img}:*",
+                "--mode",
+                "compound-path",
+                "--",
+                "disc",
+                "cat",
+                "{}",
             ],
         )
         assert result.exit_code == 0, result.output
@@ -199,9 +193,7 @@ class TestMaterialiseMode:
         rows = _tsv_rows(result.output)
         assert rows == {"$.A": "a", "$.BB": "bb", "$.CCC": "ccc"}
 
-    def test_temp_files_are_cleaned_up_after_run(
-        self, runner: CliRunner, tmp_path: Path
-    ) -> None:
+    def test_temp_files_are_cleaned_up_after_run(self, runner: CliRunner, tmp_path: Path) -> None:
         img = _build_disc(tmp_path)
         result = runner.invoke(
             cli, ["for-each", f"{img}:*", "--mode", "materialise", "--", *_ECHO_ARGV, "{}"]

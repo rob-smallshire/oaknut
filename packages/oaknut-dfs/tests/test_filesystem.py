@@ -18,9 +18,7 @@ from oaknut.filesystem import (
 def _make_dfs_image(tmp_path):
     image_filepath = tmp_path / "test.ssd"
     with DFS.create_file(image_filepath, ACORN_DFS_80T_SINGLE_SIDED, title="DEMO") as dfs:
-        (dfs.root / "$.HELLO").write_bytes(
-            b"hello world", load_address=0x1900, exec_address=0x8023
-        )
+        (dfs.root / "$.HELLO").write_bytes(b"hello world", load_address=0x1900, exec_address=0x8023)
         (dfs.root / "$.DATA").write_bytes(b"\x00\x01\x02\x03", load_address=0xFF00)
     return image_filepath
 

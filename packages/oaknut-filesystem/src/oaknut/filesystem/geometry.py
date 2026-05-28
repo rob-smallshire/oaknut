@@ -303,9 +303,7 @@ def region_reader(
     would not reach the file, and is refused rather than silently lost.
     """
     if geometry is None or _is_linear(geometry):
-        return reader.window(
-            start_sector * BYTES_PER_SECTOR, num_sectors * BYTES_PER_SECTOR
-        )
+        return reader.window(start_sector * BYTES_PER_SECTOR, num_sectors * BYTES_PER_SECTOR)
     if reader.writable:
         raise GeometryError(
             "writing to an interleaved reserved region (e.g. AFS on a "
