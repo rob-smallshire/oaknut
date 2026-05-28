@@ -220,7 +220,7 @@ The ``!BOOT`` command file, which will be ``*EXEC``-uted at boot,
 contains ``*RUN $.FS3v126\r`` — the ``*RUN`` invocation plus the
 Acorn carriage-return line ending — so that loading the disc
 launches the file-server executable. Here ``printf`` builds those
-bytes on stdout, the shell pipes them in, and the trailing ``-``
+bytes on stdout, the shell pipes them in, and the trailing hyphen
 tells ``disc put`` to read from stdin (the standard Unix
 convention). We use ``printf`` rather than ``echo`` because ``echo``
 appends ``\n`` on every common shell, and we need ``\r`` — see
@@ -317,3 +317,74 @@ The AFS half shows the two emplaced library trees in full, with
 the BBC-era utilities (``LCAT``, ``NETMON``, ``PROT``, ``USERS``,
 …) that the Level 3 File Server's clients reach for via
 ``*<command>`` once the server is up.
+
+
+A checksum table for every file on a disc
+-----------------------------------------
+
+To pair every in-image path with a checksum of its bytes — to verify
+a transfer, compare two copies, or spot-check a build — ``disc
+for-each`` writes the table in one command. The default
+``--mode content`` pipes each file's bytes to the command; the
+command's stdout becomes that file's row. When stdout is captured,
+``disc`` writes TSV:
+
+.. code-block:: sh
+
+   disc for-each 'image.ssd:*' -- <command> > checksums.tsv
+
+Three choices for ``<command>``.
+
+A CRC32 from ``cksum``
+~~~~~~~~~~~~~~~~~~~~~~
+
+On stdin, ``cksum`` emits ``<crc32> <bytes>``:
+
+.. cli-example:: checksum_each_file
+   :section: cksum
+
+CRC32 is a compact fingerprint, fine for spotting differences between
+two copies of a file. It's also computable on the BBC Micro itself.
+
+An MD5 from ``md5sum``
+~~~~~~~~~~~~~~~~~~~~~~
+
+``md5sum`` (GNU coreutils) gives a longer fingerprint — a
+32-character hex digest that downstream tooling and published
+archives commonly cite:
+
+.. cli-example:: checksum_each_file
+   :section: md5sum
+
+The trailing ``  -`` is ``md5sum``'s standard marker for input read
+from stdin.
+
+Trimming the marker
+~~~~~~~~~~~~~~~~~~~
+
+For a clean ``<path>\t<hash>`` table, strip the ``  -`` from the
+stream:
+
+.. cli-example:: checksum_each_file
+   :section: md5sum-trim
+
+The for-each output is text; the rest of the shell's text tools work
+normally — ``awk`` to rename columns, ``sort`` for ordering, ``grep
+-v`` to drop rows by pattern.
+
+
+Files containing a string
+-------------------------
+
+To find every file on a disc whose bytes contain a string — here, the
+BBC BASIC keyword ``PROC`` — pair ``disc for-each`` with ``grep -c``.
+The match count for each file becomes the output column:
+
+.. cli-example:: grep_each_file
+   :section: count
+
+For just the paths of the files that matched, strip the header with
+``--no-header`` and filter on the count column:
+
+.. cli-example:: grep_each_file
+   :section: paths

@@ -117,6 +117,49 @@ def _strip_section_markers(raw: str) -> str:
     )
 
 
+def _align_tab_columns(text: str, *, gap: int = 4) -> str:
+    """Render tab-separated columns with space padding for visual alignment.
+
+    Consecutive lines sharing the same tab count form a run; within each
+    run, every column is padded to the maximum width of that column,
+    plus *gap* spaces of breathing room. Lines without tabs (and lines
+    whose tab count differs from their neighbours') end the run.
+
+    The transformation is for *display* only — the recipe's real captured
+    stdout still contains tab characters, so the TSV stream a reader
+    might pipe to is unaffected.
+    """
+    lines = text.split("\n")
+    out: list[str] = []
+    i = 0
+    while i < len(lines):
+        tab_count = lines[i].count("\t")
+        if tab_count == 0:
+            out.append(lines[i])
+            i += 1
+            continue
+        j = i + 1
+        while j < len(lines) and lines[j].count("\t") == tab_count:
+            j += 1
+        out.extend(_align_run(lines[i:j], gap))
+        i = j
+    return "\n".join(out)
+
+
+def _align_run(run: list[str], gap: int) -> list[str]:
+    rows = [line.split("\t") for line in run]
+    num_cols = len(rows[0])
+    widths = [max(len(row[c]) for row in rows) for c in range(num_cols)]
+    aligned: list[str] = []
+    for row in rows:
+        parts = [
+            row[c].ljust(widths[c] + gap) if c < num_cols - 1 else row[c]
+            for c in range(num_cols)
+        ]
+        aligned.append("".join(parts))
+    return aligned
+
+
 class CliExampleDirective(Directive):
     """Run a recipe at scripts/cli-examples/<name>.py and embed its transcript.
 
@@ -165,12 +208,13 @@ class CliExampleDirective(Directive):
                 ]
             display_text = sections[section_name]
 
-        # Some recipes legitimately emit tab characters — `ls -C` is
-        # the prototype, where BSD ls aligns columns with tabs. Expand
-        # them here so the rendered literal block aligns identically
-        # whatever tab-size the HTML/CSS layer picks. 8-stop matches
-        # the assumption every Unix tool that emits tabs makes.
-        display_text = display_text.expandtabs(8)
+        # Recipes legitimately emit tab characters — TSV output from
+        # `disc … --as tsv` is the common case; `ls -C` style output is
+        # the other. Render them as visually-aligned columns so the
+        # docs don't depend on whatever tab-size the HTML/CSS layer
+        # happens to pick. The real captured output still uses tabs
+        # (it's a TSV stream); only the rendered transcript is padded.
+        display_text = _align_tab_columns(display_text)
 
         block = nodes.literal_block(display_text, display_text)
         block["language"] = "disc-session"

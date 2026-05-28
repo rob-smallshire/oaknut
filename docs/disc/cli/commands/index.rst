@@ -35,6 +35,45 @@ Inspection
 
    .. cli-example:: cmd_find
 
+.. oaknut-command:: oaknut.disc.cli:for-each
+   :prog: disc for-each
+
+   ``--mode content`` (default) — each file's bytes are piped to the
+   command's stdin. The shape that produces a path/output TSV for
+   ``md5sum``, ``sha256sum``, ``xxd``, and friends:
+
+   .. cli-example:: cmd_for_each
+      :section: content
+
+   ``--mode inner-path`` — the in-image path string is substituted
+   into ``{}`` (or appended, find-style). For tools that take a path
+   as a string without needing to open it — templating, logging,
+   filtering:
+
+   .. cli-example:: cmd_for_each
+      :section: inner-path
+
+   ``--mode compound-path`` — the full ``OUTER:INNER`` is substituted,
+   so ``disc`` itself becomes the per-file action. The rest of the CLI
+   composes without bespoke wrappers — ``disc cat``, ``disc lock``,
+   ``disc set-load`` and any other addressable disc command:
+
+   .. cli-example:: cmd_for_each
+      :section: compound-path
+
+   ``--mode materialise`` — each file's bytes are written to a host
+   temp file and its path substituted, so host-native tools that only
+   take regular files (``file``, image viewers, emulators) can be
+   pointed at in-image contents without manual extraction:
+
+   .. cli-example:: cmd_for_each
+      :section: materialise
+
+.. oaknut-command:: oaknut.disc.cli:materialise
+   :prog: disc materialise
+
+   .. cli-example:: cmd_materialise
+
 .. oaknut-command:: oaknut.disc.cli:freemap
    :prog: disc freemap
 
