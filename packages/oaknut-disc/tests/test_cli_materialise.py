@@ -93,8 +93,8 @@ class TestMaterialise:
         result = runner.invoke(cli, ["materialise", f"{img}:$.HELLO"])
         assert result.exit_code != 0
 
-    def test_file_spec_required(self, runner: CliRunner, tmp_path: Path) -> None:
+    def test_compound_path_required(self, runner: CliRunner, tmp_path: Path) -> None:
         img = _make_disc(tmp_path)
-        # bare image, no PATH_SPEC — materialise needs to address a file.
+        # bare image, no INNER_PATH — materialise needs to address a file.
         result = runner.invoke(cli, ["materialise", str(img), "--", "cat"])
         assert result.exit_code != 0

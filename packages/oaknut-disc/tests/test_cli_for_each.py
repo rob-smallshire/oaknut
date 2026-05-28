@@ -170,7 +170,7 @@ class TestCompoundPathMode:
         self, runner: CliRunner, tmp_path: Path
     ) -> None:
         # The headline composition: every match fed through `disc cat` via
-        # its FILE_SPEC. The output column is each file's content.
+        # its COMPOUND_PATH. The output column is each file's content.
         img = _build_disc(tmp_path)
         result = runner.invoke(
             cli,

@@ -53,7 +53,7 @@ class TestLs:
     ) -> None:
         """Bare ``disc ls IMAGE`` on DFS lists the populated directory
         letters — the children of the nameless root, matching the
-        per-FS "default PATH_SPEC = root" model. Drill into a letter
+        per-FS "default INNER_PATH = root" model. Drill into a letter
         with ``disc ls IMAGE:$`` (or ``:A``, etc.) for the files.
         """
         result = runner.invoke(cli, ["ls", "--as", "display", str(dfs_image_filepath)])
@@ -642,7 +642,7 @@ class TestStat:
 # ---------------------------------------------------------------------------
 
 
-def _stat_block_sizes(runner: CliRunner, image_filepath: Path) -> dict[str, int]:
+def _stat_block_sizes(runner: CliRunner, outer_filepath: Path) -> dict[str, int]:
     """Map each stat block name to its ``Size`` in bytes, via ``--as json``.
 
     Size is now a single audience-aware value — friendly units for
@@ -652,7 +652,7 @@ def _stat_block_sizes(runner: CliRunner, image_filepath: Path) -> dict[str, int]
     """
     import json as _json
 
-    result = runner.invoke(cli, ["stat", "--as", "json", str(image_filepath)])
+    result = runner.invoke(cli, ["stat", "--as", "json", str(outer_filepath)])
     assert result.exit_code == 0, result.output
     reports = _json.loads(result.output)["reports"]
     return {
