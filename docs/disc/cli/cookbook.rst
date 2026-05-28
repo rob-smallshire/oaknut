@@ -376,9 +376,9 @@ normally — ``awk`` to rename columns, ``sort`` for ordering, ``grep
 Files containing a string
 -------------------------
 
-To find every file on a disc whose bytes match a pattern, pair ``disc
-for-each`` with ``grep -c``. The match count for each file becomes the
-output column:
+To find every file on a disc whose bytes contain a string — here, the
+BBC BASIC keyword ``PROC`` — pair ``disc for-each`` with ``grep -c``.
+The match count for each file becomes the output column:
 
 .. cli-example:: grep_each_file
    :section: count
