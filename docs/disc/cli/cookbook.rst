@@ -220,7 +220,7 @@ The ``!BOOT`` command file, which will be ``*EXEC``-uted at boot,
 contains ``*RUN $.FS3v126\r`` — the ``*RUN`` invocation plus the
 Acorn carriage-return line ending — so that loading the disc
 launches the file-server executable. Here ``printf`` builds those
-bytes on stdout, the shell pipes them in, and the trailing ``-``
+bytes on stdout, the shell pipes them in, and the trailing hyphen
 tells ``disc put`` to read from stdin (the standard Unix
 convention). We use ``printf`` rather than ``echo`` because ``echo``
 appends ``\n`` on every common shell, and we need ``\r`` — see
