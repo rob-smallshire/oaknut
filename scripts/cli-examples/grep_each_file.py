@@ -28,4 +28,6 @@ with in_tmp_dir():
     show("disc for-each 'code.ssd:*' -- grep -c PROC")
 
     section("paths")
-    show("disc for-each 'code.ssd:*' --no-header -- grep -c PROC | awk -F'\\t' '$2 > 0 { print $1 }'")
+    show(
+        "disc for-each 'code.ssd:*' --no-header -- grep -c PROC | awk -F'\\t' '$2 > 0 { print $1 }'"
+    )

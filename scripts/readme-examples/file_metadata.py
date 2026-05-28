@@ -9,8 +9,8 @@ from oaknut.file import AcornMeta
 
 # A RISC OS file with the ArtWorks filetype (0xD94) stamped into its
 # load address. The bottom byte is the low half of the date word.
-meta = AcornMeta(load_addr=0xFFFD9400, exec_addr=0xFFF12345)
+meta = AcornMeta(load_address=0xFFFD9400, exec_address=0xFFF12345)
 
-print(f"load_addr:         0x{meta.load_addr:08X}")
+print(f"load_address:      0x{meta.load_address:08X}")
 print(f"filetype-stamped:  {meta.is_filetype_stamped}")
 print(f"inferred filetype: 0x{meta.infer_filetype():03X}")

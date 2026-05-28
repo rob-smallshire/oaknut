@@ -1,7 +1,3 @@
-<p align="center">
-  <img src="https://raw.githubusercontent.com/rob-smallshire/oaknut/master/docs/portal/oaknut-logo.png" alt="oaknut" width="320">
-</p>
-
 # oaknut
 
 This distribution is a **namespace placeholder**. It ships no code and has no
@@ -15,11 +11,14 @@ You almost certainly want one of:
 | [`oaknut-adfs`](https://pypi.org/project/oaknut-adfs/) | Acorn ADFS disc image support for Archimedes, RISC OS, and BBC Master |
 | [`oaknut-afs`](https://pypi.org/project/oaknut-afs/) | Acorn Level 3 File Server (AFS) filesystem support — the private on-disc format WFSINIT prepares in the tail of an old-map ADFS disc |
 | [`oaknut-basic`](https://pypi.org/project/oaknut-basic/) | BBC BASIC tokeniser and detokeniser for Acorn 8-bit and 32-bit BASIC source files |
+| [`oaknut-cli`](https://pypi.org/project/oaknut-cli/) | Shared CLI toolkit for the oaknut family: the contributed-command axis and report-rendering helpers a disc command needs, below the filesystem packages |
 | [`oaknut-dfs`](https://pypi.org/project/oaknut-dfs/) | Python library for handling Acorn DFS disc images (SSD/DSD format) |
 | [`oaknut-disc`](https://pypi.org/project/oaknut-disc/) | CLI for working with Acorn DFS, ADFS, and AFS disc images |
 | [`oaknut-discimage`](https://pypi.org/project/oaknut-discimage/) | Disc image sector abstractions shared by Acorn filesystem packages |
 | [`oaknut-exception`](https://pypi.org/project/oaknut-exception/) | Categorised exceptions and CLI error-reporting boundary for the oaknut package family |
+| [`oaknut-extension`](https://pypi.org/project/oaknut-extension/) | Entry-point plug-in framework shared by every extensible axis of the oaknut package family |
 | [`oaknut-file`](https://pypi.org/project/oaknut-file/) | Acorn file metadata handling: INF sidecars, filename encoding, xattrs, and access flags |
+| [`oaknut-filesystem`](https://pypi.org/project/oaknut-filesystem/) | The pluggable filesystem contract for the oaknut family: detection, capabilities, geometry, partitions, and the identification coordinator |
 | [`oaknut-zip`](https://pypi.org/project/oaknut-zip/) | Work with ZIP files containing Acorn computer metadata |
 
 Source: https://github.com/rob-smallshire/oaknut
