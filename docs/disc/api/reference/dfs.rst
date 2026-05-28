@@ -1,9 +1,9 @@
 ``oaknut.dfs``
 ==============
 
-Acorn DFS, Watford DDFS, and Opus DDOS — the flat-catalogue filesystems
+Acorn DFS, Watford DFS, and Opus DDOS — the flat-catalogue filesystems
 of BBC Micro and Acorn Electron floppies, in ``.ssd`` / ``.dsd`` form.
-A single catalogue holds up to 31 files (62 under Watford DDFS), each
+A single catalogue holds up to 31 files (62 under Watford DFS), each
 with a one-character directory, a seven-character name, and load/exec
 addresses; there is no directory hierarchy.
 
@@ -39,7 +39,7 @@ Disc formats
 
 The format constants for the standard Acorn DFS geometries — 40- and
 80-track, single- and double-sided (sequential or interleaved). Each is
-a generic :class:`~oaknut.discimage.DiscFormat`. Watford DDFS catalogues
+a generic :class:`~oaknut.discimage.DiscFormat`. Watford DFS catalogues
 are detected at read time and need no separate format constant here.
 
 .. autodata:: oaknut.dfs.ACORN_DFS_40T_SINGLE_SIDED

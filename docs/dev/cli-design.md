@@ -6,7 +6,7 @@
 
 The oaknut monorepo now ships library packages for three Acorn filesystem families:
 
-- **DFS** (and variants: Watford DDFS, Opus DDOS) — flat-catalogue BBC/Electron floppies.
+- **DFS** (and variants: Watford DFS, Opus DDOS) — flat-catalogue BBC floppies.
 - **ADFS** — hierarchical directories, free space maps, hard-disc images.
 - **AFS** — the Level 3 File Server's private on-disc format (`AFS0` magic), living in the tail cylinders of an old-map ADFS hard-disc image.
 

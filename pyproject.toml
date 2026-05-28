@@ -61,7 +61,10 @@ members = ["packages/oaknut-*"]
 [tool.uv.sources]
 oaknut-exception = { workspace = true }
 oaknut-file  = { workspace = true }
+oaknut-extension = { workspace = true }
 oaknut-discimage = { workspace = true }
+oaknut-filesystem = { workspace = true }
+oaknut-cli   = { workspace = true }
 oaknut-basic = { workspace = true }
 oaknut-dfs   = { workspace = true }
 oaknut-adfs  = { workspace = true }
@@ -81,7 +84,10 @@ default-groups = ["test", "lint", "dev", "workspace"]
 workspace = [
     "oaknut-exception",
     "oaknut-file",
+    "oaknut-extension",
     "oaknut-discimage",
+    "oaknut-filesystem",
+    "oaknut-cli",
     "oaknut-basic",
     "oaknut-dfs",
     "oaknut-adfs",
@@ -128,7 +134,16 @@ filename = "packages/oaknut-exception/src/oaknut/exception/__init__.py"
 filename = "packages/oaknut-file/src/oaknut/file/__init__.py"
 
 [[tool.bumpversion.files]]
+filename = "packages/oaknut-extension/src/oaknut/extension/__init__.py"
+
+[[tool.bumpversion.files]]
 filename = "packages/oaknut-discimage/src/oaknut/discimage/__init__.py"
+
+[[tool.bumpversion.files]]
+filename = "packages/oaknut-filesystem/src/oaknut/filesystem/__init__.py"
+
+[[tool.bumpversion.files]]
+filename = "packages/oaknut-cli/src/oaknut/cli/__init__.py"
 
 [[tool.bumpversion.files]]
 filename = "packages/oaknut-basic/src/oaknut/basic/__init__.py"
@@ -157,7 +172,10 @@ addopts = ["--import-mode=importlib"]
 testpaths = [
     "packages/oaknut-exception/tests",
     "packages/oaknut-file/tests",
+    "packages/oaknut-extension/tests",
     "packages/oaknut-discimage/tests",
+    "packages/oaknut-filesystem/tests",
+    "packages/oaknut-cli/tests",
     "packages/oaknut-basic/tests",
     "packages/oaknut-dfs/tests",
     "packages/oaknut-adfs/tests",

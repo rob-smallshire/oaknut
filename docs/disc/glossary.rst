@@ -56,7 +56,7 @@ prose with the ``:term:`` role.
    catalogue
       The on-disc index of files. On :term:`DFS`, two adjacent
       sectors at the start of the disc hold up to 31 entries (62 on
-      :term:`Watford DDFS`). On :term:`ADFS` and :term:`AFS`, each
+      :term:`Watford DFS`). On :term:`ADFS` and :term:`AFS`, each
       directory is its own small catalogue. Always spelt British
       "catalogue" in this project, to match the Acorn-era
       convention.
@@ -64,7 +64,7 @@ prose with the ``:term:`` role.
    cylinder
       A vertical group of tracks at the same radial position across
       all surfaces of a disc. ADFS hard-disc geometry is reported in
-      cylinders, and ``disc afs-plan`` / ``disc afs-init`` size the
+      cylinders, and ``disc afs plan`` / ``disc afs init`` size the
       :term:`AFS` partition by cylinder boundary because the Level 3
       File Server's allocation tables address whole cylinders.
 
@@ -74,7 +74,7 @@ prose with the ``:term:`` role.
       by a single-character directory letter and a seven-character
       filename. Floppy-only (``.ssd``, ``.dsd``). Implemented by the
       ``oaknut-dfs`` package, which also handles the
-      :term:`Watford DDFS` and Opus DDOS extensions.
+      :term:`Watford DFS` and Opus DDOS extensions.
 
    Econet
       Acorn's lightweight two-wire LAN protocol, designed for
@@ -141,7 +141,7 @@ prose with the ``:term:`` role.
       store SINs to refer to children, the way Unix dentries store
       inode numbers.
 
-   Watford DDFS
+   Watford DFS
       Watford Electronics's enhanced replacement for the stock
       Acorn :term:`DFS` ROM. Doubles the catalogue capacity from
       31 to 62 entries by spreading it across four sectors instead
@@ -153,7 +153,7 @@ prose with the ``:term:`` role.
       The Level 3 File Server's disc-initialisation utility, which
       partitions an :term:`ADFS` hard disc and writes the
       :term:`AFS` :term:`info sector`. ``oaknut.afs.wfsinit``
-      reproduces this work in pure Python; ``disc afs-init`` is the
+      reproduces this work in pure Python; ``disc afs init`` is the
       user-facing entry point.
 
    xattr

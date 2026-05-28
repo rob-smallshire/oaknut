@@ -3,7 +3,7 @@ Getting started
 
 The ``disc`` command-line tool speaks Acorn DFS, Acorn ADFS and AFS
 transparently, with a subcommand-style interface (``disc ls``,
-``disc cp``, ``disc afs-init``, etc.) supplemented by Acorn-style
+``disc cp``, ``disc afs init``, etc.) supplemented by Acorn-style
 star-command aliases — ``disc '*CAT'``, ``disc '*COPY'`` and so on.
 AFS is the partition format used by the Acorn Level 3 File Server,
 sometimes called *AFS0* (pronounced "A F S zero") after the
@@ -73,14 +73,17 @@ Acorn-era disc images out in the wild are.
 
 .. cli-example:: getting_started
 
-The ``.ssd`` extension is enough for ``disc create`` to pick the
-right format — the same is true of ``.dsd`` (DFS double-sided),
+The ``.ssd`` extension is enough for ``disc create`` to infer both
+the filesystem and the geometry — a single-sided 80-track Acorn DFS
+floppy. The same holds for ``.dsd`` (DFS double-sided) and
 ``.ads`` / ``.adm`` / ``.adl`` (ADFS floppies, small / medium /
-large), and ``.dat`` (ADFS hard discs, which also need
-``--capacity 10MB`` or similar — see :doc:`cookbook` for the
-walkthrough that builds a Level 3 File Server disc). Pass
-``--format`` explicitly only when the extension is unconventional
-or ambiguous.
+large). An ambiguous extension (``.adf`` — ADFS-S or -M?) or an
+open-ended one (``.dat``, a hard disc) has no default geometry, so it
+needs ``--geometry``; a hard disc takes ``--geometry capacity=10MB``
+(or a ``cylinders=…,heads=…,spt=…`` form) — see :doc:`cookbook` for
+the walkthrough that builds a Level 3 File Server disc. Override the
+inferred choices with ``--filesystem`` and ``--geometry`` when you
+need to.
 
 The disc is empty but the catalogue and boot option are already in
 place. Two sectors of the 800 total are "used" — sectors 0 and 1
@@ -245,17 +248,17 @@ partitions on top of ADFS have hierarchical directories, so paths
 nest naturally (``$.Games.Elite``).
 
 On a disc that carries both ADFS *and* an AFS partition (most Level 3
-File Server hard discs are like this), the ``afs:`` / ``adfs:``
-dispatch prefix routes ``disc`` to the right partition::
+File Server hard discs are like this), a ``afs:`` / ``adfs:`` partition
+selector routes ``disc`` to the right partition::
 
    disc ls 'scsi0.dat'                    # default: the ADFS root
-   disc ls 'scsi0.dat:adfs:$'             # explicit ADFS
+   disc ls 'scsi0.dat:adfs:$'             # the ADFS partition
    disc ls 'scsi0.dat:afs:$'              # the AFS partition root
    disc cat 'scsi0.dat:afs:$.Library.Free'
 
 See :doc:`conventions/paths` for the full breakdown of
-``FILE_SPEC = IMAGE_SPEC:PATH_SPEC``, dispatch prefixes, and
-auto-detection rules.
+``FILE_SPEC = IMAGE_SPEC:PATH_SPEC``, partition selectors, and
+content-based identification.
 
 
 When something fails

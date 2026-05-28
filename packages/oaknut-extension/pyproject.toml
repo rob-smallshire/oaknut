@@ -1,0 +1,49 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "oaknut-extension"
+dynamic = ["version"]
+authors = [{ name = "Robert Smallshire", email = "robert@smallshire.org.uk" }]
+description = "Entry-point plug-in framework shared by every extensible axis of the oaknut package family."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.11"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+dependencies = [
+    "oaknut-exception>=10.0",
+    "stevedore>=5.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/rob-smallshire/oaknut/tree/master/packages/oaknut-extension"
+Repository = "https://github.com/rob-smallshire/oaknut"
+Issues = "https://github.com/rob-smallshire/oaknut/issues"
+
+[dependency-groups]
+test = [
+    "pytest>=8.0",
+]
+dev = [
+    "bump-my-version>=0.28.0",
+    "pre-commit>=3.0",
+    {include-group = "test"},
+]
+
+[tool.setuptools.dynamic]
+version = { attr = "oaknut.extension.__version__" }
+
+[tool.setuptools.packages.find]
+where = ["src"]

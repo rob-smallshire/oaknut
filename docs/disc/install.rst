@@ -112,7 +112,7 @@ These packages exist to be imported by your Python code.
      - When you want to…
    * - ``oaknut-dfs``
      - Read or write Acorn DFS floppy images (SSD/DSD), including
-       Watford DDFS and Opus DDOS variants.
+       Watford DFS and Opus DDOS variants.
    * - ``oaknut-adfs``
      - Read or write ADFS floppy or hard-disc images — Archimedes,
        RISC OS, BBC Master.

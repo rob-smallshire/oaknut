@@ -37,7 +37,7 @@ with in_tmp_dir():
     shutil.copy(SOURCE, "FS3v126.ssd")
 
     section("envelope")
-    show("disc create scsi0.dat --capacity 10MB --title Server")
+    show("disc create scsi0.dat --geometry capacity=10MB --title Server")
 
     section("install_fs")
     show("disc cp 'FS3v126.ssd:$.FS3v126' 'scsi0.dat:$.FS3v126'")
@@ -48,18 +48,18 @@ with in_tmp_dir():
     show("disc opt scsi0.dat EXEC")
 
     section("plan_afs")
-    show("disc afs-plan scsi0.dat")
+    show("disc afs plan scsi0.dat")
 
     section("init_afs")
     show(
-        "disc afs-init scsi0.dat --disc-name Server"
+        "disc afs init scsi0.dat --disc-name Server"
         " --user RJS:2MB"
         " --omit-user Welcome"
         " --emplace Library --emplace Library1"
     )
 
     section("inspect_afs")
-    show("disc afs-users scsi0.dat")
+    show("disc afs users scsi0.dat")
 
     section("verify")
     show("disc stat scsi0.dat")

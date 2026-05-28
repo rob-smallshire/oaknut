@@ -253,8 +253,14 @@ Where to go next
 - :doc:`cookbook` — eight tested, runnable recipes for the operations
   this page introduced (cross-image copy, host round-trip, building a
   Level 3 File Server disc, bulk-archiving floppies).
-- :doc:`patterns/index` — cross-cutting concepts that span the package
-  boundaries (paths, metadata, errors).
+- :doc:`patterns/extension-axis` — for code that does *not* know which
+  filesystem an image carries: content-first identification, opening
+  any image through a uniform :class:`~oaknut.filesystem.Mount`,
+  capability-aware operations, and discovering what filesystems are
+  installed. The path to take when ``DFS.from_file`` and friends are
+  too specific.
+- :doc:`patterns/index` — the other cross-cutting concepts (paths,
+  metadata, errors).
 - :doc:`reference/index` — the per-package autodoc for every public
   class, method, and function.
 - :doc:`/cli/getting-started` if you would rather drive the same

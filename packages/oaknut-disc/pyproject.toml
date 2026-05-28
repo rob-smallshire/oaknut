@@ -25,9 +25,15 @@ classifiers = [
 dependencies = [
     "oaknut-exception>=10.7",
     "oaknut-file>=10.0",
-    "oaknut-dfs>=10.0",
-    "oaknut-adfs>=10.0",
-    "oaknut-afs>=10.0",
+    "oaknut-filesystem>=10.0",
+    "oaknut-cli>=10.0",
+    # The filesystem packages stay as dependencies so `pip install
+    # oaknut-disc` is batteries-included, but the CLI code imports and
+    # branches on none of them — it routes through oaknut.filesystem.
+    # The [cli] extra pulls each filesystem's contributed-command module.
+    "oaknut-dfs[cli]>=10.0",
+    "oaknut-adfs[cli]>=10.0",
+    "oaknut-afs[cli]>=10.0",
     "click>=8.1.7",
     "rich>=13.0",
     "asyoulikeit>=1.2.0",

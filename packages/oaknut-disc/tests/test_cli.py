@@ -58,13 +58,14 @@ class TestLs:
         """
         result = runner.invoke(cli, ["ls", "--as", "display", str(dfs_image_filepath)])
         assert result.exit_code == 0
-        assert "DFS" in result.output
+        # The format is named by its extension key, not an ad-hoc label.
+        assert "acorn-dfs" in result.output
         # The bare listing carries directory rows, not file rows.
         # $ is the populated letter in the standard fixture.
         assert "$" in result.output
         assert "dir" in result.output
         # The files in $ should NOT appear at this level.
-        assert "HELLO" not in result.output
+        assert "Hello" not in result.output
 
     def test_ls_dfs_dollar_lists_files(
         self, runner: CliRunner, dfs_image_filepath: Path
@@ -80,7 +81,7 @@ class TestLs:
         assert result.exit_code == 0
         assert "Hello" in result.output
         assert "Games" in result.output
-        assert "ADFS" in result.output
+        assert "adfs" in result.output
 
     def test_ls_adfs_subdirectory(self, runner: CliRunner, adfs_image_filepath: Path) -> None:
         result = runner.invoke(cli, ["ls", f"{adfs_image_filepath}:$.Games"])
@@ -88,9 +89,13 @@ class TestLs:
         assert "Elite" in result.output
 
     def test_ls_afs_prefix(self, runner: CliRunner, afs_image_filepath: Path) -> None:
+        # The fixture is an ADFS-L (interleaved) floppy with an AFS tail
+        # partition, so this also exercises geometry-aware de-interleaving
+        # of the recursed region through the CLI.
         result = runner.invoke(cli, ["ls", "--as", "display", f"{afs_image_filepath}:afs:"])
         assert result.exit_code == 0
-        assert "AFS" in result.output
+        assert "afs" in result.output
+        assert "Greeting" in result.output
 
     def test_ls_nonexistent_path(self, runner: CliRunner, dfs_image_filepath: Path) -> None:
         result = runner.invoke(cli, ["ls", f"{dfs_image_filepath}:$.NOPE"])
@@ -98,9 +103,13 @@ class TestLs:
         assert "not found" in result.output
 
     def test_ls_prefix_mismatch(self, runner: CliRunner, dfs_image_filepath: Path) -> None:
+        # A prefix selects a *partition*, not a format. A DFS disc has no
+        # ``adfs`` partition, so the selector is rejected — and the error
+        # lists what partitions the disc actually does offer.
         result = runner.invoke(cli, ["ls", f"{dfs_image_filepath}:adfs:$"])
         assert result.exit_code != 0
-        assert "cannot access as ADFS" in result.output
+        assert "no such partition 'adfs'" in result.output
+        assert "acorn-dfs" in result.output
 
     def test_ls_machine_columns_are_numeric(
         self, runner: CliRunner, dfs_image_filepath: Path
@@ -381,13 +390,13 @@ class TestTree:
         assert result.exit_code == 0, result.output
         doc = _json.loads(result.output)
         payload = next(iter(doc["reports"].values()))
-        # One root (the image filename) with ADFS and AFS labelled
-        # partitions beneath it.
+        # One root (the image filename) with the partitions labelled by
+        # their selectors (what a prefix would address) beneath it.
         assert len(payload["roots"]) == 1
         image_root = payload["roots"][0]
         partition_labels = [c["values"]["name"] for c in image_root["children"]]
-        assert "ADFS" in partition_labels
-        assert "AFS" in partition_labels
+        assert "adfs" in partition_labels
+        assert "afs" in partition_labels
 
 
 def _collect_names(node: dict) -> list[str]:
@@ -981,8 +990,12 @@ class TestTitleCapability:
         assert read_result.exit_code == 0
         assert "NewName" in read_result.output
 
-    def test_disc_title_afs(self, runner: CliRunner, afs_image_filepath: Path) -> None:
-        spec = f"{afs_image_filepath}:afs:"
+    def test_disc_title_afs(
+        self, runner: CliRunner, partitioned_image_with_files: Path
+    ) -> None:
+        # A hard-disc AFS partition is writable (an interleaved floppy
+        # would refuse the write earlier).
+        spec = f"{partitioned_image_with_files}:afs:"
         set_result = runner.invoke(cli, ["title", spec, "AfsRenamed"])
         assert set_result.exit_code == 0
         read_result = runner.invoke(cli, ["title", spec])
@@ -1011,12 +1024,13 @@ class TestTitleCapability:
         assert "title" in result.output.lower()
 
     def test_directory_title_afs_rejected(
-        self, runner: CliRunner, afs_image_filepath: Path
+        self, runner: CliRunner, partitioned_image_with_files: Path
     ) -> None:
-        # Create the directory first so the error is purely about the
-        # title capability, not a missing path.
-        runner.invoke(cli, ["mkdir", f"{afs_image_filepath}:afs:$.Lib"])
-        result = runner.invoke(cli, ["title", f"{afs_image_filepath}:afs:$.Lib", "Nope"])
+        # A hard-disc AFS partition (writable) so the error is purely
+        # about the title capability. $.GAMES exists in the fixture.
+        result = runner.invoke(
+            cli, ["title", f"{partitioned_image_with_files}:afs:$.GAMES", "Nope"]
+        )
         assert result.exit_code == 65
         assert "title" in result.output.lower()
 
@@ -1033,15 +1047,17 @@ class TestTitleCapability:
         assert "Documents" in read_result.output
 
     def test_mkdir_title_afs_rejected_without_orphan(
-        self, runner: CliRunner, afs_image_filepath: Path
+        self, runner: CliRunner, partitioned_image_with_files: Path
     ) -> None:
+        # A hard-disc AFS partition (writable, unlike an interleaved
+        # floppy), so the title rejection is what fires, not a write guard.
         result = runner.invoke(
-            cli, ["mkdir", f"{afs_image_filepath}:afs:$.Lib", "--title", "Nope"]
+            cli, ["mkdir", f"{partitioned_image_with_files}:afs:$.Lib", "--title", "Nope"]
         )
         assert result.exit_code == 65
         assert "title" in result.output.lower()
         # The directory must not have been created (atomic failure).
-        listing = runner.invoke(cli, ["ls", f"{afs_image_filepath}:afs:$"])
+        listing = runner.invoke(cli, ["ls", f"{partitioned_image_with_files}:afs:$"])
         assert "Lib" not in listing.output
 
 
@@ -2259,7 +2275,8 @@ class TestMkdir:
     def test_mkdir_dfs_errors(self, runner: CliRunner, dfs_image_filepath: Path) -> None:
         result = runner.invoke(cli, ["mkdir", f"{dfs_image_filepath}:$.Dir"])
         assert result.exit_code != 0
-        assert "not supported for DFS" in result.output
+        # DFS is flat — it does not advertise hierarchical directories.
+        assert "not supported for acorn-dfs" in result.output
 
     def test_mkdir_p_existing(self, runner: CliRunner, adfs_image_filepath: Path) -> None:
         result = runner.invoke(cli, ["mkdir", "-p", f"{adfs_image_filepath}:$.Games"])
@@ -2272,110 +2289,118 @@ class TestMkdir:
 
 
 class TestCreate:
-    def test_create_ssd(self, runner: CliRunner, tmp_path: Path) -> None:
+    def test_create_ssd_inferred(self, runner: CliRunner, tmp_path: Path) -> None:
         out = tmp_path / "new.ssd"
-        result = runner.invoke(cli, ["create", str(out), "--format", "ssd"])
+        result = runner.invoke(cli, ["create", str(out)])
         assert result.exit_code == 0
         assert out.exists()
         # `disc create` is silent on success (Unix convention); the
         # file appearing on disc is the success signal.
         assert result.output == ""
+        # .ssd defaults to an 80-track single-sided floppy.
+        assert out.stat().st_size == 204800
 
-    def test_create_adfs_l(self, runner: CliRunner, tmp_path: Path) -> None:
+    def test_create_adfs_l_inferred(self, runner: CliRunner, tmp_path: Path) -> None:
         out = tmp_path / "new.adl"
-        result = runner.invoke(cli, ["create", str(out), "--format", "adfs-l"])
+        result = runner.invoke(cli, ["create", str(out)])
+        assert result.exit_code == 0
+        assert out.stat().st_size == 655360  # ADFS-L = 80 × 2 × 16 × 256
+
+    def test_create_watford_via_filesystem_override(
+        self, runner: CliRunner, tmp_path: Path
+    ) -> None:
+        # Watford isn't a default creator; reach it with --filesystem.
+        out = tmp_path / "wat.ssd"
+        result = runner.invoke(cli, ["create", str(out), "--filesystem", "watford-dfs"])
         assert result.exit_code == 0
         assert out.exists()
 
-    def test_create_adfs_hard_with_mib(self, runner: CliRunner, tmp_path: Path) -> None:
+    def test_create_adfs_hard_with_capacity_mib(
+        self, runner: CliRunner, tmp_path: Path
+    ) -> None:
         out = tmp_path / "new.dat"
-        result = runner.invoke(
-            cli, ["create", str(out), "--format", "adfs-hard", "--capacity", "5MiB"]
-        )
+        result = runner.invoke(cli, ["create", str(out), "--geometry", "capacity=5MiB"])
         assert result.exit_code == 0
-        assert out.exists()
         # 5 MiB = 5,242,880 bytes; image rounds up to whole cylinders.
         assert out.stat().st_size >= 5 * 1024 * 1024
 
-    def test_create_adfs_hard_with_mb(self, runner: CliRunner, tmp_path: Path) -> None:
-        out = tmp_path / "new.dat"
-        result = runner.invoke(
-            cli, ["create", str(out), "--format", "adfs-hard", "--capacity", "5 MB"]
-        )
-        assert result.exit_code == 0
-        assert out.exists()
-
-    def test_create_adfs_hard_bare_bytes(self, runner: CliRunner, tmp_path: Path) -> None:
-        out = tmp_path / "new.dat"
-        result = runner.invoke(
-            cli, ["create", str(out), "--format", "adfs-hard", "--capacity", "1048576"]
-        )
-        assert result.exit_code == 0
-        assert out.exists()
-
-    def test_create_adfs_hard_requires_capacity(self, runner: CliRunner, tmp_path: Path) -> None:
-        out = tmp_path / "new.dat"
-        result = runner.invoke(cli, ["create", str(out), "--format", "adfs-hard"])
-        assert result.exit_code != 0
-        assert "capacity" in result.output.lower()
-
-    def test_create_ssd_default_is_80_tracks(
+    def test_create_adfs_hard_with_capacity_bare_bytes(
         self, runner: CliRunner, tmp_path: Path
     ) -> None:
-        out = tmp_path / "default.ssd"
-        result = runner.invoke(cli, ["create", str(out), "--format", "ssd"])
+        out = tmp_path / "new.dat"
+        result = runner.invoke(cli, ["create", str(out), "--geometry", "capacity=1048576"])
         assert result.exit_code == 0
-        assert out.stat().st_size == 204800  # 80 tracks × 10 sectors × 256 bytes
+        assert out.exists()
 
-    def test_create_ssd_40_tracks(self, runner: CliRunner, tmp_path: Path) -> None:
-        out = tmp_path / "small.ssd"
+    def test_create_adfs_hard_explicit_chs(self, runner: CliRunner, tmp_path: Path) -> None:
+        out = tmp_path / "chs.dat"
         result = runner.invoke(
-            cli, ["create", str(out), "--format", "ssd", "--tracks", "40"]
+            cli, ["create", str(out), "--geometry", "cylinders=100,heads=4,spt=33"]
         )
+        assert result.exit_code == 0
+        assert out.stat().st_size == 100 * 4 * 33 * 256
+
+    def test_create_adfs_hard_requires_geometry(
+        self, runner: CliRunner, tmp_path: Path
+    ) -> None:
+        # A hard disc is open-ended — no default geometry.
+        out = tmp_path / "new.dat"
+        result = runner.invoke(cli, ["create", str(out)])
+        assert result.exit_code != 0
+        assert "geometry" in result.output.lower()
+        # Discoverability: point at where the geometries are listed.
+        assert "describe-filesystem" in result.output
+
+    def test_create_ambiguous_extension_points_to_describe(
+        self, runner: CliRunner, tmp_path: Path
+    ) -> None:
+        out = tmp_path / "new.adf"  # ADFS-S or -M? ambiguous
+        result = runner.invoke(cli, ["create", str(out)])
+        assert result.exit_code != 0
+        assert "describe-filesystem adfs" in result.output
+
+    def test_create_bad_geometry_lists_what_is_accepted(
+        self, runner: CliRunner, tmp_path: Path
+    ) -> None:
+        out = tmp_path / "new.adf"
+        result = runner.invoke(cli, ["create", str(out), "--geometry", "bogus"])
+        assert result.exit_code != 0
+        # Not a cryptic "key=value" complaint — the accepted forms.
+        assert "accepts:" in result.output
+        assert "presets l, m, s" in result.output
+
+    def test_help_is_plain_text_and_points_to_discovery(self, runner: CliRunner) -> None:
+        result = runner.invoke(cli, ["create", "--help"])
+        assert result.exit_code == 0
+        # RST markup is stripped for the terminal — no stray backticks.
+        assert "`" not in result.output
+        # Points at both discovery commands.
+        assert "list-filesystems" in result.output
+        assert "describe-filesystem" in result.output
+
+    def test_create_ssd_40_track_geometry(self, runner: CliRunner, tmp_path: Path) -> None:
+        out = tmp_path / "small.ssd"
+        result = runner.invoke(cli, ["create", str(out), "--geometry", "40t-ss"])
         assert result.exit_code == 0
         assert out.stat().st_size == 102400  # 40 tracks × 10 sectors × 256 bytes
 
-    def test_create_ssd_80_tracks_explicit(
-        self, runner: CliRunner, tmp_path: Path
-    ) -> None:
-        out = tmp_path / "big.ssd"
-        result = runner.invoke(
-            cli, ["create", str(out), "--format", "ssd", "--tracks", "80"]
-        )
-        assert result.exit_code == 0
-        assert out.stat().st_size == 204800
-
-    def test_create_dsd_40_tracks(self, runner: CliRunner, tmp_path: Path) -> None:
+    def test_create_dsd_40_track_geometry(self, runner: CliRunner, tmp_path: Path) -> None:
         out = tmp_path / "small.dsd"
-        result = runner.invoke(
-            cli, ["create", str(out), "--format", "dsd", "--tracks", "40"]
-        )
+        result = runner.invoke(cli, ["create", str(out), "--geometry", "40t-ds"])
         assert result.exit_code == 0
         # 40T DSD: 2 sides × 40 tracks × 10 sectors × 256 bytes
         assert out.stat().st_size == 204800
 
-    def test_create_tracks_rejected_for_adfs(
+    def test_create_unknown_extension_needs_filesystem(
         self, runner: CliRunner, tmp_path: Path
     ) -> None:
-        out = tmp_path / "new.adl"
-        result = runner.invoke(
-            cli,
-            ["create", str(out), "--format", "adfs-l", "--tracks", "40"],
-        )
+        out = tmp_path / "mystery.bin"
+        result = runner.invoke(cli, ["create", str(out)])
         assert result.exit_code != 0
-        assert "tracks" in result.output.lower()
-
-    def test_create_tracks_rejects_invalid_value(
-        self, runner: CliRunner, tmp_path: Path
-    ) -> None:
-        out = tmp_path / "new.ssd"
-        result = runner.invoke(
-            cli, ["create", str(out), "--format", "ssd", "--tracks", "60"]
-        )
-        assert result.exit_code != 0
+        assert "--filesystem" in result.output
 
     def test_create_ads_infers_adfs_s(self, runner: CliRunner, tmp_path: Path) -> None:
-        """`.ads` infers ADFS-S (640 sectors) without an explicit --format."""
+        """`.ads` infers ADFS-S (640 sectors) without any options."""
         out = tmp_path / "small.ads"
         result = runner.invoke(cli, ["create", str(out)])
         assert result.exit_code == 0
@@ -2391,7 +2416,7 @@ class TestCreate:
         self, runner: CliRunner, tmp_path: Path
     ) -> None:
         """Regression: an extension `disc create` accepts must also be
-        recognised by the filing-system detection the other commands use."""
+        recognised by the content-first identification the other commands use."""
         out = tmp_path / "small.ads"
         assert runner.invoke(cli, ["create", str(out)]).exit_code == 0
         result = runner.invoke(cli, ["freemap", str(out)])
@@ -2399,12 +2424,12 @@ class TestCreate:
         assert "Traceback" not in result.output
 
     def test_create_adf_is_ambiguous(self, runner: CliRunner, tmp_path: Path) -> None:
-        """`.adf` is recognised as ADFS for reading but its size is
-        ambiguous, so creating one needs an explicit --format."""
+        """`.adf` is ADFS, but S-vs-M is ambiguous, so creating one needs
+        an explicit --geometry."""
         out = tmp_path / "amb.adf"
         result = runner.invoke(cli, ["create", str(out)])
         assert result.exit_code != 0
-        assert "infer" in result.output.lower()
+        assert "geometry" in result.output.lower()
 
 
 # ---------------------------------------------------------------------------
@@ -2413,44 +2438,39 @@ class TestCreate:
 
 
 class TestFreemap:
+    @staticmethod
+    def _matrix_cell_count(output: str) -> int:
+        """Total sector glyphs across every matrix row in *output*.
+
+        A matrix row is ``<offset> <glyphs>`` where the glyphs are only
+        ``.`` (free) and ``█`` (used); counting them is independent of
+        the terminal width the rows were wrapped to.
+        """
+        cells = 0
+        for line in output.splitlines():
+            parts = line.split(maxsplit=1)
+            if (
+                len(parts) == 2
+                and parts[0].isdigit()
+                and parts[1]
+                and set(parts[1]) <= {".", "█"}
+            ):
+                cells += len(parts[1])
+        return cells
+
     def test_freemap_dfs(self, runner: CliRunner, dfs_image_filepath: Path) -> None:
         result = runner.invoke(cli, ["freemap", str(dfs_image_filepath)])
         assert result.exit_code == 0
         assert "Free:" in result.output
         assert "█" in result.output or "." in result.output
 
-    def test_freemap_dfs_geometry_header(
+    def test_freemap_dfs_matrix_covers_every_sector(
         self, runner: CliRunner, dfs_image_filepath: Path
     ) -> None:
-        """Synthesised DFS geometry: 80 tracks × 10 sectors/track for an 80T SSD."""
+        """80T SSD = 800 sectors; the matrix renders one glyph per sector."""
         result = runner.invoke(cli, ["freemap", str(dfs_image_filepath)])
         assert result.exit_code == 0
-        assert "80 tracks" in result.output
-        assert "10 sectors/track" in result.output
-
-    def test_freemap_dfs_grid_shape(
-        self, runner: CliRunner, dfs_image_filepath: Path
-    ) -> None:
-        """80T SSD: 80 track rows, each carrying 10 sector glyphs (no head split)."""
-        result = runner.invoke(cli, ["freemap", str(dfs_image_filepath)])
-        assert result.exit_code == 0
-
-        grid_chars = set(".█ ")
-        grid_rows: list[str] = []
-        for line in result.output.splitlines():
-            parts = line.split(maxsplit=1)
-            if (
-                len(parts) == 2
-                and parts[0].isdigit()
-                and parts[1]
-                and set(parts[1]) <= grid_chars
-            ):
-                grid_rows.append(parts[1])
-        assert len(grid_rows) == 80, (
-            f"expected 80 track rows, got {len(grid_rows)}"
-        )
-        for row in grid_rows:
-            assert len(row) == 10, f"unexpected row width {len(row)}: {row!r}"
+        assert self._matrix_cell_count(result.output) == 800
 
     def test_freemap_adfs(self, runner: CliRunner, adfs_image_filepath: Path) -> None:
         result = runner.invoke(cli, ["freemap", str(adfs_image_filepath)])
@@ -2458,73 +2478,38 @@ class TestFreemap:
         assert "Free:" in result.output
         assert "region" in result.output
 
-    def test_freemap_adfs_geometry_header(
+    def test_freemap_adfs_matrix_covers_every_sector(
         self, runner: CliRunner, adfs_image_filepath: Path
     ) -> None:
-        """ADFS-L is 80 cylinders × 2 heads × 16 sectors/track; the header surfaces it."""
+        """ADFS-L = 80 × 2 × 16 = 2560 sectors, each a cell in the matrix."""
         result = runner.invoke(cli, ["freemap", str(adfs_image_filepath)])
         assert result.exit_code == 0
-        assert "80 cylinders" in result.output
-        assert "2 heads" in result.output
-        assert "16 sectors/track" in result.output
-
-    def test_freemap_adfs_grid_shape(
-        self, runner: CliRunner, adfs_image_filepath: Path
-    ) -> None:
-        """ADFS-L: 80 cylinder rows, each rendering 16 + 1 + 16 = 33 sector glyphs."""
-        result = runner.invoke(cli, ["freemap", str(adfs_image_filepath)])
-        assert result.exit_code == 0
-
-        grid_chars = set(".█ ")
-        grid_rows: list[str] = []
-        for line in result.output.splitlines():
-            parts = line.split(maxsplit=1)
-            if (
-                len(parts) == 2
-                and parts[0].isdigit()
-                and parts[1]
-                and set(parts[1]) <= grid_chars
-            ):
-                grid_rows.append(parts[1])
-        assert len(grid_rows) == 80, (
-            f"expected 80 cylinder rows, got {len(grid_rows)}"
-        )
-        for row in grid_rows:
-            assert len(row) == 33, f"unexpected row width {len(row)}: {row!r}"
+        assert self._matrix_cell_count(result.output) == 2560
 
     def test_freemap_afs(self, runner: CliRunner, afs_image_filepath: Path) -> None:
         result = runner.invoke(cli, ["freemap", f"{afs_image_filepath}:afs:"])
         assert result.exit_code == 0
         assert "Free:" in result.output
-        assert "cylinders" in result.output
-
-    def test_freemap_afs_shade_legend(
-        self, runner: CliRunner, afs_image_filepath: Path
-    ) -> None:
-        """AFS legend covers all five shade-block states."""
-        result = runner.invoke(cli, ["freemap", f"{afs_image_filepath}:afs:"])
-        assert result.exit_code == 0
-        for glyph in (".", "░", "▒", "▓", "█"):
-            assert glyph in result.output, f"missing legend glyph {glyph!r}"
+        # AFS renders the same sector matrix now — no per-cylinder shading.
+        assert "█" in result.output or "." in result.output
+        assert "░" not in result.output and "▒" not in result.output
 
     def test_freemap_dat_without_dsc_is_user_error(
         self, runner: CliRunner, tmp_path: Path
     ) -> None:
-        """An ADFS hard-disc ``.dat`` with no companion ``.dsc`` should yield
-        a categorised user-facing error, not an uncaught ``FileNotFoundError``
-        traceback."""
+        """An unrecognisable image yields a clean user-facing error, not an
+        uncaught ``FileNotFoundError`` traceback."""
         dat_filepath = tmp_path / "orphan.dat"
         dat_filepath.write_bytes(b"\x00" * 4096)
 
         result = runner.invoke(cli, ["freemap", str(dat_filepath)])
         assert result.exit_code != 0
-        # No raw stdlib traceback should reach the user
+        # No raw stdlib traceback should reach the user.
         assert "Traceback" not in result.output
         assert "FileNotFoundError" not in result.output
-        # The error should name the missing .dsc so the user knows what to do
-        assert ".dsc" in result.output
-        # The wrapped error should not produce a duplicate "caused by" line
-        assert "caused by" not in result.output
+        # Content-first identification: an unrecognised image is reported
+        # as such (rather than a format-specific .dsc hint).
+        assert "no installed filesystem recognises" in result.output
 
 
 class TestCompact:
@@ -2595,19 +2580,19 @@ class TestAfsPlan:
     def test_afs_plan_max(self, runner: CliRunner, adfs_no_afs_filepath: Path) -> None:
         # Display mode pins the report titles so the layout is
         # asserted as-is; TSV omits titles by design.
-        result = runner.invoke(cli, ["afs-plan", "--as", "display", str(adfs_no_afs_filepath)])
+        result = runner.invoke(cli, ["afs", "plan", "--as", "display", str(adfs_no_afs_filepath)])
         assert result.exit_code == 0
         assert "Disc geometry" in result.output
         assert "cylinders" in result.output
         assert "Proposed AFS partition" in result.output
-        assert "disc afs-init" in result.output
+        assert "disc afs init" in result.output
 
     def test_afs_plan_explicit_cylinders(
         self,
         runner: CliRunner,
         adfs_no_afs_filepath: Path,
     ) -> None:
-        result = runner.invoke(cli, ["afs-plan", str(adfs_no_afs_filepath), "--cylinders", "10"])
+        result = runner.invoke(cli, ["afs", "plan", str(adfs_no_afs_filepath), "--cylinders", "10"])
         assert result.exit_code == 0
         assert "10 cylinders" in result.output
 
@@ -2619,7 +2604,7 @@ class TestAfsPlan:
         # The existing-partition case now surfaces as a dedicated
         # "Existing AFS partition" report rather than a free-text
         # message; pin --as display to see the title.
-        result = runner.invoke(cli, ["afs-plan", "--as", "display", str(afs_image_filepath)])
+        result = runner.invoke(cli, ["afs", "plan", "--as", "display", str(afs_image_filepath)])
         assert result.exit_code == 0
         assert "Existing AFS partition" in result.output
 
@@ -2628,7 +2613,7 @@ class TestAfsPlan:
         runner: CliRunner,
         adfs_no_afs_filepath: Path,
     ) -> None:
-        result = runner.invoke(cli, ["afs-plan", str(adfs_no_afs_filepath), "--cylinders", "9999"])
+        result = runner.invoke(cli, ["afs", "plan", str(adfs_no_afs_filepath), "--cylinders", "9999"])
         assert result.exit_code != 0
 
     def test_afs_plan_as_json(
@@ -2638,7 +2623,7 @@ class TestAfsPlan:
     ) -> None:
         import json
 
-        result = runner.invoke(cli, ["afs-plan", str(adfs_no_afs_filepath), "--as", "json"])
+        result = runner.invoke(cli, ["afs", "plan", str(adfs_no_afs_filepath), "--as", "json"])
         assert result.exit_code == 0
         doc = json.loads(result.output)
         reports = doc["reports"]
@@ -2653,7 +2638,7 @@ class TestAfsPlan:
         assert plan_row["afs_region"]
         assert plan_row["start_cylinder"]
         assert plan_row["will_compact"] == "not required"
-        assert plan_row["suggested_command"].startswith("disc afs-init")
+        assert plan_row["suggested_command"].startswith("disc afs init")
 
     def test_afs_plan_as_json_already_partitioned(
         self,
@@ -2662,7 +2647,7 @@ class TestAfsPlan:
     ) -> None:
         import json
 
-        result = runner.invoke(cli, ["afs-plan", str(afs_image_filepath), "--as", "json"])
+        result = runner.invoke(cli, ["afs", "plan", str(afs_image_filepath), "--as", "json"])
         assert result.exit_code == 0
         doc = json.loads(result.output)
         reports = doc["reports"]
@@ -2677,7 +2662,7 @@ class TestAfsPlan:
         runner: CliRunner,
         adfs_no_afs_filepath: Path,
     ) -> None:
-        result = runner.invoke(cli, ["afs-plan", str(adfs_no_afs_filepath), "--as", "xml"])
+        result = runner.invoke(cli, ["afs", "plan", str(adfs_no_afs_filepath), "--as", "xml"])
         assert result.exit_code != 0
 
 
@@ -2686,7 +2671,7 @@ class TestAfsInit:
         result = runner.invoke(
             cli,
             [
-                "afs-init",
+                "afs", "init",
                 str(adfs_no_afs_filepath),
                 "--disc-name",
                 "NewAFS",
@@ -2702,7 +2687,7 @@ class TestAfsInit:
 
 class TestAfsUsers:
     def test_afs_users(self, runner: CliRunner, afs_image_filepath: Path) -> None:
-        result = runner.invoke(cli, ["afs-users", str(afs_image_filepath)])
+        result = runner.invoke(cli, ["afs", "users", str(afs_image_filepath)])
         assert result.exit_code == 0
         assert "Syst" in result.output
 
@@ -2711,13 +2696,13 @@ class TestAfsUsers:
     ) -> None:
         """The human display renders quotas in IEC units, not hex bytes."""
         add = runner.invoke(
-            cli, ["afs-useradd", str(afs_image_filepath), "ALICE", "--quota", "1048576"]
+            cli, ["afs", "useradd", str(afs_image_filepath), "ALICE", "--quota", "1048576"]
         )
         assert add.exit_code == 0, add.output
         # Pin --as display: under CliRunner there's no TTY to trigger the
         # display default, so the formatter would otherwise fall back to TSV.
         result = runner.invoke(
-            cli, ["afs-users", "--as", "display", str(afs_image_filepath)]
+            cli, ["afs", "users", "--as", "display", str(afs_image_filepath)]
         )
         assert result.exit_code == 0, result.output
         # ALICE's 1 MiB quota reads as a friendly unit, and the old
@@ -2729,7 +2714,7 @@ class TestAfsUsers:
         """--as json emits a parseable document listing every user."""
         import json as _json
 
-        result = runner.invoke(cli, ["afs-users", "--as", "json", str(afs_image_filepath)])
+        result = runner.invoke(cli, ["afs", "users", "--as", "json", str(afs_image_filepath)])
         assert result.exit_code == 0, result.output
         doc = _json.loads(result.output)
         payload = next(iter(doc["reports"].values()))
@@ -2751,17 +2736,17 @@ class TestAfsUsers:
         import json as _json
 
         add = runner.invoke(
-            cli, ["afs-useradd", str(afs_image_filepath), "ALICE", "--quota", "1048576"]
+            cli, ["afs", "useradd", str(afs_image_filepath), "ALICE", "--quota", "1048576"]
         )
         assert add.exit_code == 0, add.output
-        result = runner.invoke(cli, ["afs-users", "--as", "json", str(afs_image_filepath)])
+        result = runner.invoke(cli, ["afs", "users", "--as", "json", str(afs_image_filepath)])
         assert result.exit_code == 0, result.output
         payload = next(iter(_json.loads(result.output)["reports"].values()))
         alice_row = next(r for r in payload["rows"] if r["user"] == "ALICE")
         assert alice_row["quota"] == 1048576
 
     def test_afs_users_tsv_columns(self, runner: CliRunner, afs_image_filepath: Path) -> None:
-        result = runner.invoke(cli, ["afs-users", "--as", "tsv", str(afs_image_filepath)])
+        result = runner.invoke(cli, ["afs", "users", "--as", "tsv", str(afs_image_filepath)])
         assert result.exit_code == 0, result.output
         lines = [ln for ln in result.output.splitlines() if ln]
         # First non-data line is the "# User..." header.
@@ -2784,7 +2769,7 @@ class TestAfsUserDel:
         result = runner.invoke(
             cli,
             [
-                "afs-userdel",
+                "afs", "userdel",
                 str(afs_image_with_spare_slot),
                 "alice",
             ],
@@ -2804,7 +2789,7 @@ class TestAfsUserAdd:
         result = runner.invoke(
             cli,
             [
-                "afs-userdel",
+                "afs", "userdel",
                 str(afs_image_with_spare_slot),
                 "alice",
             ],
@@ -2815,7 +2800,7 @@ class TestAfsUserAdd:
         result = runner.invoke(
             cli,
             [
-                "afs-useradd",
+                "afs", "useradd",
                 str(afs_image_with_spare_slot),
                 "bob",
             ],
@@ -2823,7 +2808,7 @@ class TestAfsUserAdd:
         assert result.exit_code == 0
         assert result.output == ""
 
-        result = runner.invoke(cli, ["afs-users", str(afs_image_with_spare_slot)])
+        result = runner.invoke(cli, ["afs", "users", str(afs_image_with_spare_slot)])
         assert "bob" in result.output
 
 
@@ -2841,7 +2826,7 @@ class TestAfsPasswd:
     ) -> None:
         result = runner.invoke(
             cli,
-            ["afs-passwd", str(afs_image_with_spare_slot), "alice", "--password", "sw0rd"],
+            ["afs", "passwd", str(afs_image_with_spare_slot), "alice", "--password", "sw0rd"],
         )
         assert result.exit_code == 0, result.output
         assert _afs_user_password(afs_image_with_spare_slot, "alice") == "sw0rd"
@@ -2852,7 +2837,7 @@ class TestAfsPasswd:
         """--password is its own option, so a ':'/'=' password is fine."""
         result = runner.invoke(
             cli,
-            ["afs-passwd", str(afs_image_with_spare_slot), "alice", "--password", "p:s=w"],
+            ["afs", "passwd", str(afs_image_with_spare_slot), "alice", "--password", "p:s=w"],
         )
         assert result.exit_code == 0, result.output
         assert _afs_user_password(afs_image_with_spare_slot, "alice") == "p:s=w"
@@ -2862,7 +2847,7 @@ class TestAfsPasswd:
     ) -> None:
         result = runner.invoke(
             cli,
-            ["afs-passwd", str(afs_image_with_spare_slot), "ghost", "--password", "x"],
+            ["afs", "passwd", str(afs_image_with_spare_slot), "ghost", "--password", "x"],
         )
         assert result.exit_code != 0
 
@@ -2871,7 +2856,7 @@ class TestAfsPasswd:
     ) -> None:
         result = runner.invoke(
             cli,
-            ["afs-passwd", str(afs_image_with_spare_slot), "alice", "--password", "toolong"],
+            ["afs", "passwd", str(afs_image_with_spare_slot), "alice", "--password", "toolong"],
         )
         assert result.exit_code != 0
 
@@ -2885,7 +2870,7 @@ class TestAfsInitPasswords:
         result = runner.invoke(
             cli,
             [
-                "afs-init",
+                "afs", "init",
                 str(adfs_no_afs_filepath),
                 "--disc-name",
                 "PwInit",
@@ -2907,7 +2892,7 @@ class TestAfsInitPasswords:
         result = runner.invoke(
             cli,
             [
-                "afs-init",
+                "afs", "init",
                 str(adfs_no_afs_filepath),
                 "--disc-name",
                 "PwColon",
@@ -2929,7 +2914,7 @@ class TestAfsInitPasswords:
         result = runner.invoke(
             cli,
             [
-                "afs-init",
+                "afs", "init",
                 str(adfs_no_afs_filepath),
                 "--disc-name",
                 "PwBuilt",
@@ -2948,7 +2933,7 @@ class TestAfsInitPasswords:
         result = runner.invoke(
             cli,
             [
-                "afs-init",
+                "afs", "init",
                 str(adfs_no_afs_filepath),
                 "--disc-name",
                 "PwGhost",
@@ -2967,7 +2952,7 @@ class TestAfsInitPasswords:
         result = runner.invoke(
             cli,
             [
-                "afs-init",
+                "afs", "init",
                 str(adfs_no_afs_filepath),
                 "--disc-name",
                 "PwNoEq",
@@ -2987,7 +2972,7 @@ class TestAfsInitPasswords:
         result = runner.invoke(
             cli,
             [
-                "afs-init",
+                "afs", "init",
                 str(adfs_no_afs_filepath),
                 "--disc-name",
                 "PwDup",
@@ -3074,7 +3059,7 @@ class TestAfsMerge:
         result = runner.invoke(
             cli,
             [
-                "afs-merge",
+                "afs", "merge",
                 str(afs_image_filepath),
                 "--source",
                 str(source_filepath),
@@ -3104,7 +3089,7 @@ class TestAfsMerge:
         result = runner.invoke(
             cli,
             [
-                "afs-merge",
+                "afs", "merge",
                 str(afs_image_filepath),
                 "--source",
                 str(source_filepath),
@@ -3130,7 +3115,7 @@ class TestAfsMerge:
         result = runner.invoke(
             cli,
             [
-                "afs-merge",
+                "afs", "merge",
                 str(afs_image_filepath),
                 "--source",
                 str(source_filepath),
@@ -3156,7 +3141,7 @@ class TestAfsMerge:
         result = runner.invoke(
             cli,
             [
-                "afs-merge",
+                "afs", "merge",
                 str(afs_image_filepath),
                 "--source",
                 str(source_filepath),
@@ -3171,20 +3156,28 @@ class TestAfsMerge:
 
 
 class TestAfsPrefixErrors:
+    """A prefix names a *partition*, not a format, so addressing one a disc
+    does not have yields a uniform "no such partition" error that lists the
+    partitions the disc actually offers — never a format-assertion message.
+    """
+
     def test_afs_prefix_on_dfs(self, runner: CliRunner, dfs_image_filepath: Path) -> None:
         result = runner.invoke(cli, ["ls", f"{dfs_image_filepath}:afs:$"])
         assert result.exit_code != 0
-        assert "AFS partitions exist only on ADFS" in result.output
+        assert "no such partition 'afs'" in result.output
+        assert "acorn-dfs" in result.output
 
     def test_afs_on_disc_without_afs(self, runner: CliRunner, adfs_no_afs_filepath: Path) -> None:
         result = runner.invoke(cli, ["ls", f"{adfs_no_afs_filepath}:afs:$"])
         assert result.exit_code != 0
-        assert "no AFS partition" in result.output
+        assert "no such partition 'afs'" in result.output
+        assert "adfs" in result.output
 
     def test_dfs_prefix_on_adfs(self, runner: CliRunner, adfs_image_filepath: Path) -> None:
         result = runner.invoke(cli, ["ls", f"{adfs_image_filepath}:dfs:$"])
         assert result.exit_code != 0
-        assert "cannot access as DFS" in result.output
+        assert "no such partition 'dfs'" in result.output
+        assert "adfs" in result.output
 
 
 # ---------------------------------------------------------------------------
@@ -3210,14 +3203,14 @@ class TestExpand:
 
     def test_expand_truncated_ssd(self, runner: CliRunner, tmp_path: Path) -> None:
         filepath = self._make_truncated_ssd(tmp_path)
-        result = runner.invoke(cli, ["expand", str(filepath)])
+        result = runner.invoke(cli, ["dfs", "expand", str(filepath)])
         assert result.exit_code == 0
         assert filepath.stat().st_size == 204800
         assert result.output == ""
 
     def test_expand_with_explicit_format(self, runner: CliRunner, tmp_path: Path) -> None:
         filepath = self._make_truncated_ssd(tmp_path, num_sectors=20)
-        result = runner.invoke(cli, ["expand", str(filepath), "--format", "ssd"])
+        result = runner.invoke(cli, ["dfs", "expand", str(filepath), "--format", "ssd"])
         assert result.exit_code == 0
         assert filepath.stat().st_size == 204800
 
@@ -3225,7 +3218,7 @@ class TestExpand:
         self, runner: CliRunner, dfs_image_filepath: Path
     ) -> None:
         original_size = dfs_image_filepath.stat().st_size
-        result = runner.invoke(cli, ["expand", str(dfs_image_filepath)])
+        result = runner.invoke(cli, ["dfs", "expand", str(dfs_image_filepath)])
         assert result.exit_code == 0
         assert result.output == ""
         assert dfs_image_filepath.stat().st_size == original_size
@@ -3233,12 +3226,12 @@ class TestExpand:
     def test_expand_not_sector_aligned(self, runner: CliRunner, tmp_path: Path) -> None:
         filepath = tmp_path / "bad.ssd"
         filepath.write_bytes(b"\x00" * 257)
-        result = runner.invoke(cli, ["expand", str(filepath)])
+        result = runner.invoke(cli, ["dfs", "expand", str(filepath)])
         assert result.exit_code != 0
 
     def test_expand_nonexistent_file(self, runner: CliRunner, tmp_path: Path) -> None:
         filepath = tmp_path / "nonexistent.ssd"
-        result = runner.invoke(cli, ["expand", str(filepath)])
+        result = runner.invoke(cli, ["dfs", "expand", str(filepath)])
         assert result.exit_code != 0
 
     def test_expand_dsd(self, runner: CliRunner, tmp_path: Path) -> None:
@@ -3250,7 +3243,7 @@ class TestExpand:
         data = full_filepath.read_bytes()
         truncated_filepath = tmp_path / "truncated.dsd"
         truncated_filepath.write_bytes(data[:20480])
-        result = runner.invoke(cli, ["expand", str(truncated_filepath)])
+        result = runner.invoke(cli, ["dfs", "expand", str(truncated_filepath)])
         assert result.exit_code == 0
         assert truncated_filepath.stat().st_size == 409600
 
@@ -3278,7 +3271,7 @@ class TestGenerateDsc:
     CLI via ``ADFS.from_file``.
     """
 
-    def test_writes_dsc_and_unblocks_ls(
+    def test_writes_dsc_sidecar(
         self,
         runner: CliRunner,
         tmp_path: Path,
@@ -3290,11 +3283,13 @@ class TestGenerateDsc:
         cf_dat = tmp_path / "cf_test.dat"
         _make_cfbackup_style_dat(src, cf_dat)
 
-        # Sanity: no .dsc, ls fails.
+        # Content-first ls no longer needs the .dsc: identification reads
+        # the linear image directly. generate-dsc still synthesises the
+        # sidecar for ADFS.from_file consumers that do want explicit CHS.
         cf_dsc = cf_dat.with_suffix(".dsc")
         assert not cf_dsc.exists()
         ls_before = runner.invoke(cli, ["ls", str(cf_dat)])
-        assert ls_before.exit_code != 0
+        assert ls_before.exit_code == 0, ls_before.output
 
         # Generate the .dsc.  The fixture is built with the SCSI default
         # geometry (heads=4, spt=33), so reuse that to ensure the FSM
@@ -3304,6 +3299,7 @@ class TestGenerateDsc:
         result = runner.invoke(
             cli,
             [
+                "adfs",
                 "generate-dsc",
                 str(cf_dat),
                 "--heads",
@@ -3343,7 +3339,7 @@ class TestGenerateDsc:
         cf_dat = tmp_path / "cf.dat"
         _make_cfbackup_style_dat(src, cf_dat)
 
-        result = runner.invoke(cli, ["generate-dsc", str(cf_dat)])
+        result = runner.invoke(cli, ["adfs", "generate-dsc", str(cf_dat)])
         assert result.exit_code == 0, result.output
         assert (cf_dat.with_suffix(".dsc")).exists()
         # The note about truncation should appear on stderr.
@@ -3362,7 +3358,7 @@ class TestGenerateDsc:
         cf_dsc.write_bytes(b"\x00" * 22)
         result = runner.invoke(
             cli,
-            ["generate-dsc", str(cf_dat), "--heads", "4", "--sectors-per-track", "33"],
+            ["adfs", "generate-dsc", str(cf_dat), "--heads", "4", "--sectors-per-track", "33"],
         )
         assert result.exit_code != 0
         assert "refusing to overwrite" in result.output
@@ -3380,6 +3376,7 @@ class TestGenerateDsc:
         result = runner.invoke(
             cli,
             [
+                "adfs",
                 "generate-dsc",
                 str(cf_dat),
                 "--heads",
@@ -3400,7 +3397,7 @@ class TestGenerateDsc:
     ) -> None:
         bogus = tmp_path / "wrong.bin"
         bogus.write_bytes(b"\x00" * 1024)
-        result = runner.invoke(cli, ["generate-dsc", str(bogus)])
+        result = runner.invoke(cli, ["adfs", "generate-dsc", str(bogus)])
         assert result.exit_code != 0
         assert ".dat" in result.output
 
@@ -3411,7 +3408,7 @@ class TestGenerateDsc:
     ) -> None:
         bad = tmp_path / "odd.dat"
         bad.write_bytes(b"\x00" * 1023)
-        result = runner.invoke(cli, ["generate-dsc", str(bad)])
+        result = runner.invoke(cli, ["adfs", "generate-dsc", str(bad)])
         assert result.exit_code != 0
         assert "256" in result.output
 
@@ -3439,6 +3436,7 @@ class TestGenerateDsc:
         result = runner.invoke(
             cli,
             [
+                "adfs",
                 "generate-dsc",
                 str(cf_dat),
                 "--heads",
@@ -3457,7 +3455,7 @@ class TestGenerateDsc:
     ) -> None:
         bad = tmp_path / "junk.dat"
         bad.write_bytes(b"\x00" * 4096)  # checksums won't validate
-        result = runner.invoke(cli, ["generate-dsc", str(bad)])
+        result = runner.invoke(cli, ["adfs", "generate-dsc", str(bad)])
         assert result.exit_code != 0
         assert "ADFS Old Map" in result.output
 
@@ -3498,7 +3496,7 @@ class TestGenerateDsc:
 
         # Sanity: the truncated file should hold the full Deep tree.
         # generate-dsc + tree should walk it cleanly.
-        result_gen = runner.invoke(cli, ["generate-dsc", str(cf_dat)])
+        result_gen = runner.invoke(cli, ["adfs", "generate-dsc", str(cf_dat)])
         assert result_gen.exit_code == 0, result_gen.output
 
         result_tree = runner.invoke(cli, ["tree", str(cf_dat)])

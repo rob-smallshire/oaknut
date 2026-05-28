@@ -29,56 +29,12 @@ class FakeADFSStat:
         )
 
 
-class FakeAFSAccess:
-    """Mimics AFSAccess with the bits we care about."""
-
-    def __init__(
-        self,
-        *,
-        owner_read=False,
-        owner_write=False,
-        locked=False,
-        public_read=False,
-        public_write=False,
-        is_directory=False,
-    ):
-        self._or = owner_read
-        self._ow = owner_write
-        self._l = locked
-        self._pr = public_read
-        self._pw = public_write
-        self._d = is_directory
-
-    @property
-    def is_locked(self):
-        return self._l
-
-    @property
-    def is_directory(self):
-        return self._d
-
-    def __and__(self, other):
-        return int(self) & other
-
-    def __int__(self):
-        v = 0
-        if self._pr:
-            v |= 0x01
-        if self._pw:
-            v |= 0x02
-        if self._or:
-            v |= 0x04
-        if self._ow:
-            v |= 0x08
-        if self._l:
-            v |= 0x10
-        if self._d:
-            v |= 0x20
-        return v
-
-
 class FakeAFSStat:
-    def __init__(self, access):
+    """An AFS stat exposes a *canonical* wire Access — its on-disc byte is
+    already translated (AFSAccess.to_acorn) — so this layer needs no AFS
+    bit knowledge."""
+
+    def __init__(self, access: Access):
         self.access = access
         self.load_address = 0
         self.exec_address = 0
@@ -115,9 +71,7 @@ class TestAccessFromStat:
         assert result & Access.L
 
     def test_afs_stat(self):
-        afs_access = FakeAFSAccess(owner_read=True, owner_write=True, public_read=True)
-        st = FakeAFSStat(afs_access)
+        # An AFS stat hands back a canonical Access directly.
+        st = FakeAFSStat(Access.R | Access.W | Access.PR)
         result = access_from_stat(st)
-        assert result & Access.R
-        assert result & Access.W
-        assert result & Access.PR
+        assert result == Access.R | Access.W | Access.PR

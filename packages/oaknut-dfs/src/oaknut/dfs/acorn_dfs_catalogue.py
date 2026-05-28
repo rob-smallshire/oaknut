@@ -104,9 +104,11 @@ class AcornDFSCatalogue(Catalogue):
         if tracks < 1:
             return False
 
-        # Check 7: Must not exceed surface size
-        if total_sectors > surface.num_sectors:
-            return False
+        # A truncated image declares its full (untruncated) sector count
+        # while the file holds only the used sectors; the filing system
+        # reads it transparently (issue #1), so a declared total that
+        # exceeds the surface is *accepted*, not rejected — checks 1–6
+        # already establish a well-formed catalogue.
 
         # EXCLUSION CHECK: Must NOT be Watford DFS
         # Watford DFS has specific markers in sectors 2-3

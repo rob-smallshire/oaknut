@@ -55,6 +55,11 @@ Inspection
 
    .. cli-example:: cmd_type
 
+.. oaknut-command:: oaknut.disc.cli:identify
+   :prog: disc identify
+
+   .. cli-example:: cmd_identify
+
 
 File transfer (host ↔ image)
 ----------------------------
@@ -179,8 +184,8 @@ Whole-image operations
 
    .. cli-example:: cmd_compact
 
-.. oaknut-command:: oaknut.disc.cli:expand
-   :prog: disc expand
+.. oaknut-command:: oaknut.dfs.cli:expand
+   :prog: disc dfs expand
 
    .. cli-example:: cmd_expand
 
@@ -188,13 +193,13 @@ Whole-image operations
 AFS (Acorn Level 3 File Server)
 -------------------------------
 
-.. oaknut-command:: oaknut.disc.cli:afs-plan
-   :prog: disc afs-plan
+.. oaknut-command:: oaknut.afs.cli:plan
+   :prog: disc afs plan
 
    .. cli-example:: cmd_afs_plan
 
-.. oaknut-command:: oaknut.disc.cli:afs-init
-   :prog: disc afs-init
+.. oaknut-command:: oaknut.afs.cli:init
+   :prog: disc afs init
 
    Passwords are set with ``--user-password NAME=VALUE``, not inside
    the ``--user`` spec: a password may contain a colon, which the
@@ -207,28 +212,28 @@ AFS (Acorn Level 3 File Server)
 
    .. cli-example:: cmd_afs_init
 
-.. oaknut-command:: oaknut.disc.cli:afs-users
-   :prog: disc afs-users
+.. oaknut-command:: oaknut.afs.cli:users
+   :prog: disc afs users
 
    .. cli-example:: cmd_afs_users
 
-.. oaknut-command:: oaknut.disc.cli:afs-useradd
-   :prog: disc afs-useradd
+.. oaknut-command:: oaknut.afs.cli:useradd
+   :prog: disc afs useradd
 
    .. cli-example:: cmd_afs_useradd
 
-.. oaknut-command:: oaknut.disc.cli:afs-userdel
-   :prog: disc afs-userdel
+.. oaknut-command:: oaknut.afs.cli:userdel
+   :prog: disc afs userdel
 
    .. cli-example:: cmd_afs_userdel
 
-.. oaknut-command:: oaknut.disc.cli:afs-passwd
-   :prog: disc afs-passwd
+.. oaknut-command:: oaknut.afs.cli:passwd
+   :prog: disc afs passwd
 
    .. cli-example:: cmd_afs_passwd
 
-.. oaknut-command:: oaknut.disc.cli:afs-merge
-   :prog: disc afs-merge
+.. oaknut-command:: oaknut.afs.cli:merge
+   :prog: disc afs merge
 
    The recipe initialises a small source disc with an emplaced
    ``Library``, then merges its AFS tree into a separate empty
@@ -243,10 +248,28 @@ AFS (Acorn Level 3 File Server)
 Diagnostics
 -----------
 
-.. oaknut-command:: oaknut.disc.cli:generate-dsc
-   :prog: disc generate-dsc
+.. oaknut-command:: oaknut.adfs.cli:generate_dsc
+   :prog: disc adfs generate-dsc
 
    .. cli-example:: cmd_generate_dsc
+
+
+Filesystem identification
+-------------------------
+
+These introspect the filesystems ``disc identify`` can recognise — one
+registered detector per filesystem. The set grows as filesystem
+packages are installed.
+
+.. oaknut-command:: oaknut.disc.cli:list-filesystems
+   :prog: disc list-filesystems
+
+   .. cli-example:: cmd_list_filesystems
+
+.. oaknut-command:: oaknut.disc.cli:describe-filesystem
+   :prog: disc describe-filesystem
+
+   .. cli-example:: cmd_describe_filesystem
 
 
 Meta-commands

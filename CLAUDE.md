@@ -18,7 +18,7 @@ Seven packages, layered strictly bottom-up:
 | `oaknut-file` | `oaknut.file` | `exception` | INF sidecars, xattr namespaces, filename encoding, `Access`, `AcornMeta`, `MetaFormat`, `BootOption`, `FSError` base (a `DataError`), `acorn` text codec, `host_bridge` |
 | `oaknut-discimage` | `oaknut.discimage` | `file` | `Surface`, `SectorsView`, `UnifiedDisc`, generic `DiskFormat` + surface-spec helpers |
 | `oaknut-basic` | `oaknut.basic` | — | BBC BASIC tokeniser/detokeniser, language constants |
-| `oaknut-dfs` | `oaknut.dfs` | `file`, `discimage`, `basic` | Acorn DFS / Watford DDFS / Opus DDOS — flat-catalogue BBC/Electron floppies |
+| `oaknut-dfs` | `oaknut.dfs` | `file`, `discimage`, `basic` | Acorn DFS / Watford DFS / Opus DDOS — flat-catalogue BBC floppies |
 | `oaknut-adfs` | `oaknut.adfs` | `file`, `discimage`, `basic` | ADFS hierarchical directories, free space maps, hard-disc images |
 | `oaknut-afs` | `oaknut.afs` | `file`, `discimage`, `adfs` | Acorn Level 3 File Server private on-disc format (`AFS0` magic). Read/write, `wfsinit` partitioning + initialisation, merge, host-tree import, shipped library images |
 | `oaknut-zip` | `oaknut.zip` | `file` | ZIP archives containing Acorn files (SparkFS extras, INF resolution, RISC OS filetypes) |
@@ -123,8 +123,7 @@ When implementing a non-trivial change, write a failing test first, then make it
 Package-specific CLAUDE.md files that inherit from this one:
 
 - `packages/oaknut-dfs/CLAUDE.md` — DFS module layout, layer flow, testing entry points.
-- `packages/oaknut-zip/CLAUDE.md` — ZIP archive handling specifics.
 
 - `packages/oaknut-afs/CLAUDE.md` — AFS module architecture, primary sources, testing.
 
-The other packages (`oaknut-file`, `oaknut-discimage`, `oaknut-adfs`, `oaknut-basic`) don't currently ship a per-package CLAUDE.md; their scope is described in the layering table above.
+The other packages (`oaknut-file`, `oaknut-discimage`, `oaknut-adfs`, `oaknut-basic`, `oaknut-zip`) don't currently ship a per-package CLAUDE.md; their scope is described in the layering table above.

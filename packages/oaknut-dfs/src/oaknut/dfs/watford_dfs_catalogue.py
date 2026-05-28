@@ -119,8 +119,9 @@ class WatfordDFSCatalogue(Catalogue):
             return False
         if total_sectors % 10 != 0:  # Must be multiple of 10 (sectors per track)
             return False
-        if total_sectors > surface.num_sectors:
-            return False
+        # A truncated image declares its full size though the file holds only
+        # the used sectors; the filing system reads it transparently
+        # (issue #1), so a declared total exceeding the surface is accepted.
 
         # WATFORD-SPECIFIC: Check for 0xAA marker in sector 2 (first 12 bytes)
         if not all(sector2[i] == 0xAA for i in range(12)):
@@ -889,7 +890,7 @@ class WatfordDFSCatalogue(Catalogue):
         return self.MAX_FILES
 
     def validate(self) -> list["DFSValidationError"]:
-        """Validate Watford DDFS catalogue integrity.
+        """Validate Watford DFS catalogue integrity.
 
         Returns a list of :class:`DFSValidationError` instances — empty
         when the catalogue is consistent.

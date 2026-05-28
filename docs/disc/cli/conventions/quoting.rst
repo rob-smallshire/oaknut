@@ -27,7 +27,7 @@ Characters to watch
        (in double quotes)
    * - ``:``
      - ``IMAGE_SPEC:PATH_SPEC`` separator; ``adfs:`` / ``afs:`` /
-       ``dfs:`` dispatch prefixes
+       ``acorn-dfs:`` partition selectors
      - Inside double quotes on PowerShell it is interpreted as a
        drive-name separator in some contexts; otherwise harmless
    * - ``.``

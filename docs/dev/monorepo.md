@@ -78,7 +78,7 @@ The end-state package set is layered, not flat. Beyond the packages that already
 | `oaknut-file` | Acorn file metadata sidecar formats: INF (trad + PiEconetBridge), `user.acorn.*` / `user.econet_*` xattrs, RISC OS / MOS filename encoding, `Access` flags, `AcornMeta`, `MetaFormat`, **and the host bridge** (the `host_bridge.py` module currently inside `oaknut-dfs` moves here, since it's a natural extension of oaknut-file's I/O surface) | `oaknut-dfs`, `oaknut-adfs`, `oaknut-zip`, anything that touches host metadata |
 | `oaknut-fs` *(new)* | **Universal filesystem abstractions** — anything an Acorn filesystem needs that isn't filesystem-specific: the abstract `Catalogue` ABC, `FileEntry`, `DiscInfo`, `ParsedFilename`, the `acorn` text codec, `BootOption`, `FSError` base | `oaknut-dfs`, `oaknut-adfs`, future `oaknut-nfs`, future `oaknut-afs` |
 | `oaknut-discimage` *(new)* | **Disc-image abstractions** for filesystems backed by sectors on a disc image: `Surface`, `SectorImage`, `SectorsView`, `DiscFormat`, geometry helpers, `UnifiedDisc`, `CataloguedSurface` | `oaknut-dfs`, `oaknut-adfs` only — *not* `oaknut-nfs`/`oaknut-afs`, neither of which is disc-based |
-| `oaknut-dfs` | DFS / Watford DDFS / Opus DDOS only — the catalogue implementations and `DFSPath` / `DFS` types | downstream consumers |
+| `oaknut-dfs` | DFS / Watford DFS / Opus DDOS only — the catalogue implementations and `DFSPath` / `DFS` types | downstream consumers |
 | `oaknut-adfs` | ADFS only — directory format, free space map, `ADFSPath` / `ADFS` types | downstream consumers |
 | `oaknut-basic` | BBC BASIC tokeniser/detokeniser, language constants. Self-contained, no internal deps | downstream consumers |
 | `oaknut-zip` | Acorn-aware ZIP archive support (SparkFS extras, INF resolution) | CLI |
@@ -158,7 +158,7 @@ oaknut/                                  # monorepo root
 │   │   │   ├── __init__.py
 │   │   │   └── ...
 │   │   └── tests/
-│   ├── oaknut-dfs/                      # DFS / Watford DDFS / Opus DDOS only
+│   ├── oaknut-dfs/                      # DFS / Watford DFS / Opus DDOS only
 │   │   ├── pyproject.toml               # name = "oaknut-dfs"
 │   │   ├── src/oaknut/dfs/
 │   │   │   ├── __init__.py
@@ -315,7 +315,7 @@ build-backend = "setuptools.build_meta"
 name = "oaknut-dfs"
 requires-python = ">= 3.11"
 dynamic = ["version"]
-description = "Acorn DFS / Watford DDFS / Opus DDOS disc image support."
+description = "Acorn DFS / Watford DFS / Opus DDOS disc image support."
 readme = "README.md"
 license = "MIT"
 dependencies = [

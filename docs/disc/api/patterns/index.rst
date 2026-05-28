@@ -11,3 +11,4 @@ vocabulary every package uses.
    errors
    metadata
    paths
+   extension-axis

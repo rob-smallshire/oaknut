@@ -110,7 +110,7 @@ class TestMkdirErrors:
             result.exception
         )
         assert result.exit_code == 1
-        assert "not supported for DFS" in result.output
+        assert "not supported for acorn-dfs" in result.output
 
 
 # ---------------------------------------------------------------------------
@@ -469,28 +469,19 @@ class TestTreeErrors:
 
 
 class TestCreateErrors:
-    def test_adfs_hard_without_capacity(self, runner: CliRunner, tmp_path: Path) -> None:
-        result = runner.invoke(
-            cli,
-            ["create", "--format", "adfs-hard", str(tmp_path / "new.dat")],
-        )
+    def test_adfs_hard_without_geometry(self, runner: CliRunner, tmp_path: Path) -> None:
+        # A .dat hard disc has no default geometry — clean error, no traceback.
+        result = runner.invoke(cli, ["create", str(tmp_path / "new.dat")])
         assert result.exception is None or isinstance(result.exception, SystemExit), (
             result.exception
         )
         assert result.exit_code != 0
-        assert "capacity" in result.output.lower()
+        assert "geometry" in result.output.lower()
 
     def test_adfs_hard_invalid_capacity(self, runner: CliRunner, tmp_path: Path) -> None:
         result = runner.invoke(
             cli,
-            [
-                "create",
-                "--format",
-                "adfs-hard",
-                "--capacity",
-                "not-a-size",
-                str(tmp_path / "new.dat"),
-            ],
+            ["create", str(tmp_path / "new.dat"), "--geometry", "capacity=not-a-size"],
         )
         assert result.exception is None or isinstance(result.exception, SystemExit), (
             result.exception
@@ -504,7 +495,7 @@ class TestAfsInitErrors:
         result = runner.invoke(
             cli,
             [
-                "afs-init",
+                "afs", "init",
                 str(adfs_hard_no_afs_filepath),
                 "--disc-name",
                 "This Name Is Far Too Long For AFS",
@@ -527,7 +518,7 @@ class TestAfsInitErrors:
         result = runner.invoke(
             cli,
             [
-                "afs-init",
+                "afs", "init",
                 str(adfs_hard_with_afs_filepath),
                 "--disc-name",
                 "TwiceFS",
@@ -543,7 +534,7 @@ class TestAfsInitErrors:
 
 class TestAfsUserCommandErrors:
     def test_userdel_unknown_user(self, runner: CliRunner, afs_image_filepath: Path) -> None:
-        result = runner.invoke(cli, ["afs-userdel", str(afs_image_filepath), "nosuch"])
+        result = runner.invoke(cli, ["afs", "userdel", str(afs_image_filepath), "nosuch"])
         assert result.exception is None or isinstance(result.exception, SystemExit), (
             result.exception
         )
@@ -556,7 +547,7 @@ class TestAfsUserCommandErrors:
     ) -> None:
         # ADFS image with no AFS partition; useradd should fail with a
         # clean diagnostic, not a traceback.
-        result = runner.invoke(cli, ["afs-useradd", str(adfs_no_afs_filepath), "alice"])
+        result = runner.invoke(cli, ["afs", "useradd", str(adfs_no_afs_filepath), "alice"])
         assert result.exception is None or isinstance(result.exception, SystemExit), (
             result.exception
         )

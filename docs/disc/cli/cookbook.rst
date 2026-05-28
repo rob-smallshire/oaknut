@@ -76,6 +76,40 @@ filesystems, and where information is lost in either direction) live
 in :doc:`/api/patterns/metadata`.
 
 
+Browse a ZIP archive
+--------------------
+
+A ZIP archive is a filesystem too. ``disc`` recognises it by content
+like any disc, and the same ``ls`` / ``tree`` / ``cat`` / ``get``
+commands work against it — so a ZIP of RISC OS files is browsable
+without unpacking it first.
+
+.. cli-example:: browse_zip
+   :section: identify
+
+The archive here holds RISC OS files whose filetype is carried in the
+``,xxx`` filename suffix. ``disc`` presents the flat ZIP namespace as a
+directory tree — synthesising the ``Docs`` directory the archive only
+implies — and decodes the suffix into the filetyped load address:
+
+.. cli-example:: browse_zip
+   :section: ls
+
+.. cli-example:: browse_zip
+   :section: tree
+
+``disc get`` extracts a member to the host with its metadata sidecar, so
+the filetype survives the trip out:
+
+.. cli-example:: browse_zip
+   :section: get
+
+The mount is read-only: ``disc put`` / ``rm`` / ``mv`` into a ZIP are not
+supported. The metadata recovery itself — SparkFS extras, bundled
+``.inf`` sidecars, and filename encoding — belongs to the ``oaknut-zip``
+package, which the ZIP filesystem wraps.
+
+
 Archive a folder of SSDs to one ADFS hard disc
 ----------------------------------------------
 
@@ -158,9 +192,10 @@ ADFS envelope plus the file-server executable shipped on
    :section: envelope
 
 Here ``disc create`` reserves the file on the host and writes the
-ADFS catalogue + free-space map. The ``--format adfs-hard`` option
-picks the hard-disc geometry family, ``--capacity 10MB`` sizes it,
-and ``--title`` sets the on-disc title that ``*CAT`` will display.
+ADFS catalogue + free-space map. The ``.dat`` extension selects ADFS;
+``--geometry capacity=10MB`` sizes the hard disc (``disc`` derives a
+cylinders/heads/sectors layout for that capacity); and ``--title``
+sets the on-disc title that ``*CAT`` will display.
 
 The command is silent on success — see :doc:`conventions/exit-codes`
 for the broader contract.
@@ -207,7 +242,7 @@ line at the OS prompt.
 .. cli-example:: l3fs_disc
    :section: plan_afs
 
-The ``afs-plan`` command is a dry-run that shows the disc's geometry,
+The ``afs plan`` command is a dry-run that shows the disc's geometry,
 how many sectors ADFS currently occupies, and what an AFS partition built
 from the remaining free space would look like. Nothing is written
 — the step is there to let you review the proposed shape before
@@ -218,12 +253,12 @@ committing. Skip it if you know what you want.
 .. cli-example:: l3fs_disc
    :section: init_afs
 
-The ``afs-init`` command carves out the AFS partition for real, adds
+The ``afs init`` command carves out the AFS partition for real, adds
 an ``RJS`` regular user, omits the provided-by-default ``Welcome``
 account, and emplaces two shipped library images.
 
-Note the absence of ``--cylinders``: when omitted, ``afs-init``
-claims the existing free space, which is exactly what ``afs-plan``
+Note the absence of ``--cylinders``: when omitted, ``afs init``
+claims the existing free space, which is exactly what ``afs plan``
 suggested. Pass an explicit value if you want a smaller AFS region
 and ADFS retained beyond what is strictly necessary.
 
@@ -236,7 +271,7 @@ contents land in a directory of the same name on the AFS partition.
 .. cli-example:: l3fs_disc
    :section: inspect_afs
 
-The ``disc afs-users`` command confirms the resulting account list:
+The ``disc afs users`` command confirms the resulting account list:
 ``Syst``, ``Boot``, and ``RJS`` are present; ``Welcome`` is not. The
 ``Syst`` and ``Boot`` accounts are not created explicitly — they
 are built-ins and arrive for free with every freshly-initialised
@@ -255,10 +290,10 @@ colon-delimited spec could not represent — and are set with their own
 To ship the disc with the system account already protected, add it at
 initialisation::
 
-    disc afs-init scsi0.dat --disc-name Server --user-password Syst=secret
+    disc afs init scsi0.dat --disc-name Server --user-password Syst=secret
 
 ``NAME`` matches a ``--user`` or a built-in; set a password later with
-``disc afs-passwd IMAGE NAME --password VALUE``.
+``disc afs passwd IMAGE NAME --password VALUE``.
 
 **7. Verify the dual-partition shape and walk the disc.**
 

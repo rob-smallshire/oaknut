@@ -1,0 +1,139 @@
+"""Tests for the geometry layer and its grammar."""
+
+import pytest
+from oaknut.filesystem import (
+    Geometry,
+    GeometryError,
+    GeometryGrammar,
+    floppy_geometry,
+    geometry_from_dsc,
+    winchester_geometry,
+)
+from oaknut.filesystem.geometry import FLOPPY, WINCHESTER
+
+
+class TestGeometryConstructors:
+    def test_single_sided_floppy_size(self):
+        # 80 tracks × 10 sectors × 256 bytes, single-sided.
+        geom = floppy_geometry(tracks=80, sides=1)
+        assert geom.image_size == 80 * 10 * 256
+        assert geom.num_sectors == 800
+
+    def test_double_sided_floppy_size(self):
+        geom = floppy_geometry(tracks=80, sides=2)
+        assert geom.image_size == 80 * 10 * 256 * 2
+        assert geom.num_sectors == 1600
+
+    def test_invalid_sides(self):
+        with pytest.raises(GeometryError):
+            floppy_geometry(tracks=80, sides=3)
+
+    def test_winchester_size(self):
+        geom = winchester_geometry(cylinders=100, heads=4, sectors_per_track=33)
+        assert geom.num_sectors == 100 * 4 * 33
+        assert geom.image_size == 100 * 4 * 33 * 256
+
+    def test_empty_geometry_rejected(self):
+        with pytest.raises(GeometryError):
+            Geometry(surface_specs=())
+
+
+class TestGeometryGrammar:
+    def test_preset_lookup(self):
+        small = floppy_geometry(tracks=40, sides=1, label="S")
+        grammar = GeometryGrammar(presets={"s": small}, kinds=(FLOPPY,))
+        assert grammar.parse("s") is small
+        assert grammar.parse("S") is small  # case-insensitive
+        assert grammar.preset_names() == ["s"]
+
+    def test_parameterised_floppy(self):
+        grammar = GeometryGrammar(kinds=(FLOPPY,))
+        geom = grammar.parse("tracks=80,sides=2")
+        assert geom.num_sectors == 1600
+
+    def test_parameterised_floppy_sequential(self):
+        grammar = GeometryGrammar(kinds=(FLOPPY,))
+        interleaved = grammar.parse("tracks=80,sides=2,interleave=interleaved")
+        sequential = grammar.parse("tracks=80,sides=2,interleave=sequential")
+        # Same capacity, different physical layout.
+        assert interleaved.num_sectors == sequential.num_sectors
+        assert interleaved.surface_specs != sequential.surface_specs
+
+    def test_parameterised_winchester(self):
+        grammar = GeometryGrammar(kinds=(WINCHESTER,))
+        geom = grammar.parse("cylinders=100,heads=4,spt=33")
+        assert geom.num_sectors == 100 * 4 * 33
+
+    def test_winchester_from_capacity(self):
+        import math
+
+        grammar = GeometryGrammar(kinds=(WINCHESTER,))
+        geom = grammar.parse("capacity=10MB")
+        # Default heads=4, spt=33; cylinders cover the requested capacity.
+        assert geom.heads == 4
+        assert geom.sectors_per_track == 33
+        assert geom.cylinders == math.ceil(10_000_000 / (4 * 33 * 256))
+
+    def test_winchester_capacity_with_explicit_heads_spt(self):
+        import math
+
+        grammar = GeometryGrammar(kinds=(WINCHESTER,))
+        geom = grammar.parse("capacity=20MB,heads=8,spt=32")
+        assert geom.heads == 8
+        assert geom.sectors_per_track == 32
+        assert geom.cylinders == math.ceil(20_000_000 / (8 * 32 * 256))
+
+    def test_winchester_capacity_rejected_without_kind(self):
+        floppy_only = GeometryGrammar(kinds=(FLOPPY,))
+        with pytest.raises(GeometryError, match="hard-disc"):
+            floppy_only.parse("capacity=10MB")
+
+    def test_kind_not_accepted(self):
+        floppy_only = GeometryGrammar(kinds=(FLOPPY,))
+        with pytest.raises(GeometryError, match="hard-disc"):
+            floppy_only.parse("cylinders=100,heads=4,spt=33")
+
+    def test_unparseable_spec_lists_presets(self):
+        grammar = GeometryGrammar(presets={"l": floppy_geometry(tracks=80, sides=2)})
+        with pytest.raises(GeometryError, match="l"):
+            grammar.parse("nonsense")
+
+    def test_unknown_spec_lists_what_is_accepted(self):
+        # A bare word (no '=') is a mistyped preset; the error names the
+        # parameterised forms this filesystem accepts rather than
+        # complaining about key=value syntax.
+        grammar = GeometryGrammar(kinds=(FLOPPY,))
+        with pytest.raises(GeometryError, match="accepts:.*tracks=N,sides=N"):
+            grammar.parse("tracks 80")
+
+    def test_partial_key_value_field_errors(self):
+        # A genuine key=value list with a bare field still errors clearly.
+        grammar = GeometryGrammar(kinds=(FLOPPY,))
+        with pytest.raises(GeometryError, match="key=value"):
+            grammar.parse("tracks=80,sides")
+
+
+class TestGeometryFromDsc:
+    @staticmethod
+    def _dsc(cylinders: int, heads: int) -> bytes:
+        data = bytearray(22)
+        data[13] = (cylinders >> 8) & 0xFF
+        data[14] = cylinders & 0xFF
+        data[15] = heads
+        return bytes(data)
+
+    def test_parses_chs_and_records_it(self):
+        geom = geometry_from_dsc(self._dsc(296, 4))
+        # CHS is recorded for reporting, even though the layout linearises.
+        assert geom.cylinders == 296
+        assert geom.heads == 4
+        assert geom.sectors_per_track == 33  # not in the .dsc; the Acorn default
+        assert geom.num_sectors == 296 * 4 * 33
+
+    def test_short_sidecar_rejected(self):
+        with pytest.raises(GeometryError, match="22 bytes"):
+            geometry_from_dsc(b"\x00" * 10)
+
+    def test_zero_geometry_rejected(self):
+        with pytest.raises(GeometryError, match="malformed"):
+            geometry_from_dsc(self._dsc(0, 0))

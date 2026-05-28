@@ -11,14 +11,14 @@ all built from the same colon-joined grammar:
 - ``IMAGE_SPEC`` — a host-OS path to a disc image file (``games.ssd``,
   ``/var/discs/scsi0.dat``, ``C:\\Discs\\hd.dat``).
 - ``PATH_SPEC`` — an in-image Acorn path (``$.DIR.FILE``, ``^.SIB``,
-  ``afs:$.Library``). It may carry a filing-system dispatch prefix.
+  ``afs:$.Library``). It may carry a partition selector.
 - ``FILE_SPEC`` — the two joined with a colon: ``games.ssd:$.HELLO``.
   This is what most commands accept; the colon (and the ``PATH_SPEC``
   after it) is optional when the command can default to the disc's
   root.
 
 Commands that operate on the disc as a whole (``disc create``,
-``disc validate``, ``disc afs-init``, …) take a plain ``IMAGE_SPEC``
+``disc validate``, ``disc afs init``, …) take a plain ``IMAGE_SPEC``
 because a ``PATH_SPEC`` would be meaningless. Commands that operate
 on a specific entry (``disc cat``, ``disc cp``, ``disc chmod``, …)
 take a ``FILE_SPEC``.
@@ -84,7 +84,7 @@ mkdir``) and recursive operations (``disc cp -r``, ``disc tree``)
 work the way Unix users would expect.
 
 **DFS — single-character directories under a nameless root.**
-A DFS catalogue holds up to 31 file entries (62 on Watford DDFS).
+A DFS catalogue holds up to 31 file entries (62 on Watford DFS).
 Each lives in one of 27 directories — ``$`` and ``A``–``Z`` — and
 all 27 are children of a nameless root. ``$`` is a sibling of
 ``A``–``Z``, not a container for them. ``$.MYPROG`` and
@@ -122,53 +122,46 @@ reason. ``disc tree`` does work on DFS images, but the resulting
 populated directory letter.
 
 
-Filing-system dispatch prefixes
--------------------------------
+Partition selectors
+--------------------
 
-A single ADFS hard-disc image can carry an AFS partition in its tail
+A single disc image can hold more than one partition: an ADFS hard-disc
+image, for instance, often carries an AFS partition in its tail
 cylinders — the on-disc layout the Acorn Level 3 File Server uses,
 sometimes called *AFS0* after the four-byte magic at the head of the
 partition (see the :doc:`glossary </glossary>` for the longer note).
-To tell ``disc`` which filing system to address, prefix the
-``PATH_SPEC`` with a filing-system tag:
+To address a particular partition, prefix the ``PATH_SPEC`` with the
+partition's *filesystem key* and a colon:
 
-.. code-block:: sh
+.. cli-example:: partition_selectors
+   :section: selectors
 
-   disc ls scsi0.dat                       # default: ADFS root
-   disc ls 'scsi0.dat:adfs:$'              # explicit ADFS
-   disc ls 'scsi0.dat:afs:$'               # AFS partition root
-   disc cat 'scsi0.dat:afs:$.Library.Free'
+The selector is the registered filesystem key — ``acorn-dfs``,
+``watford-dfs``, ``adfs``, ``afs``, … — the same vocabulary
+``disc list-filesystems`` prints and ``--filesystem`` accepts. Keys are
+lower-case, which is exactly what keeps a selector distinct from an
+Acorn path (``$``, ``^`` and upper-case names never look like one). The
+selector sits between the ``IMAGE_SPEC`` colon and the bare in-image
+path. When an image holds two partitions of the same filesystem, the
+first is the bare key and the rest are numbered from one: ``afs:`` is
+the first AFS partition, ``afs.1:`` the second.
 
-The three supported prefixes are ``dfs:``, ``adfs:``, and ``afs:``,
-case-insensitive (``AFS:``, ``Afs:`` and ``afs:`` all work). The
-prefix sits between the ``IMAGE_SPEC`` colon and the bare in-image
-path, and is preserved through the parser so the routing decision
-travels all the way to the filing-system handle.
+With no selector, ``disc`` identifies the image by its *content* — not
+its file extension — and mounts the best candidate (the whole-image
+host, so a combined ADFS+AFS disc opens at its ADFS root). Because
+detection reads the bytes, an image whose extension is missing or wrong
+still opens correctly.
 
-When no prefix is given, the filing system is auto-detected from the
-image filename:
+If nothing recognises the image, the error lists what is installed:
 
-.. list-table::
-   :header-rows: 1
+.. cli-example:: partition_selectors
+   :section: unrecognised
 
-   * - Extension
-     - Default filing system
-   * - ``.ssd``, ``.dsd``
-     - DFS
-   * - ``.adf``, ``.adl``, ``.dat``
-     - ADFS (which may then expose an AFS partition through ``afs:``)
+If you ask for a partition the image does not have, the error names the
+ones it does:
 
-If the extension is unrecognised, ``disc`` refuses to guess::
-
-   $ disc ls some.image
-   Error: cannot detect filing system from extension '.image'; use an
-   explicit prefix (dfs:, adfs:, afs:)
-
-If you ask for a filing system the image cannot provide, the error is
-immediate and specific::
-
-   $ disc ls 'games.ssd:adfs:$'
-   Error: image is DFS format; cannot access as ADFS
+.. cli-example:: partition_selectors
+   :section: wrong_partition
 
 
 Acorn star-aliases

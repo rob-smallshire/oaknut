@@ -52,6 +52,33 @@ class TestMergeExcludesPasswords:
         assert (tgt_reloaded.root / "Tool").read_bytes() == b"tool"
 
 
+class TestMergeCopiesSubdirectories:
+    """Merging a subtree that contains a directory must create that
+    directory on the target. merge passes the source entry's *wire*
+    Access to mkdir, so mkdir has to accept it (as write_bytes does);
+    previously it was used verbatim and ``Access.to_byte()`` blew up —
+    the failure the afs-merge cli-example hit via --emplace.
+    """
+
+    def test_merge_creates_nested_directory(self) -> None:
+        src_adfs = build_synthetic_adfs_with_afs(disc_name="Src")
+        tgt_adfs = build_synthetic_adfs_with_afs(disc_name="Tgt")
+        src = src_adfs.afs_partition
+        tgt = tgt_adfs.afs_partition
+
+        (src.root / "Docs").mkdir()
+        (src.root / "Docs" / "Sub").mkdir()
+        (src.root / "Docs" / "Sub" / "File").write_bytes(b"deep")
+
+        # Copy Docs's contents into Library: the Sub *directory* is created
+        # on the target with the source directory's (wire) access.
+        (tgt.root / "Library").mkdir()
+        merge(tgt, src, source_path=src.root / "Docs", target_path=tgt.root / "Library")
+
+        assert (tgt.root / "Library" / "Sub" / "File").read_bytes() == b"deep"
+        assert (tgt.root / "Library" / "Sub").is_dir()
+
+
 class TestEmplaceLibrary:
     """Bug 2: libraries should be emplaced into named directories."""
 
