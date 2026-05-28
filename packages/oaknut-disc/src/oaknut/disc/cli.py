@@ -915,8 +915,7 @@ def materialise(file_spec: str, command_argv: tuple[str, ...]) -> None:
         disc materialise 'img:$.PROG' -- ./run-emulator {}
         disc materialise 'img:$.HELLO' -- file {}
 
-    The command's stdout, stderr and exit code pass through unchanged —
-    ``materialise`` is a transparent wrapper, not a Reports producer.
+    The command's stdout, stderr and exit code pass through unchanged.
     """
     import subprocess
     import sys
