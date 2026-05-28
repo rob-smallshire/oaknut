@@ -19,13 +19,15 @@ emplaced into:
 
 Usage::
 
-    python scripts/build_library_images.py /path/to/econet-fs.tar
+    python scripts/build_library_images.py [/path/to/econet-fs.tar]
 
-Or with no arguments, the default source path is::
+With no arguments, the default source is the in-repo copy at
+``packages/oaknut-afs/scripts/econet-fs.tar`` — checked in alongside
+this script so the build is self-contained from a fresh clone. The
+tar lives under ``scripts/`` (not ``src/``) so it is not picked up by
+setuptools' source discovery and does not land in the published wheel.
 
-    /Users/rjs/Code/beebium/discs/l3fs/libraries/econet-fs.tar
-
-The canonical upstream tarball lives at
+The canonical upstream tarball is at
 ``https://zxnet.co.uk/beeb/econet-fs.tar``. It is a pax tar with
 ``SCHILY.xattr.user.econet_*`` headers carrying each file's Pi Econet
 Bridge metadata (load / exec / access). Python's :mod:`tarfile`
@@ -47,7 +49,7 @@ from pathlib import Path
 
 from oaknut.adfs import ADFS, ADFS_L
 
-_DEFAULT_TAR = Path("/Users/rjs/Code/beebium/discs/l3fs/libraries/econet-fs.tar")
+_DEFAULT_TAR = Path(__file__).resolve().parent / "econet-fs.tar"
 
 # Each output image and the tar directories whose files it contains.
 # When multiple source directories map to one image, their files are
