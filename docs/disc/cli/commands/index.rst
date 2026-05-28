@@ -35,6 +35,11 @@ Inspection
 
    .. cli-example:: cmd_find
 
+.. oaknut-command:: oaknut.disc.cli:for-each
+   :prog: disc for-each
+
+   .. cli-example:: cmd_for_each
+
 .. oaknut-command:: oaknut.disc.cli:freemap
    :prog: disc freemap
 

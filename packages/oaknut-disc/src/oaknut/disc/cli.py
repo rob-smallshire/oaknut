@@ -729,6 +729,93 @@ def _find_recursive(mount, path: str, pattern: str, prefix: str, rows: list[dict
             _find_recursive(mount, child.path, pattern, prefix, rows)
 
 
+@cli.command(name="for-each")
+@click.argument("file_spec")
+@click.argument("command_argv", nargs=-1, required=True)
+@report_output(
+    reports={
+        "results": "Per-file capture: path and the command's stdout, one row per match."
+    }
+)
+def for_each(file_spec: str, command_argv: tuple[str, ...]):
+    """Run a command for each file matching PATTERN.
+
+    Each matched file's content is piped to the command's stdin; the
+    command's stdout is captured per file and emitted alongside the
+    Acorn path as a Reports table. Combine with ``--as tsv > out.tsv``
+    for a path/output spreadsheet (md5sum, sha256sum, xxd, file, …).
+
+    Use ``--`` to separate ``disc``'s options from the command's, so
+    flags meant for the command are not interpreted by ``for-each``::
+
+        disc for-each 'img:*' -- md5sum
+
+    The search recurses into subdirectories by default and skips
+    directories (they have no content to pipe). The ``adfs:`` / ``afs:``
+    / ``acorn-dfs:`` partition selector scopes the search; without one,
+    every identified partition is searched and each result is emitted
+    with the selector that addresses it.
+    """
+    from asyoulikeit.tabular_data import Report, Reports, TableContent
+
+    from .mount import split_selector
+
+    image, pattern = parse_file_spec(file_spec)
+    if not pattern:
+        raise click.UsageError("PATTERN is required")
+    selector, bare_pattern = split_selector(pattern)
+
+    if selector is not None:
+        selectors = [selector]
+        emit_prefix = True
+    else:
+        selectors = partition_selectors(image)
+        emit_prefix = len(selectors) > 1
+
+    rows: list[dict] = []
+    argv = list(command_argv)
+    for sel in selectors:
+        resolved = resolve_mount(f"{image}:{sel}:")
+        mount = resolved.mount
+        prefix = f"{sel}:" if emit_prefix else ""
+        _for_each_recursive(mount, mount.path_root(), bare_pattern, prefix, argv, rows)
+
+    table = TableContent(title="results")
+    table.add_column("path", "Path", header=True)
+    table.add_column("output", "Output")
+    for row in rows:
+        table.add_row(**row)
+    return Reports(results=Report(data=table))
+
+
+def _for_each_recursive(
+    mount,
+    path: str,
+    pattern: str,
+    prefix: str,
+    command_argv: list[str],
+    rows: list[dict],
+) -> None:
+    """Walk *mount* from *path*; pipe each matching file through the command.
+
+    Files only — directories have no content to pipe; descend into them
+    but never invoke the command against one.
+    """
+    import subprocess
+
+    for child in mount.iter_entries(path):
+        if not child.is_dir and (
+            _match_acorn_wildcard(pattern, child.name)
+            or _match_acorn_wildcard(pattern, child.path)
+        ):
+            content = mount.read_bytes(child.path)
+            result = subprocess.run(command_argv, input=content, capture_output=True)
+            output = result.stdout.decode("utf-8", errors="replace").rstrip("\n")
+            rows.append({"path": f"{prefix}{child.path}", "output": output})
+        if child.is_dir:
+            _for_each_recursive(mount, child.path, pattern, prefix, command_argv, rows)
+
+
 @cli.command()
 @click.argument("file_spec")
 def freemap(file_spec: str) -> None:
