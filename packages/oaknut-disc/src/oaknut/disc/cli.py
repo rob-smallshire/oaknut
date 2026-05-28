@@ -741,13 +741,8 @@ _FOR_EACH_MODES = ("content", "inner-path", "compound-path", "materialise")
     default="content",
     show_default=True,
     help=(
-        "What each file is presented to the command as: its `content` "
-        "(bytes on stdin — md5sum, sha256sum, xxd); its `inner-path` "
-        "(the in-image path string, e.g. $.HELLO); its `compound-path` "
-        "(the full outer:inner addressable by `disc` itself — chain disc "
-        "commands); or `materialise` (the bytes written to a host temp "
-        "file, whose path is substituted, for tools that only take "
-        "regular files — file(1), image viewers, emulators)."
+        "How each file is presented to the command. See the command "
+        "description above for what each choice does."
     ),
 )
 @report_output(
@@ -763,10 +758,32 @@ def for_each(file_spec: str, command_argv: tuple[str, ...], mode: str):
 
         disc for-each 'img:*' -- md5sum
 
-    The substitution token ``{}`` in the command's args is replaced per
-    file with whichever value ``--mode`` selects (or appended if no
-    ``{}`` is present, find-style). ``--mode content`` (default) ignores
-    ``{}`` — bytes go to stdin instead.
+    The ``--mode`` option picks one of four ways to present each file
+    to the command:
+
+    - ``--mode content`` (the default) pipes the file's bytes to the
+      command's standard input. The shape for ``md5sum``,
+      ``sha256sum``, ``xxd`` and other tools that read stdin.
+
+    - ``--mode inner-path`` passes the file's in-image path as a string
+      — ``$.HELLO`` on DFS, ``Docs/Readme`` on a ZIP, whatever the
+      filesystem's syntax. For tools that want a path for logging,
+      templating, or filtering by name.
+
+    - ``--mode compound-path`` passes the full ``OUTER:INNER``, so the
+      rest of the ``disc`` CLI itself can act per file — ``disc cat``,
+      ``disc lock``, ``disc set-load`` and so on.
+
+    - ``--mode materialise`` writes the file's bytes to a host temp
+      file and passes that host path. For tools that only take real
+      files (``file(1)``, image viewers, emulators).
+
+    For every mode except ``content``, a per-file value has to reach
+    the command somewhere. By default it is appended as the last
+    argument (the same rule ``find -exec`` uses). Include the literal
+    ``{}`` token in the command's args to put the value somewhere else
+    — every ``{}`` is replaced per file by the value ``--mode``
+    selected.
 
     The search recurses into subdirectories by default and skips
     directories (they have no content to operate on). The ``adfs:`` /
