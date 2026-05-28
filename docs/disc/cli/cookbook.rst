@@ -379,18 +379,21 @@ Trimming the marker
 ~~~~~~~~~~~~~~~~~~~
 
 If you'd rather the second column hold *only* the hash — for
-downstream tooling that expects ``<path>\t<hash>`` and nothing else
-— wrap the per-file command in a tiny shell pipeline that drops the
-trailing tokens:
+downstream tooling that expects ``<path>\t<hash>`` and nothing else —
+strip the trailing ``  -`` *from the resulting stream* rather than
+wrapping every per-file invocation. The for-each output is a regular
+TSV; post-process it as you would any other table:
 
 .. cli-example:: checksum_each_file
    :section: md5sum-trim
 
-The wrapper runs inside the per-file invocation, so the framing is
-unchanged — ``disc`` still sees one stdout per file and treats it as
-that file's row. The same trick generalises to anything else whose
-output you'd like to shape per file: ``awk``, ``cut``, ``tr``, a
-one-line Python script, your choice.
+One ``sed`` invocation reshapes the whole stream, ``md5sum`` itself
+stays untouched, and the trimming happens once at the end — not
+inside a per-file shell wrapper that spawns three processes for every
+match. The same principle generalises: rename columns with ``awk``,
+sort with ``sort``, drop rows by pattern with ``grep -v`` — the
+for-each output is just text, available to the rest of the shell's
+toolbox.
 
 Other shapes
 ~~~~~~~~~~~~

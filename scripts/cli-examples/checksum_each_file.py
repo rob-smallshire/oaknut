@@ -34,4 +34,4 @@ with in_tmp_dir():
     show("disc for-each 'archive.ssd:*' -- md5sum")
 
     section("md5sum-trim")
-    show("disc for-each 'archive.ssd:*' -- sh -c 'md5sum | cut -d \" \" -f 1'")
+    show("disc for-each 'archive.ssd:*' -- md5sum | sed 's/  -$//'")
