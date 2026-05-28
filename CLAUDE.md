@@ -123,8 +123,7 @@ When implementing a non-trivial change, write a failing test first, then make it
 Package-specific CLAUDE.md files that inherit from this one:
 
 - `packages/oaknut-dfs/CLAUDE.md` — DFS module layout, layer flow, testing entry points.
-- `packages/oaknut-zip/CLAUDE.md` — ZIP archive handling specifics.
 
 - `packages/oaknut-afs/CLAUDE.md` — AFS module architecture, primary sources, testing.
 
-The other packages (`oaknut-file`, `oaknut-discimage`, `oaknut-adfs`, `oaknut-basic`) don't currently ship a per-package CLAUDE.md; their scope is described in the layering table above.
+The other packages (`oaknut-file`, `oaknut-discimage`, `oaknut-adfs`, `oaknut-basic`, `oaknut-zip`) don't currently ship a per-package CLAUDE.md; their scope is described in the layering table above.
