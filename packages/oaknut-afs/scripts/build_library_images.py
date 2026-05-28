@@ -13,6 +13,9 @@ emplaced into:
 - ``Library.adl``   — BBC Model B/B+ client libraries + shared Utils
 - ``Library1.adl``  — Master 128/Compact client libraries
 - ``ArthurLib.adl`` — Archimedes client libraries
+- ``Utils.adl``     — shared Utils, also packaged on its own so an
+                      install can place the utilities in their own
+                      directory rather than alongside the BBC Library
 
 Usage::
 
@@ -21,12 +24,24 @@ Usage::
 Or with no arguments, the default source path is::
 
     /Users/rjs/Code/beebium/discs/l3fs/libraries/econet-fs.tar
+
+The canonical upstream tarball lives at
+``https://zxnet.co.uk/beeb/econet-fs.tar``. It is a pax tar with
+``SCHILY.xattr.user.econet_*`` headers carrying each file's Pi Econet
+Bridge metadata (load / exec / access). Python's :mod:`tarfile`
+exposes those headers via :attr:`TarInfo.pax_headers` but its
+``extractall`` does not write them to disk, so we shell out to
+``tar -xf ... --xattrs`` for the extraction step — bsdtar (macOS) and
+GNU tar (Linux) both support that flag, and the rest of the build
+then reads the xattrs through ``oaknut.file.import_with_metadata``'s
+``XATTR_ACORN`` reader (which falls through to the ``user.econet_*``
+namespace).
 """
 
 from __future__ import annotations
 
+import subprocess
 import sys
-import tarfile
 import tempfile
 from pathlib import Path
 
@@ -41,6 +56,7 @@ _IMAGE_SPEC: dict[str, list[str]] = {
     "Library": ["Utils", "Library"],
     "Library1": ["Library1"],
     "ArthurLib": ["ArthurLib"],
+    "Utils": ["Utils"],
 }
 
 _DEST_DIRPATH = Path(__file__).resolve().parent.parent / "src" / "oaknut" / "afs" / "libraries"
@@ -86,8 +102,12 @@ def main(argv: list[str] | None = None) -> int:
 
     with tempfile.TemporaryDirectory() as tmpdir:
         tmp = Path(tmpdir)
-        with tarfile.open(tar_filepath, "r:*") as tf:
-            tf.extractall(tmp, filter="data")
+        # Shell out so the xattrs in the pax SCHILY.xattr.* headers
+        # actually land on the extracted files; see module docstring.
+        subprocess.run(
+            ["tar", "-xf", str(tar_filepath), "-C", str(tmp), "--xattrs"],
+            check=True,
+        )
 
         for image_name, dirnames in _IMAGE_SPEC.items():
             source_dirpaths = []
