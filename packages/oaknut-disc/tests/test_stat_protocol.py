@@ -67,9 +67,7 @@ class TestStatProtocolConformance:
         assert st.length >= 0
 
     @pytest.mark.parametrize("fixture_name", ["dfs_stat", "adfs_stat", "afs_stat"])
-    def test_is_directory_false_for_regular_file(
-        self, request, fixture_name: str
-    ) -> None:
+    def test_is_directory_false_for_regular_file(self, request, fixture_name: str) -> None:
         st = request.getfixturevalue(fixture_name)
         assert st.is_directory is False
 
@@ -107,9 +105,7 @@ class TestAFSStatExtras:
         # AFS extra field surviving the protocol uniformisation.
         assert isinstance(st.afs_access, AFSAccess)
 
-    def test_afs_stat_canonical_access_matches_afs_access(
-        self, afs_image_filepath: Path
-    ) -> None:
+    def test_afs_stat_canonical_access_matches_afs_access(self, afs_image_filepath: Path) -> None:
         with ADFS.from_file(afs_image_filepath) as adfs:
             afs = adfs.afs_partition
             st = (afs.root / "Greeting").stat()

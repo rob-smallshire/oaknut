@@ -133,9 +133,7 @@ class OldFreeSpaceMap:
         free_end = self._data[_FREE_END_OFFSET]
         if free_end % 3 != 0:
             errors.append(
-                ADFSValidationError(
-                    f"FreeEnd pointer ({free_end}) is not a multiple of 3"
-                )
+                ADFSValidationError(f"FreeEnd pointer ({free_end}) is not a multiple of 3")
             )
 
         if free_end > _MAX_FREE_ENTRIES * _BYTES_PER_ENTRY:

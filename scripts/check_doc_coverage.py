@@ -101,9 +101,7 @@ def resolve(dotted_name: str) -> object | None:
 def check_api(inventory_filepath: Path, packages: list[str]) -> int:
     """Check that every package's ``__all__`` is documented in the inventory."""
     if not inventory_filepath.is_file():
-        raise SystemExit(
-            f"inventory not found: {inventory_filepath} — build the HTML docs first"
-        )
+        raise SystemExit(f"inventory not found: {inventory_filepath} — build the HTML docs first")
 
     documented = documented_py_names(inventory_filepath)
 
@@ -118,10 +116,7 @@ def check_api(inventory_filepath: Path, packages: list[str]) -> int:
         if f"{package}.{name}" in documented:
             return True
         obj = getattr(importlib.import_module(package), name)
-        return any(
-            resolve(candidate) is obj
-            for candidate in documented_by_leaf.get(name, ())
-        )
+        return any(resolve(candidate) is obj for candidate in documented_by_leaf.get(name, ()))
 
     missing: dict[str, list[str]] = {}
     for package in packages:
@@ -221,21 +216,16 @@ def check_commands(reference_filepath: Path, examples_dirpath: Path) -> int:
 
     undocumented = sorted(commands - set(documented))
     if undocumented:
-        problems.append(
-            "commands with no .. oaknut-command:: entry: " + ", ".join(undocumented)
-        )
+        problems.append("commands with no .. oaknut-command:: entry: " + ", ".join(undocumented))
 
     stale = sorted(set(documented) - commands)
     if stale:
-        problems.append(
-            "documented commands that no longer exist on the CLI: " + ", ".join(stale)
-        )
+        problems.append("documented commands that no longer exist on the CLI: " + ", ".join(stale))
 
     without_example = sorted(name for name, examples in documented.items() if not examples)
     if without_example:
         problems.append(
-            "documented commands with no .. cli-example:: directive: "
-            + ", ".join(without_example)
+            "documented commands with no .. cli-example:: directive: " + ", ".join(without_example)
         )
 
     missing_scripts = sorted(
@@ -245,9 +235,7 @@ def check_commands(reference_filepath: Path, examples_dirpath: Path) -> int:
         if not (examples_dirpath / f"{example}.py").is_file()
     )
     if missing_scripts:
-        problems.append(
-            "cli-example scripts referenced but absent: " + ", ".join(missing_scripts)
-        )
+        problems.append("cli-example scripts referenced but absent: " + ", ".join(missing_scripts))
 
     if problems:
         print(f"Command reference coverage gaps ({reference_filepath}):\n")

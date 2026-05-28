@@ -42,48 +42,40 @@ class TestMaterialise:
         # fd 1 (not into CliRunner's in-process stdout buffer); capfd is
         # what reads it back in tests.
         img = _make_disc(tmp_path)
-        result = runner.invoke(
-            cli, ["materialise", f"{img}:$.HELLO", "--", "cat", "{}"]
-        )
+        result = runner.invoke(cli, ["materialise", f"{img}:$.HELLO", "--", "cat", "{}"])
         out, _ = capfd.readouterr()
         assert result.exit_code == 0
         assert out.strip() == "hi there"
 
-    def test_appends_path_when_no_brace(
-        self, runner: CliRunner, tmp_path: Path, capfd
-    ) -> None:
+    def test_appends_path_when_no_brace(self, runner: CliRunner, tmp_path: Path, capfd) -> None:
         img = _make_disc(tmp_path)
-        result = runner.invoke(
-            cli, ["materialise", f"{img}:$.HELLO", "--", "cat"]
-        )
+        result = runner.invoke(cli, ["materialise", f"{img}:$.HELLO", "--", "cat"])
         out, _ = capfd.readouterr()
         assert result.exit_code == 0
         assert out.strip() == "hi there"
 
-    def test_temp_file_is_cleaned_up_after(
-        self, runner: CliRunner, tmp_path: Path, capfd
-    ) -> None:
+    def test_temp_file_is_cleaned_up_after(self, runner: CliRunner, tmp_path: Path, capfd) -> None:
         img = _make_disc(tmp_path)
-        result = runner.invoke(
-            cli, ["materialise", f"{img}:$.HELLO", "--", *_ECHO_ARGV, "{}"]
-        )
+        result = runner.invoke(cli, ["materialise", f"{img}:$.HELLO", "--", *_ECHO_ARGV, "{}"])
         out, _ = capfd.readouterr()
         assert result.exit_code == 0
         temp_path = out.strip()
         assert temp_path, "echo subprocess emitted no path"
         assert not Path(temp_path).exists(), f"temp file leaked: {temp_path}"
 
-    def test_propagates_command_exit_code(
-        self, runner: CliRunner, tmp_path: Path
-    ) -> None:
+    def test_propagates_command_exit_code(self, runner: CliRunner, tmp_path: Path) -> None:
         img = _make_disc(tmp_path)
         # A command that exits 7 unconditionally; the disc command's exit
         # code follows.
         result = runner.invoke(
             cli,
             [
-                "materialise", f"{img}:$.HELLO",
-                "--", sys.executable, "-c", "import sys; sys.exit(7)",
+                "materialise",
+                f"{img}:$.HELLO",
+                "--",
+                sys.executable,
+                "-c",
+                "import sys; sys.exit(7)",
             ],
         )
         assert result.exit_code == 7
@@ -93,8 +85,8 @@ class TestMaterialise:
         result = runner.invoke(cli, ["materialise", f"{img}:$.HELLO"])
         assert result.exit_code != 0
 
-    def test_file_spec_required(self, runner: CliRunner, tmp_path: Path) -> None:
+    def test_compound_path_required(self, runner: CliRunner, tmp_path: Path) -> None:
         img = _make_disc(tmp_path)
-        # bare image, no PATH_SPEC — materialise needs to address a file.
+        # bare image, no INNER_PATH — materialise needs to address a file.
         result = runner.invoke(cli, ["materialise", str(img), "--", "cat"])
         assert result.exit_code != 0

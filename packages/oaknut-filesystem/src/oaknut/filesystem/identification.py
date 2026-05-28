@@ -89,8 +89,6 @@ class Identification:
         """True unless this is a reserved-but-unrecognised region."""
         return bool(self.filesystem)
 
-    def with_contained(
-        self, contained: tuple["Identification", ...]
-    ) -> "Identification":
+    def with_contained(self, contained: tuple["Identification", ...]) -> "Identification":
         """A copy with :attr:`contained` set (this dataclass is frozen)."""
         return replace(self, contained=contained)

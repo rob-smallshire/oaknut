@@ -153,8 +153,7 @@ def _align_run(run: list[str], gap: int) -> list[str]:
     aligned: list[str] = []
     for row in rows:
         parts = [
-            row[c].ljust(widths[c] + gap) if c < num_cols - 1 else row[c]
-            for c in range(num_cols)
+            row[c].ljust(widths[c] + gap) if c < num_cols - 1 else row[c] for c in range(num_cols)
         ]
         aligned.append("".join(parts))
     return aligned

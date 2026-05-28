@@ -51,10 +51,10 @@ with in_tmp_dir():
     # not exist, matching Unix `cp -r SRC DEST` — no explicit
     # `disc mkdir` is needed.
     show(
-        'for ssd in *.ssd; do\n'
+        "for ssd in *.ssd; do\n"
         '  name="$(basename "$ssd" .ssd | sed -E \'s/.*-([A-Z][a-z]+).*/\\1/\')"\n'
         '  disc cp -r "$ssd:\\$" "games.dat:\\$.$name"\n'
-        'done'
+        "done"
     )
 
     section("verify")

@@ -131,9 +131,9 @@ The resulting layering (a new package, no cycle):
 depends on `oaknut-cli`. Because `oaknut-cli` is strictly below the
 filesystem packages, nothing points back up — the cycle is gone.
 
-`resolve_mount` / FILE_SPEC parsing stay in `oaknut-disc`: the
+`resolve_mount` / COMPOUND_PATH parsing stay in `oaknut-disc`: the
 contributed admin commands take a plain image path (`click.Path`), not a
-partition-addressing FILE_SPEC, so they don't need the mount substrate.
+partition-addressing COMPOUND_PATH, so they don't need the mount substrate.
 
 ## 5. What moves where
 
@@ -151,7 +151,7 @@ kit afterwards).
 ### Naming note: `disc afs` the command vs `afs:` the selector
 
 `disc afs init` (a subcommand) is distinct from the `afs:` partition
-selector inside a FILE_SPEC argument (`disc ls image:afs:`). One is a
+selector inside a COMPOUND_PATH argument (`disc ls image:afs:`). One is a
 command name in the argv command position; the other is part of an
 argument value parsed by `split_selector`. They never occupy the same
 grammatical slot, so there is no ambiguity.

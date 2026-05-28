@@ -6,10 +6,10 @@ from pathlib import Path
 
 import click
 import pytest
-from oaknut.disc.cli_paths import parse_file_spec
+from oaknut.disc.cli_paths import parse_compound_path
 
 
-class TestParseImageArg:
+class TestParseCompoundPath:
     """Tests for the fused IMAGE[:PATH] parser.
 
     Every command accepts a single positional spec where the host image
@@ -26,13 +26,13 @@ class TestParseImageArg:
 
     def test_bare_image(self, tmp_path: Path) -> None:
         img = self._make_image(tmp_path)
-        image, in_image = parse_file_spec(str(img))
+        image, in_image = parse_compound_path(str(img))
         assert image == img
         assert in_image == ""
 
     def test_fused_form(self, tmp_path: Path) -> None:
         img = self._make_image(tmp_path)
-        image, in_image = parse_file_spec(f"{img}:$.Games")
+        image, in_image = parse_compound_path(f"{img}:$.Games")
         assert image == img
         assert in_image == "$.Games"
 
@@ -40,7 +40,7 @@ class TestParseImageArg:
         # The adfs:/afs:/dfs: prefix sits on the in-image side of the
         # outer image colon and must pass through unchanged.
         img = self._make_image(tmp_path)
-        image, in_image = parse_file_spec(f"{img}:afs:$.Library")
+        image, in_image = parse_compound_path(f"{img}:afs:$.Library")
         assert image == img
         assert in_image == "afs:$.Library"
 
@@ -48,23 +48,23 @@ class TestParseImageArg:
         # "image:" is a deliberate "fused, but no path" — equivalent to
         # the bare image form; the in-image string is "".
         img = self._make_image(tmp_path)
-        image, in_image = parse_file_spec(f"{img}:")
+        image, in_image = parse_compound_path(f"{img}:")
         assert image == img
         assert in_image == ""
 
     def test_fused_form_image_not_found(self, tmp_path: Path) -> None:
-        # Colon in file_spec definitively signals fused intent. When
+        # Colon in compound_path definitively signals fused intent. When
         # the LHS portion doesn't exist, the error message must quote
         # only that portion, not the whole string, so the user can
         # see immediately what was looked up.
         nonexistent = tmp_path / "missing.ssd"
         with pytest.raises(click.UsageError, match=r"image not found:.*missing\.ssd"):
-            parse_file_spec(f"{nonexistent}:$.Games")
+            parse_compound_path(f"{nonexistent}:$.Games")
 
     def test_bare_image_not_found(self, tmp_path: Path) -> None:
         nonexistent = tmp_path / "missing.ssd"
         with pytest.raises(click.UsageError, match=r"image not found:.*missing\.ssd"):
-            parse_file_spec(str(nonexistent))
+            parse_compound_path(str(nonexistent))
 
     def test_windows_drive_letter_skipped(self, tmp_path: Path) -> None:
         # The first colon in C:\... is the drive letter; the next colon
@@ -73,7 +73,7 @@ class TestParseImageArg:
         # path, not just "C".
         spec = r"C:\images\disc.ssd:$.Hello"
         with pytest.raises(click.UsageError, match=r"image not found:.*C.\\images"):
-            parse_file_spec(spec)
+            parse_compound_path(spec)
 
     def test_windows_drive_letter_with_real_file(self, tmp_path: Path) -> None:
         # A real directory at tmp_path/C/disc.ssd. The leading portion
@@ -84,6 +84,6 @@ class TestParseImageArg:
         d.mkdir()
         img = d / "disc.ssd"
         img.write_bytes(b"\x00" * 100)
-        image, in_image = parse_file_spec(f"{img}:$.Test")
+        image, in_image = parse_compound_path(f"{img}:$.Test")
         assert image == img
         assert in_image == "$.Test"

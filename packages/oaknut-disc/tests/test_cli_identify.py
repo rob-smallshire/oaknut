@@ -118,26 +118,20 @@ class TestExplicitDfsPrefix:
     not an ``dfs:`` family alias.
     """
 
-    def test_bare_prefix_lists_virtual_root(
-        self, runner: CliRunner, dfs_image_filepath
-    ):
+    def test_bare_prefix_lists_virtual_root(self, runner: CliRunner, dfs_image_filepath):
         # acorn-dfs: (empty path) lists the disc's nameless virtual root,
         # which for DFS holds the populated directory letters.
         result = runner.invoke(cli, ["ls", f"{dfs_image_filepath}:acorn-dfs:"])
         assert result.exit_code == 0
         assert "$" in result.output
 
-    def test_prefix_with_root_lists_files(
-        self, runner: CliRunner, dfs_image_filepath
-    ):
+    def test_prefix_with_root_lists_files(self, runner: CliRunner, dfs_image_filepath):
         # acorn-dfs:$ lists inside $ — the files themselves.
         result = runner.invoke(cli, ["ls", f"{dfs_image_filepath}:acorn-dfs:$"])
         assert result.exit_code == 0
         assert "HELLO" in result.output
 
-    def test_prefix_rejects_mismatched_content(
-        self, runner: CliRunner, adfs_image_filepath
-    ):
+    def test_prefix_rejects_mismatched_content(self, runner: CliRunner, adfs_image_filepath):
         # An ADFS image has no acorn-dfs partition: a clean "no such
         # partition" error, not garbage.
         result = runner.invoke(cli, ["ls", f"{adfs_image_filepath}:acorn-dfs:"])

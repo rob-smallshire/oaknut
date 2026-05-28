@@ -114,7 +114,7 @@ via recursion).
   (batteries-included). The change is that the *code* imports and branches on
   none of them — it dispatches through the coordinator and capabilities.
   A reusable **mount-resolution substrate** (`oaknut/disc/mount.py`)
-  turns a `FILE_SPEC` into a mounted partition + in-partition path; every
+  turns a `COMPOUND_PATH` into a mounted partition + in-partition path; every
   command calls it instead of the per-filing-system `open_image`/`_navigate`.
 - Addressing (`cli_paths.py` rewrite): prefix = partition selector
   `<filesystem>[.<index>]`; the in-partition remainder is handed to the

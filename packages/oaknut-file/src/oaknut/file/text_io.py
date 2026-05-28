@@ -23,9 +23,7 @@ BBC ROM expects.
 from __future__ import annotations
 
 
-def decode_text(
-    data: bytes, *, encoding: str = "acorn", newline: str | None = None
-) -> str:
+def decode_text(data: bytes, *, encoding: str = "acorn", newline: str | None = None) -> str:
     """Decode ``data`` as text, optionally normalising line endings.
 
     Args:
@@ -46,9 +44,7 @@ def decode_text(
     return text
 
 
-def encode_text(
-    text: str, *, encoding: str = "acorn", newline: str | None = "\r"
-) -> bytes:
+def encode_text(text: str, *, encoding: str = "acorn", newline: str | None = "\r") -> bytes:
     """Encode ``text`` as bytes, optionally translating line endings.
 
     Args:

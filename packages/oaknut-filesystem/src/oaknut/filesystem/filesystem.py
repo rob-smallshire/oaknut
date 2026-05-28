@@ -107,6 +107,4 @@ class Filesystem(Extension):
         Filesystems that are not created standalone (AFS lives inside an
         ADFS disc; archives) do not override this and decline.
         """
-        raise FilesystemError(
-            f"{self.name} images cannot be created with `disc create`"
-        )
+        raise FilesystemError(f"{self.name} images cannot be created with `disc create`")

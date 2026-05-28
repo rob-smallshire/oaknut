@@ -257,7 +257,7 @@ selector routes ``disc`` to the right partition::
    disc cat 'scsi0.dat:afs:$.Library.Free'
 
 See :doc:`conventions/paths` for the full breakdown of
-``FILE_SPEC = IMAGE_SPEC:PATH_SPEC``, partition selectors, and
+``COMPOUND_PATH = OUTER_PATH:INNER_PATH``, partition selectors, and
 content-based identification.
 
 

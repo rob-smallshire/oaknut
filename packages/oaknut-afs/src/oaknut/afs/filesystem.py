@@ -105,9 +105,7 @@ class _AFSMount:
             return Entry(name="$", is_dir=True, length=0, path="$")
         target = self._navigate(path)
         st = target.stat()
-        return Entry(
-            name=st.name, is_dir=st.is_directory, length=st.length, path=target.path
-        )
+        return Entry(name=st.name, is_dir=st.is_directory, length=st.length, path=target.path)
 
     def join(self, parent: str, name: str) -> str:
         return (self._navigate(parent) / name).path
@@ -115,9 +113,7 @@ class _AFSMount:
     def iter_entries(self, path: str) -> Iterable[Entry]:
         for child in self._navigate(path).iterdir():
             st = child.stat()
-            yield Entry(
-                name=st.name, is_dir=st.is_directory, length=st.length, path=child.path
-            )
+            yield Entry(name=st.name, is_dir=st.is_directory, length=st.length, path=child.path)
 
     def exists(self, path: str) -> bool:
         return self._is_root(path) or self._navigate(path).exists()
@@ -277,11 +273,9 @@ class AFS(Filesystem):
         if info is None:
             return None
         spc = info.sectors_per_cylinder
-        verified = (
-            spc > 0
-            and reader.read((1 + spc) * INFO_SECTOR_SIZE, INFO_SECTOR_SIZE)
-            == reader.read(_INFO_SECTOR_OFFSET, INFO_SECTOR_SIZE)
-        )
+        verified = spc > 0 and reader.read(
+            (1 + spc) * INFO_SECTOR_SIZE, INFO_SECTOR_SIZE
+        ) == reader.read(_INFO_SECTOR_OFFSET, INFO_SECTOR_SIZE)
         evidence = [f"AFS0 info sector (disc {info.disc_name!r})"]
         evidence.append("redundant copy verified" if verified else "single info-sector copy")
         return Identification(
@@ -301,9 +295,7 @@ class AFS(Filesystem):
         region_base = info.start_cylinder * spc
         sec1 = region_base + 1
         sec2 = sec1 + spc
-        return _AFSMount(
-            _AFSRegion(_window_disc(reader), sec1, sec2, region_base=region_base)
-        )
+        return _AFSMount(_AFSRegion(_window_disc(reader), sec1, sec2, region_base=region_base))
 
     def geometry_grammar(self) -> GeometryGrammar:
         # AFS geometry is dictated by its host, not independently chosen.

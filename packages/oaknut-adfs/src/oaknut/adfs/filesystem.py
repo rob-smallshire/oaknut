@@ -114,9 +114,7 @@ class _ADFSMount:
     def stat(self, path: str) -> Entry:
         target = self._navigate(path)
         st = target.stat()
-        return Entry(
-            name=target.name, is_dir=st.is_directory, length=st.length, path=target.path
-        )
+        return Entry(name=target.name, is_dir=st.is_directory, length=st.length, path=target.path)
 
     def join(self, parent: str, name: str) -> str:
         return (self._navigate(parent) / name).path
@@ -124,9 +122,7 @@ class _ADFSMount:
     def iter_entries(self, path: str) -> Iterable[Entry]:
         for child in self._navigate(path).iterdir():
             st = child.stat()
-            yield Entry(
-                name=child.name, is_dir=st.is_directory, length=st.length, path=child.path
-            )
+            yield Entry(name=child.name, is_dir=st.is_directory, length=st.length, path=child.path)
 
     def exists(self, path: str) -> bool:
         return self._navigate(path).exists()
@@ -245,9 +241,7 @@ class _ADFSMount:
         from oaknut.filesystem import FreeMapData
 
         fsm = self._adfs._fsm
-        regions = tuple(
-            (start // 256, length // 256) for start, length in fsm.free_space_entries()
-        )
+        regions = tuple((start // 256, length // 256) for start, length in fsm.free_space_entries())
         return FreeMapData(free_regions=regions, total_sectors=fsm.total_sectors)
 
     # -- Compactable --
@@ -350,8 +344,6 @@ class ADFS(Filesystem):
         by_size = {fmt.total_bytes: fmt for fmt in (ADFS_S, ADFS_M, ADFS_L)}
         adfs_format = by_size.get(geometry.image_size)
         if adfs_format is None:
-            raise FilesystemError(
-                f"no ADFS floppy format for a {geometry.image_size}-byte image"
-            )
+            raise FilesystemError(f"no ADFS floppy format for a {geometry.image_size}-byte image")
         with _ADFSDisc.create_file(filepath, adfs_format, title=title):
             pass

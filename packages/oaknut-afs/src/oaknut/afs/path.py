@@ -451,13 +451,9 @@ class AFSPath(AcornPath):
             raise AFSPathError("cannot touch the root directory")
         if self.exists():
             if self.is_dir():
-                raise AFSPathError(
-                    f"{self.path!r} is a directory, cannot touch"
-                )
+                raise AFSPathError(f"{self.path!r} is a directory, cannot touch")
             if not exist_ok:
-                raise AFSDirectoryEntryExistsError(
-                    f"file {self.path!r} already exists"
-                )
+                raise AFSDirectoryEntryExistsError(f"file {self.path!r} already exists")
             new_date = date if date is not None else AfsDate(datetime.date.today())
             entry = self.directory_entry()
             self.write_bytes(
@@ -528,9 +524,7 @@ class AFSPath(AcornPath):
             if self.is_dir():
                 if exist_ok:
                     return
-                raise AFSDirectoryEntryExistsError(
-                    f"directory {self.path!r} already exists"
-                )
+                raise AFSDirectoryEntryExistsError(f"directory {self.path!r} already exists")
             raise AFSPathError(f"{self.path!r} already exists as a file")
 
         # Normalise the access at the boundary (the same helper write_bytes
@@ -845,6 +839,7 @@ class AFSPath(AcornPath):
         # Apply richer access bits via chmod if the source had them.
         if meta.access is not None:
             self.chmod(int(meta.access))
+
 
 # ---------------------------------------------------------------------------
 # Helpers

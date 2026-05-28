@@ -662,9 +662,7 @@ class AcornDFSCatalogue(Catalogue):
         disc_info = self.get_disc_info()
         if disc_info.num_files > self.MAX_FILES:
             errors.append(
-                DFSValidationError(
-                    f"Too many files: {disc_info.num_files} > {self.MAX_FILES}"
-                )
+                DFSValidationError(f"Too many files: {disc_info.num_files} > {self.MAX_FILES}")
             )
 
         files = self.list_files()
@@ -694,9 +692,7 @@ class AcornDFSCatalogue(Catalogue):
         names = [f.path.upper() for f in files]
         duplicates = [name for name in set(names) if names.count(name) > 1]
         if duplicates:
-            errors.append(
-                DFSValidationError(f"Duplicate filenames: {', '.join(duplicates)}")
-            )
+            errors.append(DFSValidationError(f"Duplicate filenames: {', '.join(duplicates)}"))
 
         return errors
 

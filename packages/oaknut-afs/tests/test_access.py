@@ -127,10 +127,7 @@ class TestAcornWireConversion:
 
         afs = AFSAccess.from_acorn(Access.L | Access.W | Access.R | Access.PR)
         assert afs == (
-            AFSAccess.LOCKED
-            | AFSAccess.OWNER_WRITE
-            | AFSAccess.OWNER_READ
-            | AFSAccess.PUBLIC_READ
+            AFSAccess.LOCKED | AFSAccess.OWNER_WRITE | AFSAccess.OWNER_READ | AFSAccess.PUBLIC_READ
         )
 
     def test_from_acorn_drops_execute_and_sets_no_directory_bit(self) -> None:

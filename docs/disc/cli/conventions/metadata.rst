@@ -31,10 +31,10 @@ The four commands that cross the host boundary
    * - Command
      - Direction
      - Default ``--meta-format``
-   * - ``disc get FILE_SPEC [HOST_PATH]``
+   * - ``disc get COMPOUND_PATH [HOST_PATH]``
      - image → host (one file)
      - ``inf-trad``
-   * - ``disc put FILE_SPEC [HOST_PATH]``
+   * - ``disc put COMPOUND_PATH [HOST_PATH]``
      - host → image (one file)
      - import cascade (see :ref:`metadata-import-cascade`)
    * - ``disc export IMAGE HOST_DIR``

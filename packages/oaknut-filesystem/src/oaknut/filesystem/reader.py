@@ -190,7 +190,5 @@ def reader_for(
         handle = path.open("r+b" if writable else "rb")
         access = mmap.ACCESS_WRITE if writable else mmap.ACCESS_READ
         mapping = mmap.mmap(handle.fileno(), 0, access=access)
-        return ImageReader(
-            mapping, suffix=suffix, writable=writable, _closeables=(mapping, handle)
-        )
+        return ImageReader(mapping, suffix=suffix, writable=writable, _closeables=(mapping, handle))
     raise TypeError(f"cannot build an ImageReader from {type(source).__name__}")

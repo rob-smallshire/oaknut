@@ -84,10 +84,10 @@ class TestWritableMount:
     def test_writable_afs_partition_on_hard_disc_persists(self, tmp_path):
         import shutil
 
-        image_filepath = tmp_path / "l3fs.dat"
-        shutil.copy(_L3FS_DAT, image_filepath)
-        with resolve_mount(f"{image_filepath}:afs:$", writable=True) as resolved:
+        outer_filepath = tmp_path / "l3fs.dat"
+        shutil.copy(_L3FS_DAT, outer_filepath)
+        with resolve_mount(f"{outer_filepath}:afs:$", writable=True) as resolved:
             assert resolved.filesystem == "afs"
             resolved.mount.write_bytes("$.NEWFILE", b"persisted")
-        resolved = resolve_mount(f"{image_filepath}:afs:$")
+        resolved = resolve_mount(f"{outer_filepath}:afs:$")
         assert resolved.mount.read_bytes("$.NEWFILE") == b"persisted"

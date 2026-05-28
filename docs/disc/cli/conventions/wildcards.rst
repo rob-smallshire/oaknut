@@ -1,7 +1,7 @@
 Wildcards
 =========
 
-Some ``disc`` commands accept a glob pattern in the ``PATH_SPEC`` —
+Some ``disc`` commands accept a glob pattern in the ``INNER_PATH`` —
 ``disc find`` to locate matching paths, ``disc cp``, ``disc mv``,
 ``disc rm``, ``disc chmod``, ``disc lock``, ``disc unlock``,
 ``disc set-load``, and ``disc set-exec`` to apply an operation
@@ -48,7 +48,7 @@ Commands that walk into subdirectories carry an explicit ``-r`` /
 ``disc lock``, ``disc unlock``). For wildcard-driven searches across
 the whole tree, ``disc find`` traverses every directory and matches
 the pattern against both the bare filename and the fully-qualified
-``PATH_SPEC`` of each entry::
+``INNER_PATH`` of each entry::
 
    disc find 'image.adl:Elite'         # any file named "Elite"
    disc find 'image.adl:$.Games.*'     # everything directly under $.Games
@@ -113,7 +113,7 @@ in the disc image::
    #                                   scsi0.dat:scsi0.dat
    #  → three "image not found" errors
 
-Quote the ``PATH_SPEC`` to keep the pattern literal::
+Quote the ``INNER_PATH`` to keep the pattern literal::
 
    disc find 'scsi0.dat:*'
    disc find "scsi0.dat:*"

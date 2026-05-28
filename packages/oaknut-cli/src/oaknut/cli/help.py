@@ -44,9 +44,7 @@ class PlainHelpFormatter(click.HelpFormatter):
     def write_text(self, text: str) -> None:
         super().write_text(strip_rst(text))
 
-    def write_dl(
-        self, rows: Iterable[tuple[str, str]], *args: object, **kwargs: object
-    ) -> None:
+    def write_dl(self, rows: Iterable[tuple[str, str]], *args: object, **kwargs: object) -> None:
         super().write_dl(
             [(strip_rst(term), strip_rst(definition)) for term, definition in rows],
             *args,

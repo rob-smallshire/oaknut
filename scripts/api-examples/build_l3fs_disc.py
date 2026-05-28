@@ -48,8 +48,10 @@ def main(workdir: Path) -> None:
         assert "Herman" in names
         assert "Welcome" not in names
         assert (afs.root / "Library").is_dir()
-        assert (afs.root / "Herman" / "Notes").read_text().startswith(
-            "server built via AFS.create_file"
+        assert (
+            (afs.root / "Herman" / "Notes")
+            .read_text()
+            .startswith("server built via AFS.create_file")
         )
 
         print(f"Disc:    {afs.disc_name}")

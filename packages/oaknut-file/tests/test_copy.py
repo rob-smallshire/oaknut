@@ -114,7 +114,9 @@ class TestUnifiedAccess:
 
         def capture(data: bytes, **kwargs):
             captured.update(kwargs)
-            FakePath.write_bytes(dst, data, **{k: kwargs[k] for k in ("load_address", "exec_address")})
+            FakePath.write_bytes(
+                dst, data, **{k: kwargs[k] for k in ("load_address", "exec_address")}
+            )
 
         dst.write_bytes = capture  # type: ignore[assignment]
         copy_file(src, dst)

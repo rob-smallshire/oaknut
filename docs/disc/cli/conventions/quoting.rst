@@ -26,7 +26,7 @@ Characters to watch
      - Variable / parameter expansion in bash, zsh, PowerShell
        (in double quotes)
    * - ``:``
-     - ``IMAGE_SPEC:PATH_SPEC`` separator; ``adfs:`` / ``afs:`` /
+     - ``OUTER_PATH:INNER_PATH`` separator; ``adfs:`` / ``afs:`` /
        ``acorn-dfs:`` partition selectors
      - Inside double quotes on PowerShell it is interpreted as a
        drive-name separator in some contexts; otherwise harmless
@@ -47,8 +47,8 @@ Characters to watch
      - Parent directory
      - Pipe symbol in zsh ``extendedglob``; escape character in cmd.exe
 
-The single safest rule is to wrap the whole ``PATH_SPEC`` (and the
-``FILE_SPEC`` if you can stand it) in single quotes on POSIX shells
+The single safest rule is to wrap the whole ``INNER_PATH`` (and the
+``COMPOUND_PATH`` if you can stand it) in single quotes on POSIX shells
 and single quotes on PowerShell — that suppresses expansion across
 the board. The examples below use that convention.
 
@@ -210,7 +210,7 @@ Windows paths and POSIX shells
 
 A Windows path written into a Bash or Zsh script needs its
 backslashes escaped (or single-quoted), and the trailing
-``:PATH_SPEC`` still works as written.
+``:INNER_PATH`` still works as written.
 
 .. tab-set::
    :sync-group: shell

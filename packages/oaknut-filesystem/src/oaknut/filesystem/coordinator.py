@@ -113,9 +113,7 @@ def identify(
         active = _registered_filesystems() if filesystems is None else filesystems
         candidates = _probe_region(reader, active, reader.suffix)
         whole = Partition(name="", start_sector=0, num_sectors=reader.size // BYTES_PER_SECTOR)
-        return [
-            replace(c, partition=replace(whole, name=c.filesystem)) for c in candidates
-        ]
+        return [replace(c, partition=replace(whole, name=c.filesystem)) for c in candidates]
 
 
 def _probe_region(
