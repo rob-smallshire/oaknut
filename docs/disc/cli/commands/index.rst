@@ -40,6 +40,11 @@ Inspection
 
    .. cli-example:: cmd_for_each
 
+.. oaknut-command:: oaknut.disc.cli:materialise
+   :prog: disc materialise
+
+   .. cli-example:: cmd_materialise
+
 .. oaknut-command:: oaknut.disc.cli:freemap
    :prog: disc freemap
 

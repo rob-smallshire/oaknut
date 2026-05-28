@@ -729,26 +729,43 @@ def _find_recursive(mount, path: str, pattern: str, prefix: str, rows: list[dict
             _find_recursive(mount, child.path, pattern, prefix, rows)
 
 
+_FOR_EACH_MODES = ("content", "path-spec", "file-spec", "temp-file")
+
+
 @cli.command(name="for-each")
 @click.argument("file_spec")
 @click.argument("command_argv", nargs=-1, required=True)
+@click.option(
+    "--mode",
+    type=click.Choice(_FOR_EACH_MODES),
+    default="content",
+    show_default=True,
+    help=(
+        "What each file is presented to the command as: its `content` "
+        "(bytes on stdin — md5sum, sha256sum, xxd), its `path-spec` "
+        "(in-image path string, e.g. $.HELLO), its `file-spec` (the full "
+        "IMAGE:PATH addressable by `disc` itself — chain `disc` commands), "
+        "or as a `temp-file` (the bytes materialised to a host temp file "
+        "for tools that only take regular files, e.g. file, image viewers)."
+    ),
+)
 @report_output(
     reports={
         "results": "Per-file capture: path and the command's stdout, one row per match."
     }
 )
-def for_each(file_spec: str, command_argv: tuple[str, ...]):
+def for_each(file_spec: str, command_argv: tuple[str, ...], mode: str):
     """Run a command for each file matching PATTERN.
-
-    Each matched file's content is piped to the command's stdin; the
-    command's stdout is captured per file and emitted alongside the
-    Acorn path as a Reports table. Combine with ``--as tsv > out.tsv``
-    for a path/output spreadsheet (md5sum, sha256sum, xxd, file, …).
 
     Use ``--`` to separate ``disc``'s options from the command's, so
     flags meant for the command are not interpreted by ``for-each``::
 
         disc for-each 'img:*' -- md5sum
+
+    The substitution token ``{}`` in the command's args is replaced per
+    file with whichever value ``--mode`` selects (or appended if no
+    ``{}`` is present, find-style). ``--mode content`` (default) ignores
+    ``{}`` — bytes go to stdin instead.
 
     The search recurses into subdirectories by default and skips
     directories (they have no content to pipe). The ``adfs:`` / ``afs:``
@@ -772,13 +789,14 @@ def for_each(file_spec: str, command_argv: tuple[str, ...]):
         selectors = partition_selectors(image)
         emit_prefix = len(selectors) > 1
 
-    rows: list[dict] = []
-    argv = list(command_argv)
+    matches: list[tuple[str, object]] = []
     for sel in selectors:
         resolved = resolve_mount(f"{image}:{sel}:")
         mount = resolved.mount
         prefix = f"{sel}:" if emit_prefix else ""
-        _for_each_recursive(mount, mount.path_root(), bare_pattern, prefix, argv, rows)
+        _collect_matches(mount, mount.path_root(), bare_pattern, prefix, matches)
+
+    rows = _for_each_run(image, matches, list(command_argv), mode)
 
     table = TableContent(title="results")
     table.add_column("path", "Path", header=True)
@@ -788,32 +806,144 @@ def for_each(file_spec: str, command_argv: tuple[str, ...]):
     return Reports(results=Report(data=table))
 
 
-def _for_each_recursive(
-    mount,
-    path: str,
-    pattern: str,
-    prefix: str,
-    command_argv: list[str],
-    rows: list[dict],
-) -> None:
-    """Walk *mount* from *path*; pipe each matching file through the command.
+def _collect_matches(mount, path: str, pattern: str, prefix: str, out: list) -> None:
+    """Walk *mount* from *path*, appending (display_path, mount, real_path) for file matches.
 
-    Files only — directories have no content to pipe; descend into them
-    but never invoke the command against one.
+    Files only — directories have no content to operate on; descend into
+    them but never act on them.
     """
-    import subprocess
-
     for child in mount.iter_entries(path):
         if not child.is_dir and (
             _match_acorn_wildcard(pattern, child.name)
             or _match_acorn_wildcard(pattern, child.path)
         ):
-            content = mount.read_bytes(child.path)
-            result = subprocess.run(command_argv, input=content, capture_output=True)
-            output = result.stdout.decode("utf-8", errors="replace").rstrip("\n")
-            rows.append({"path": f"{prefix}{child.path}", "output": output})
+            out.append((f"{prefix}{child.path}", mount, child.path))
         if child.is_dir:
-            _for_each_recursive(mount, child.path, pattern, prefix, command_argv, rows)
+            _collect_matches(mount, child.path, pattern, prefix, out)
+
+
+def _for_each_run(
+    image_filepath, matches: list, command_argv: list[str], mode: str
+) -> list[dict]:
+    """Run the per-file command for each match in the chosen *mode*.
+
+    Returns a list of result rows (each ``{"path": ..., "output": ...}``).
+    For ``temp-file`` mode the materialised files live in a single
+    ``TemporaryDirectory`` whose cleanup covers normal *and* exceptional
+    exits.
+    """
+    import subprocess
+    import tempfile
+
+    rows: list[dict] = []
+    if mode == "temp-file":
+        with tempfile.TemporaryDirectory(prefix="oaknut-for-each-") as tmp:
+            tmp_dir = Path(tmp)
+            for idx, (display_path, mount, real_path) in enumerate(matches):
+                host_path = _materialise(mount.read_bytes(real_path), tmp_dir, real_path, idx)
+                argv = _substitute(command_argv, str(host_path))
+                result = subprocess.run(argv, capture_output=True)
+                rows.append({"path": display_path, "output": _trim(result.stdout)})
+        return rows
+
+    for display_path, mount, real_path in matches:
+        if mode == "content":
+            argv = command_argv
+            stdin = mount.read_bytes(real_path)
+        elif mode == "path-spec":
+            argv = _substitute(command_argv, display_path)
+            stdin = None
+        elif mode == "file-spec":
+            argv = _substitute(command_argv, f"{image_filepath}:{display_path}")
+            stdin = None
+        else:  # pragma: no cover — the Choice option blocks anything else
+            raise click.ClickException(f"unknown for-each mode: {mode!r}")
+        result = subprocess.run(argv, input=stdin, capture_output=True)
+        rows.append({"path": display_path, "output": _trim(result.stdout)})
+    return rows
+
+
+def _substitute(argv: list[str], value: str) -> list[str]:
+    """Replace every ``{}`` in *argv* with *value*; append it if there is none."""
+    if any("{}" in arg for arg in argv):
+        return [arg.replace("{}", value) for arg in argv]
+    return [*argv, value]
+
+
+def _trim(stdout: bytes) -> str:
+    """Decode a captured stdout and strip a single trailing newline."""
+    return stdout.decode("utf-8", errors="replace").rstrip("\n")
+
+
+def _materialise(
+    content: bytes, tmp_dir: Path, source_path: str, ordinal: int
+) -> Path:
+    """Write *content* to a sanitised file under *tmp_dir*, return its path.
+
+    The basename keeps a recognisable trace of *source_path* (the leaf
+    name with everything but ``[A-Za-z0-9._-]`` replaced by ``_``) so
+    output from commands that echo their argument is readable, and
+    prefixes it with an ordinal so two matches sharing a leaf name in
+    different parents do not collide.
+    """
+    import re
+
+    leaf = source_path.rsplit("/", 1)[-1].rsplit(".", 1)[-1]
+    safe_leaf = re.sub(r"[^A-Za-z0-9._-]", "_", leaf) or "file"
+    target = tmp_dir / f"{ordinal:04d}-{safe_leaf}"
+    target.write_bytes(content)
+    return target
+
+
+@cli.command(name="materialise")
+@click.argument("file_spec")
+@click.argument("command_argv", nargs=-1, required=True)
+def materialise(file_spec: str, command_argv: tuple[str, ...]) -> None:
+    """Materialise one file to a host temp file, run a command on it, clean up.
+
+    The single-file primitive behind ``for-each --mode temp-file``: read
+    the in-image file's bytes, write them to a host temp file, substitute
+    ``{}`` in the command's args with that path (or append the path if
+    no ``{}`` is present), run the command, then remove the temp file —
+    even if the command fails.
+
+    Use it to point a host-native tool at an in-image file without
+    extracting it manually::
+
+        disc materialise 'img:$.IMG' -- xdg-open {}
+        disc materialise 'img:$.PROG' -- ./run-emulator {}
+        disc materialise 'img:$.HELLO' -- file {}
+
+    The command's stdout, stderr and exit code pass through unchanged —
+    ``materialise`` is a transparent wrapper, not a Reports producer.
+    """
+    import subprocess
+    import sys
+    import tempfile
+
+    image_filepath, in_image_path = parse_file_spec(file_spec)
+    if not in_image_path:
+        raise click.UsageError("PATH_SPEC is required (e.g. img:$.HELLO)")
+
+    with resolve_mount(file_spec) as resolved:
+        mount = resolved.mount
+        if not mount.exists(resolved.path):
+            raise FSError(
+                f"path not found: {resolved.path}", exit_code=ExitCode.OS_FILE
+            )
+        if mount.stat(resolved.path).is_dir:
+            raise FSError(
+                f"cannot materialise a directory: {resolved.path}",
+                exit_code=ExitCode.OS_FILE,
+            )
+        content = mount.read_bytes(resolved.path)
+
+    with tempfile.TemporaryDirectory(prefix="oaknut-materialise-") as tmp:
+        host_path = _materialise(content, Path(tmp), resolved.path, 0)
+        argv = _substitute(list(command_argv), str(host_path))
+        result = subprocess.run(argv)
+        if result.returncode != 0:
+            sys.exit(result.returncode)
 
 
 @cli.command()

@@ -21,8 +21,14 @@ with in_tmp_dir():
     silent("printf 'hello' | disc put 'demo.ssd:$.A' -")
     silent("printf 'world!' | disc put 'demo.ssd:$.B' -")
     silent("printf 'goodbye' | disc put 'demo.ssd:$.C' -")
+
+    # Default mode: each file's bytes piped to the command's stdin.
     show(
         "disc for-each 'demo.ssd:*' -- "
         "python3 -c 'import sys, hashlib; "
         "print(hashlib.md5(sys.stdin.buffer.read()).hexdigest())'"
     )
+
+    # `--mode file-spec`: each match's full IMAGE:PATH is substituted for
+    # {}, so the disc CLI itself becomes the per-file action language.
+    show("disc for-each 'demo.ssd:*' --mode file-spec -- disc cat {}")
