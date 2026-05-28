@@ -45,7 +45,7 @@ structural and uniform across all 21 commands.
 - [x] Stage 0 — Create this tracking file
 - [x] Stage 1 — `cli_paths.py`: rename `parse_file_spec`,
   `_split_at_image_colon`, params, docstrings
-- [ ] Stage 2 — `mount.py`: rename `resolve_mount` parameter,
+- [x] Stage 2 — `mount.py`: rename `resolve_mount` parameter,
   `in_image_path` variables, docstrings
 - [ ] Stage 3 — `cli.py`: 21 `@click.argument` decorators, function
   parameters, bodies, docstrings; consolidate `in_image_path`/
@@ -61,8 +61,8 @@ structural and uniform across all 21 commands.
 | Stage | Status | Commit | Notes |
 |---|---|---|---|
 | 0 | done | 0e0e088 | tracking file |
-| 1 | done | (next) | cli_paths.py rewrite |
-| 2 | pending | — | |
+| 1 | done | ccf9e9f | cli_paths.py rewrite |
+| 2 | done | (next) | mount.py rewrite |
 | 3 | pending | — | |
 | 4 | pending | — | |
 | 5 | pending | — | |

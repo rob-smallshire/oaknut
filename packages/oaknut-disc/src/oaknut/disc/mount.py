@@ -1,4 +1,4 @@
-"""Resolve a ``FILE_SPEC`` to a mounted partition — the CLI's open path.
+"""Resolve a ``COMPOUND_PATH`` to a mounted partition — the CLI's open path.
 
 Every command routes through :func:`resolve_mount` instead of opening a
 specific filing system. It identifies the image by content (via the
@@ -34,7 +34,7 @@ from oaknut.filesystem import (
 )
 from oaknut.filesystem.exceptions import GeometryError
 
-from .cli_paths import parse_file_spec
+from .cli_paths import parse_compound_path
 
 # A partition selector is a lower-case filesystem key, optionally with a
 # ``.N`` index, followed by a colon: ``afs:``, ``afs.1:``, ``acorn-dfs:``.
@@ -72,22 +72,22 @@ class ResolvedMount:
         self.close()
 
 
-def split_selector(in_image_path: str) -> tuple[str | None, str]:
-    """Split a leading ``partition:`` selector from an in-image path."""
-    match = _SELECTOR_RE.match(in_image_path)
+def split_selector(inner_path: str) -> tuple[str | None, str]:
+    """Split a leading ``partition:`` selector from an inner path."""
+    match = _SELECTOR_RE.match(inner_path)
     if match is None:
-        return None, in_image_path
+        return None, inner_path
     return match.group(1), match.group(2)
 
 
 def resolve_mount(
-    file_spec: str,
+    compound_path: str,
     *,
     writable: bool = False,
     force_filesystem: str | None = None,
     force_geometry: str | None = None,
 ) -> ResolvedMount:
-    """Resolve *file_spec* to a mounted partition and in-partition path.
+    """Resolve *compound_path* to a mounted partition and in-partition path.
 
     Identifies the image by content and mounts the selected partition.
     *force_filesystem* / *force_geometry* override detection. With
@@ -96,10 +96,10 @@ def resolve_mount(
     mapping and must be used as a context manager so it is released. A
     read-only mount holds a private copy, so the reader is closed at once.
     """
-    image_filepath, in_image_path = parse_file_spec(file_spec)
-    selector, in_path = split_selector(in_image_path)
+    outer_filepath, inner_path = parse_compound_path(compound_path)
+    selector, in_path = split_selector(inner_path)
 
-    reader = reader_for(image_filepath, writable=writable)
+    reader = reader_for(outer_filepath, writable=writable)
     try:
         if force_filesystem is not None:
             filesystem = create_filesystem(force_filesystem)
@@ -108,13 +108,13 @@ def resolve_mount(
                 filesystem, force_geometry, proposed.geometry if proposed else None
             )
             if geometry is None:
-                geometry = _geometry_from_sidecar(image_filepath)
+                geometry = _geometry_from_sidecar(outer_filepath)
             mount = filesystem.open(reader, geometry)
             chosen_name = partition_name = force_filesystem
         else:
-            candidates = identify(image_filepath)
+            candidates = identify(outer_filepath)
             if not candidates:
-                raise click.ClickException(_unrecognised_message(image_filepath.name))
+                raise click.ClickException(_unrecognised_message(outer_filepath.name))
             host = candidates[0]
             chosen, region = _select(host, selector)
             filesystem = create_filesystem(chosen.filesystem)
@@ -132,7 +132,7 @@ def resolve_mount(
                 # The whole-image host's geometry — a hard disc records its
                 # CHS only in the .dsc sidecar, not the content. (A reserved
                 # partition reads geometry from its own on-disc structure.)
-                geometry = _geometry_from_sidecar(image_filepath)
+                geometry = _geometry_from_sidecar(outer_filepath)
             mount = filesystem.open(region_view, geometry)
             chosen_name = chosen.filesystem
             partition_name = chosen.partition.selector
@@ -143,24 +143,24 @@ def resolve_mount(
     if not writable:
         # The mount holds a private copy; the mapping is no longer needed.
         reader.close()
-        return ResolvedMount(mount, in_path, chosen_name, partition_name, image_filepath)
+        return ResolvedMount(mount, in_path, chosen_name, partition_name, outer_filepath)
     # A writable mount maps the file live; keep the reader open until the
     # caller closes the ResolvedMount.
     return ResolvedMount(
-        mount, in_path, chosen_name, partition_name, image_filepath, _reader=reader
+        mount, in_path, chosen_name, partition_name, outer_filepath, _reader=reader
     )
 
 
-def partition_selectors(image_filepath: Path) -> list[str]:
-    """Selectors of every identified partition in *image_filepath*.
+def partition_selectors(outer_filepath: Path) -> list[str]:
+    """Selectors of every identified partition in *outer_filepath*.
 
     The host partition first, then each identified contained partition
     (``adfs``, ``afs``, ``afs.1`` …) — the names a prefix would address.
     Raises if nothing recognises the image.
     """
-    candidates = identify(image_filepath)
+    candidates = identify(outer_filepath)
     if not candidates:
-        raise click.ClickException(_unrecognised_message(image_filepath.name))
+        raise click.ClickException(_unrecognised_message(outer_filepath.name))
     host = candidates[0]
     return [host.partition.selector] + [
         c.partition.selector for c in host.contained if c.identified
@@ -196,14 +196,14 @@ def _geometry(filesystem, force_geometry: str | None, proposed: Geometry | None)
     return filesystem.geometry_grammar().parse(force_geometry)
 
 
-def _geometry_from_sidecar(image_filepath: Path) -> Geometry | None:
+def _geometry_from_sidecar(outer_filepath: Path) -> Geometry | None:
     """The CHS geometry from an adjacent ``.dsc`` sidecar, if present.
 
     A hard-disc image records its geometry only in the sidecar, so this
     is geometry *resolution* (a separate layer) — identification stays
     content-first. A malformed sidecar is ignored.
     """
-    sidecar = image_filepath.with_suffix(".dsc")
+    sidecar = outer_filepath.with_suffix(".dsc")
     if not sidecar.is_file():
         return None
     try:
