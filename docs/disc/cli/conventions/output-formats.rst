@@ -119,7 +119,7 @@ Multi-report commands
 
 Some commands logically return more than one piece of information:
 
-- ``disc stat IMAGE_SPEC`` returns a ``disc`` block (physical
+- ``disc stat OUTER_PATH`` returns a ``disc`` block (physical
   geometry + total size) and one ``partition_N`` block per
   filesystem partition (``partition_1`` for DFS or ADFS,
   ``partition_2`` for AFS on a dual-partition image).

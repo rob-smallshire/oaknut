@@ -50,7 +50,7 @@ At a glance
        it is the report-an-issue signal.
    * - ``72``
      - ``OS_FILE``
-     - A ``PATH_SPEC`` does not resolve to an entry on the disc (or
+     - A ``INNER_PATH`` does not resolve to an entry on the disc (or
        an AFS user does not exist).
    * - ``73``
      - ``CANT_CREATE``

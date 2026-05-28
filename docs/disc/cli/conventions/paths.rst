@@ -1,44 +1,34 @@
-Paths and file specifications
-=============================
+Paths and compound paths
+========================
 
-``disc`` has three closely-related names for the things it points at,
-all built from the same colon-joined grammar:
+``disc`` addresses everything through a single colon-joined grammar:
 
 .. code-block:: text
 
-   FILE_SPEC  =  IMAGE_SPEC  ":"  PATH_SPEC
-            (compound-path = outer-path : inner-path)
+   COMPOUND_PATH  =  OUTER_PATH  ":"  INNER_PATH
 
-- ``IMAGE_SPEC`` — also **outer-path** — a host-OS path to a disc image
-  file (``games.ssd``, ``/var/discs/scsi0.dat``, ``C:\\Discs\\hd.dat``).
-- ``PATH_SPEC`` — also **inner-path** — a path *inside* the image in
-  whatever syntax that filesystem uses (``$.DIR.FILE`` on DFS / ADFS /
-  AFS, ``Docs/Readme`` on a ZIP, ``afs:$.Library`` for the AFS partition
-  on a combined disc). It may carry a partition selector.
-- ``FILE_SPEC`` — also **compound-path** — the two joined with a colon:
-  ``games.ssd:$.HELLO``. This is what most commands accept; the colon
-  (and the inner-path after it) is optional when the command can default
-  to the disc's root.
-
-The ``outer-path`` / ``inner-path`` / ``compound-path`` names are the
-project's preferred vocabulary going forward — clearer at a glance, no
-commitment to Acorn-specific path syntax, and easier to disambiguate
-when they appear as option values (e.g. ``disc for-each --mode
-compound-path``). The ``IMAGE_SPEC`` / ``PATH_SPEC`` / ``FILE_SPEC``
-forms remain in use across the older commands' help text and will be
-swept across in a future pass.
+- ``OUTER_PATH`` — a host-OS path to a disc image file
+  (``games.ssd``, ``/var/discs/scsi0.dat``, ``C:\\Discs\\hd.dat``).
+- ``INNER_PATH`` — a path *inside* the image, in whatever syntax the
+  filesystem uses (``$.DIR.FILE`` on DFS / ADFS / AFS, ``Docs/Readme``
+  on a ZIP, ``afs:$.Library`` for the AFS partition on a combined
+  disc). May carry a partition selector.
+- ``COMPOUND_PATH`` — the two joined with a colon:
+  ``games.ssd:$.HELLO``. This is what most commands accept; the
+  colon (and the inner path after it) is optional when the command
+  can default to the disc's root.
 
 Commands that operate on the disc as a whole (``disc create``,
-``disc validate``, ``disc afs init``, …) take a plain outer-path
-because an inner-path would be meaningless. Commands that operate
-on a specific entry (``disc cat``, ``disc cp``, ``disc chmod``, …)
-take a compound-path.
+``disc validate``, ``disc afs init``, …) take a plain ``OUTER_PATH``
+because an inner path would be meaningless. Commands that operate on
+a specific entry (``disc cat``, ``disc cp``, ``disc chmod``, …) take
+a ``COMPOUND_PATH``.
 
 
-PATH_SPEC grammar
------------------
+INNER_PATH grammar
+------------------
 
-In-image paths are written in Acorn syntax, not Unix syntax. The
+Inner paths are written in Acorn syntax, not Unix syntax. The
 component separator is ``.`` (a literal dot), not ``/``. A small set
 of single-character names are reserved for directory references:
 
@@ -62,7 +52,7 @@ of single-character names are reserved for directory references:
      - The current directory (rarely needed on the CLI — the *current*
        is always the filing system's notional root for batch tools)
 
-A fully-qualified ADFS or AFS ``PATH_SPEC`` therefore starts with
+A fully-qualified ADFS or AFS ``INNER_PATH`` therefore starts with
 ``$.`` and walks down: ``$.Games.Elite`` is the file ``Elite`` inside
 the directory ``Games`` at the root. Hats can appear mid-path to
 sidestep up and across: ``$.Games.^.Docs.ReadMe`` walks down into
@@ -83,7 +73,7 @@ DFS vs ADFS / AFS: flat catalogue vs hierarchical tree
 ------------------------------------------------------
 
 Every filing system has a **root** — the implicit default for a
-command whose ``PATH_SPEC`` is omitted. The three filing systems
+command whose ``INNER_PATH`` is omitted. The three filing systems
 differ in what their root is.
 
 **ADFS and AFS — hierarchical trees.**
@@ -104,9 +94,9 @@ exist — a directory comes into being the first time a file is
 written under it and disappears again when its last file is
 deleted, which is why ``disc mkdir`` is not a DFS operation.
 
-Because the DFS root is nameless, there is no name to write in a
-``PATH_SPEC``; the way to refer to the root is to omit the
-``PATH_SPEC``. So bare ``disc ls IMAGE.ssd`` lists the populated
+Because the DFS root is nameless, there is no name to write in an
+``INNER_PATH``; the way to refer to the root is to omit the
+``INNER_PATH``. So bare ``disc ls IMAGE.ssd`` lists the populated
 directory letters at the root, and the next level — the actual
 files — is reachable via ``disc ls IMAGE.ssd:$`` (or ``:A``,
 etc.).
@@ -122,7 +112,7 @@ What this looks like in practice:
    disc cat 'games.ssd:$.HELLO'      # the file HELLO in directory $
    disc cat 'games.ssd:A.HELLO'      # the file HELLO in directory A —
                                      # different file from $.HELLO
-   disc cat 'games.ssd:HELLO'        # error: PATH_SPEC needs a directory
+   disc cat 'games.ssd:HELLO'        # error: INNER_PATH needs a directory
                                      # letter; bare names do not resolve
 
 No DFS command will recurse into siblings the way ADFS commands
@@ -141,7 +131,7 @@ image, for instance, often carries an AFS partition in its tail
 cylinders — the on-disc layout the Acorn Level 3 File Server uses,
 sometimes called *AFS0* after the four-byte magic at the head of the
 partition (see the :doc:`glossary </glossary>` for the longer note).
-To address a particular partition, prefix the ``PATH_SPEC`` with the
+To address a particular partition, prefix the ``INNER_PATH`` with the
 partition's *filesystem key* and a colon:
 
 .. cli-example:: partition_selectors
@@ -152,7 +142,7 @@ The selector is the registered filesystem key — ``acorn-dfs``,
 ``disc list-filesystems`` prints and ``--filesystem`` accepts. Keys are
 lower-case, which is exactly what keeps a selector distinct from an
 Acorn path (``$``, ``^`` and upper-case names never look like one). The
-selector sits between the ``IMAGE_SPEC`` colon and the bare in-image
+selector sits between the ``OUTER_PATH`` colon and the bare in-partition
 path. When an image holds two partitions of the same filesystem, the
 first is the bare key and the rest are numbered from one: ``afs:`` is
 the first AFS partition, ``afs.1:`` the second.
@@ -227,13 +217,13 @@ Windows path handling
 ---------------------
 
 A Windows-style absolute path such as ``C:\\Discs\\disc.dat`` contains
-a colon — and so do ``FILE_SPEC``\ s. The parser disambiguates by
+a colon — and so do ``COMPOUND_PATH``\ s. The parser disambiguates by
 recognising the drive-letter prefix (a single ASCII letter followed
 by ``:\`` or ``:/`` at the start of the spec) and skipping past it
-before looking for the ``IMAGE_SPEC``/``PATH_SPEC`` colon. So
-``C:\\Discs\\disc.dat:$.HELLO`` parses as the image
-``C:\\Discs\\disc.dat`` plus the path ``$.HELLO``, never as the image
-``C`` plus the path ``\\Discs\\disc.dat:$.HELLO``.
+before looking for the ``OUTER_PATH``/``INNER_PATH`` colon. So
+``C:\\Discs\\disc.dat:$.HELLO`` parses as the outer path
+``C:\\Discs\\disc.dat`` plus the inner path ``$.HELLO``, never as the
+outer path ``C`` plus the inner path ``\\Discs\\disc.dat:$.HELLO``.
 
 On POSIX shells the same backslash that Windows would write needs
 quoting; see :doc:`quoting`.

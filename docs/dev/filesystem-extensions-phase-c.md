@@ -12,7 +12,7 @@ in `oaknut/disc/` is empty (bar the kept pyproject deps).
 
 ## Substrate
 
-- [x] `mount.py` — `resolve_mount(FILE_SPEC, --filesystem, --geometry)`
+- [x] `mount.py` — `resolve_mount(COMPOUND_PATH, --filesystem, --geometry)`
   → mounted partition + in-partition path, via the coordinator.
 - [x] partition-selector addressing (`<fs>[.index]:`), replacing
   `FilingSystem`/`parse_prefix`/`detect_filing_system`/`open_image`/`_navigate`.
@@ -128,7 +128,7 @@ Candidates for a future "filesystem-contributed command" axis.
   and every package's `[oaknut.prober]` entry points. `disc identify` /
   `list-formats` / `describe-format` now draw on the `oaknut.filesystem`
   coordinator, which already backed every other path.
-- [x] `cli_paths.py` shrank to the fused `IMAGE_SPEC:PATH_SPEC` colon
+- [x] `cli_paths.py` shrank to the fused `OUTER_PATH:INNER_PATH` colon
   parser; `FilingSystem`/`resolve_path`/`parse_prefix` and the rest of the
   routing block are gone (partition selection lives in `mount.py`).
 

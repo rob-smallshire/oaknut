@@ -11,8 +11,8 @@ Finding files by pattern
 ------------------------
 
 To locate files by name, walk the catalogue with ``disc find``. The
-pattern is an Acorn wildcard expression sitting in the ``PATH_SPEC``
-half of the ``FILE_SPEC``, so it is quoted the same way as any other
+pattern is an Acorn wildcard expression sitting in the ``INNER_PATH``
+half of the ``COMPOUND_PATH``, so it is quoted the same way as any other
 in-image path:
 
 .. cli-example:: find_pattern
