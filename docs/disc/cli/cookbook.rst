@@ -317,3 +317,36 @@ The AFS half shows the two emplaced library trees in full, with
 the BBC-era utilities (``LCAT``, ``NETMON``, ``PROT``, ``USERS``,
 …) that the Level 3 File Server's clients reach for via
 ``*<command>`` once the server is up.
+
+
+A checksum table for every file on a disc
+-----------------------------------------
+
+To verify that two images carry the same data, that an image came
+across a transfer intact, or simply to spot-check a build, you want a
+table pairing every in-image path with a checksum of its bytes — no
+extraction, no host-side litter. ``disc for-each`` is built for it::
+
+   disc for-each 'image.ssd:*' --as tsv \
+     -- sh -c 'md5sum | cut -d " " -f 1' > checksums.tsv
+
+The default ``--mode content`` pipes each file's bytes through the
+right-hand command. ``md5sum`` reads stdin and emits ``<hash>  -``
+(with ``-`` marking stdin); the ``sh -c '… | cut'`` wrapper trims that
+to just the hash, so the TSV reads cleanly as ``<path>\t<hash>`` per
+row:
+
+.. cli-example:: checksum_each_file
+
+``--as tsv`` is redundant when stdout is a pipe — ``disc`` already
+auto-selects TSV when its output is captured — but stating it
+explicitly makes the intent obvious in a script. Swap in ``--as json``
+to feed downstream tooling that prefers JSON; ``--as display`` for a
+boxed table when you're eyeballing the result.
+
+Any per-file command works the same way: ``sha256sum``, ``xxd``,
+``wc -c``, ``file`` (with ``--mode materialise --`` so it gets a real
+path instead of stdin), or a one-line Python script that hashes /
+classifies / fingerprints the content in whatever way the task wants.
+The Acorn path lives in the first column; the rest of the row is
+whatever the command says.
