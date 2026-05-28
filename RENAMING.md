@@ -53,7 +53,9 @@ structural and uniform across all 21 commands.
 - [x] Stage 4 — Tests: 5 test files, all green (2896 passing)
 - [x] Stage 5 — Documentation: 11 files swept; `paths.rst` rewritten
   as canonical OUTER/INNER/COMPOUND
-- [ ] Stage 6 — Final cleanup pass: grep, pytest, docs, pre-commit
+- [x] Stage 6 — Final cleanup pass: grep, pytest, docs all clean;
+  pre-commit's only failure (file_metadata.py) is a pre-existing
+  bug on master (`load_addr` should be `load_address`), out of scope
 - [ ] Stage 7 — Delete this tracking file
 
 ## Per-stage status
@@ -66,7 +68,7 @@ structural and uniform across all 21 commands.
 | 3 | done | c87875e | cli.py sweep — 21 commands, metavar=OUTER:INNER |
 | 4 | done | fd1fce4 | 5 test files; 2896 tests passing |
 | 5 | done | (next) | 11 docs files; full -W build clean |
-| 6 | pending | — | |
+| 6 | done | (next) | pre-existing master pre-commit issue noted |
 | 7 | pending | — | |
 
 ## Verification at end
