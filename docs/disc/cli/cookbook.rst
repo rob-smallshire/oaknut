@@ -323,30 +323,81 @@ A checksum table for every file on a disc
 -----------------------------------------
 
 To verify that two images carry the same data, that an image came
-across a transfer intact, or simply to spot-check a build, you want a
-table pairing every in-image path with a checksum of its bytes — no
-extraction, no host-side litter. ``disc for-each`` is built for it::
+across a transfer intact, or to spot-check a build, you want a table
+pairing every in-image path with a checksum of its bytes — no
+extraction, no host-side litter. ``disc for-each`` builds it in one
+command; the default ``--mode content`` pipes each file's bytes to the
+right-hand command, and the per-file output is captured as a column
+next to the path. When stdout is a pipe (or a file), ``disc``
+auto-selects TSV, so the obvious shell pipeline writes a clean TSV
+without any explicit format option:
 
-   disc for-each 'image.ssd:*' --as tsv \
-     -- sh -c 'md5sum | cut -d " " -f 1' > checksums.tsv
+.. code-block:: sh
 
-The default ``--mode content`` pipes each file's bytes through the
-right-hand command. ``md5sum`` reads stdin and emits ``<hash>  -``
-(with ``-`` marking stdin); the ``sh -c '… | cut'`` wrapper trims that
-to just the hash, so the TSV reads cleanly as ``<path>\t<hash>`` per
-row:
+   disc for-each 'image.ssd:*' -- <command> > checksums.tsv
+
+What changes is the per-file command. Three useful pickings, in
+ascending complexity.
+
+A CRC32 from ``cksum``
+~~~~~~~~~~~~~~~~~~~~~~
+
+``cksum`` is the POSIX one. On stdin it emits ``<crc32> <bytes>`` —
+two numbers, no marker, no filename — so the captured TSV is clean
+without any wrapping:
 
 .. cli-example:: checksum_each_file
+   :section: cksum
 
-``--as tsv`` is redundant when stdout is a pipe — ``disc`` already
-auto-selects TSV when its output is captured — but stating it
-explicitly makes the intent obvious in a script. Swap in ``--as json``
-to feed downstream tooling that prefers JSON; ``--as display`` for a
-boxed table when you're eyeballing the result.
+CRC32 is a long way short of a cryptographic hash, but it's the right
+tool for "did this transfer intact?" (the case the recipe most often
+serves) and it has one virtue worth keeping in mind for an Acorn
+project: it can be computed on the original hardware. A table built
+on a modern host can be verified by a BBC Micro reading the disc, and
+vice versa — no platform-specific tooling stands between the two
+worlds.
 
-Any per-file command works the same way: ``sha256sum``, ``xxd``,
-``wc -c``, ``file`` (with ``--mode materialise --`` so it gets a real
-path instead of stdin), or a one-line Python script that hashes /
-classifies / fingerprints the content in whatever way the task wants.
-The Acorn path lives in the first column; the rest of the row is
-whatever the command says.
+An MD5 from ``md5sum``
+~~~~~~~~~~~~~~~~~~~~~~
+
+When you want a cryptographic hash, ``md5sum`` (GNU coreutils — or
+``shasum -a 256`` if you want SHA-256) is the natural reach. The
+output column carries one quirk worth knowing about:
+
+.. cli-example:: checksum_each_file
+   :section: md5sum
+
+The trailing ``  -`` (two spaces and a hyphen) is ``md5sum``'s
+standard marker for "input came from stdin" — the literal ``-`` that
+GNU tools use in place of a filename when they read from a pipe.
+Seeing it here is your confirmation that ``for-each`` really did
+stream the bytes through stdin: there was no temp file, no
+filesystem round-trip, just the disc image's bytes going straight to
+``md5sum``.
+
+Trimming the marker
+~~~~~~~~~~~~~~~~~~~
+
+If you'd rather the second column hold *only* the hash — for
+downstream tooling that expects ``<path>\t<hash>`` and nothing else
+— wrap the per-file command in a tiny shell pipeline that drops the
+trailing tokens:
+
+.. cli-example:: checksum_each_file
+   :section: md5sum-trim
+
+The wrapper runs inside the per-file invocation, so the framing is
+unchanged — ``disc`` still sees one stdout per file and treats it as
+that file's row. The same trick generalises to anything else whose
+output you'd like to shape per file: ``awk``, ``cut``, ``tr``, a
+one-line Python script, your choice.
+
+Other shapes
+~~~~~~~~~~~~
+
+For a tool that only takes a real file path (``file(1)``, image
+viewers, hashers that don't read stdin), reach for ``--mode
+materialise``: each file's bytes land on a host temp file before the
+command sees it. For downstream tooling that prefers structured
+input, swap ``> checksums.tsv`` for ``--as json > checksums.json``;
+for human inspection use ``--as display`` for a boxed table.
