@@ -29,6 +29,6 @@ with in_tmp_dir():
         "print(hashlib.md5(sys.stdin.buffer.read()).hexdigest())'"
     )
 
-    # `--mode file-spec`: each match's full IMAGE:PATH is substituted for
+    # `--mode compound-path`: each match's full IMAGE:PATH is substituted for
     # {}, so the disc CLI itself becomes the per-file action language.
-    show("disc for-each 'demo.ssd:*' --mode file-spec -- disc cat {}")
+    show("disc for-each 'demo.ssd:*' --mode compound-path -- disc cat {}")

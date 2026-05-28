@@ -729,12 +729,12 @@ def _find_recursive(mount, path: str, pattern: str, prefix: str, rows: list[dict
             _find_recursive(mount, child.path, pattern, prefix, rows)
 
 
-_FOR_EACH_MODES = ("content", "path-spec", "file-spec", "temp-file")
+_FOR_EACH_MODES = ("content", "inner-path", "compound-path", "materialise")
 
 
 @cli.command(name="for-each")
-@click.argument("file_spec")
-@click.argument("command_argv", nargs=-1, required=True)
+@click.argument("file_spec", metavar="OUTER:INNER")
+@click.argument("command_argv", nargs=-1, required=True, metavar="-- COMMAND...")
 @click.option(
     "--mode",
     type=click.Choice(_FOR_EACH_MODES),
@@ -742,11 +742,12 @@ _FOR_EACH_MODES = ("content", "path-spec", "file-spec", "temp-file")
     show_default=True,
     help=(
         "What each file is presented to the command as: its `content` "
-        "(bytes on stdin — md5sum, sha256sum, xxd), its `path-spec` "
-        "(in-image path string, e.g. $.HELLO), its `file-spec` (the full "
-        "IMAGE:PATH addressable by `disc` itself — chain `disc` commands), "
-        "or as a `temp-file` (the bytes materialised to a host temp file "
-        "for tools that only take regular files, e.g. file, image viewers)."
+        "(bytes on stdin — md5sum, sha256sum, xxd); its `inner-path` "
+        "(the in-image path string, e.g. $.HELLO); its `compound-path` "
+        "(the full outer:inner addressable by `disc` itself — chain disc "
+        "commands); or `materialise` (the bytes written to a host temp "
+        "file, whose path is substituted, for tools that only take "
+        "regular files — file(1), image viewers, emulators)."
     ),
 )
 @report_output(
@@ -755,7 +756,7 @@ _FOR_EACH_MODES = ("content", "path-spec", "file-spec", "temp-file")
     }
 )
 def for_each(file_spec: str, command_argv: tuple[str, ...], mode: str):
-    """Run a command for each file matching PATTERN.
+    """Run a command for each file matching an inner-path pattern.
 
     Use ``--`` to separate ``disc``'s options from the command's, so
     flags meant for the command are not interpreted by ``for-each``::
@@ -768,10 +769,10 @@ def for_each(file_spec: str, command_argv: tuple[str, ...], mode: str):
     ``{}`` — bytes go to stdin instead.
 
     The search recurses into subdirectories by default and skips
-    directories (they have no content to pipe). The ``adfs:`` / ``afs:``
-    / ``acorn-dfs:`` partition selector scopes the search; without one,
-    every identified partition is searched and each result is emitted
-    with the selector that addresses it.
+    directories (they have no content to operate on). The ``adfs:`` /
+    ``afs:`` / ``acorn-dfs:`` partition selector scopes the search;
+    without one, every identified partition is searched and each result
+    is emitted with the selector that addresses it.
     """
     from asyoulikeit.tabular_data import Report, Reports, TableContent
 
@@ -836,7 +837,7 @@ def _for_each_run(
     import tempfile
 
     rows: list[dict] = []
-    if mode == "temp-file":
+    if mode == "materialise":
         with tempfile.TemporaryDirectory(prefix="oaknut-for-each-") as tmp:
             tmp_dir = Path(tmp)
             for idx, (display_path, mount, real_path) in enumerate(matches):
@@ -850,10 +851,10 @@ def _for_each_run(
         if mode == "content":
             argv = command_argv
             stdin = mount.read_bytes(real_path)
-        elif mode == "path-spec":
+        elif mode == "inner-path":
             argv = _substitute(command_argv, display_path)
             stdin = None
-        elif mode == "file-spec":
+        elif mode == "compound-path":
             argv = _substitute(command_argv, f"{image_filepath}:{display_path}")
             stdin = None
         else:  # pragma: no cover — the Choice option blocks anything else
@@ -896,16 +897,16 @@ def _materialise(
 
 
 @cli.command(name="materialise")
-@click.argument("file_spec")
-@click.argument("command_argv", nargs=-1, required=True)
+@click.argument("file_spec", metavar="OUTER:INNER")
+@click.argument("command_argv", nargs=-1, required=True, metavar="-- COMMAND...")
 def materialise(file_spec: str, command_argv: tuple[str, ...]) -> None:
     """Materialise one file to a host temp file, run a command on it, clean up.
 
-    The single-file primitive behind ``for-each --mode temp-file``: read
-    the in-image file's bytes, write them to a host temp file, substitute
-    ``{}`` in the command's args with that path (or append the path if
-    no ``{}`` is present), run the command, then remove the temp file —
-    even if the command fails.
+    The single-file primitive behind ``for-each --mode materialise``:
+    read the in-image file's bytes, write them to a host temp file,
+    substitute ``{}`` in the command's args with that path (or append
+    the path if no ``{}`` is present), run the command, then remove the
+    temp file — even if the command fails.
 
     Use it to point a host-native tool at an in-image file without
     extracting it manually::

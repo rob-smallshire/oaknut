@@ -126,13 +126,13 @@ _ECHO_ARGV = [
 ]
 
 
-class TestPathSpecMode:
-    """``--mode path-spec``: the in-image path is substituted, no host file."""
+class TestInnerPathMode:
+    """``--mode inner-path``: the in-image path is substituted, no host file."""
 
     def test_substitutes_brace(self, runner: CliRunner, tmp_path: Path) -> None:
         img = _build_disc(tmp_path)
         result = runner.invoke(
-            cli, ["for-each", f"{img}:*", "--mode", "path-spec", "--", *_ECHO_ARGV, "{}"]
+            cli, ["for-each", f"{img}:*", "--mode", "inner-path", "--", *_ECHO_ARGV, "{}"]
         )
         assert result.exit_code == 0, result.output
         rows = _tsv_rows(result.output)
@@ -141,22 +141,22 @@ class TestPathSpecMode:
     def test_appends_when_no_brace(self, runner: CliRunner, tmp_path: Path) -> None:
         img = _build_disc(tmp_path)
         result = runner.invoke(
-            cli, ["for-each", f"{img}:*", "--mode", "path-spec", "--", *_ECHO_ARGV]
+            cli, ["for-each", f"{img}:*", "--mode", "inner-path", "--", *_ECHO_ARGV]
         )
         assert result.exit_code == 0, result.output
         rows = _tsv_rows(result.output)
         assert rows == {"$.A": "$.A", "$.BB": "$.BB", "$.CCC": "$.CCC"}
 
 
-class TestFileSpecMode:
-    """``--mode file-spec``: full IMAGE:PATH per match — chains with `disc` itself."""
+class TestCompoundPathMode:
+    """``--mode compound-path``: full IMAGE:PATH per match — chains with `disc` itself."""
 
     def test_substitutes_brace_with_full_spec(
         self, runner: CliRunner, tmp_path: Path
     ) -> None:
         img = _build_disc(tmp_path)
         result = runner.invoke(
-            cli, ["for-each", f"{img}:*", "--mode", "file-spec", "--", *_ECHO_ARGV, "{}"]
+            cli, ["for-each", f"{img}:*", "--mode", "compound-path", "--", *_ECHO_ARGV, "{}"]
         )
         assert result.exit_code == 0, result.output
         rows = _tsv_rows(result.output)
@@ -175,7 +175,7 @@ class TestFileSpecMode:
         result = runner.invoke(
             cli,
             [
-                "for-each", f"{img}:*", "--mode", "file-spec",
+                "for-each", f"{img}:*", "--mode", "compound-path",
                 "--", "disc", "cat", "{}",
             ],
         )
@@ -184,8 +184,8 @@ class TestFileSpecMode:
         assert rows == {"$.A": "a", "$.BB": "bb", "$.CCC": "ccc"}
 
 
-class TestTempFileMode:
-    """``--mode temp-file``: file materialised to a host temp path."""
+class TestMaterialiseMode:
+    """``--mode materialise``: file materialised to a host temp path."""
 
     def test_substitutes_brace_with_temp_path_holding_content(
         self, runner: CliRunner, tmp_path: Path
@@ -193,7 +193,7 @@ class TestTempFileMode:
         # cat reads the materialised file; we get the bytes back.
         img = _build_disc(tmp_path)
         result = runner.invoke(
-            cli, ["for-each", f"{img}:*", "--mode", "temp-file", "--", "cat", "{}"]
+            cli, ["for-each", f"{img}:*", "--mode", "materialise", "--", "cat", "{}"]
         )
         assert result.exit_code == 0, result.output
         rows = _tsv_rows(result.output)
@@ -204,7 +204,7 @@ class TestTempFileMode:
     ) -> None:
         img = _build_disc(tmp_path)
         result = runner.invoke(
-            cli, ["for-each", f"{img}:*", "--mode", "temp-file", "--", *_ECHO_ARGV, "{}"]
+            cli, ["for-each", f"{img}:*", "--mode", "materialise", "--", *_ECHO_ARGV, "{}"]
         )
         assert result.exit_code == 0, result.output
         rows = _tsv_rows(result.output)

@@ -1,6 +1,6 @@
 """CLI tests for `disc materialise` — single-file host-tempfile materialisation.
 
-`materialise` is the single-file primitive that ``for-each --mode temp-file``
+`materialise` is the single-file primitive that ``for-each --mode materialise``
 sugar-coats: write the in-image file to a host temp file, substitute ``{}``
 in the command's args with that path (or append it if there is no ``{}``),
 run the command, then remove the temp file. The command's stdout / stderr
@@ -26,7 +26,7 @@ def _make_disc(tmp_path: Path) -> Path:
 
 
 # Echo-argv: prints its sole argument verbatim. Used to capture the
-# substituted temp-file path so the cleanup test can verify it.
+# substituted materialised path so the cleanup test can verify it.
 _ECHO_ARGV = [
     sys.executable,
     "-c",

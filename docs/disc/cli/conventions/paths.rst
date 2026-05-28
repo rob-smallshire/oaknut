@@ -7,21 +7,32 @@ all built from the same colon-joined grammar:
 .. code-block:: text
 
    FILE_SPEC  =  IMAGE_SPEC  ":"  PATH_SPEC
+            (compound-path = outer-path : inner-path)
 
-- ``IMAGE_SPEC`` — a host-OS path to a disc image file (``games.ssd``,
-  ``/var/discs/scsi0.dat``, ``C:\\Discs\\hd.dat``).
-- ``PATH_SPEC`` — an in-image Acorn path (``$.DIR.FILE``, ``^.SIB``,
-  ``afs:$.Library``). It may carry a partition selector.
-- ``FILE_SPEC`` — the two joined with a colon: ``games.ssd:$.HELLO``.
-  This is what most commands accept; the colon (and the ``PATH_SPEC``
-  after it) is optional when the command can default to the disc's
-  root.
+- ``IMAGE_SPEC`` — also **outer-path** — a host-OS path to a disc image
+  file (``games.ssd``, ``/var/discs/scsi0.dat``, ``C:\\Discs\\hd.dat``).
+- ``PATH_SPEC`` — also **inner-path** — a path *inside* the image in
+  whatever syntax that filesystem uses (``$.DIR.FILE`` on DFS / ADFS /
+  AFS, ``Docs/Readme`` on a ZIP, ``afs:$.Library`` for the AFS partition
+  on a combined disc). It may carry a partition selector.
+- ``FILE_SPEC`` — also **compound-path** — the two joined with a colon:
+  ``games.ssd:$.HELLO``. This is what most commands accept; the colon
+  (and the inner-path after it) is optional when the command can default
+  to the disc's root.
+
+The ``outer-path`` / ``inner-path`` / ``compound-path`` names are the
+project's preferred vocabulary going forward — clearer at a glance, no
+commitment to Acorn-specific path syntax, and easier to disambiguate
+when they appear as option values (e.g. ``disc for-each --mode
+compound-path``). The ``IMAGE_SPEC`` / ``PATH_SPEC`` / ``FILE_SPEC``
+forms remain in use across the older commands' help text and will be
+swept across in a future pass.
 
 Commands that operate on the disc as a whole (``disc create``,
-``disc validate``, ``disc afs init``, …) take a plain ``IMAGE_SPEC``
-because a ``PATH_SPEC`` would be meaningless. Commands that operate
+``disc validate``, ``disc afs init``, …) take a plain outer-path
+because an inner-path would be meaningless. Commands that operate
 on a specific entry (``disc cat``, ``disc cp``, ``disc chmod``, …)
-take a ``FILE_SPEC``.
+take a compound-path.
 
 
 PATH_SPEC grammar
