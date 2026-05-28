@@ -42,8 +42,8 @@ structural and uniform across all 21 commands.
 
 ## Stage checklist
 
-- [ ] Stage 0 — Create this tracking file
-- [ ] Stage 1 — `cli_paths.py`: rename `parse_file_spec`,
+- [x] Stage 0 — Create this tracking file
+- [x] Stage 1 — `cli_paths.py`: rename `parse_file_spec`,
   `_split_at_image_colon`, params, docstrings
 - [ ] Stage 2 — `mount.py`: rename `resolve_mount` parameter,
   `in_image_path` variables, docstrings
@@ -60,8 +60,8 @@ structural and uniform across all 21 commands.
 
 | Stage | Status | Commit | Notes |
 |---|---|---|---|
-| 0 | in progress | — | this file |
-| 1 | pending | — | |
+| 0 | done | 0e0e088 | tracking file |
+| 1 | done | (next) | cli_paths.py rewrite |
 | 2 | pending | — | |
 | 3 | pending | — | |
 | 4 | pending | — | |
