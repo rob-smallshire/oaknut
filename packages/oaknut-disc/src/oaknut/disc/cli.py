@@ -37,7 +37,7 @@ from .cli_identify import (
     identify_command,
     list_filesystems_command,
 )
-from .cli_paths import parse_file_spec
+from .cli_paths import parse_compound_path
 from .mount import partition_selectors, resolve_mount
 
 # ---------------------------------------------------------------------------
@@ -200,7 +200,7 @@ cli.add_command(describe_filesystem_command(), name="describe-filesystem")
 
 
 @cli.command()
-@click.argument("file_spec")
+@click.argument("compound_path", metavar="OUTER:INNER")
 @click.option(
     "-H",
     "--access-byte",
@@ -209,16 +209,16 @@ cli.add_command(describe_filesystem_command(), name="describe-filesystem")
     help="Show the raw access byte as two hex digits alongside the symbolic form.",
 )
 @report_output(reports={"entries": "Directory entries with load/exec/length/attributes."})
-def ls(file_spec: str, show_access_byte: bool):
+def ls(compound_path: str, show_access_byte: bool):
     """List directory contents (Acorn alias: *CAT).
 
-    Accepts a ``FILE_SPEC`` (the in-image ``PATH_SPEC`` is optional and defaults to the root).
+    Accepts a ``COMPOUND_PATH`` (the in-image ``INNER_PATH`` is optional and defaults to the root).
     """
     from asyoulikeit.tabular_data import Importance, Report, Reports, TableContent
     from oaknut.file import Access
     from oaknut.filesystem import AcornMetadata, FreeSpace, Titled
 
-    resolved = resolve_mount(file_spec)
+    resolved = resolve_mount(compound_path)
     mount = resolved.mount
     target = resolved.path or mount.path_root()
 
@@ -299,17 +299,17 @@ _alias("*CAT", "ls")
 
 
 @cli.command()
-@click.argument("file_spec")
+@click.argument("compound_path", metavar="OUTER:INNER")
 @report_output(reports={"tree": "Hierarchical directory listing."})
-def tree(file_spec: str):
+def tree(compound_path: str):
     """Display recursive directory tree.
 
-    Accepts a ``FILE_SPEC`` (the in-image ``PATH_SPEC`` is optional and defaults to the root).
+    Accepts a ``COMPOUND_PATH`` (the in-image ``INNER_PATH`` is optional and defaults to the root).
     """
     from asyoulikeit.tabular_data import Report, Reports
     from asyoulikeit.tree_data import TreeContent
 
-    _image, path = parse_file_spec(file_spec)
+    _outer_filepath, path = parse_compound_path(compound_path)
 
     # The root node carries the image name visibly now that asyoulikeit
     # 0.5.1 drops the Rich-table chrome around single-column trees —
@@ -319,7 +319,7 @@ def tree(file_spec: str):
 
     if path:
         # Explicit path (possibly with a partition prefix) — that subtree only.
-        resolved = resolve_mount(file_spec)
+        resolved = resolve_mount(compound_path)
         mount = resolved.mount
         target = resolved.path or mount.path_root()
         if not mount.exists(target):
@@ -329,12 +329,12 @@ def tree(file_spec: str):
         if entry.is_dir:
             _attach_children_mount(mount, target, root)
     else:
-        _build_tree_whole_image(file_spec, tc)
+        _build_tree_whole_image(compound_path, tc)
 
     return Reports(tree=Report(data=tc))
 
 
-def _build_tree_whole_image(file_spec: str, tc) -> None:
+def _build_tree_whole_image(compound_path: str, tc) -> None:
     """Populate *tc* with one root per image, labelled partitions beneath.
 
     Each identified partition is mounted through the coordinator and its
@@ -342,12 +342,12 @@ def _build_tree_whole_image(file_spec: str, tc) -> None:
     ``afs``, …). A single-partition image folds its contents straight
     under the image root with no partition label.
     """
-    image_filepath, _ = parse_file_spec(file_spec)
-    selectors = partition_selectors(image_filepath)
-    image_root = tc.add_root(name=image_filepath.name)
+    outer_filepath, _ = parse_compound_path(compound_path)
+    selectors = partition_selectors(outer_filepath)
+    image_root = tc.add_root(name=outer_filepath.name)
     multi = len(selectors) > 1
     for selector in selectors:
-        resolved = resolve_mount(f"{image_filepath}:{selector}:")
+        resolved = resolve_mount(f"{outer_filepath}:{selector}:")
         mount = resolved.mount
         parent = image_root.add_child(name=selector) if multi else image_root
         _attach_children_mount(mount, mount.path_root(), parent)
@@ -362,7 +362,7 @@ def _attach_children_mount(mount, path: str, parent_tree_node) -> None:
 
 
 @cli.command()
-@click.argument("file_spec")
+@click.argument("compound_path", metavar="OUTER:INNER")
 @report_output(
     reports={
         "disc": (
@@ -383,7 +383,7 @@ def _attach_children_mount(mount, path: str, parent_tree_node) -> None:
         "file": "Per-file metadata when the path denotes a file.",
     }
 )
-def stat(file_spec: str):
+def stat(compound_path: str):
     """Disc summary (no path) or file metadata (with path). Alias: *INFO.
 
     With no in-partition path, summarises the disc by walking its
@@ -391,7 +391,7 @@ def stat(file_spec: str):
     partition on a partitioned disc, or a single block otherwise. With a
     path, reports that file's metadata.
 
-    Accepts a ``FILE_SPEC`` (the in-image ``PATH_SPEC`` is optional and defaults to the root).
+    Accepts a ``COMPOUND_PATH`` (the in-image ``INNER_PATH`` is optional and defaults to the root).
     """
     from asyoulikeit.tabular_data import Report, Reports, TableContent
     from oaknut.file import Access
@@ -399,13 +399,13 @@ def stat(file_spec: str):
 
     from .mount import split_selector
 
-    image, in_path = parse_file_spec(file_spec)
-    _selector, bare = split_selector(in_path)
+    outer_filepath, inner_path = parse_compound_path(compound_path)
+    _selector, bare = split_selector(inner_path)
 
     if not bare:
-        return _stat_disc(file_spec, image)
+        return _stat_disc(compound_path, outer_filepath)
 
-    resolved = resolve_mount(file_spec)
+    resolved = resolve_mount(compound_path)
     mount = resolved.mount
     if not mount.exists(bare):
         raise click.ClickException(f"path not found: {bare}")
@@ -438,7 +438,7 @@ def stat(file_spec: str):
 _alias("*INFO", "stat")
 
 
-def _stat_disc(file_spec: str, image_filepath: Path):
+def _stat_disc(compound_path: str, outer_filepath: Path):
     """Summarise a disc by navigating its partition structure.
 
     A single-partition image yields one ``partition_1`` block carrying
@@ -454,25 +454,25 @@ def _stat_disc(file_spec: str, image_filepath: Path):
 
     from .mount import split_selector
 
-    selector, _ = split_selector(parse_file_spec(file_spec)[1])
-    selectors = partition_selectors(image_filepath)
+    selector, _ = split_selector(parse_compound_path(compound_path)[1])
+    selectors = partition_selectors(outer_filepath)
 
     if selector is not None:
         # Scoped to one partition — a single block keyed by its position.
         index = selectors.index(selector) if selector in selectors else 0
-        resolved = resolve_mount(file_spec)
+        resolved = resolve_mount(compound_path)
         block = _partition_block(resolved.mount, selector.upper(), geometry=True)
         return Reports({f"partition_{index + 1}": Report(data=block)})
 
     if len(selectors) == 1:
-        resolved = resolve_mount(f"{image_filepath}:{selectors[0]}:")
+        resolved = resolve_mount(f"{outer_filepath}:{selectors[0]}:")
         block = _partition_block(resolved.mount, selectors[0].upper(), geometry=True)
         return Reports(partition_1=Report(data=block))
 
     # Multi-partition: a disc envelope (host geometry) then one block per
     # partition, with cylinder ranges accumulated from each slice's size.
     sections: dict = {}
-    host = resolve_mount(f"{image_filepath}:{selectors[0]}:").mount
+    host = resolve_mount(f"{outer_filepath}:{selectors[0]}:").mount
     disc_geometry = host.disc_geometry() if isinstance(host, PhysicalGeometry) else None
     if disc_geometry is not None:
         sections["disc"] = Report(data=_disc_envelope(disc_geometry))
@@ -483,7 +483,7 @@ def _stat_disc(file_spec: str, image_filepath: Path):
         mount = (
             host
             if selector_name == selectors[0]
-            else resolve_mount(f"{image_filepath}:{selector_name}:").mount
+            else resolve_mount(f"{outer_filepath}:{selector_name}:").mount
         )
         range_text = None
         if spc:
@@ -554,20 +554,20 @@ def _partition_block(mount, title: str, *, geometry: bool = False, range_text: s
 
 
 @cli.command()
-@click.argument("file_spec")
-def cat(file_spec: str) -> None:
+@click.argument("compound_path", metavar="OUTER:INNER")
+def cat(compound_path: str) -> None:
     """Dump file contents to stdout as raw bytes.
 
-    Accepts a ``FILE_SPEC``.
+    Accepts a ``COMPOUND_PATH``.
 
     Use :command:`disc type` for Acorn text files — this command
     writes bytes verbatim, so files using Acorn ``\\r`` line endings
     will render unreadably on a Unix terminal.
     """
-    _image, path = parse_file_spec(file_spec)
+    _outer_filepath, path = parse_compound_path(compound_path)
     if not path:
         raise click.UsageError("PATH is required")
-    resolved = resolve_mount(file_spec)
+    resolved = resolve_mount(compound_path)
     mount = resolved.mount
     target = resolved.path or mount.path_root()
     if not mount.exists(target):
@@ -606,7 +606,7 @@ def _translate_line_endings(data: bytes, mode: str) -> bytes:
 
 
 @cli.command(name="type")
-@click.argument("file_spec")
+@click.argument("compound_path", metavar="OUTER:INNER")
 @click.option(
     "--line-endings",
     "-l",
@@ -618,10 +618,10 @@ def _translate_line_endings(data: bytes, mode: str) -> bytes:
         "lf/crlf/cr = force a specific style; keep = no translation."
     ),
 )
-def type_(file_spec: str, line_endings: str) -> None:
+def type_(compound_path: str, line_endings: str) -> None:
     """Display a text file with line endings translated for the host.
 
-    Accepts a ``FILE_SPEC``.
+    Accepts a ``COMPOUND_PATH``.
 
     Acorn text files terminate lines with ``\\r`` (carriage return).
     Dumped raw to a Unix terminal each line overwrites the previous,
@@ -631,10 +631,10 @@ def type_(file_spec: str, line_endings: str) -> None:
 
     Acorn alias: *TYPE.
     """
-    _image, path = parse_file_spec(file_spec)
+    _outer_filepath, path = parse_compound_path(compound_path)
     if not path:
         raise click.UsageError("PATH is required")
-    resolved = resolve_mount(file_spec)
+    resolved = resolve_mount(compound_path)
     mount = resolved.mount
     target = resolved.path or mount.path_root()
     if not mount.exists(target):
@@ -649,13 +649,13 @@ _alias("*TYPE", "type")
 
 
 @cli.command()
-@click.argument("file_spec")
+@click.argument("compound_path", metavar="OUTER:INNER")
 @report_output(reports={"matches": "Paths matching the wildcard pattern."})
-def find(file_spec: str):
+def find(compound_path: str):
     """Find files matching an Acorn wildcard pattern.
 
-    Accepts an ``IMAGE_SPEC`` (lists every file) or a ``FILE_SPEC``
-    whose ``PATH_SPEC`` is the wildcard pattern.
+    Accepts an ``OUTER_PATH`` (lists every file) or a ``COMPOUND_PATH``
+    whose ``INNER_PATH`` is the wildcard pattern.
 
     Accepts the same ``adfs:`` / ``afs:`` / ``dfs:`` prefixes as
     every other command to scope the search to a single partition.
@@ -669,7 +669,7 @@ def find(file_spec: str):
 
     from .mount import split_selector
 
-    image, pattern = parse_file_spec(file_spec)
+    outer_filepath, pattern = parse_compound_path(compound_path)
     if not pattern:
         raise click.UsageError("PATTERN is required")
     selector, bare_pattern = split_selector(pattern)
@@ -684,12 +684,12 @@ def find(file_spec: str):
         # image labels each hit with its selector so a result feeds back
         # into a follow-up command unchanged; a single-partition image
         # keeps bare paths.
-        selectors = partition_selectors(image)
+        selectors = partition_selectors(outer_filepath)
         emit_prefix = len(selectors) > 1
 
     rows: list[dict] = []
     for sel in selectors:
-        resolved = resolve_mount(f"{image}:{sel}:")
+        resolved = resolve_mount(f"{outer_filepath}:{sel}:")
         mount = resolved.mount
         prefix = f"{sel}:" if emit_prefix else ""
         _find_recursive(mount, mount.path_root(), bare_pattern, prefix, rows)
@@ -733,7 +733,7 @@ _FOR_EACH_MODES = ("content", "inner-path", "compound-path", "materialise")
 
 
 @cli.command(name="for-each")
-@click.argument("file_spec", metavar="OUTER:INNER")
+@click.argument("compound_path", metavar="OUTER:INNER")
 @click.argument("command_argv", nargs=-1, required=True, metavar="-- COMMAND...")
 @click.option(
     "--mode",
@@ -750,7 +750,7 @@ _FOR_EACH_MODES = ("content", "inner-path", "compound-path", "materialise")
         "results": "Per-file capture: path and the command's stdout, one row per match."
     }
 )
-def for_each(file_spec: str, command_argv: tuple[str, ...], mode: str):
+def for_each(compound_path: str, command_argv: tuple[str, ...], mode: str):
     """Run a command for each file matching an inner-path pattern.
 
     Use ``--`` to separate ``disc``'s options from the command's, so
@@ -795,7 +795,7 @@ def for_each(file_spec: str, command_argv: tuple[str, ...], mode: str):
 
     from .mount import split_selector
 
-    image, pattern = parse_file_spec(file_spec)
+    outer_filepath, pattern = parse_compound_path(compound_path)
     if not pattern:
         raise click.UsageError("PATTERN is required")
     selector, bare_pattern = split_selector(pattern)
@@ -804,17 +804,17 @@ def for_each(file_spec: str, command_argv: tuple[str, ...], mode: str):
         selectors = [selector]
         emit_prefix = True
     else:
-        selectors = partition_selectors(image)
+        selectors = partition_selectors(outer_filepath)
         emit_prefix = len(selectors) > 1
 
     matches: list[tuple[str, object]] = []
     for sel in selectors:
-        resolved = resolve_mount(f"{image}:{sel}:")
+        resolved = resolve_mount(f"{outer_filepath}:{sel}:")
         mount = resolved.mount
         prefix = f"{sel}:" if emit_prefix else ""
         _collect_matches(mount, mount.path_root(), bare_pattern, prefix, matches)
 
-    rows = _for_each_run(image, matches, list(command_argv), mode)
+    rows = _for_each_run(outer_filepath, matches, list(command_argv), mode)
 
     table = TableContent(title="results")
     table.add_column("path", "Path", header=True)
@@ -841,7 +841,7 @@ def _collect_matches(mount, path: str, pattern: str, prefix: str, out: list) -> 
 
 
 def _for_each_run(
-    image_filepath, matches: list, command_argv: list[str], mode: str
+    outer_filepath, matches: list, command_argv: list[str], mode: str
 ) -> list[dict]:
     """Run the per-file command for each match in the chosen *mode*.
 
@@ -872,7 +872,7 @@ def _for_each_run(
             argv = _substitute(command_argv, display_path)
             stdin = None
         elif mode == "compound-path":
-            argv = _substitute(command_argv, f"{image_filepath}:{display_path}")
+            argv = _substitute(command_argv, f"{outer_filepath}:{display_path}")
             stdin = None
         else:  # pragma: no cover — the Choice option blocks anything else
             raise click.ClickException(f"unknown for-each mode: {mode!r}")
@@ -914,9 +914,9 @@ def _materialise(
 
 
 @cli.command(name="materialise")
-@click.argument("file_spec", metavar="OUTER:INNER")
+@click.argument("compound_path", metavar="OUTER:INNER")
 @click.argument("command_argv", nargs=-1, required=True, metavar="-- COMMAND...")
-def materialise(file_spec: str, command_argv: tuple[str, ...]) -> None:
+def materialise(compound_path: str, command_argv: tuple[str, ...]) -> None:
     """Materialise one file to a host temp file, run a command on it, clean up.
 
     The single-file primitive behind ``for-each --mode materialise``:
@@ -938,11 +938,11 @@ def materialise(file_spec: str, command_argv: tuple[str, ...]) -> None:
     import sys
     import tempfile
 
-    image_filepath, in_image_path = parse_file_spec(file_spec)
-    if not in_image_path:
-        raise click.UsageError("PATH_SPEC is required (e.g. img:$.HELLO)")
+    outer_filepath, inner_path = parse_compound_path(compound_path)
+    if not inner_path:
+        raise click.UsageError("INNER_PATH is required (e.g. img:$.HELLO)")
 
-    with resolve_mount(file_spec) as resolved:
+    with resolve_mount(compound_path) as resolved:
         mount = resolved.mount
         if not mount.exists(resolved.path):
             raise FSError(
@@ -964,11 +964,11 @@ def materialise(file_spec: str, command_argv: tuple[str, ...]) -> None:
 
 
 @cli.command()
-@click.argument("file_spec")
-def freemap(file_spec: str) -> None:
+@click.argument("compound_path", metavar="OUTER:INNER")
+def freemap(compound_path: str) -> None:
     """Show the free-space map as a sector matrix.
 
-    Accepts a ``FILE_SPEC``; a partition prefix scopes the map to that
+    Accepts a ``COMPOUND_PATH``; a partition prefix scopes the map to that
     partition. Each cell is one sector — ``.`` free, ``█`` used — laid
     out in rows sized to the terminal.
     """
@@ -976,7 +976,7 @@ def freemap(file_spec: str) -> None:
 
     from oaknut.filesystem import FreeMap
 
-    with resolve_mount(file_spec) as resolved:
+    with resolve_mount(compound_path) as resolved:
         mount = resolved.mount
         if not isinstance(mount, FreeMap):
             raise click.ClickException(f"{resolved.filesystem} provides no free-space map")
@@ -1070,7 +1070,7 @@ def validate(image: Path) -> None:
 
 
 @cli.command()
-@click.argument("file_spec")
+@click.argument("compound_path", metavar="OUTER:INNER")
 @click.argument("host_path", required=False, default=None)
 @click.option(
     "--meta-format",
@@ -1091,14 +1091,14 @@ def validate(image: Path) -> None:
 )
 @click.option("--owner", type=int, default=0, help="Econet owner ID for PiEB formats.")
 def get(
-    file_spec: str,
+    compound_path: str,
     host_path: str | None,
     meta_format: str,
     owner: int,
 ) -> None:
     """Export a file from the image to the host filesystem.
 
-    Accepts a ``FILE_SPEC`` and an optional ``HOST_PATH``.
+    Accepts a ``COMPOUND_PATH`` and an optional ``HOST_PATH``.
 
     When ``HOST_PATH`` is omitted, the file is written to the current
     working directory under its on-disc Acorn name. When
@@ -1118,11 +1118,11 @@ def get(
     from oaknut.file import AcornMeta, MetaFormat, export_with_metadata
     from oaknut.filesystem import AcornMetadata
 
-    _image, path = parse_file_spec(file_spec)
+    _outer_filepath, path = parse_compound_path(compound_path)
     if not path:
         raise click.UsageError("PATH is required")
     host_path = Path(host_path) if host_path is not None else None
-    resolved = resolve_mount(file_spec)
+    resolved = resolve_mount(compound_path)
     mount = resolved.mount
     target = resolved.path or mount.path_root()
     if not mount.exists(target):
@@ -1164,7 +1164,7 @@ def get(
 
 
 @cli.command()
-@click.argument("file_spec")
+@click.argument("compound_path", metavar="OUTER:INNER")
 @click.argument("host_path", required=False, default=None)
 @click.option(
     "--load",
@@ -1198,7 +1198,7 @@ def get(
     help="Metadata format to read from host file.",
 )
 def put(
-    file_spec: str,
+    compound_path: str,
     host_path: str | None,
     load_address: str | None,
     exec_address: str | None,
@@ -1206,7 +1206,7 @@ def put(
 ) -> None:
     """Import a host file into the image.
 
-    Accepts a ``FILE_SPEC`` (the in-image destination) and a
+    Accepts a ``COMPOUND_PATH`` (the in-image destination) and a
     ``HOST_PATH``.
 
     ``HOST_PATH`` is required. When it is ``-``, the raw bytes are
@@ -1231,7 +1231,7 @@ def put(
     from oaknut.file import AcornMeta, parse_address
     from oaknut.filesystem import AcornMetadata
 
-    _image, path = parse_file_spec(file_spec)
+    _outer_filepath, path = parse_compound_path(compound_path)
     if not path:
         raise click.UsageError("PATH is required")
     host_path = Path(host_path) if host_path is not None else None
@@ -1264,7 +1264,7 @@ def put(
     else:
         raise click.ClickException("HOST_PATH is required (or use - for stdin)")
 
-    with resolve_mount(file_spec, writable=True) as resolved:
+    with resolve_mount(compound_path, writable=True) as resolved:
         mount = resolved.mount
         target = resolved.path or mount.path_root()
         # The generic write carries no addresses; set them after, when the
@@ -1289,13 +1289,13 @@ def put(
 
 
 @cli.command()
-@click.argument("file_spec")
+@click.argument("compound_path", metavar="OUTER:INNER")
 @click.argument("paths", nargs=-1)
 @click.option("-f", "--force", is_flag=True, help="Ignore missing, override locks.")
 @click.option("-r", "--recursive", is_flag=True, help="Remove directories recursively.")
 @click.option("--dry-run", is_flag=True, help="Print what would be removed.")
 def rm(
-    file_spec: str,
+    compound_path: str,
     paths: tuple[str, ...],
     force: bool,
     recursive: bool,
@@ -1303,15 +1303,15 @@ def rm(
 ) -> None:
     """Delete file(s) from the image (Acorn alias: *DELETE).
 
-    Accepts a ``FILE_SPEC`` followed by zero or more bare ``PATH_SPEC``
-    arguments — the first entry to delete travels in the ``FILE_SPEC``,
+    Accepts a ``COMPOUND_PATH`` followed by zero or more bare ``INNER_PATH``
+    arguments — the first entry to delete travels in the ``COMPOUND_PATH``,
     additional in-image paths follow. Each path may contain Acorn
     wildcards (``*``, ``#``); ``-r`` descends into directory matches
     and removes children before the directory itself.
     """
     from .mount import split_selector
 
-    image, first_path = parse_file_spec(file_spec)
+    outer_filepath, first_path = parse_compound_path(compound_path)
     all_paths: tuple[str, ...] = (first_path, *paths) if first_path else paths
     if not all_paths:
         raise click.UsageError("at least one PATH is required")
@@ -1323,7 +1323,7 @@ def rm(
     bare_patterns = [split_selector(p)[1] for p in all_paths]
     prefix = f"{selector}:" if selector else ""
 
-    with resolve_mount(f"{image}:{prefix}", writable=not dry_run) as resolved:
+    with resolve_mount(f"{outer_filepath}:{prefix}", writable=not dry_run) as resolved:
         mount = resolved.mount
         for pattern in bare_patterns:
             # --force downgrades "no matches" to a no-op.
@@ -1355,20 +1355,21 @@ _alias("*DELETE", "rm")
 def mv(src: str, dst: str, force: bool) -> None:
     """Rename or move a file within the image (Acorn alias: *RENAME).
 
-    Accepts two ``FILE_SPEC`` arguments — source and destination, both
+    Accepts two ``COMPOUND_PATH`` arguments — source and destination, both
     of which must name the same image. mv is single-image: the library
     renames a directory entry in place and cannot move across
     filesystems.
     """
     from .mount import split_selector
 
-    src_image, _ = parse_file_spec(src)
-    dst_image, dst_in = parse_file_spec(dst)
-    if src_image.resolve() != dst_image.resolve():
+    src_outer_filepath, _ = parse_compound_path(src)
+    dst_outer_filepath, dst_inner_path = parse_compound_path(dst)
+    if src_outer_filepath.resolve() != dst_outer_filepath.resolve():
         raise click.UsageError(
-            f"mv source and destination must name the same image; got {src_image} and {dst_image}"
+            f"mv source and destination must name the same image; "
+            f"got {src_outer_filepath} and {dst_outer_filepath}"
         )
-    _, bare_dst = split_selector(dst_in)
+    _, bare_dst = split_selector(dst_inner_path)
 
     with resolve_mount(src, writable=True) as resolved:
         mount = resolved.mount
@@ -1398,7 +1399,7 @@ def cp(src: str, dst: str, force: bool, recursive: bool) -> None:
 
     Acorn alias: *COPY.
 
-    Accepts two ``FILE_SPEC`` arguments — source and destination.
+    Accepts two ``COMPOUND_PATH`` arguments — source and destination.
     Cross-image copies are the normal case; for an in-image copy,
     name the same image on both sides
     (``disc cp image.adl:$.Original image.adl:$.Copy``).
@@ -1507,8 +1508,8 @@ def _iter_target_paths(mount, pattern: str, *, recursive: bool):
             yield seed
 
 
-def _mutate_access(file_spec: str, *, recursive: bool, dry_run: bool, verb, transform) -> None:
-    """Apply an access-byte *transform* to every target of *file_spec*.
+def _mutate_access(compound_path: str, *, recursive: bool, dry_run: bool, verb, transform) -> None:
+    """Apply an access-byte *transform* to every target of *compound_path*.
 
     *transform* maps the current :class:`~oaknut.file.Access` to the new
     one. Access is wire-canonical at the mount boundary — each filesystem
@@ -1520,10 +1521,10 @@ def _mutate_access(file_spec: str, *, recursive: bool, dry_run: bool, verb, tran
     from oaknut.file import Access, AcornMeta
     from oaknut.filesystem import AcornMetadata, HierarchicalDirectories
 
-    _image, path = parse_file_spec(file_spec)
+    _outer_filepath, path = parse_compound_path(compound_path)
     if not path:
         raise click.UsageError("PATH is required")
-    with resolve_mount(file_spec, writable=not dry_run) as resolved:
+    with resolve_mount(compound_path, writable=not dry_run) as resolved:
         mount = resolved.mount
         if not isinstance(mount, AcornMetadata):
             raise FSError(
@@ -1870,7 +1871,7 @@ _alias("*COPY", "cp")
 
 
 @cli.command()
-@click.argument("file_spec")
+@click.argument("compound_path", metavar="OUTER:INNER")
 @click.option(
     "-p",
     is_flag=True,
@@ -1882,19 +1883,19 @@ _alias("*COPY", "cp")
     default=None,
     help="Set the new directory's title (ADFS only; DFS/AFS directories have none).",
 )
-def mkdir(file_spec: str, p: bool, dir_title: str | None) -> None:
+def mkdir(compound_path: str, p: bool, dir_title: str | None) -> None:
     """Create a directory (ADFS/AFS only). Alias: *CDIR.
 
-    Accepts a ``FILE_SPEC``. ``--title`` additionally sets the new
+    Accepts a ``COMPOUND_PATH``. ``--title`` additionally sets the new
     directory's title, which only ADFS supports — passing it for an
     AFS directory is an error (DFS has no directories at all).
     """
     from oaknut.filesystem import HierarchicalDirectories
 
-    _image, path = parse_file_spec(file_spec)
+    _outer_filepath, path = parse_compound_path(compound_path)
     if not path:
         raise click.UsageError("PATH is required")
-    with resolve_mount(file_spec, writable=True) as resolved:
+    with resolve_mount(compound_path, writable=True) as resolved:
         mount = resolved.mount
         # mkdir is available when the filesystem nests directories; a flat
         # catalogue (DFS) does not advertise the capability.
@@ -1910,21 +1911,21 @@ _alias("*CDIR", "mkdir")
 
 
 @cli.command()
-@click.argument("file_spec")
+@click.argument("compound_path", metavar="OUTER:INNER")
 @click.argument("access")
 @click.option("-r", "--recursive", is_flag=True, help="Recurse into directory matches.")
 @click.option(
     "--dry-run", is_flag=True, help="Print what would change without modifying the image."
 )
 def chmod(
-    file_spec: str,
+    compound_path: str,
     access: str,
     recursive: bool,
     dry_run: bool,
 ) -> None:
     """Set file access permissions (Acorn alias: *ACCESS).
 
-    Accepts a ``FILE_SPEC`` and an ``ACCESS``.
+    Accepts a ``COMPOUND_PATH`` and an ``ACCESS``.
 
     ACCESS is symbolic (e.g. LWR/R, WR/WR) or hex (0x0B, 33).
     DFS only supports the L (locked) bit; other flags are ignored.
@@ -1939,7 +1940,7 @@ def chmod(
     # chmod replaces the access wholesale; the mount maps it to its layout
     # (DFS keeps only the lock bit, ADFS/AFS the full set).
     _mutate_access(
-        file_spec,
+        compound_path,
         recursive=recursive,
         dry_run=dry_run,
         verb=lambda target: f"would chmod {target} {access}",
@@ -1951,21 +1952,21 @@ _alias("*ACCESS", "chmod")
 
 
 @cli.command()
-@click.argument("file_spec")
+@click.argument("compound_path", metavar="OUTER:INNER")
 @click.option("-r", "--recursive", is_flag=True, help="Recurse into directory matches.")
 @click.option(
     "--dry-run", is_flag=True, help="Print what would change without modifying the image."
 )
-def lock(file_spec: str, recursive: bool, dry_run: bool) -> None:
+def lock(compound_path: str, recursive: bool, dry_run: bool) -> None:
     """Lock a file.
 
-    Accepts a ``FILE_SPEC``.
+    Accepts a ``COMPOUND_PATH``.
     PATH may be a wildcard; ``-r`` recurses.
     """
     from oaknut.file import Access
 
     _mutate_access(
-        file_spec,
+        compound_path,
         recursive=recursive,
         dry_run=dry_run,
         verb=lambda target: f"would lock {target}",
@@ -1974,21 +1975,21 @@ def lock(file_spec: str, recursive: bool, dry_run: bool) -> None:
 
 
 @cli.command()
-@click.argument("file_spec")
+@click.argument("compound_path", metavar="OUTER:INNER")
 @click.option("-r", "--recursive", is_flag=True, help="Recurse into directory matches.")
 @click.option(
     "--dry-run", is_flag=True, help="Print what would change without modifying the image."
 )
-def unlock(file_spec: str, recursive: bool, dry_run: bool) -> None:
+def unlock(compound_path: str, recursive: bool, dry_run: bool) -> None:
     """Unlock a file.
 
-    Accepts a ``FILE_SPEC``.
+    Accepts a ``COMPOUND_PATH``.
     PATH may be a wildcard; ``-r`` recurses.
     """
     from oaknut.file import Access
 
     _mutate_access(
-        file_spec,
+        compound_path,
         recursive=recursive,
         dry_run=dry_run,
         verb=lambda target: f"would unlock {target}",
@@ -1997,21 +1998,21 @@ def unlock(file_spec: str, recursive: bool, dry_run: bool) -> None:
 
 
 @cli.command(name="set-load")
-@click.argument("file_spec")
+@click.argument("compound_path", metavar="OUTER:INNER")
 @click.argument("addr")
 @click.option("-r", "--recursive", is_flag=True, help="Recurse into directory matches.")
 @click.option(
     "--dry-run", is_flag=True, help="Print what would change without modifying the image."
 )
 def set_load(
-    file_spec: str,
+    compound_path: str,
     addr: str,
     recursive: bool,
     dry_run: bool,
 ) -> None:
     """Set a file's load address.
 
-    Accepts a ``FILE_SPEC`` and an ``ADDR``.
+    Accepts a ``COMPOUND_PATH`` and an ``ADDR``.
 
     ``ADDR``'s number base comes from its prefix: ``0x`` for hex
     (the usual form for Acorn addresses — e.g. ``0x1900``), ``0o``
@@ -2026,11 +2027,11 @@ def set_load(
     from oaknut.file import AcornMeta, parse_address
     from oaknut.filesystem import AcornMetadata
 
-    _image, path = parse_file_spec(file_spec)
+    _outer_filepath, path = parse_compound_path(compound_path)
     if not path:
         raise click.UsageError("PATH is required")
     address = parse_address(addr)
-    with resolve_mount(file_spec, writable=not dry_run) as resolved:
+    with resolve_mount(compound_path, writable=not dry_run) as resolved:
         mount = resolved.mount
         if not isinstance(mount, AcornMetadata):
             raise FSError(
@@ -2056,21 +2057,21 @@ def set_load(
 
 
 @cli.command(name="set-exec")
-@click.argument("file_spec")
+@click.argument("compound_path", metavar="OUTER:INNER")
 @click.argument("addr")
 @click.option("-r", "--recursive", is_flag=True, help="Recurse into directory matches.")
 @click.option(
     "--dry-run", is_flag=True, help="Print what would change without modifying the image."
 )
 def set_exec(
-    file_spec: str,
+    compound_path: str,
     addr: str,
     recursive: bool,
     dry_run: bool,
 ) -> None:
     """Set a file's exec address.
 
-    Accepts a ``FILE_SPEC`` and an ``ADDR``.
+    Accepts a ``COMPOUND_PATH`` and an ``ADDR``.
 
     ``ADDR``'s number base comes from its prefix: ``0x`` for hex
     (the usual form for Acorn addresses — e.g. ``0x8023``), ``0o``
@@ -2085,11 +2086,11 @@ def set_exec(
     from oaknut.file import AcornMeta, parse_address
     from oaknut.filesystem import AcornMetadata
 
-    _image, path = parse_file_spec(file_spec)
+    _outer_filepath, path = parse_compound_path(compound_path)
     if not path:
         raise click.UsageError("PATH is required")
     address = parse_address(addr)
-    with resolve_mount(file_spec, writable=not dry_run) as resolved:
+    with resolve_mount(compound_path, writable=not dry_run) as resolved:
         mount = resolved.mount
         if not isinstance(mount, AcornMetadata):
             raise FSError(
@@ -2114,8 +2115,8 @@ def set_exec(
             )
 
 
-def _require_acorn_meta(file_spec: str):
-    """Resolve *file_spec* to an existing file and return its Acorn metadata.
+def _require_acorn_meta(compound_path: str):
+    """Resolve *compound_path* to an existing file and return its Acorn metadata.
 
     Raises if the path is missing, is a directory, or the filesystem does
     not carry Acorn metadata (the capability the get-load/get-exec
@@ -2123,10 +2124,10 @@ def _require_acorn_meta(file_spec: str):
     """
     from oaknut.filesystem import AcornMetadata
 
-    _image, path = parse_file_spec(file_spec)
+    _outer_filepath, path = parse_compound_path(compound_path)
     if not path:
         raise click.UsageError("PATH is required")
-    resolved = resolve_mount(file_spec)
+    resolved = resolve_mount(compound_path)
     mount = resolved.mount
     target = resolved.path or mount.path_root()
     if not mount.exists(target):
@@ -2140,7 +2141,7 @@ def _require_acorn_meta(file_spec: str):
 
 
 @cli.command(name="get-load")
-@click.argument("file_spec")
+@click.argument("compound_path", metavar="OUTER:INNER")
 @report_output(
     reports={
         "load": (
@@ -2149,15 +2150,15 @@ def _require_acorn_meta(file_spec: str):
         )
     }
 )
-def get_load(file_spec: str):
+def get_load(compound_path: str):
     """Print a file's load address.
 
-    Accepts a ``FILE_SPEC``.
+    Accepts a ``COMPOUND_PATH``.
     """
     from asyoulikeit.scalar_data import ScalarContent
     from asyoulikeit.tabular_data import Report, Reports
 
-    meta = _require_acorn_meta(file_spec)
+    meta = _require_acorn_meta(compound_path)
     return Reports(
         load=Report(
             data=ScalarContent(value=address_cell(meta.load_address), title="Load"),
@@ -2166,7 +2167,7 @@ def get_load(file_spec: str):
 
 
 @cli.command(name="get-exec")
-@click.argument("file_spec")
+@click.argument("compound_path", metavar="OUTER:INNER")
 @report_output(
     reports={
         "exec": (
@@ -2175,15 +2176,15 @@ def get_load(file_spec: str):
         )
     }
 )
-def get_exec(file_spec: str):
+def get_exec(compound_path: str):
     """Print a file's exec address.
 
-    Accepts a ``FILE_SPEC``.
+    Accepts a ``COMPOUND_PATH``.
     """
     from asyoulikeit.scalar_data import ScalarContent
     from asyoulikeit.tabular_data import Report, Reports
 
-    meta = _require_acorn_meta(file_spec)
+    meta = _require_acorn_meta(compound_path)
     return Reports(
         exec=Report(
             data=ScalarContent(value=address_cell(meta.exec_address), title="Exec"),
@@ -2192,13 +2193,13 @@ def get_exec(file_spec: str):
 
 
 @cli.command()
-@click.argument("file_spec")
+@click.argument("compound_path", metavar="OUTER:INNER")
 @click.argument("new_title", required=False, default=None)
 @report_output(reports={"title": "Current title (when no new title is supplied)."})
-def title(file_spec: str, new_title: str | None):
+def title(compound_path: str, new_title: str | None):
     """Read or set a disc or directory title (Acorn alias: *TITLE).
 
-    Accepts a ``FILE_SPEC``. With no in-image path it reads or sets
+    Accepts a ``COMPOUND_PATH``. With no in-image path it reads or sets
     the disc-level title (the DFS disc title, the ADFS root title, or
     the AFS partition's disc name). With a directory path it reads or
     sets that directory's title — an ADFS-only capability, since DFS
@@ -2210,8 +2211,8 @@ def title(file_spec: str, new_title: str | None):
     from oaknut.file import TitleNotSupportedError
     from oaknut.filesystem import DirectoryTitled, Titled
 
-    _image, _path = parse_file_spec(file_spec)
-    with resolve_mount(file_spec, writable=new_title is not None) as resolved:
+    _outer_filepath, _path = parse_compound_path(compound_path)
+    with resolve_mount(compound_path, writable=new_title is not None) as resolved:
         mount = resolved.mount
         bare = resolved.path
         # No in-image path → the disc/partition title (every filesystem

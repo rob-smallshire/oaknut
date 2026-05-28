@@ -47,7 +47,7 @@ structural and uniform across all 21 commands.
   `_split_at_image_colon`, params, docstrings
 - [x] Stage 2 — `mount.py`: rename `resolve_mount` parameter,
   `in_image_path` variables, docstrings
-- [ ] Stage 3 — `cli.py`: 21 `@click.argument` decorators, function
+- [x] Stage 3 — `cli.py`: 21 `@click.argument` decorators, function
   parameters, bodies, docstrings; consolidate `in_image_path`/
   `in_image`/`in_path` → `inner_path`
 - [ ] Stage 4 — Tests: 4 test files, ~30 occurrences
@@ -62,8 +62,8 @@ structural and uniform across all 21 commands.
 |---|---|---|---|
 | 0 | done | 0e0e088 | tracking file |
 | 1 | done | ccf9e9f | cli_paths.py rewrite |
-| 2 | done | (next) | mount.py rewrite |
-| 3 | pending | — | |
+| 2 | done | b4e57bb | mount.py rewrite |
+| 3 | done | (next) | cli.py sweep — 21 commands, metavar=OUTER:INNER |
 | 4 | pending | — | |
 | 5 | pending | — | |
 | 6 | pending | — | |
