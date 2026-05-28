@@ -358,8 +358,9 @@ def _build_afs_plan_reports(document: dict):
     "emplacements",
     multiple=True,
     help=(
-        "Emplace a library: a shipped name (Library, Library1, ArthurLib) "
-        "or a path to an ADFS .adl image. Repeat for multiple."
+        "Emplace a library: a shipped name (Library, Library1, ArthurLib, "
+        "Utils), the literal 'all' to emplace every shipped library, or a "
+        "path to an ADFS .adl image. Repeat for multiple."
     ),
 )
 def init(
@@ -415,7 +416,7 @@ def init(
             from oaknut.afs.libraries import emplace_library
 
             with adfs_disc.open_afs_partition() as afs_region:
-                for name in emplacements:
+                for name in _expand_emplacements(emplacements):
                     try:
                         replaced = emplace_library(afs_region, name)
                     except (ValueError, FileNotFoundError) as exc:
@@ -423,6 +424,26 @@ def init(
                     if replaced:
                         for fname in replaced:
                             click.echo(f"  replaced $.{name}/{fname}", err=True)
+
+
+def _expand_emplacements(emplacements: tuple[str, ...]) -> list[str]:
+    """Expand the ``all`` pseudo-name to every shipped library.
+
+    Other values pass through unchanged, in their original order, so
+    ``--emplace Library --emplace all --emplace /path/Custom.adl``
+    yields ``[Library, *SHIPPED_LIBRARIES, /path/Custom.adl]`` —
+    duplicates are preserved and the per-call conflict semantics in
+    :func:`emplace_library` resolve them on disc.
+    """
+    from oaknut.afs.libraries import SHIPPED_LIBRARIES
+
+    expanded: list[str] = []
+    for name in emplacements:
+        if name == "all":
+            expanded.extend(SHIPPED_LIBRARIES)
+        else:
+            expanded.append(name)
+    return expanded
 
 
 def _parse_user_specs(raw_specs: tuple[str, ...]) -> list:

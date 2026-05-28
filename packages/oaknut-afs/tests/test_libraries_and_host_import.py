@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 from helpers.afs_image import build_synthetic_adfs_with_afs
 from oaknut.afs import SHIPPED_LIBRARIES, import_host_tree
+from oaknut.afs.cli import _expand_emplacements
 from oaknut.afs.host_import import _sanitise_name
 from oaknut.afs.libraries import open_shipped, shipped_available
 
@@ -68,6 +69,26 @@ class TestShippedLibraries:
             entry = adfs.root / sample_name
             assert entry.exists(), f"sample file {sample_name} missing from {name}.adl"
             assert entry.stat().load_address == sample_load
+
+
+class TestExpandEmplacements:
+    """``--emplace all`` expands to every shipped library."""
+
+    def test_passes_individual_names_through(self) -> None:
+        assert _expand_emplacements(("Library", "ArthurLib")) == ["Library", "ArthurLib"]
+
+    def test_passes_path_through(self) -> None:
+        assert _expand_emplacements(("/path/Custom.adl",)) == ["/path/Custom.adl"]
+
+    def test_all_expands_to_shipped_libraries(self) -> None:
+        assert _expand_emplacements(("all",)) == list(SHIPPED_LIBRARIES)
+
+    def test_all_among_other_emplacements_preserves_order(self) -> None:
+        result = _expand_emplacements(("Library", "all", "/path/Custom.adl"))
+        assert result == ["Library", *SHIPPED_LIBRARIES, "/path/Custom.adl"]
+
+    def test_empty_input_returns_empty(self) -> None:
+        assert _expand_emplacements(()) == []
 
 
 class TestSanitiseName:
