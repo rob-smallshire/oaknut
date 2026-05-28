@@ -20,8 +20,8 @@ in `oaknut/disc/` is empty (bar the kept pyproject deps).
 
 ## Introspection / meta
 
-- [ ] `identify` — re-point to `oaknut.filesystem.identify` (new result shape).
-- [ ] `list-formats` → `list-filesystems`; `describe-format` → `describe-filesystem`.
+- [x] `identify` — re-point to `oaknut.filesystem.identify` (new result shape).
+- [x] `list-formats` → `list-filesystems`; `describe-format` → `describe-filesystem`.
 - ( `list-report-formats` / `describe-report-format` / `list-reports` /
   `describe-report` are asyoulikeit output-format commands — out of scope. )
 

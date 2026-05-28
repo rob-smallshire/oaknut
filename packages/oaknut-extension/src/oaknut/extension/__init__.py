@@ -1,15 +1,15 @@
 """Generic entry-point plug-in machinery shared by every oaknut extension axis.
 
 An *axis* is a single extension point — a family of interchangeable
-plug-ins that all answer the same question (for example the *prober*
-axis, which identifies disc-image formats). Each axis declares a
-``kind`` (a short identifier such as ``"prober"``). Concrete extensions
-subclass :class:`Extension`, override :meth:`Extension._kind`, and are
-registered under the ``oaknut.<kind>`` entry-point namespace in their
-package's ``pyproject.toml``::
+plug-ins that all answer the same question (for example the *filesystem*
+axis, where each plug-in detects and operates on one disc format). Each
+axis declares a ``kind`` (a short identifier such as ``"filesystem"``).
+Concrete extensions subclass :class:`Extension`, override
+:meth:`Extension._kind`, and are registered under the ``oaknut.<kind>``
+entry-point namespace in their package's ``pyproject.toml``::
 
-    [project.entry-points."oaknut.prober"]
-    acorn_dfs = "oaknut.dfs.probers:AcornDFSProber"
+    [project.entry-points."oaknut.filesystem"]
+    acorn-dfs = "oaknut.dfs.filesystem:AcornDFS"
 
 Consumers discover and load them via :func:`list_extensions`,
 :func:`create_extension`, :func:`extension`, and :func:`describe_extension`,
@@ -64,8 +64,8 @@ logger = logging.getLogger(__name__)
 def namespace_for(kind: str) -> str:
     """Return the entry-point namespace for an extension *kind*.
 
-    The convention is ``"oaknut.<kind>"`` — e.g. ``namespace_for("prober")``
-    is ``"oaknut.prober"``.
+    The convention is ``"oaknut.<kind>"`` — e.g.
+    ``namespace_for("filesystem")`` is ``"oaknut.filesystem"``.
     """
     return f"{NAMESPACE_PREFIX}.{kind}"
 

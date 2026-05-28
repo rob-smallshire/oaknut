@@ -12,8 +12,8 @@ The core library packages stay Click-free. Uses Click for command
 parsing and asyoulikeit for formatted output.
 
 `oaknut-disc` itself imports **no** filesystem package — content-first
-identification and partition selection go through `oaknut.identify` plus
-the filesystem extension manager in `mount.py`. `cli_paths.py` is now
+identification and partition selection go through `oaknut.filesystem`'s
+coordinator and extension manager in `mount.py`. `cli_paths.py` is now
 only the fused `IMAGE_SPEC:PATH_SPEC` colon parser; the `afs:`/`adfs:`/
 `dfs:` selector prefix it preserves is interpreted by `split_selector`
 in `mount.py`.

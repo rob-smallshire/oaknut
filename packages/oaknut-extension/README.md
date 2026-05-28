@@ -4,18 +4,19 @@ The entry-point plug-in framework shared by every extensible *axis* of the
 `oaknut` package family.
 
 An **axis** is one extension point — a family of interchangeable plug-ins that
-all answer the same question. The first axis is *probers* (disc-image format
-identification, in `oaknut-identify`); future axes — filesystems, output
-formatters, importers — plug into the same machinery.
+all answer the same question. The primary axis is *filesystems* (each plug-in
+detects and operates on one disc format, in `oaknut-filesystem`);
+`oaknut.command` (CLI subcommands contributed by filesystem packages) is
+another.
 
-Each axis declares a `kind` (a short identifier such as `"prober"`). Concrete
-extensions for that axis subclass `Extension`, override `_kind()`, and register
-themselves under the `oaknut.<kind>` entry-point namespace in their package's
-`pyproject.toml`:
+Each axis declares a `kind` (a short identifier such as `"filesystem"`).
+Concrete extensions for that axis subclass `Extension`, override `_kind()`,
+and register themselves under the `oaknut.<kind>` entry-point namespace in
+their package's `pyproject.toml`:
 
 ```toml
-[project.entry-points."oaknut.prober"]
-acorn_dfs = "oaknut.dfs.probers:AcornDFSProber"
+[project.entry-points."oaknut.filesystem"]
+acorn-dfs = "oaknut.dfs.filesystem:AcornDFS"
 ```
 
 Consumers discover and load them through `list_extensions()`,
