@@ -383,11 +383,8 @@ output column:
 .. cli-example:: grep_each_file
    :section: count
 
-For just the paths of the files that matched, pipe through ``awk``:
+For just the paths of the files that matched, strip the header with
+``--no-header`` and filter on the count column:
 
 .. cli-example:: grep_each_file
    :section: paths
-
-``($2+0) > 0`` forces a numeric comparison: counts of one or more
-match; the ``# Path / Output`` header and the zero-count rows both
-coerce to ``0`` and drop out.
