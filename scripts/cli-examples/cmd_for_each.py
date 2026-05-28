@@ -21,11 +21,7 @@ with in_tmp_dir():
 
     # Default mode: each file's bytes piped to the command's stdin.
     section("content")
-    show(
-        "disc for-each 'demo.ssd:*' -- "
-        "python3 -c 'import sys, hashlib; "
-        "print(hashlib.md5(sys.stdin.buffer.read()).hexdigest())'"
-    )
+    show("disc for-each 'demo.ssd:*' -- md5sum")
 
     # inner-path: the in-image path string is substituted into {} per
     # match (or appended, find-style). `echo` just prints its argument,
