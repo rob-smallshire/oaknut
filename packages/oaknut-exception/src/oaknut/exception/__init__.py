@@ -38,7 +38,7 @@ from typing import Iterator, Optional
 
 from exit_codes import ExitCode
 
-__version__ = "11.2.0"
+__version__ = "12.0.0"
 
 __all__ = [
     "OaknutException",
