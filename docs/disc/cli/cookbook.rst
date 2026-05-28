@@ -322,84 +322,61 @@ the BBC-era utilities (``LCAT``, ``NETMON``, ``PROT``, ``USERS``,
 A checksum table for every file on a disc
 -----------------------------------------
 
-To verify that two images carry the same data, that an image came
-across a transfer intact, or to spot-check a build, you want a table
-pairing every in-image path with a checksum of its bytes — no
-extraction, no host-side litter. ``disc for-each`` builds it in one
-command; the default ``--mode content`` pipes each file's bytes to the
-right-hand command, and the per-file output is captured as a column
-next to the path. When stdout is a pipe (or a file), ``disc``
-auto-selects TSV, so the obvious shell pipeline writes a clean TSV
-without any explicit format option:
+To pair every in-image path with a checksum of its bytes — to verify
+a transfer, compare two copies, or spot-check a build — ``disc
+for-each`` writes the table in one command. The default
+``--mode content`` pipes each file's bytes to the command; the
+command's stdout becomes that file's row. When stdout is captured,
+``disc`` writes TSV:
 
 .. code-block:: sh
 
    disc for-each 'image.ssd:*' -- <command> > checksums.tsv
 
-What changes is the per-file command. Three useful pickings, in
-ascending complexity.
+Three choices for ``<command>``.
 
 A CRC32 from ``cksum``
 ~~~~~~~~~~~~~~~~~~~~~~
 
-``cksum`` is the POSIX one. On stdin it emits ``<crc32> <bytes>`` —
-two numbers, no marker, no filename — so the captured TSV is clean
-without any wrapping:
+On stdin, ``cksum`` emits ``<crc32> <bytes>``:
 
 .. cli-example:: checksum_each_file
    :section: cksum
 
-CRC32 is a compact fingerprint — perfect for "did this transfer
-intact?" or "are these two files the same?" — and it has a virtue
-worth keeping in mind for an Acorn project: it can be computed on
-the original hardware too. A table built on a modern host can be
-verified by a BBC Micro reading the disc, and vice versa.
+CRC32 is a compact fingerprint, fine for spotting differences between
+two copies of a file. It's also computable on the BBC Micro itself.
 
 An MD5 from ``md5sum``
 ~~~~~~~~~~~~~~~~~~~~~~
 
-``md5sum`` (GNU coreutils) is the natural reach when you want a
-longer fingerprint — a 32-character hex digest that downstream
-tooling and published archives commonly cite. Same shape as
-``cksum``, with one quirk worth knowing about in the output:
+``md5sum`` (GNU coreutils) gives a longer fingerprint — a
+32-character hex digest that downstream tooling and published
+archives commonly cite:
 
 .. cli-example:: checksum_each_file
    :section: md5sum
 
-The trailing ``  -`` (two spaces and a hyphen) is ``md5sum``'s
-standard marker for "input came from stdin" — the literal ``-`` that
-GNU tools use in place of a filename when they read from a pipe.
-Seeing it here is your confirmation that ``for-each`` really did
-stream the bytes through stdin: there was no temp file, no
-filesystem round-trip, just the disc image's bytes going straight to
-``md5sum``.
+The trailing ``  -`` is ``md5sum``'s standard marker for input read
+from stdin.
 
 Trimming the marker
 ~~~~~~~~~~~~~~~~~~~
 
-If you'd rather the second column hold *only* the hash — for
-downstream tooling that expects ``<path>\t<hash>`` and nothing else —
-strip the trailing ``  -`` *from the resulting stream* rather than
-wrapping every per-file invocation. The for-each output is a regular
-TSV; post-process it as you would any other table:
+For a clean ``<path>\t<hash>`` table, strip the ``  -`` from the
+stream:
 
 .. cli-example:: checksum_each_file
    :section: md5sum-trim
 
-One ``sed`` invocation reshapes the whole stream, ``md5sum`` itself
-stays untouched, and the trimming happens once at the end — not
-inside a per-file shell wrapper that spawns three processes for every
-match. The same principle generalises: rename columns with ``awk``,
-sort with ``sort``, drop rows by pattern with ``grep -v`` — the
-for-each output is just text, available to the rest of the shell's
-toolbox.
+The for-each output is text; the rest of the shell's text tools work
+normally — ``awk`` to rename columns, ``sort`` for ordering, ``grep
+-v`` to drop rows by pattern.
 
 Other shapes
 ~~~~~~~~~~~~
 
-For a tool that only takes a real file path (``file(1)``, image
-viewers, hashers that don't read stdin), reach for ``--mode
-materialise``: each file's bytes land on a host temp file before the
-command sees it. For downstream tooling that prefers structured
-input, swap ``> checksums.tsv`` for ``--as json > checksums.json``;
-for human inspection use ``--as display`` for a boxed table.
+For tools that only take a real file path (``file(1)``, image
+viewers, hashers without stdin support), use ``--mode materialise``:
+each file's bytes land on a host temp file before the command runs.
+Swap ``> checksums.tsv`` for ``--as json > checksums.json`` when
+downstream tooling prefers JSON; ``--as display`` for a boxed table.
