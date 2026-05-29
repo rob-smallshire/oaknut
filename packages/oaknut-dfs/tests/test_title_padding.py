@@ -22,17 +22,24 @@ _ACORN_TITLE_SPANS = ((0, 0, 8), (256, 0, 4))
 _WATFORD_TITLE_SPANS = ((0, 0, 10),)
 
 
-def _poke_title(image_filepath, title: bytes, spans) -> None:
-    """Overwrite the raw title field with *title*, padded with the byte(s)
-    already present, then splice the given (sector_base, start, length)
-    spans so we can plant NUL or space padding deterministically."""
-    data = bytearray(image_filepath.read_bytes())
+def _image_with_nul_title(source_filepath, target_filepath, title: bytes, spans) -> None:
+    """Write *target_filepath* as a copy of *source_filepath* whose raw title
+    field holds *title*, NUL-padded.
+
+    The poked bytes are written to a **fresh** path, never back over the
+    source: ``DFS.create_file`` leaves the source memory-mapped until its
+    handle is garbage-collected, and on Windows a mapped file cannot be
+    truncated — which ``write_bytes`` does — so rewriting it raises
+    ``OSError(EINVAL)`` there. Reading the source and writing a new file
+    sidesteps that.
+    """
+    data = bytearray(source_filepath.read_bytes())
     cursor = 0
     for base, start, length in spans:
         chunk = title[cursor : cursor + length]
         data[base + start : base + start + length] = chunk.ljust(length, b"\x00")
         cursor += length
-    image_filepath.write_bytes(bytes(data))
+    target_filepath.write_bytes(bytes(data))
 
 
 class TestDFSTitlePadding:
@@ -45,13 +52,14 @@ class TestDFSTitlePadding:
         ids=["acorn", "watford"],
     )
     def test_nul_padding_stripped(self, disc_format, spans, tmp_path):
-        image_filepath = tmp_path / "padded.ssd"
-        with DFS.create_file(image_filepath, disc_format, title="HELLO"):
+        created_filepath = tmp_path / "created.ssd"
+        padded_filepath = tmp_path / "padded.ssd"
+        with DFS.create_file(created_filepath, disc_format, title="HELLO"):
             pass
-        # Plant a NUL-padded title on disc (DFS create space-pads, so we
-        # overwrite the field to exercise the NUL case explicitly).
-        _poke_title(image_filepath, b"GAME", spans)
-        with DFS.from_file(image_filepath, disc_format) as dfs:
+        # DFS create space-pads, so plant a NUL-padded title explicitly —
+        # into a fresh file, not back over the still-mapped source.
+        _image_with_nul_title(created_filepath, padded_filepath, b"GAME", spans)
+        with DFS.from_file(padded_filepath, disc_format) as dfs:
             assert dfs.title == "GAME"
 
     @pytest.mark.parametrize(
