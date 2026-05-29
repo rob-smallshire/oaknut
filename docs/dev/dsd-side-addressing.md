@@ -218,33 +218,60 @@ contract is a small method on the filesystem, called by `resolve_mount`
 after the partition is chosen:
 
 ```python
-def split_volume(self, inner_path: str, geometry: Geometry) -> tuple[int, str]:
-    """Split a leading volume token from *inner_path*.
+def split_volume(
+    self, inner_path: str, geometry: Geometry, ambiguities: tuple[Geometry, ...]
+) -> tuple[int, Geometry, str]:
+    """Parse a leading volume token; resolve the surface *and* geometry.
 
-    Returns ``(surface_index, residual_path)``. The default takes
-    surface 0 and the whole path — most filesystems have no notion of a
+    Returns ``(surface_index, geometry, residual_path)`` — the geometry
+    may differ from the one passed in, because the volume token can
+    *imply* a geometry. The default takes surface 0, the geometry
+    unchanged, and the whole path — most filesystems have no notion of a
     sub-volume. DFS overrides it to parse the Acorn ``:drive.`` prefix:
-    drive 0 -> surface 0, any non-zero drive -> surface 1 (when the
-    geometry is double-sided), erroring on a drive for a single-sided
-    image. ADFS/AFS use the default — ADFS-L spans both physical
-    surfaces as one logical volume, so it exposes no drive.
+
+    - no drive, or ``:0.``     -> ``(0, geometry, residual)``
+    - ``:N.`` (N != 0) and *geometry* already double-sided
+                               -> ``(1, geometry, residual)``
+    - ``:N.`` (N != 0) and a double-sided member of *ambiguities* exists
+                               -> ``(1, that_ambiguity, residual)``   # implied
+    - ``:N.`` (N != 0) otherwise -> raise (single-sided, not ambiguous)
+
+    ADFS/AFS use the default — ADFS-L spans both physical surfaces as one
+    logical volume, so it exposes no drive.
     """
-    return 0, inner_path
+    return 0, geometry, inner_path
 ```
 
-`resolve_mount` then opens that surface and sets the residual as the
-in-partition path:
+`resolve_mount` applies the precedence by **what it passes**:
 
 ```python
-surface, residual = filesystem.split_volume(in_path, geometry)
-mount = filesystem.open(region_view, geometry, surface=surface)   # open gains surface=
+if force_geometry is not None:
+    # Explicit geometry pins it: no ambiguities, so nothing is implied,
+    # and a ':2.' inconsistent with a single-sided force raises here.
+    surface, geometry, residual = fs.split_volume(in_path, force_geometry, ())
+else:
+    # Default: offer the proposed geometry and its ambiguities, so a
+    # non-zero drive may imply the double-sided reading.
+    surface, geometry, residual = fs.split_volume(in_path, chosen.geometry, chosen.ambiguities)
+mount = fs.open(region_view, geometry, surface=surface)   # open gains surface=
 return ResolvedMount(mount, path=residual, …)
 ```
+
+So the geometry precedence is **explicit `--geometry` > drive-implied >
+proposed default**, and it is expressed purely by whether `resolve_mount`
+forwards the ambiguities — no precedence logic inside the filesystem.
 
 `open` gains a `surface: int = 0` kwarg; `_BaseDFS.open` threads it to
 `DFS.from_buffer(reader.buffer(), disc_format, side=surface)` — opening the
 chosen side over the **whole live buffer**, so writes persist (verified).
 Every other filesystem ignores the kwarg.
+
+The implied promotion is **self-validating**: an 80T-SS and a 40T-DS image
+are the same 204800 bytes laid out differently, so the implied `40t-ds`
+side 1 is only a valid catalogue if the image truly was double-sided. If it
+is garbage, `open` errors clearly (decision 6) — "side 1 is not a valid
+catalogue; this image is single-sided" — rather than corrupting anything.
+The `:2.` is the assertion; the disc confirms or refutes it.
 
 ### The dual hook: the filesystem *enumerates* its volumes
 
@@ -374,11 +401,13 @@ Settling (this round):
 
 4. **Inner-parse contract — `split_volume` (settling).** Three-layer peel:
    outer file → generic `partition:` selector → filesystem-owned
-   `:drive.path`. The new `Filesystem.split_volume(inner_path, geometry)`
-   returns `(surface_index, residual_path)`, default `(0, inner_path)`; DFS
-   overrides. The partition prefix runs first and picks the filesystem; that
-   filesystem then owns the residual. No change to identification, the
-   coordinator, `Partition`, or `_SELECTOR_RE`.
+   `:drive.path`. The new
+   `Filesystem.split_volume(inner_path, geometry, ambiguities)` returns
+   `(surface_index, geometry, residual_path)`, default
+   `(0, geometry, inner_path)`; DFS overrides. The partition prefix runs
+   first and picks the filesystem; that filesystem then owns the residual.
+   No change to identification, the coordinator, `Partition`, or
+   `_SELECTOR_RE`.
 5. **One volume per mount (settling).** The drive resolves at open time
    (`open(..., surface=)`), so a mount represents exactly one side's volume
    and the mount-global capability protocols stay untouched. Cross-drive
@@ -409,13 +438,21 @@ Settling (this round):
    type to address the volume. A single-volume filesystem shows today's flat
    summary.
 
+8. **Geometry ambiguity — drive implies, `--geometry` overrides (settled).**
+   Only the 204800-byte length collides (`80t-ss` proposed vs `40t-ds`
+   ambiguity). A non-zero drive on such an image *implies* the double-sided
+   reading; the precedence is **explicit `--geometry` > drive-implied >
+   proposed default**, expressed by whether `resolve_mount` forwards the
+   ambiguities to `split_volume`. The implication is self-validating: if the
+   implied side 1 has no valid catalogue, `open` errors clearly (decision 6)
+   — the image was single-sided after all. A 409600-byte DSD is
+   unambiguously double-sided (no implication needed); a `40t-ss` is
+   unambiguously single-sided (`::2.` → clean "no drive 2"). `stat` /
+   `volumes()` key off the *proposed* geometry, so an ambiguous image is
+   presented as single-sided until a `:2.` opts into the alternative.
+
 Still genuinely open:
 
-8. **Geometry ambiguity** — an 80T single-sided and a 40T double-sided image
-   are the same byte length (`_propose_geometry` flags this). An explicit
-   `::N.` implies the double-sided reading; how does that interact with a
-   forced `--geometry`, and what happens when the second side is unformatted
-   garbage?
 9. **Sequential vs interleaved DSDs** — both must work; `DFS.from_buffer
    (side=)` handles both. Confirm nothing extra surfaces to the user.
 10. **Watford / Opus** — the same whole-disc mechanism should cover any
@@ -453,10 +490,16 @@ Then, per layer:
   file (not a read-only de-interleaved copy).
 - `disc stat elite.dsd::2.$` reports the second side's title/free space; bare
   reports drive 0.
-- Clean error for `::2.` on a single-sided image (right exit code, no
-  traceback).
-- Clean error for `::2.` on a DSD whose side 1 is unformatted garbage
-  (distinct from "no drive 2 on a single-sided image").
+- Clean error for `::2.` on a `40t-ss` (102400-byte) image — unambiguously
+  single-sided: "no drive 2" (right exit code, no traceback).
+- Geometry precedence on a 204800-byte (ambiguous) image:
+  - bare → `80t-ss`, one volume in `stat`.
+  - `::2.` with a valid `40t-ds` side 1 → implies `40t-ds`, opens surface 1.
+  - `::2.` with garbage side 1 → clean error "side 1 not a valid catalogue;
+    image is single-sided".
+  - `--geometry 80t-ss` + `::2.` → error (explicit overrides the implication).
+  - `--geometry 40t-ds` + `::2.` → opens surface 1 (consistent).
+- `::2.` on a 409600-byte DSD opens surface 1 with no implication needed.
 - Interleaved and sequential DSDs both addressable.
 - Watford double-sided image addressable via the same syntax.
 
