@@ -61,21 +61,23 @@ region* below).
 
 ## Goal
 
-Present a double-sided DFS image as a disc carrying **two DFS partitions**,
-reusing the existing partition-selector convention:
+Let a double-sided DFS image expose **both of its independent volumes**,
+addressed by Acorn drive number, defaulting to drive 0 so nothing existing
+regresses:
 
 ```sh
 disc cp "drive-0.ssd:*" elite.dsd          # bare → drive 0 (default)
-disc cp "drive-2.ssd:*" elite.dsd:2:       # explicit → drive 2
-disc cp "drive-0.ssd:*" elite.dsd:0:       # explicit → drive 0
-disc ls   elite.dsd:2:$
-disc stat elite.dsd:2:
+disc cp "drive-2.ssd:*" elite.dsd::2.$      # native Acorn path → second side
+disc ls   elite.dsd::2.$
+disc stat elite.dsd::2.$
 ```
 
-This inherits the no-selector-means-first-partition rule the CLI already
-applies (`mount.py:_select` returns the host when the selector is `None`),
-so existing `elite.dsd:…` commands keep meaning drive 0 and nothing
-regresses.
+This inherits the unqualified-means-drive-0 default, so existing
+`elite.dsd:…` commands keep meaning drive 0 and nothing regresses.
+
+The drive is addressed with **verbatim Acorn path syntax** rather than an
+invented selector — see *Architecture: the filesystem owns the inner path*
+below.
 
 ## Why a side is not a reserved region (the crux)
 
@@ -111,159 +113,194 @@ DFS.from_buffer(reader.buffer(), double_sided_format, side=1)  # → disc.surfac
 This writes back in place. Verified empirically: writing a title and a file
 to `side=1` persisted to the file and left side 0 untouched.
 
-**Conclusion:** the user-facing model is "two partitions," but the second
-partition must **not** route through `region_reader`. It must open over the
-whole image with a *surface index* threaded down to `DFS.from_buffer`.
+**Conclusion:** the second side must **not** route through `region_reader`.
+It must open over the whole image with a *surface index* threaded down to
+`DFS.from_buffer`. That points at a mount that spans the whole disc and
+resolves the drive from the path — see the architecture below.
 
-## Proposed mechanism
+## Architecture: the filesystem owns the inner path
 
-### 1. `Partition` gains an optional surface index
+The least-surprising design is to let users type **exactly the Acorn path
+they already know** — `:0.$.PLANETO`, `:2.Z.MYDATA`, `:0.D.MYPROG1` — and
+make the **DFS extension responsible for interpreting the inner component**
+of the compound path. The drive is not an oaknut-invented partition
+selector; in real DFS it is an integral part of the path, written
+`:drive.directory.filename`, and we honour that verbatim.
 
-`oaknut.filesystem.identification.Partition` is currently a logical-sector
-run. Add:
+### The inner path is verbatim Beeb syntax
 
-```python
-@dataclass(frozen=True)
-class Partition:
-    name: str
-    start_sector: int
-    num_sectors: int
-    index: int = 0
-    surface_index: int | None = None   # NEW: a whole-image surface, not a sector run
-```
+`parse_compound_path` already splits `OUTER:INNER` at the first colon and
+hands the rest on unchanged. So:
 
-`surface_index is not None` marks a partition that is a *surface of the same
-image* rather than a reserved sector-range region. The two are mutually
-exclusive in practice: a reserved region has `surface_index is None` and
-meaningful `start_sector`/`num_sectors`; a surface partition has
-`surface_index` set and ignores the sector run.
+| You type                       | Outer        | Inner (to the filesystem) | DFS reads          |
+|--------------------------------|--------------|---------------------------|--------------------|
+| `elite.dsd:$.PLANETO`          | `elite.dsd`  | `$.PLANETO`               | drive 0, `$.PLANETO` |
+| `elite.dsd:D.MYPROG1`          | `elite.dsd`  | `D.MYPROG1`               | drive 0, `D.MYPROG1` |
+| `elite.dsd::2.Z.MYDATA`        | `elite.dsd`  | `:2.Z.MYDATA`             | drive 2, `Z.MYDATA`  |
+| `elite.dsd::0.$.PLANETO`       | `elite.dsd`  | `:0.$.PLANETO`            | drive 0, `$.PLANETO` |
 
-### 2. The DFS probe advertises the second surface
+The **inner component is exactly what you would type on a BBC Micro.** If
+your Beeb path is drive-qualified it starts with a colon (`:2.Z.MYDATA`), so
+the compound form has two colons: the first is oaknut's image delimiter, the
+second is DFS's own drive colon — preserved by the existing parser, no
+change needed. If your Beeb path is not drive-qualified (`$.PLANETO`,
+`D.MYPROG1`), there is a single colon.
 
-When `probe()` proposes a double-sided geometry **and** the second surface
-carries a valid catalogue (or is blank — see *Blank second side*), it
-returns the side-0 identification as today, plus a contained identification
-for side 1 with `surface_index=1`. Side 0 stays the host (the default).
+### Drive 0 by default — no "current drive" state
 
-This needs a probe path that does **not** go through `_recurse_regions`
-(which is region-reader-based). Options:
+When the inner path carries no `:drive.` prefix, the DFS extension resolves
+it against **drive 0**. This mirrors Acorn's default drive *as a default
+only* — the CLI keeps **no** stateful "current drive" notion (no `*DRIVE`
+analogue): each invocation is independent and an unqualified path is always
+drive 0. So every existing `elite.dsd:$.X` command keeps meaning drive 0 and
+nothing regresses.
 
-- **(a)** The coordinator special-cases `surface_index`-bearing
-  reserved entries: instead of `region_reader`, it re-probes that surface
-  directly and attaches it as `contained`. Keeps probe declarative.
-- **(b)** The DFS `probe()` builds and attaches the `contained`
-  identification itself (it already has the geometry and the catalogue
-  check), bypassing the coordinator's region recursion entirely.
+The leading colon is what disambiguates a *drive* from a *directory* named
+with a digit, exactly as on real hardware: `:2.FILE` is drive 2; `2.FILE` is
+directory `2`. Because we honour the colon, the digit-directory shorthand
+keeps working — no ambiguity, no special grammar.
 
-Leaning **(b)** — it keeps the surface-vs-region fork inside the one
-filesystem that has surfaces, rather than teaching the generic coordinator
-about a DFS-shaped concept.
+### Which digit means the second side: forgiving "0 and non-zero"
 
-### 3. The mount opens a surface partition over the whole image
+A single image has exactly **two** sides, so there is nothing for a non-zero
+drive digit to be ambiguous against. We exploit that to accept every
+reasonable convention at once:
 
-`mount.py:resolve_mount` currently does, for a contained partition:
+- `:0.` → side 0 (surface 0).
+- `:N.` for **any non-zero** `N` (`1`, `2`, `3`, …) → the second side
+  (surface 1).
 
-```python
-region_view = region_reader(reader, host.geometry, region.start_sector, region.num_sectors)
-mount = filesystem.open(region_view, geometry)
-```
+This accommodates the Acorn-faithful reader who types `:2.` (drive 2 is the
+back of drive 0 — see *Domain background*), the newcomer who reasonably
+types `:1.`, and anyone who guesses `:3.`. All land on the one other side.
+Acorn purists lose nothing; the uninitiated are not tripped up.
 
-For a `surface_index`-bearing partition it must instead open the **whole**
-reader at the **double-sided** geometry, telling the filesystem which
-surface. That requires the `open` contract to carry a surface:
+Open sub-question: what to **display** as the canonical drive number in
+`stat` / listings — the Acorn-faithful `2` (this being an Acorn tool), or
+the intuitive `1`. Input is forgiving either way; only the label is a
+choice. (We might also *warn* on a wildly out-of-range digit like `:7.` to
+catch a typo, while still resolving it to the second side.)
 
-```python
-def open(self, reader, geometry, *, surface: int = 0) -> Mount: ...
-```
+### A double-sided DFS mount spans the whole disc
 
-`_DFSMount`/`_BaseDFS.open` then passes `side=surface` to `DFS.from_buffer`.
-Other filesystems ignore the kwarg (default 0). Writability is preserved
-because we open the live whole-image buffer, exactly as the verified
-library path does.
+Rather than mounting one surface and treating the other as a partition, a
+double-sided DFS image mounts as **one disc with two surfaces**. The mount
+parses the `:drive.` prefix and dispatches each operation to the right
+surface, holding (and caching) a `DFS` per side over the **shared live
+buffer** — both write back independently to disjoint sectors, as the two
+`DFS.from_buffer(side=…)` instances already do (verified). Benefits:
 
-### 4. Selector grammar accepts a bare drive number
+- Native syntax falls out naturally — the drive lives in the path, where the
+  filesystem parses it.
+- No invented selector grammar, no `Partition.surface_index`, no
+  `region_reader` for sides — the cross-cutting layers stay unchanged.
+- Cross-drive copy within a single mount (`cp :0.A :2.B`) becomes possible,
+  since one mount sees both surfaces.
 
-`mount.py:_SELECTOR_RE` is `^([a-z][a-z0-9-]*(?:\.\d+)?):(.*)$`. Extend it to
-also accept a bare integer drive number:
+What this needs:
 
-```python
-^(\d+|[a-z][a-z0-9-]*(?:\.\d+)?):(.*)$
-```
+1. **A filesystem-owned inner-path parse.** A hook on the `Mount`/filesystem
+   contract by which the identified filesystem interprets the inner string —
+   DFS strips an optional `:drive.` prefix to a surface index; ADFS/AFS parse
+   their own `$`/`^`/`@` grammar. The generic cross-partition prefix
+   (`afs:`/`adfs:` for an ADFS host with an AFS tail) stays a separate,
+   coordinator-level dispatch that runs *first*; the chosen filesystem then
+   parses the residual path. The two axes must be defined to compose
+   cleanly (see decisions).
+2. **A two-surface `_DFSMount`** for double-sided geometry: navigation,
+   `stat`, `title`, free space etc. all key off the path's drive, defaulting
+   to 0. For single-sided geometry it behaves exactly as today.
+3. **`disc stat` / listing** to surface that drive 2 exists (the mount knows
+   its surface count), so the second side is discoverable.
 
-Disambiguation from a DFS directory named with a digit is clean: a selector
-**must** be followed by a colon. `elite.dsd:2:$.PROG` → selector `2`, path
-`$.PROG`; `elite.dsd:2.PROG` → no selector, path `2.PROG` (directory `2`,
-file `PROG`). The outer compound split takes the first colon, so the inner
-string the selector regex sees is `2:$.PROG`.
+### Alternative considered (rejected): drive as a partition selector
 
-`Partition.selector` for a surface partition returns the **drive number**
-(`"0"`, `"2"`) rather than the `name`/`index` form. Mapping: surface 0 →
-drive 0, surface 1 → drive 2.
+The earlier sketch modelled the second side as a contained `Partition` with
+a new `surface_index`, addressed by an invented `2:` selector
+(`elite.dsd:2:$.PROG`), extending `mount.py:_SELECTOR_RE` to accept bare
+digits. It works, but it invents non-Acorn syntax for something Acorn
+already spells, and it splits drive handling across the generic mount layer
+rather than the filesystem that owns the concept. Kept here only as the
+fallback if filesystem-owned inner parsing proves too invasive.
 
 ## User-facing surface
 
 ```sh
-disc cp "drive-0.ssd:*" elite.dsd            # drive 0 (bare default)
-disc cp "drive-0.ssd:*" elite.dsd:0:         # drive 0 (explicit)
-disc cp "drive-2.ssd:*" elite.dsd:2:         # drive 2
-disc ls   elite.dsd:2:$                       # list drive 2's $ directory
-disc stat elite.dsd:2:                        # drive 2 disc-level info
-disc title elite.dsd:2: "Compendium E side 2" # set drive 2's title
+disc cp "drive-0.ssd:*" elite.dsd                 # drive 0 (default)
+disc cp "drive-2.ssd:*" elite.dsd::2.$             # drive 2, $ directory
+disc ls    elite.dsd::2.$                          # list drive 2's $ directory
+disc cat   elite.dsd::2.Z.MYDATA                   # read drive 2, dir Z, MYDATA
+disc stat  elite.dsd::2.$                          # drive 2 disc-level info
+disc title "elite.dsd::2.$" "Compendium E side 2"  # set drive 2's title
 ```
 
-`disc stat elite.dsd` with no selector summarises drive 0 (unchanged). A
-single-sided `.ssd` exposes only drive 0 — no second partition, and `:2:`
-errors cleanly ("no such partition '2'; available: 0").
+`disc stat elite.dsd` (unqualified) summarises drive 0. A single-sided
+`.ssd` has only drive 0; an explicit `::2.` on it errors cleanly ("no drive
+2 on a single-sided image").
 
 ## Decisions to confirm
 
-1. **Mechanism for surface partitions** — `Partition.surface_index` + an
-   `open(..., surface=)` kwarg (proposed), versus a broader rework. Confirm
-   the minimal shape.
-2. **Probe wiring** — coordinator special-case (a) versus DFS builds its own
-   `contained` (b). Proposed (b).
-3. **Selector spelling** — bare drive numbers `0:`/`2:` (proposed, matches
-   Acorn and Mark's guess). Also accept `drive0:`/`drive2:` aliases? Also
-   keep a filesystem-name form (`acorn-dfs`/`acorn-dfs.1`) for scripting, or
-   drop it as confusing?
-4. **Blank / catalogue-less second side** — still expose drive 2 as an
-   empty, writable, formattable partition (needed for Mark's
-   build-from-two-SSDs flow), or only when a valid catalogue is present?
-   Proposed: always expose drive 2 for a double-sided geometry, so it can be
-   filled.
-5. **`stat` / `ls` / partition listing** — should a bare `disc stat
-   elite.dsd` (or a new listing) advertise that drive 2 exists, and how?
-6. **Geometry ambiguity** — an 80T single-sided and a 40T double-sided image
-   are the same byte length (`_propose_geometry` already flags this as an
-   ambiguity). When the image is *interpreted* single-sided, there is no
-   drive 2; when double-sided, there is. Does `:2:` force/assume the
-   double-sided reading, and how does that interact with `--geometry`?
-7. **Sequential vs interleaved DSDs** — both must work; the surface specs
-   differ but `DFS.from_buffer(side=)` handles both. Confirm no extra
-   surface for the user.
-8. **Watford / Opus** — the same surface mechanism applies to any
-   double-sided DFS-family geometry. Confirm scope includes them (likely
-   free, since they share `_BaseDFS`).
+Settling toward, in light of the discussion:
+
+1. **Spelling — native Acorn path syntax (settling).** The inner component
+   is verbatim Beeb syntax; the DFS extension parses the optional `:drive.`
+   prefix. The invented `2:` partition selector is rejected.
+2. **Drive digit — forgiving 0/non-zero (settling).** `:0.` → side 0; any
+   non-zero `:N.` → the second side. Remaining sub-question: the canonical
+   *display* drive number (Acorn-faithful `2` vs intuitive `1`), and whether
+   to warn on out-of-range digits.
+3. **Default drive — 0, stateless (settled).** Unqualified path is always
+   drive 0; no "current drive" notion.
+
+Still genuinely open:
+
+4. **Filesystem-owned inner parsing — the contract.** What does the hook look
+   like, and how does it compose with the existing generic cross-partition
+   prefix (`afs:`/`adfs:`)? Does the prefix run first (coordinator picks the
+   partition) and the chosen filesystem parse the residual, or do we unify
+   them? This is the main architectural design task.
+5. **Two-surface mount vs one-surface-plus-fallback.** Confirm the
+   double-sided `_DFSMount` holds both surfaces over the shared buffer
+   (enabling cross-drive `cp`), rather than the rejected
+   per-surface-partition approach.
+6. **Blank / catalogue-less second side** — expose drive 2 as an empty,
+   writable, formattable side regardless of catalogue (needed for Mark's
+   build-from-two-SSDs flow)? Proposed: yes, whenever the geometry is
+   double-sided.
+7. **`stat` / `ls` listing** — how should a bare `disc stat elite.dsd`
+   advertise that a second side exists and is addressable?
+8. **Geometry ambiguity** — an 80T single-sided and a 40T double-sided image
+   are the same byte length (`_propose_geometry` flags this). An explicit
+   `::N.` implies the double-sided reading; how does that interact with a
+   forced `--geometry`, and what happens when the second side is unformatted
+   garbage?
+9. **Sequential vs interleaved DSDs** — both must work; `DFS.from_buffer
+   (side=)` handles both. Confirm nothing extra surfaces to the user.
+10. **Watford / Opus** — the same whole-disc mechanism should cover any
+    double-sided DFS-family geometry, since they share `_BaseDFS`. Confirm
+    scope.
 
 ## Test matrix (test-first)
 
 The headline failing test to write first:
 
-> Create a `.dsd`, `disc cp` files onto `:2:`, reopen, and assert drive 2
-> holds them while drive 0 is untouched — and vice versa.
+> Create a `.dsd`, `disc cp` files onto `::2.$`, reopen, and assert the
+> second side holds them while drive 0 is untouched — and vice versa.
 
 Then, per layer:
 
-- `Partition.surface_index` round-trips; `selector` yields `0`/`2`.
-- `_SELECTOR_RE` parses `2:$.PROG` as (selector `2`, path `$.PROG`) and
-  `2.PROG` as (no selector, path `2.PROG`).
-- DFS `probe()` on a double-sided image yields a contained surface
-  partition; on single-sided, none.
-- `resolve_mount('elite.dsd:2:$')` opens a **writable** mount over the live
+- Compound-path round-trips: `elite.dsd::2.Z.MYDATA` → outer `elite.dsd`,
+  inner `:2.Z.MYDATA`; `elite.dsd:$.X` → inner `$.X`.
+- DFS inner-path parse: `:2.Z.MYDATA` → (side 1, `Z.MYDATA`); `:0.$.X` →
+  (side 0, `$.X`); `$.X` → (side 0, `$.X`); forgiving `:1.` and `:3.` both →
+  side 1; digit-directory shorthand `2.FILE` → (side 0, dir `2`, `FILE`).
+- A double-sided `_DFSMount` reads/writes each side independently over the
+  shared buffer; both persist; neither corrupts the other's interleave.
+- `resolve_mount('elite.dsd::2.$')` yields a **writable** mount over the live
   file (not a read-only de-interleaved copy).
-- `disc stat elite.dsd:2:` reports drive 2's title/free space; bare
+- `disc stat elite.dsd::2.$` reports the second side's title/free space; bare
   reports drive 0.
-- Clean error for `:2:` on a single-sided image (right exit code, no
+- Clean error for `::2.` on a single-sided image (right exit code, no
   traceback).
 - Interleaved and sequential DSDs both addressable.
 - Watford double-sided image addressable via the same syntax.
