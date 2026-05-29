@@ -300,17 +300,16 @@ describing what the server tracks per-disc at run time:
 - `MPSCYL` (2 bytes): start cylinder
 - `MPSZCY` (1 byte): size in bytes of cylinder bit map
 
-### Map block layout (on disc and in memory)
+### Map block layout
 
-The *map block pointer block* header at `Uade02:313-334` is both the
-**in-memory descriptor** of a loaded map block *and* the on-disc byte
-layout once the 6-byte ASCII magic has been replaced by the block's
-own SIN/BLKNO. The fields are:
+The *map block pointer block* header at `Uade02:313-334` doubles as
+the byte layout of a map block both on disc and in the server's RAM
+cache. The fields are:
 
 | Offset | Size | Label   | Meaning |
 |-------:|-----:|---------|---------|
-|  0 | 3 | `BLKSN`  | On disc: first 3 bytes of `'JesMap'` magic. In memory after read: the SIN this map block was loaded from. |
-|  3 | 3 | `BLKNO`  | On disc: last 3 bytes of `'JesMap'` magic. In memory: the block's ordinal number / drive number (not used on the wire). |
+|  0 | 3 | `BLKSN`  | On a **head** block: first 3 bytes of `'JesMap'` magic. On a **successor** block: zero. |
+|  3 | 3 | `BLKNO`  | On a **head** block: last 3 bytes of `'JesMap'` magic. On a **successor** block: zero. |
 |  6 | 1 | `MBSQNO` | Leading master sequence number. |
 |  7 | 1 | `MGFLG`  | Reserved flags byte (always zero in L3V126). |
 |  8 | 2 | `BILB`   | **Bytes in last (data) block — 16-bit LE**. Only the final map block in a chain carries a meaningful value; intermediate blocks leave it stale. Zero means "last data sector is fully used" (i.e. add a full 256 bytes). `Uade13:573-595` (`MPGSFN`). |
@@ -324,10 +323,45 @@ Constants from `Uade02:329-334`:
 - `LSTSQ = 255`
 - `BTINBK = 256`
 
-The magic is written by `Uade10.asm:229-236` (`MPCRSP`), which copies
-the six-byte literal ``MPBLTX EQUB "paMseJ"`` onto disc with an index
-that runs from 5 down to 0, producing the bytes `J`, `e`, `s`, `M`,
-`a`, `p` in normal order on the wire.
+`BLKSN` / `BLKNO` are symbolic offsets (3-byte fields at offsets 0
+and 3 of a block), nothing more. The ROM never overwrites bytes 0..5
+of an in-memory map block with a runtime-computed SIN or ordinal —
+those labels are simply reused in other contexts (e.g. `Uade12:409`
+indexes into a five-byte extent record via `LDY #BLKSN` for the
+start-sector field). The bytes that go to disc are exactly the bytes
+that sit in the cache buffer.
+
+### Where the magic comes from
+
+The `'JesMap'` magic at offsets 0..5 is written in exactly one place
+in the entire L3V126 ROM: the `MPJLTX` loop inside `MPCRSP` at
+`Uade10.asm:235-242`. `MPCRSP` is the file-creation path — it
+allocates the **initial** (head) map block of a new object and copies
+the six-byte literal `MPBLTX EQUB "paMseJ"` (Uade10.asm:58, stored
+reversed so the loop can index from `X = 5` downward while `Y` runs
+upward from offset 0) onto the buffer at offsets 0..5, producing the
+bytes `J`, `e`, `s`, `M`, `a`, `p` in normal order.
+
+Successor map blocks — the second and later blocks of a chain — are
+allocated by `MKRLN` (`Uade12.asm:160-242`) when an existing object
+overflows its 48-extent head block. `MKRLN`'s allocation step is
+`JSR ALBLK` followed by `SEC : JSR RDMPBK` (Uade12:190-191). The
+carry-set `RDMPBK` takes the `RMBNR` branch (Uade11.asm:612-677),
+which fills in the cache descriptor and calls `CLRSTR` to **zero the
+buffer** before returning. `MKRLN` then writes only the chain pointer
+into the *old* block's slot 48 (`MMBWT` flushes the old block) and
+populates extents into the *new* block's `MBENTS` body. The magic
+write loop is never invoked on the new block, so bytes 0..5 stay at
+their `CLRSTR`-cleared value of zero when `ENSMB → ENSBKS → WRBLK`
+later flushes the new block to disc.
+
+The read path in `MPGTSZ` (`Uade13.asm:484-558`) starts walking
+extents at `MBENTS` and never inspects offsets 0..5 of any block —
+head or successor. `RDMPBK` validates `MBSQNO == LSTSQ` and the
+disc-block checksum, nothing more. So a successor block with zero
+magic is fully legitimate to the ROM, and any parser that requires
+`'JesMap'` at offset 0 on every block in a chain will reject real
+L3FS images that contain >48-extent files.
 
 ### Chained map blocks
 
