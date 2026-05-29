@@ -269,7 +269,7 @@ Every other filesystem ignores the kwarg.
 The implied promotion is **self-validating**: an 80T-SS and a 40T-DS image
 are the same 204800 bytes laid out differently, so the implied `40t-ds`
 side 1 is only a valid catalogue if the image truly was double-sided. If it
-is garbage, `open` errors clearly (decision 6) — "side 1 is not a valid
+is garbage, `open` errors clearly (decision 6) — "side `:2` is not a valid
 catalogue; this image is single-sided" — rather than corrupting anything.
 The `:2.` is the assertion; the disc confirms or refutes it.
 
@@ -316,6 +316,20 @@ elite.dsd — Acorn DFS, 80T double-sided
 A single-sided `.ssd` (or ADFS / AFS) reports one volume with an empty
 designation, so `stat` shows today's flat summary unchanged.
 
+### Diagnostics speak the designation, not the cardinal
+
+The cardinal **surface index** (`0`, `1`) is an internal coordinate — it
+appears in the `split_volume`/`open(surface=)` contract and nowhere a user
+can see it. Every **user-facing message** uses the filesystem's designation
+instead: the token the user typed or would type. So the error for a missing
+second side is *"this image has no side `:2`"*, never *"no surface 1"*; an
+unformatted side is *"side `:2` is not a valid catalogue"*. The designation
+comes from the same filesystem-owned vocabulary as `volumes()` — a
+`designation_for(surface)` helper (or a reverse lookup over `volumes()`)
+renders it — so a filesystem that designates its volumes `A`/`B` produces
+*"no side `B`"* automatically, with no DFS-specific wording leaking into the
+shared CLI layer.
+
 ### Why one volume per mount, not a two-surface mount
 
 The capability protocols (`Titled`, `Bootable`, `FreeSpace`, `Sized`,
@@ -341,6 +355,9 @@ What this needs, in total:
    `(0, inner_path)`; DFS overrides to parse `:drive.`.
 2. `Filesystem.volumes(geometry)` — new, default one undesignated `Volume`;
    DFS reports `:0`/`:2` for double-sided geometry. Round-trips with (1).
+   A `designation_for(surface, geometry)` helper (or reverse lookup over
+   `volumes()`) renders the designation for diagnostics, so error messages
+   say `:2`, never the cardinal surface index.
 3. `Filesystem.open(reader, geometry, *, surface=0)` — one new kwarg;
    only DFS reads it.
 4. `resolve_mount` calls `split_volume`, opens the surface, sets the
@@ -379,8 +396,8 @@ disc title "elite.dsd::2.$" "Compendium E side 2"  # set drive 2's title
 ```
 
 `disc stat elite.dsd` (unqualified) summarises drive 0. A single-sided
-`.ssd` has only drive 0; an explicit `::2.` on it errors cleanly ("no drive
-2 on a single-sided image").
+`.ssd` has only drive 0; an explicit `::2.` on it errors cleanly ("this
+image has no side `:2`").
 
 ## Decisions to confirm
 
@@ -447,7 +464,7 @@ Settling (this round):
    implied side 1 has no valid catalogue, `open` errors clearly (decision 6)
    — the image was single-sided after all. A 409600-byte DSD is
    unambiguously double-sided (no implication needed); a `40t-ss` is
-   unambiguously single-sided (`::2.` → clean "no drive 2"). `stat` /
+   unambiguously single-sided (`::2.` → clean "no side `:2`"). `stat` /
    `volumes()` key off the *proposed* geometry, so an ambiguous image is
    presented as single-sided until a `:2.` opts into the alternative.
 
@@ -491,15 +508,18 @@ Then, per layer:
 - `disc stat elite.dsd::2.$` reports the second side's title/free space; bare
   reports drive 0.
 - Clean error for `::2.` on a `40t-ss` (102400-byte) image — unambiguously
-  single-sided: "no drive 2" (right exit code, no traceback).
+  single-sided: "no side `:2`" (right exit code, no traceback).
 - Geometry precedence on a 204800-byte (ambiguous) image:
   - bare → `80t-ss`, one volume in `stat`.
   - `::2.` with a valid `40t-ds` side 1 → implies `40t-ds`, opens surface 1.
-  - `::2.` with garbage side 1 → clean error "side 1 not a valid catalogue;
-    image is single-sided".
+  - `::2.` with garbage side 1 → clean error "side `:2` not a valid
+    catalogue; image is single-sided".
   - `--geometry 80t-ss` + `::2.` → error (explicit overrides the implication).
   - `--geometry 40t-ds` + `::2.` → opens surface 1 (consistent).
 - `::2.` on a 409600-byte DSD opens surface 1 with no implication needed.
+- Diagnostics use the designation, not the cardinal: the "no side" and
+  "not a valid catalogue" messages contain `:2`, never `surface 1` / `side
+  1`.
 - Interleaved and sequential DSDs both addressable.
 - Watford double-sided image addressable via the same syntax.
 
