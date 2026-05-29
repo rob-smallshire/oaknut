@@ -38,7 +38,7 @@ from .cli_identify import (
     list_filesystems_command,
 )
 from .cli_paths import parse_compound_path
-from .mount import partition_selectors, resolve_mount
+from .mount import partition_selectors, partition_volumes, resolve_mount
 
 # ---------------------------------------------------------------------------
 # Alias-aware Click group
@@ -378,6 +378,11 @@ def _attach_children_mount(mount, path: str, parent_tree_node) -> None:
             "Second partition (AFS on a partitioned disc; also the report "
             "name when an ``afs:`` prefix scopes the view to that half)."
         ),
+        "volume_1": (
+            "First volume of a multi-volume single partition — side ``:0`` "
+            "of a double-sided DFS disc."
+        ),
+        "volume_2": "Second volume — side ``:2`` of a double-sided DFS disc.",
         "file": "Per-file metadata when the path denotes a file.",
     }
 )
@@ -461,6 +466,20 @@ def _stat_disc(compound_path: str, outer_filepath: Path):
         return Reports({f"partition_{index + 1}": Report(data=block)})
 
     if len(selectors) == 1:
+        # A single partition may still expose several volumes — a
+        # double-sided DFS disc is two independent sides. List one block
+        # per volume, titled by the designation that addresses it (``:0`` /
+        # ``:2``); a sole undesignated volume keeps the flat summary.
+        volumes = partition_volumes(outer_filepath)
+        if len(volumes) > 1:
+            sections = {}
+            for position, volume in enumerate(volumes, start=1):
+                resolved = resolve_mount(f"{outer_filepath}:{selectors[0]}:{volume.designation}")
+                block = _partition_block(
+                    resolved.mount, f"Drive {volume.designation}", geometry=True
+                )
+                sections[f"volume_{position}"] = Report(data=block)
+            return Reports(sections)
         resolved = resolve_mount(f"{outer_filepath}:{selectors[0]}:")
         block = _partition_block(resolved.mount, selectors[0].upper(), geometry=True)
         return Reports(partition_1=Report(data=block))

@@ -108,6 +108,32 @@ class TestSplitDsdIntoTwoSsds:
         assert not ({"FRONTA", "FRONTB"} & _names_on(runner, f"{out2}:$"))
 
 
+class TestStatListsVolumes:
+    """``disc stat`` on a DSD lists both sides under their designations."""
+
+    def test_stat_shows_both_drives(self, runner: CliRunner, tmp_path: Path) -> None:
+        dsd = _make_dsd(
+            tmp_path / "two.dsd", side0={"FRONTF": b"f"}, side2={"REARF": b"r", "REARG": b"g"}
+        )
+        result = runner.invoke(cli, ["stat", "--as", "display", str(dsd)])
+        assert result.exit_code == 0, result.output
+        # Each side appears under the designation that addresses it.
+        assert "Drive :0" in result.output
+        assert "Drive :2" in result.output
+        # Each side's own title is reported (independent volumes).
+        assert "FRONT" in result.output
+        assert "REAR" in result.output
+
+    def test_stat_single_sided_is_flat(self, runner: CliRunner, tmp_path: Path) -> None:
+        ssd = _make_ssd(tmp_path / "one.ssd", "SOLO", {"X": b"x"})
+        result = runner.invoke(cli, ["stat", str(ssd)])
+        assert result.exit_code == 0, result.output
+        # No drive designations for a single, undesignated volume.
+        assert ":0" not in result.output
+        assert "Drive" not in result.output
+        assert "SOLO" in result.output
+
+
 class TestDriveSideErrors:
     """Addressing a side that is not there fails cleanly, by designation."""
 

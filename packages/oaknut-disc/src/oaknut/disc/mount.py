@@ -176,6 +176,24 @@ def partition_selectors(outer_filepath: Path) -> list[str]:
     ]
 
 
+def partition_volumes(outer_filepath: Path, selector: str | None = None) -> list:
+    """The independently-addressable volumes within a partition.
+
+    Identifies the image, selects the partition (the host by default),
+    and asks its filesystem to enumerate its volumes. A double-sided DFS
+    disc reports two (designated ``:0`` / ``:2``); everything else reports
+    a single, undesignated volume. Used by ``disc stat`` to list each
+    side of a DSD under the designation that addresses it.
+    """
+    candidates = identify(outer_filepath)
+    if not candidates:
+        raise click.ClickException(_unrecognised_message(outer_filepath.name))
+    host = candidates[0]
+    chosen, _region = _select(host, selector)
+    filesystem = create_filesystem(chosen.filesystem)
+    return list(filesystem.volumes(chosen.geometry))
+
+
 def _select(best: Identification, selector: str | None) -> tuple[Identification, Partition | None]:
     """Pick the addressed partition from the best candidate's tree.
 
