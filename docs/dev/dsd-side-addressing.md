@@ -246,6 +246,49 @@ return ResolvedMount(mount, path=residual, …)
 chosen side over the **whole live buffer**, so writes persist (verified).
 Every other filesystem ignores the kwarg.
 
+### The dual hook: the filesystem *enumerates* its volumes
+
+`split_volume` parses a designation *in*; for `disc stat` to **list** the
+volumes a disc carries, the filesystem must report them *out*. The
+designation is filesystem-specific — DFS reports `:0` / `:2`; a hypothetical
+filesystem might report `A` / `B` or `0` / `1`; ADFS reports a single
+volume with no designation. So the dual hook:
+
+```python
+@dataclass(frozen=True)
+class Volume:
+    designation: str   # the path token to address it (":0", ":2", "" if sole)
+    surface: int       # the surface index to open it with
+
+def volumes(self, geometry: Geometry) -> tuple[Volume, ...]:
+    """The addressable volumes within this filesystem at *geometry*.
+
+    The default is a single, undesignated volume — most filesystems are
+    one volume (ADFS-L spans both physical surfaces as one). A
+    double-sided DFS reports two: ``Volume(":0", 0)`` and
+    ``Volume(":2", 1)``.
+    """
+    return (Volume("", 0),)
+```
+
+**Round-trip invariant** (tested): every designation `volumes()` emits must
+parse back through `split_volume()` to the same surface. The two are one
+filesystem-owned vocabulary seen from each side.
+
+This also resolves the display sub-question from decision 2: the **canonical
+designation is Acorn-faithful** (`:0` / `:2`), while *input* stays forgiving
+(any non-zero drive → side 1). `disc stat elite.dsd` (no drive) iterates
+`volumes()`, opening each surface read-only to summarise it:
+
+```
+elite.dsd — Acorn DFS, 80T double-sided
+  :0   "Compendium E"      3 files    798 free
+  :2   "Compendium E (B)"  0 files    800 free
+```
+
+A single-sided `.ssd` (or ADFS / AFS) reports one volume with an empty
+designation, so `stat` shows today's flat summary unchanged.
+
 ### Why one volume per mount, not a two-surface mount
 
 The capability protocols (`Titled`, `Bootable`, `FreeSpace`, `Sized`,
@@ -268,14 +311,16 @@ copying between them is a copy between volumes, not a move within one.
 What this needs, in total:
 
 1. `Filesystem.split_volume(inner_path, geometry)` — new, default
-   `(0, inner_path)`; DFS overrides.
-2. `Filesystem.open(reader, geometry, *, surface=0)` — one new kwarg;
+   `(0, inner_path)`; DFS overrides to parse `:drive.`.
+2. `Filesystem.volumes(geometry)` — new, default one undesignated `Volume`;
+   DFS reports `:0`/`:2` for double-sided geometry. Round-trips with (1).
+3. `Filesystem.open(reader, geometry, *, surface=0)` — one new kwarg;
    only DFS reads it.
-3. `resolve_mount` calls `split_volume`, opens the surface, sets the
+4. `resolve_mount` calls `split_volume`, opens the surface, sets the
    residual path.
-4. `disc stat` / listing surfaces that a second side exists, so it is
-   discoverable.
-5. `DFS.create_file` formats **every** surface of its `DiscFormat`, so a
+5. `disc stat` iterates `volumes()`, opening each to summarise it, so the
+   second side is discoverable and directly addressable by its designation.
+6. `DFS.create_file` formats **every** surface of its `DiscFormat`, so a
    freshly-created DSD has a real empty volume on each side (today only side
    0 is formatted). See decision 6.
 
@@ -317,10 +362,11 @@ Settling toward, in light of the discussion:
 1. **Spelling — native Acorn path syntax (settling).** The inner component
    is verbatim Beeb syntax; the DFS extension parses the optional `:drive.`
    prefix. The invented `2:` partition selector is rejected.
-2. **Drive digit — forgiving 0/non-zero (settling).** `:0.` → side 0; any
-   non-zero `:N.` → the second side. Remaining sub-question: the canonical
-   *display* drive number (Acorn-faithful `2` vs intuitive `1`), and whether
-   to warn on out-of-range digits.
+2. **Drive digit — forgiving in, Acorn-faithful out (settled).** Input is
+   forgiving: `:0.` → side 0, any non-zero `:N.` → the second side. The
+   *canonical* designation emitted by `volumes()` and shown by `stat` is the
+   Acorn-faithful `:0` / `:2`. (Open: whether to warn on a wildly
+   out-of-range input digit like `:7.` while still resolving it.)
 3. **Default drive — 0, stateless (settled).** Unqualified path is always
    drive 0; no "current drive" notion.
 
@@ -357,10 +403,14 @@ Settling (this round):
    0. Sub-question: does `--title` apply to side 0 only (side 1 empty,
    settable later via `disc title …::2.$`) or to both?
 
+7. **`stat` lists volumes (settled).** `disc stat` enumerates the
+   filesystem's `volumes()` and summarises each under its filesystem-specific
+   designation (`:0` / `:2` for DFS). The designation is the very token you
+   type to address the volume. A single-volume filesystem shows today's flat
+   summary.
+
 Still genuinely open:
 
-7. **`stat` / `ls` listing** — how should a bare `disc stat elite.dsd`
-   advertise that a second side exists and is addressable?
 8. **Geometry ambiguity** — an 80T single-sided and a 40T double-sided image
    are the same byte length (`_propose_geometry` flags this). An explicit
    `::N.` implies the double-sided reading; how does that interact with a
@@ -391,6 +441,12 @@ Then, per layer:
   `Z.MYDATA`); `:0.$.X` → (side 0, `$.X`); `$.X` → (side 0, `$.X`); forgiving
   `:1.` and `:3.` both → side 1; digit-directory shorthand `2.FILE` →
   (side 0, dir `2`, `FILE`).
+- `volumes()`: double-sided DFS → `(Volume(":0",0), Volume(":2",1))`;
+  single-sided / ADFS / AFS → one undesignated `Volume`.
+- Round-trip: every `volumes()` designation parses back via `split_volume`
+  to the same surface.
+- `disc stat elite.dsd` lists both volumes under `:0` / `:2` with per-volume
+  title, file count and free space; on an `.ssd` it shows the flat summary.
 - `open(surface=1)` reads/writes side 1 independently over the shared live
   buffer; both persist; neither corrupts the other's interleave.
 - `resolve_mount('elite.dsd::2.$')` yields a **writable** mount over the live
