@@ -275,6 +275,9 @@ What this needs, in total:
    residual path.
 4. `disc stat` / listing surfaces that a second side exists, so it is
    discoverable.
+5. `DFS.create_file` formats **every** surface of its `DiscFormat`, so a
+   freshly-created DSD has a real empty volume on each side (today only side
+   0 is formatted). See decision 6.
 
 No change to `Identification`, `Partition`, the coordinator, `_SELECTOR_RE`,
 or any capability protocol.
@@ -336,15 +339,26 @@ Settling (this round):
    `cp` uses two compound paths (two mounts) — correct, since the sides are
    independent volumes.
 
+5a. **No selector alias (settled).** The partition prefix is the registered
+    filesystem name — `acorn-dfs:`, not `dfs:` — because it must distinguish
+    `watford-dfs:` and a future `opus-dfs:`. (Optional for a single-partition
+    DSD regardless.)
+6. **`create` formats *all* surfaces (settled).** There is no "blank side"
+   to address — `acorn-dfs:` *is* a catalogue structure, so an empty
+   `acorn-dfs` side means a **formatted-but-empty** one. Today `disc create`
+   formats only side 0 (verified: a fresh `.dsd` has side 1 all-zeros,
+   `total_sectors=0` — an invalid zero-sector "disc"). The fix is for
+   `create` on a multi-surface geometry to write a valid empty catalogue to
+   **every** surface, so drive 2 is immediately a real empty volume and
+   Mark's build-from-two-SSDs flow works with no extra step. Opening a
+   genuinely unformatted side (a foreign DSD with garbage on side 1) errors
+   clearly rather than presenting a zero-sector disc. Library prerequisite:
+   `DFS.create_file` formats all surfaces of its `DiscFormat`, not just side
+   0. Sub-question: does `--title` apply to side 0 only (side 1 empty,
+   settable later via `disc title …::2.$`) or to both?
+
 Still genuinely open:
 
-5a. **`dfs:` alias.** Accept `dfs:` as a friendly alias for the `acorn-dfs`
-    (and `watford-dfs`?) partition selector, or require the registered name?
-    Optional for a single-partition DSD regardless.
-6. **Blank / catalogue-less second side** — expose drive 2 as an empty,
-   writable, formattable side regardless of catalogue (needed for Mark's
-   build-from-two-SSDs flow)? Proposed: yes, whenever the geometry is
-   double-sided.
 7. **`stat` / `ls` listing** — how should a bare `disc stat elite.dsd`
    advertise that a second side exists and is addressable?
 8. **Geometry ambiguity** — an 80T single-sided and a 40T double-sided image
@@ -362,24 +376,31 @@ Still genuinely open:
 
 The headline failing test to write first:
 
-> Create a `.dsd`, `disc cp` files onto `::2.$`, reopen, and assert the
-> second side holds them while drive 0 is untouched — and vice versa.
+> `disc create elite.dsd` then `disc cp` files onto `::2.$`, reopen, and
+> assert the second side holds them while drive 0 is untouched — and vice
+> versa. (Fails today on two counts: drive 2 is unaddressable *and*
+> unformatted.)
 
 Then, per layer:
 
+- `disc create` on a `.dsd` formats **both** surfaces: side 0 and side 1
+  each have a valid empty catalogue (`total_sectors == 800`, not 0).
 - Compound-path round-trips: `elite.dsd::2.Z.MYDATA` → outer `elite.dsd`,
   inner `:2.Z.MYDATA`; `elite.dsd:$.X` → inner `$.X`.
-- DFS inner-path parse: `:2.Z.MYDATA` → (side 1, `Z.MYDATA`); `:0.$.X` →
-  (side 0, `$.X`); `$.X` → (side 0, `$.X`); forgiving `:1.` and `:3.` both →
-  side 1; digit-directory shorthand `2.FILE` → (side 0, dir `2`, `FILE`).
-- A double-sided `_DFSMount` reads/writes each side independently over the
-  shared buffer; both persist; neither corrupts the other's interleave.
+- DFS inner-path parse (`split_volume`): `:2.Z.MYDATA` → (side 1,
+  `Z.MYDATA`); `:0.$.X` → (side 0, `$.X`); `$.X` → (side 0, `$.X`); forgiving
+  `:1.` and `:3.` both → side 1; digit-directory shorthand `2.FILE` →
+  (side 0, dir `2`, `FILE`).
+- `open(surface=1)` reads/writes side 1 independently over the shared live
+  buffer; both persist; neither corrupts the other's interleave.
 - `resolve_mount('elite.dsd::2.$')` yields a **writable** mount over the live
   file (not a read-only de-interleaved copy).
 - `disc stat elite.dsd::2.$` reports the second side's title/free space; bare
   reports drive 0.
 - Clean error for `::2.` on a single-sided image (right exit code, no
   traceback).
+- Clean error for `::2.` on a DSD whose side 1 is unformatted garbage
+  (distinct from "no drive 2 on a single-sided image").
 - Interleaved and sequential DSDs both addressable.
 - Watford double-sided image addressable via the same syntax.
 
