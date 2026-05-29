@@ -225,24 +225,31 @@ The moves:
   side has no ``$`` entry yet, so the destination directory has to be
   named as such rather than detected.
 
-**4. Name each side.**
+Each side is an independent volume with its own title, set after the
+copy. Addressing a side's **disc title** takes the drive with **no
+path** — ``compendium.dsd::0`` / ``compendium.dsd::2``. (``::2.$`` would
+instead ask for the ``$`` *directory's* title, which DFS has no concept
+of.) There are two ways to supply the name, shown in turn.
+
+**4. Name side 0 directly.**
 
 .. cli-example:: assemble_dsd_from_ssds
-   :section: title
+   :section: title-direct
 
-Each side is an independent volume with its own title, set after the
-copy. Two points:
+The straightforward way: type the title. A DFS title holds up to 12
+characters, so ``Arcadians`` (nine) fits with room to spare.
 
-- Addressing a side's **disc title** takes the drive with **no path** —
-  ``compendium.dsd::0`` / ``compendium.dsd::2``. (``::2.$`` would instead
-  ask for the ``$`` *directory's* title, which DFS has no concept of.)
-- Each side's name is carried across from its source floppy with a
-  command substitution: ```disc title arcadians.ssd``` prints that disc's
-  title, which the outer ``disc title`` then writes onto the side. A DFS
-  title holds up to 12 characters, so ``Arcadians`` and ``Zalaga`` both
-  fit comfortably.
+**5. Name side 2 from its source.**
 
-**5. Verify both sides.**
+.. cli-example:: assemble_dsd_from_ssds
+   :section: title-carry
+
+When the source floppy is already named the way you want, read the title
+straight off it rather than retyping. The inner ```disc title
+zalaga.ssd``` prints the source's disc title; the outer ``disc title``
+writes it onto side 2 — a command substitution carrying the name across.
+
+**6. Verify both sides.**
 
 .. cli-example:: assemble_dsd_from_ssds
    :section: verify

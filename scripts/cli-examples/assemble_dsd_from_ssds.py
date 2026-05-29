@@ -14,7 +14,8 @@ Sections:
             formatted as empty catalogues.
   copy      One ``disc cp`` per side, addressed explicitly: drive ``:0``
             and drive ``:2``.
-  title     Name each side by carrying its source floppy's title across.
+  title-direct  Name side 0 by typing its title.
+  title-carry   Name side 2 by reading the title off its source floppy.
   verify    ``disc stat`` lists both sides; ``disc ls`` shows each
             side's catalogue under its drive designation.
 """
@@ -36,11 +37,9 @@ with in_tmp_dir():
     # captured command lines stay free of absolute paths.
     silent(f"cp {GAMES_DIR}/Disc002-Arcadians.ssd arcadians.ssd")
     silent(f"cp {GAMES_DIR}/Disc003-Zalaga.ssd zalaga.ssd")
-    # Give each floppy a tidy disc title (the captured game discs carry the
-    # cramped "ARC" / "ZALAG-L"). A DFS title holds up to 12 characters, so
-    # "Arcadians" and "Zalaga" both fit. The title step below carries each
-    # name across to its assembled side.
-    silent("disc title arcadians.ssd Arcadians")
+    # Give the Zalaga floppy a tidy disc title (its catalogue carries the
+    # cramped "ZALAG-L"); the second title step reads this name back off the
+    # source, so a clean source title makes for a clean carried-across result.
     silent("disc title zalaga.ssd Zalaga")
 
     section("sources")
@@ -62,13 +61,18 @@ with in_tmp_dir():
     show("disc cp 'arcadians.ssd:$.*' 'compendium.dsd::0.$.'")
     show("disc cp 'zalaga.ssd:$.*' 'compendium.dsd::2.$.'")
 
-    section("title")
     # Each side is an independent volume with its own title. Addressing a
     # side's disc title takes the drive with no path (``::0`` / ``::2``);
     # ``::2.$`` would instead ask for the ``$`` directory's title, which
-    # DFS lacks. Carry each side's name across from its source floppy with
-    # a command substitution, so neither name is retyped.
-    show("disc title 'compendium.dsd::0' `disc title arcadians.ssd`")
+    # DFS lacks.
+    section("title-direct")
+    # The straightforward way: type the title for side 0.
+    show("disc title 'compendium.dsd::0' Arcadians")
+
+    section("title-carry")
+    # Or carry a name across from a source floppy with a command
+    # substitution — no retyping. The inner read prints the source title;
+    # the outer write stamps it onto side 2.
     show("disc title 'compendium.dsd::2' `disc title zalaga.ssd`")
 
     section("verify")
