@@ -181,47 +181,116 @@ the intuitive `1`. Input is forgiving either way; only the label is a
 choice. (We might also *warn* on a wildly out-of-range digit like `:7.` to
 catch a typo, while still resolving it to the second side.)
 
-### A double-sided DFS mount spans the whole disc
+### Three layers, three owners
 
-Rather than mounting one surface and treating the other as a partition, a
-double-sided DFS image mounts as **one disc with two surfaces**. The mount
-parses the `:drive.` prefix and dispatches each operation to the right
-surface, holding (and caching) a `DFS` per side over the **shared live
-buffer** — both write back independently to disjoint sectors, as the two
-`DFS.from_buffer(side=…)` instances already do (verified). Benefits:
+A fully-qualified compound path peels in three stages, each owned by the
+layer that understands it:
 
-- Native syntax falls out naturally — the drive lives in the path, where the
-  filesystem parses it.
-- No invented selector grammar, no `Partition.surface_index`, no
-  `region_reader` for sides — the cross-cutting layers stay unchanged.
-- Cross-drive copy within a single mount (`cp :0.A :2.B`) becomes possible,
-  since one mount sees both surfaces.
+```
+image.dsd : dfs : :2.$.MYPROG
+└─ outer ─┘ └ A ┘ └─── B ───┘
+```
 
-What this needs:
+| Stage | What it selects | Owner | Status |
+|---|---|---|---|
+| outer `:` | the host image file | `parse_compound_path` (cli_paths) | exists |
+| **A** `partition:` | which filing system / partition in the image (`adfs:`, `afs:`, `afs.1:`, `dfs:`) | generic `split_selector` (mount) | exists |
+| **B** `:drive.path` | the volume *within* that filesystem, then the path | **the filesystem itself** | new |
 
-1. **A filesystem-owned inner-path parse.** A hook on the `Mount`/filesystem
-   contract by which the identified filesystem interprets the inner string —
-   DFS strips an optional `:drive.` prefix to a surface index; ADFS/AFS parse
-   their own `$`/`^`/`@` grammar. The generic cross-partition prefix
-   (`afs:`/`adfs:` for an ADFS host with an AFS tail) stays a separate,
-   coordinator-level dispatch that runs *first*; the chosen filesystem then
-   parses the residual path. The two axes must be defined to compose
-   cleanly (see decisions).
-2. **A two-surface `_DFSMount`** for double-sided geometry: navigation,
-   `stat`, `title`, free space etc. all key off the path's drive, defaulting
-   to 0. For single-sided geometry it behaves exactly as today.
-3. **`disc stat` / listing** to surface that drive 2 exists (the mount knows
-   its surface count), so the second side is discoverable.
+Stage A is the cross-partition axis (an ADFS host with an AFS tail). Stage B
+is intra-filesystem and **filesystem-specific** — only DFS has drives. The
+two compose by sequence, not negotiation: A runs first and picks the
+filesystem; that filesystem then owns everything to the right.
+
+Verified empirically against the current code: `image.dsd:dfs::2.$.MYPROG`
+already splits to outer `image.dsd`, selector `dfs`, residual `:2.$.MYPROG`
+with **no parser change** — the partition delimiter's colon and the DFS
+drive's colon sit adjacent as `::`. (Today the selector must be the
+registered name `acorn-dfs`; a friendly `dfs:` alias is a small
+sub-decision. For a single-partition DSD the prefix is optional, so
+`image.dsd::2.$.MYPROG` suffices.)
+
+### The new hook: the filesystem splits its own volume
+
+The drive must be known **before** the mount opens, because — see below —
+the capability model makes a mount represent exactly one volume. So the
+contract is a small method on the filesystem, called by `resolve_mount`
+after the partition is chosen:
+
+```python
+def split_volume(self, inner_path: str, geometry: Geometry) -> tuple[int, str]:
+    """Split a leading volume token from *inner_path*.
+
+    Returns ``(surface_index, residual_path)``. The default takes
+    surface 0 and the whole path — most filesystems have no notion of a
+    sub-volume. DFS overrides it to parse the Acorn ``:drive.`` prefix:
+    drive 0 -> surface 0, any non-zero drive -> surface 1 (when the
+    geometry is double-sided), erroring on a drive for a single-sided
+    image. ADFS/AFS use the default — ADFS-L spans both physical
+    surfaces as one logical volume, so it exposes no drive.
+    """
+    return 0, inner_path
+```
+
+`resolve_mount` then opens that surface and sets the residual as the
+in-partition path:
+
+```python
+surface, residual = filesystem.split_volume(in_path, geometry)
+mount = filesystem.open(region_view, geometry, surface=surface)   # open gains surface=
+return ResolvedMount(mount, path=residual, …)
+```
+
+`open` gains a `surface: int = 0` kwarg; `_BaseDFS.open` threads it to
+`DFS.from_buffer(reader.buffer(), disc_format, side=surface)` — opening the
+chosen side over the **whole live buffer**, so writes persist (verified).
+Every other filesystem ignores the kwarg.
+
+### Why one volume per mount, not a two-surface mount
+
+The capability protocols (`Titled`, `Bootable`, `FreeSpace`, `Sized`,
+`FreeMap`, `Validatable`, `Compactable`) are **mount-global** — `title`,
+`boot_option`, `free_bytes()` take no path. But each DFS side is an
+independent volume with its *own* title, boot option, free space and
+catalogue. A mount spanning both surfaces could not answer "drive 2's
+title" through these property-based capabilities without inventing a
+per-drive variant of every one of them.
+
+Resolving the drive at open time avoids that entirely: the mount **is** one
+drive's volume, so every capability is unambiguously that drive's, and the
+capability model is untouched. The cost is that a single mount sees only one
+side — but **cross-drive `cp` still works**, because `cp` takes two compound
+paths and resolves a mount for each (`cp elite.dsd::0.$.A elite.dsd::2.$.B`
+→ a read-only mount of drive 0 and a writable mount of drive 2). That is
+also the *correct* mental model: the two sides are independent volumes, so
+copying between them is a copy between volumes, not a move within one.
+
+What this needs, in total:
+
+1. `Filesystem.split_volume(inner_path, geometry)` — new, default
+   `(0, inner_path)`; DFS overrides.
+2. `Filesystem.open(reader, geometry, *, surface=0)` — one new kwarg;
+   only DFS reads it.
+3. `resolve_mount` calls `split_volume`, opens the surface, sets the
+   residual path.
+4. `disc stat` / listing surfaces that a second side exists, so it is
+   discoverable.
+
+No change to `Identification`, `Partition`, the coordinator, `_SELECTOR_RE`,
+or any capability protocol.
 
 ### Alternative considered (rejected): drive as a partition selector
 
-The earlier sketch modelled the second side as a contained `Partition` with
-a new `surface_index`, addressed by an invented `2:` selector
-(`elite.dsd:2:$.PROG`), extending `mount.py:_SELECTOR_RE` to accept bare
-digits. It works, but it invents non-Acorn syntax for something Acorn
-already spells, and it splits drive handling across the generic mount layer
-rather than the filesystem that owns the concept. Kept here only as the
-fallback if filesystem-owned inner parsing proves too invasive.
+The earlier sketch modelled the second side as a contained `Partition` in
+the identification tree with a new `surface_index`, addressed by an invented
+`2:` selector (`elite.dsd:2:$.PROG`), extending `mount.py:_SELECTOR_RE` to
+accept bare digits. It invents non-Acorn syntax for something Acorn already
+spells, and it pushes a DFS-only concept (drives) into the generic
+identification and selector layers that every filesystem shares. The
+`split_volume` contract above keeps the drive entirely inside the DFS
+extension and leaves the shared layers untouched — so this is rejected.
+(Note the *surface* still reaches `open` — but via the filesystem's own
+path parse, not a partition in the identification tree.)
 
 ## User-facing surface
 
@@ -252,17 +321,26 @@ Settling toward, in light of the discussion:
 3. **Default drive — 0, stateless (settled).** Unqualified path is always
    drive 0; no "current drive" notion.
 
+Settling (this round):
+
+4. **Inner-parse contract — `split_volume` (settling).** Three-layer peel:
+   outer file → generic `partition:` selector → filesystem-owned
+   `:drive.path`. The new `Filesystem.split_volume(inner_path, geometry)`
+   returns `(surface_index, residual_path)`, default `(0, inner_path)`; DFS
+   overrides. The partition prefix runs first and picks the filesystem; that
+   filesystem then owns the residual. No change to identification, the
+   coordinator, `Partition`, or `_SELECTOR_RE`.
+5. **One volume per mount (settling).** The drive resolves at open time
+   (`open(..., surface=)`), so a mount represents exactly one side's volume
+   and the mount-global capability protocols stay untouched. Cross-drive
+   `cp` uses two compound paths (two mounts) — correct, since the sides are
+   independent volumes.
+
 Still genuinely open:
 
-4. **Filesystem-owned inner parsing — the contract.** What does the hook look
-   like, and how does it compose with the existing generic cross-partition
-   prefix (`afs:`/`adfs:`)? Does the prefix run first (coordinator picks the
-   partition) and the chosen filesystem parse the residual, or do we unify
-   them? This is the main architectural design task.
-5. **Two-surface mount vs one-surface-plus-fallback.** Confirm the
-   double-sided `_DFSMount` holds both surfaces over the shared buffer
-   (enabling cross-drive `cp`), rather than the rejected
-   per-surface-partition approach.
+5a. **`dfs:` alias.** Accept `dfs:` as a friendly alias for the `acorn-dfs`
+    (and `watford-dfs`?) partition selector, or require the registered name?
+    Optional for a single-partition DSD regardless.
 6. **Blank / catalogue-less second side** — expose drive 2 as an empty,
    writable, formattable side regardless of catalogue (needed for Mark's
    build-from-two-SSDs flow)? Proposed: yes, whenever the geometry is
