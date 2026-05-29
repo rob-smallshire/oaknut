@@ -63,7 +63,7 @@ from oaknut.filesystem.geometry import (
 from oaknut.filesystem.identification import Confidence, Identification, Partition
 from oaknut.filesystem.reader import ImageReader, ImageSource, reader_for
 
-__version__ = "12.0.0"
+__version__ = "12.0.1"
 
 __all__ = [
     # contract
