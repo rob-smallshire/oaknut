@@ -267,6 +267,20 @@ These do not have Acorn star-aliases (the Level 3 File Server's admin interface 
 
 **Paths within the AFS partition** use `$.DIR.FILE` syntax with `.` as separator, just like ADFS. The 10-char / no-space name rules are enforced by `AFSPath` in the library. Users accustomed to ADFS paths will find AFS paths nearly identical.
 
+### Drive addressing within a DFS partition (double-sided discs)
+
+The filing-system prefix above selects a *partition*. Inside the DFS family there is a second, finer axis: a double-sided floppy (`.dsd`) is **two independent DFS volumes** — Acorn drives `:0` and `:2` — not one volume spanning both surfaces (unlike ADFS-L, which is a single logical volume across both physical sides). The drive is addressed with **verbatim Acorn path syntax**: the in-partition path may carry a leading `:drive.` prefix, which the DFS filesystem itself parses.
+
+```sh
+disc cp "drive-0.ssd:*" elite.dsd            # bare path → drive 0 (the default)
+disc cp "drive-2.ssd:*" elite.dsd::2.$        # drive 2 (the second side)
+disc ls   elite.dsd::2.$
+disc cat  elite.dsd::2.Z.MYDATA
+disc stat elite.dsd                           # lists both sides: Drive :0, Drive :2
+```
+
+The compound form has two colons because the first is the CLI's image delimiter and the second is the DFS drive colon, preserved verbatim. An unqualified path is always drive 0 (there is no stateful "current drive"). Drive input is forgiving — `:0` is the first side and any non-zero drive is the second — but the canonical designation shown by `stat` is the Acorn-faithful `:0` / `:2`. On a length-ambiguous image (the 80T-SS / 40T-DS byte collision) an explicit non-zero drive *implies* the double-sided reading, overridden by an explicit `--geometry`; addressing a side that is not there fails cleanly, named by its designation. The mechanism is the filesystem-owned `split_volume` / `volumes` / `open(surface=)` contract — see `dsd-side-addressing.md`.
+
 ### Wildcards
 
 Acorn convention: `*` matches any sequence within one name component, `?` matches one character. The CLI translates these to its own matcher and applies them to `iterdir`/`walk` output. Used by `find`, `rm`, `get` (when the argument is a wildcard) and `ls` (as a filter). Note that on the Acorn-alias `*delete PATTERN` form, the first `*` is the alias prefix, not a wildcard, so users will need to write e.g. `disc '*delete' foo.ssd '$.BACK*'` — the quoting tax again.

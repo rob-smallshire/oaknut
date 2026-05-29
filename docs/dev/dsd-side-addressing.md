@@ -1,8 +1,13 @@
 # Addressing both sides of a double-sided DFS image
 
-**Status:** draft for iteration, 2026-05-29. Nothing here is decided — flag
-anything you want to change. Amend this file in place; commit history is the
-discussion log.
+**Status:** **implemented**, 2026-05-29 (branch `dsd-side-addressing`). The
+design below is the agreed shape; it is now built and tested end-to-end —
+`DFS.create_file` formats every surface; the `split_volume` / `volumes` /
+`open(surface=)` contract is in place with `NoSuchVolumeError` /
+`VolumeNotFormattedError`; `resolve_mount` peels the drive with the geometry
+precedence; and `disc stat` lists each side. Native syntax
+`image::2.$.FILE` reaches the second side. Amend this file in place; commit
+history is the discussion log.
 
 ## Context
 
