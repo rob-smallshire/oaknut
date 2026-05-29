@@ -305,9 +305,7 @@ class _BaseDFS(Filesystem):
             if len(alternative.surface_specs) >= 2:
                 return 1, alternative, residual
         designation = self.designation_for(1, floppy_geometry(tracks=80, sides=2))
-        raise NoSuchVolumeError(
-            f"this image is single-sided; it has no side {designation}"
-        )
+        raise NoSuchVolumeError(f"this image is single-sided; it has no side {designation}")
 
     def geometry_grammar(self) -> GeometryGrammar:
         return GeometryGrammar(presets=dict(_GEOMETRY_PRESETS), kinds=(FLOPPY,))

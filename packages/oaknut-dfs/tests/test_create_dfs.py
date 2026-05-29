@@ -245,9 +245,7 @@ class TestDFSCreateFormatsAllSurfaces:
     def test_create_file_title_applies_to_side_zero_only(self, tmp_path):
         """The create title names side 0; other surfaces start untitled."""
         filepath = tmp_path / "test.dsd"
-        with DFS.create_file(
-            filepath, ACORN_DFS_80T_DOUBLE_SIDED_INTERLEAVED, title="FRONT"
-        ):
+        with DFS.create_file(filepath, ACORN_DFS_80T_DOUBLE_SIDED_INTERLEAVED, title="FRONT"):
             pass
         with DFS.from_file(filepath, ACORN_DFS_80T_DOUBLE_SIDED_INTERLEAVED, side=0) as s0:
             assert s0.title == "FRONT"

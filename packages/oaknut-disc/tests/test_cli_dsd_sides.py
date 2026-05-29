@@ -46,7 +46,9 @@ class TestBuildDsdFromTwoSsds:
     """The headline workflow: two SSDs → one DSD, a side each."""
 
     def test_assemble_and_each_side_holds_its_own(self, runner: CliRunner, tmp_path: Path) -> None:
-        drive0 = _make_ssd(tmp_path / "drive-0.ssd", "ZERO", {"PROG0": b"prog zero", "DATA0": b"00"})
+        drive0 = _make_ssd(
+            tmp_path / "drive-0.ssd", "ZERO", {"PROG0": b"prog zero", "DATA0": b"00"}
+        )
         drive2 = _make_ssd(tmp_path / "drive-2.ssd", "TWO", {"PROG2": b"prog two", "DATA2": b"22"})
         compendium = tmp_path / "compendium.dsd"
 
