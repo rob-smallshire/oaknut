@@ -36,6 +36,10 @@ with in_tmp_dir():
     # captured command lines stay free of absolute paths.
     silent(f"cp {GAMES_DIR}/Disc002-Arcadians.ssd arcadians.ssd")
     silent(f"cp {GAMES_DIR}/Disc003-Zalaga.ssd zalaga.ssd")
+    # Give the Zalaga floppy a tidy disc title (its catalogue carries the
+    # cramped "ZALAG-L"); the title step below carries this name across to
+    # the assembled side, so a clean source title makes for a clean result.
+    silent("disc title zalaga.ssd Zalaga")
 
     section("sources")
     # A bare trailing ``$`` needs no escaping — it is unambiguous in this
