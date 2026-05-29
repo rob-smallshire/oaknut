@@ -17,7 +17,7 @@ from oaknut.extension import Extension, namespace_for
 from oaknut.filesystem.capabilities import Mount
 from oaknut.filesystem.exceptions import FilesystemError
 from oaknut.filesystem.geometry import Geometry, GeometryGrammar
-from oaknut.filesystem.identification import Identification
+from oaknut.filesystem.identification import Identification, Volume
 from oaknut.filesystem.reader import ImageReader
 
 #: The extension *kind* (axis) filesystems belong to.
@@ -74,13 +74,54 @@ class Filesystem(Extension):
         raise NotImplementedError
 
     @abstractmethod
-    def open(self, reader: ImageReader, geometry: Geometry) -> Mount:
+    def open(self, reader: ImageReader, geometry: Geometry, *, surface: int = 0) -> Mount:
         """Open the region in *reader* at *geometry*, returning a mount.
 
         The returned object implements :class:`Mount` plus whichever
-        capability protocols this filesystem supports.
+        capability protocols this filesystem supports. *surface* selects
+        which volume of a multi-volume image to open (a DFS side); the
+        default 0 is the whole image / first volume, which is all most
+        filesystems have.
         """
         raise NotImplementedError
+
+    def split_volume(
+        self, inner_path: str, geometry: Geometry, ambiguities: tuple[Geometry, ...] = ()
+    ) -> tuple[int, Geometry, str]:
+        """Split a leading volume token from *inner_path*.
+
+        Returns ``(surface_index, geometry, residual_path)``. The
+        returned geometry may differ from the one passed in, because the
+        volume token can *imply* a geometry — a non-zero DFS drive on a
+        length-ambiguous image implies the double-sided reading drawn
+        from *ambiguities*. The default has no notion of a sub-volume:
+        surface 0, the geometry unchanged, and the whole path. DFS
+        overrides this to parse the Acorn ``:drive.`` prefix.
+        """
+        return 0, geometry, inner_path
+
+    def volumes(self, geometry: Geometry) -> tuple[Volume, ...]:
+        """The independently-addressable volumes at *geometry*.
+
+        The default is a single, undesignated volume — most filesystems
+        span the whole image. A double-sided DFS reports one per side,
+        designated ``:0`` / ``:2``. Round-trips with :meth:`split_volume`:
+        every designation here parses back to the same surface.
+        """
+        return (Volume(designation="", surface=0),)
+
+    def designation_for(self, surface: int, geometry: Geometry) -> str:
+        """The user-facing designation of *surface*, for diagnostics.
+
+        Looks the surface up among :meth:`volumes`, so messages quote the
+        filesystem's own vocabulary (``:2``, not the cardinal index). A
+        surface with no enumerated volume falls back to ``:N`` so a
+        diagnostic about an *absent* second side still reads naturally.
+        """
+        for volume in self.volumes(geometry):
+            if volume.surface == surface:
+                return volume.designation
+        return f":{surface}"
 
     @abstractmethod
     def geometry_grammar(self) -> GeometryGrammar:

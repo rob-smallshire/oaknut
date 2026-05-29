@@ -14,6 +14,7 @@ adapter over the proven class, to be refactored inward later.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterable
 
 from oaknut.dfs.acorn_dfs_catalogue import AcornDFSCatalogue
@@ -30,8 +31,15 @@ from oaknut.filesystem import (
     GeometryGrammar,
     Identification,
     ImageReader,
+    Volume,
     floppy_geometry,
 )
+from oaknut.filesystem.exceptions import FilesystemError
+
+# An Acorn DFS path may be prefixed with a drive — ``:N.`` (or bare ``:N``).
+# The leading colon is what distinguishes a drive from a directory named
+# with a digit (``2.FILE`` is directory ``2``; ``:2.FILE`` is drive 2).
+_DRIVE_RE = re.compile(r"^:(\d+)(?:\.(.*))?$", re.DOTALL)
 
 # An Acorn/Watford catalogue lives in sectors 0–3; matching needs them.
 _MIN_SECTORS = 4
@@ -244,15 +252,62 @@ class _BaseDFS(Filesystem):
             ambiguities=ambiguities,
         )
 
-    def open(self, reader: ImageReader, geometry: Geometry) -> _DFSMount:
+    def open(self, reader: ImageReader, geometry: Geometry, *, surface: int = 0) -> _DFSMount:
         disc_format = DiscFormat(
             surface_specs=list(geometry.surface_specs),
             catalogue_name=self._catalogue.CATALOGUE_NAME,
         )
         # Building over the reader's buffer() means mutations persist to
         # the file when the reader is writable, and run against a private
-        # copy when it is not.
-        return _DFSMount(DFS.from_buffer(reader.buffer(), disc_format))
+        # copy when it is not. ``side=surface`` opens the chosen side of a
+        # double-sided image in place, so each side is independently
+        # writable.
+        dfs = DFS.from_buffer(reader.buffer(), disc_format, side=surface)
+        # A non-zero surface may have been *implied* from a length-ambiguous
+        # image (an 80T-SS read as a 40T-DS); verify it really carries a
+        # catalogue rather than presenting garbage, and name the side by its
+        # designation, not the internal index.
+        if surface != 0 and not self._catalogue.matches(dfs._catalogued_surface._surface):
+            designation = self.designation_for(surface, geometry)
+            raise FilesystemError(
+                f"side {designation} is not a valid {self.name} catalogue; "
+                f"this image is single-sided"
+            )
+        return _DFSMount(dfs)
+
+    def volumes(self, geometry: Geometry) -> tuple[Volume, ...]:
+        # Each surface of a double-sided floppy is an independent DFS
+        # volume, designated by its Acorn drive number: side 0 is drive
+        # ``:0``, side 1 is drive ``:2``. A single-sided image is one
+        # undesignated volume (the base default).
+        if len(geometry.surface_specs) >= 2:
+            return (Volume(":0", 0), Volume(":2", 1))
+        return (Volume("", 0),)
+
+    def split_volume(
+        self, inner_path: str, geometry: Geometry, ambiguities: tuple[Geometry, ...] = ()
+    ) -> tuple[int, Geometry, str]:
+        match = _DRIVE_RE.match(inner_path)
+        if match is None:
+            # No ``:drive.`` prefix — drive 0, the whole path unchanged.
+            return 0, geometry, inner_path
+        drive = int(match.group(1))
+        residual = match.group(2) or ""
+        if drive == 0:
+            return 0, geometry, residual
+        # Any non-zero drive is the second side (forgiving: :1/:2/:3 alike).
+        if len(geometry.surface_specs) >= 2:
+            return 1, geometry, residual
+        # Single-sided proposed: a non-zero drive may *imply* the
+        # double-sided reading of a length-ambiguous image. Promote to a
+        # double-sided ambiguity if one exists; else there is no such side.
+        for alternative in ambiguities:
+            if len(alternative.surface_specs) >= 2:
+                return 1, alternative, residual
+        designation = self.designation_for(1, floppy_geometry(tracks=80, sides=2))
+        raise FilesystemError(
+            f"this image is single-sided; it has no side {designation}"
+        )
 
     def geometry_grammar(self) -> GeometryGrammar:
         return GeometryGrammar(presets=dict(_GEOMETRY_PRESETS), kinds=(FLOPPY,))

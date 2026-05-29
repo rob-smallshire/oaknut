@@ -302,7 +302,12 @@ class ADFS(Filesystem):
             reserved_regions=_reserved_regions(reader),
         )
 
-    def open(self, reader: ImageReader, geometry: Geometry | None = None) -> _ADFSMount:
+    def open(
+        self, reader: ImageReader, geometry: Geometry | None = None, *, surface: int = 0
+    ) -> _ADFSMount:
+        # ADFS is a single logical volume spanning all physical surfaces, so
+        # it has no per-surface drive; *surface* is accepted for contract
+        # uniformity and ignored.
         # ADFS addresses sectors linearly, so the disc reads correctly from
         # the buffer regardless of geometry; the geometry is retained so
         # the mount can *report* the hard-disc CHS a .dsc sidecar supplies.

@@ -60,7 +60,12 @@ from oaknut.filesystem.geometry import (
     region_reader,
     winchester_geometry,
 )
-from oaknut.filesystem.identification import Confidence, Identification, Partition
+from oaknut.filesystem.identification import (
+    Confidence,
+    Identification,
+    Partition,
+    Volume,
+)
 from oaknut.filesystem.reader import ImageReader, ImageSource, reader_for
 
 __version__ = "12.0.1"
@@ -101,6 +106,7 @@ __all__ = [
     "Confidence",
     "Identification",
     "Partition",
+    "Volume",
     # coordinator
     "identify",
     "filesystem_names",

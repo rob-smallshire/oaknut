@@ -158,7 +158,11 @@ class Zip(Filesystem):
             evidence=(f"ZIP signature ({kind}) at offset 0",),
         )
 
-    def open(self, reader: ImageReader, geometry: Geometry | None = None) -> _ZipMount:
+    def open(
+        self, reader: ImageReader, geometry: Geometry | None = None, *, surface: int = 0
+    ) -> _ZipMount:
+        # A ZIP is a single volume with no surfaces; *surface* is accepted
+        # for contract uniformity and ignored.
         data = reader.read(0, reader.size)
         return _ZipMount(zipfile.ZipFile(io.BytesIO(data)))
 

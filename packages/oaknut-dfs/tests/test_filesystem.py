@@ -1,5 +1,6 @@
 """Tests for the DFS-family filesystem extensions on the oaknut.filesystem axis."""
 
+import pytest
 from oaknut.dfs import ACORN_DFS_80T_SINGLE_SIDED, DFS
 from oaknut.filesystem import (
     AcornMetadata,
@@ -8,6 +9,7 @@ from oaknut.filesystem import (
     HierarchicalDirectories,
     Mount,
     Titled,
+    Volume,
     create_filesystem,
     filesystem_names,
     identify,
@@ -142,3 +144,110 @@ class TestGeometryGrammar:
         assert "80t-ss" in grammar.preset_names()
         geom = grammar.parse("80t-ss")
         assert geom.image_size == 204800
+
+
+class TestVolumesAndSplitVolume:
+    """The filesystem-owned volume vocabulary: enumeration and parse.
+
+    A double-sided DFS exposes two volumes designated ``:0`` / ``:2``;
+    single-sided is one undesignated volume. ``split_volume`` parses the
+    Acorn ``:drive.`` prefix back to a surface, forgivingly (any non-zero
+    drive is the second side) and stateless (no drive ⇒ side 0).
+    """
+
+    def _fs_and_geometry(self, preset):
+        fs = create_filesystem("acorn-dfs")
+        return fs, fs.geometry_grammar().parse(preset)
+
+    def test_volumes_double_sided(self):
+        fs, geom = self._fs_and_geometry("80t-ds")
+        assert fs.volumes(geom) == (Volume(":0", 0), Volume(":2", 1))
+
+    def test_volumes_single_sided_is_one_undesignated(self):
+        fs, geom = self._fs_and_geometry("80t-ss")
+        assert fs.volumes(geom) == (Volume("", 0),)
+
+    def test_designation_round_trips(self):
+        fs, geom = self._fs_and_geometry("80t-ds")
+        for volume in fs.volumes(geom):
+            surface, _geom, _residual = fs.split_volume(f"{volume.designation}.$.X", geom)
+            assert surface == volume.surface
+
+    def test_split_no_drive_is_side_zero_whole_path(self):
+        fs, geom = self._fs_and_geometry("80t-ds")
+        assert fs.split_volume("$.PLANETO", geom) == (0, geom, "$.PLANETO")
+
+    def test_split_explicit_drive_zero(self):
+        fs, geom = self._fs_and_geometry("80t-ds")
+        assert fs.split_volume(":0.$.PLANETO", geom) == (0, geom, "$.PLANETO")
+
+    def test_split_drive_two(self):
+        fs, geom = self._fs_and_geometry("80t-ds")
+        assert fs.split_volume(":2.Z.MYDATA", geom) == (1, geom, "Z.MYDATA")
+
+    def test_split_drive_forgiving_any_nonzero(self):
+        fs, geom = self._fs_and_geometry("80t-ds")
+        for token in (":1", ":2", ":3"):
+            surface, _g, residual = fs.split_volume(f"{token}.$.X", geom)
+            assert (surface, residual) == (1, "$.X")
+
+    def test_split_digit_directory_shorthand_is_not_a_drive(self):
+        fs, geom = self._fs_and_geometry("80t-ds")
+        # No leading colon → directory named '2', not drive 2.
+        assert fs.split_volume("2.FILE", geom) == (0, geom, "2.FILE")
+
+    def test_split_bare_designation_has_empty_residual(self):
+        fs, geom = self._fs_and_geometry("80t-ds")
+        assert fs.split_volume(":2", geom) == (1, geom, "")
+
+    def test_split_nonzero_drive_on_single_sided_errors(self):
+        from oaknut.filesystem.exceptions import FilesystemError
+
+        fs, geom = self._fs_and_geometry("80t-ss")
+        with pytest.raises(FilesystemError, match=r":2"):
+            fs.split_volume(":2.$.X", geom)
+
+    def test_split_nonzero_drive_implies_double_sided_from_ambiguity(self):
+        fs = create_filesystem("acorn-dfs")
+        single = fs.geometry_grammar().parse("80t-ss")
+        double = fs.geometry_grammar().parse("40t-ds")
+        surface, resolved, residual = fs.split_volume(":2.$.X", single, (double,))
+        assert surface == 1
+        assert resolved is double
+        assert residual == "$.X"
+
+
+class TestOpenSurface:
+    """``open(surface=)`` opens an independent side, writably, in place."""
+
+    def test_open_second_side_independent_writes(self, tmp_path):
+        from oaknut.dfs import ACORN_DFS_80T_DOUBLE_SIDED_INTERLEAVED
+
+        image_filepath = tmp_path / "two.dsd"
+        with DFS.create_file(image_filepath, ACORN_DFS_80T_DOUBLE_SIDED_INTERLEAVED, title="FRONT"):
+            pass
+        fs = create_filesystem("acorn-dfs")
+        geom = fs.geometry_grammar().parse("80t-ds")
+        with reader_for(image_filepath, writable=True) as reader:
+            mount = fs.open(reader, geom, surface=1)
+            mount.write_bytes("$.BACK", b"second side")
+            mount.set_title("REAR")
+        # Side 0 untouched; side 1 holds the write.
+        with reader_for(image_filepath) as reader:
+            assert fs.open(reader, geom, surface=0).title == "FRONT"
+        with reader_for(image_filepath) as reader:
+            back = fs.open(reader, geom, surface=1)
+            assert back.title == "REAR"
+            assert back.read_bytes("$.BACK") == b"second side"
+
+    def test_open_unformatted_second_side_errors_clearly(self, tmp_path):
+        from oaknut.filesystem.exceptions import FilesystemError
+
+        # A 204800-byte image that is genuinely 80T single-sided: its
+        # "side 1" under a double-sided reading is unformatted garbage.
+        image_filepath = _make_dfs_image(tmp_path)  # 80T SS, 204800 bytes
+        fs = create_filesystem("acorn-dfs")
+        double = fs.geometry_grammar().parse("40t-ds")
+        with reader_for(image_filepath) as reader:
+            with pytest.raises(FilesystemError, match=r":2"):
+                fs.open(reader, double, surface=1)

@@ -59,6 +59,27 @@ class Partition:
 
 
 @dataclass(frozen=True)
+class Volume:
+    """One independently-addressable volume within a filesystem.
+
+    Most filesystems are a single volume spanning the whole image (a
+    sole, undesignated ``Volume``). A double-sided DFS image is the
+    exception: each physical surface is an independent volume with its
+    own catalogue, title and free space, addressed by a
+    *filesystem-specific* designation — the Acorn drive token ``:0`` /
+    ``:2`` for the DFS family. The designation is the very string a user
+    types to reach the volume, and is what diagnostics quote (never the
+    internal :attr:`surface` index).
+    """
+
+    #: The path token addressing this volume (``":0"``, ``":2"``; ``""``
+    #: when the filesystem has a single, undesignated volume).
+    designation: str
+    #: The surface index this volume occupies, passed to ``open``.
+    surface: int = 0
+
+
+@dataclass(frozen=True)
 class Identification:
     """What a filesystem reports a region to be.
 

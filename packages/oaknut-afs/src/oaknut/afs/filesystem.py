@@ -284,7 +284,11 @@ class AFS(Filesystem):
             evidence=tuple(evidence),
         )
 
-    def open(self, reader: ImageReader, geometry: Geometry | None = None) -> _AFSMount:
+    def open(
+        self, reader: ImageReader, geometry: Geometry | None = None, *, surface: int = 0
+    ) -> _AFSMount:
+        # AFS is a single volume with no per-surface drive; *surface* is
+        # accepted for contract uniformity and ignored.
         info = _read_info(reader)
         if info is None:
             raise FilesystemError("no AFS info sector found in this region")
