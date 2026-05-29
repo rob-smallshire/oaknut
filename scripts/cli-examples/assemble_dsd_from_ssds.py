@@ -14,7 +14,7 @@ Sections:
             formatted as empty catalogues.
   copy      One ``disc cp`` per side, addressed explicitly: drive ``:0``
             and drive ``:2``.
-  title     Name each side — one literally, one read from the source SSD.
+  title     Name each side by carrying its source floppy's title across.
   verify    ``disc stat`` lists both sides; ``disc ls`` shows each
             side's catalogue under its drive designation.
 """
@@ -36,9 +36,11 @@ with in_tmp_dir():
     # captured command lines stay free of absolute paths.
     silent(f"cp {GAMES_DIR}/Disc002-Arcadians.ssd arcadians.ssd")
     silent(f"cp {GAMES_DIR}/Disc003-Zalaga.ssd zalaga.ssd")
-    # Give the Zalaga floppy a tidy disc title (its catalogue carries the
-    # cramped "ZALAG-L"); the title step below carries this name across to
-    # the assembled side, so a clean source title makes for a clean result.
+    # Give each floppy a tidy disc title (the captured game discs carry the
+    # cramped "ARC" / "ZALAG-L"). A DFS title holds up to 12 characters, so
+    # "Arcadians" and "Zalaga" both fit. The title step below carries each
+    # name across to its assembled side.
+    silent("disc title arcadians.ssd Arcadians")
     silent("disc title zalaga.ssd Zalaga")
 
     section("sources")
@@ -64,9 +66,9 @@ with in_tmp_dir():
     # Each side is an independent volume with its own title. Addressing a
     # side's disc title takes the drive with no path (``::0`` / ``::2``);
     # ``::2.$`` would instead ask for the ``$`` directory's title, which
-    # DFS lacks. Name side 0 literally; read side 2's name from the source
-    # SSD with a command substitution.
-    show("disc title 'compendium.dsd::0' Arcadians")
+    # DFS lacks. Carry each side's name across from its source floppy with
+    # a command substitution, so neither name is retyped.
+    show("disc title 'compendium.dsd::0' `disc title arcadians.ssd`")
     show("disc title 'compendium.dsd::2' `disc title zalaga.ssd`")
 
     section("verify")

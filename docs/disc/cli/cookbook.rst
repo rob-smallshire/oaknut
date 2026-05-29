@@ -236,10 +236,11 @@ copy. Two points:
 - Addressing a side's **disc title** takes the drive with **no path** —
   ``compendium.dsd::0`` / ``compendium.dsd::2``. (``::2.$`` would instead
   ask for the ``$`` *directory's* title, which DFS has no concept of.)
-- Side 0 is named literally; side 2's name is read straight from the
-  source floppy with a command substitution —
-  ```disc title zalaga.ssd``` prints the source disc title, which the
-  outer ``disc title`` then writes onto side 2.
+- Each side's name is carried across from its source floppy with a
+  command substitution: ```disc title arcadians.ssd``` prints that disc's
+  title, which the outer ``disc title`` then writes onto the side. A DFS
+  title holds up to 12 characters, so ``Arcadians`` and ``Zalaga`` both
+  fit comfortably.
 
 **5. Verify both sides.**
 
