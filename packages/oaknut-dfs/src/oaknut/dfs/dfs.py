@@ -852,14 +852,20 @@ class DFS:
 
         buffer = memoryview(bytearray(buffer_size))
         disc = DiscImage(buffer, specs)
-        surface = disc.surface(side)
-        total_sectors = surface.num_sectors
-
-        # Look up and initialise the catalogue
         catalogue_class = Catalogue._registry[disc_format.catalogue_name]
-        catalogue_class.initialise(surface, total_sectors, title, boot_option)
 
-        catalogued = CataloguedSurface(surface, catalogue_class)
+        # Format every surface (see create_file): a double-sided image has
+        # an independent volume per side. The title names side 0 only.
+        for surface_index in range(len(specs)):
+            surf = disc.surface(surface_index)
+            catalogue_class.initialise(
+                surf,
+                surf.num_sectors,
+                title if surface_index == 0 else "",
+                boot_option,
+            )
+
+        catalogued = CataloguedSurface(disc.surface(side), catalogue_class)
         return cls(catalogued)
 
     @staticmethod
@@ -934,13 +940,22 @@ class DFS:
             mm = mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_WRITE)
             buffer = memoryview(mm)
             disc = DiscImage(buffer, specs)
-            surface = disc.surface(side)
-            total_sectors = surface.num_sectors
-
             catalogue_class = Catalogue._registry[disc_format.catalogue_name]
-            catalogue_class.initialise(surface, total_sectors, title, boot_option)
 
-            catalogued = CataloguedSurface(surface, catalogue_class)
+            # Format every surface — a double-sided image carries an
+            # independent DFS volume per side, and all must be valid empty
+            # catalogues so the second side is usable straight away. The
+            # title names side 0; the other surfaces start untitled.
+            for surface_index in range(len(specs)):
+                surf = disc.surface(surface_index)
+                catalogue_class.initialise(
+                    surf,
+                    surf.num_sectors,
+                    title if surface_index == 0 else "",
+                    boot_option,
+                )
+
+            catalogued = CataloguedSurface(disc.surface(side), catalogue_class)
             dfs = DFS(catalogued)
             try:
                 yield dfs

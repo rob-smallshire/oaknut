@@ -201,6 +201,60 @@ class TestDFSCreateFile:
         assert filepath.stat().st_size == expected_size
 
 
+class TestDFSCreateFormatsAllSurfaces:
+    """Creating a multi-surface disc formats *every* surface, not just side 0.
+
+    A DSD carries two independent DFS volumes; both must be a valid empty
+    catalogue after creation, so the second side is immediately usable
+    (e.g. assembling a DSD from two SSDs). Regression: previously only
+    side 0 was initialised, leaving side 1 a zero-sector non-disc.
+    """
+
+    DOUBLE_SIDED = [
+        pytest.param(ACORN_DFS_80T_DOUBLE_SIDED_INTERLEAVED, 800, id="acorn-80t-dsi"),
+        pytest.param(ACORN_DFS_80T_DOUBLE_SIDED_SEQUENTIAL, 800, id="acorn-80t-dss"),
+        pytest.param(ACORN_DFS_40T_DOUBLE_SIDED_INTERLEAVED, 400, id="acorn-40t-dsi"),
+        pytest.param(WATFORD_DFS_80T_DOUBLE_SIDED_INTERLEAVED, 800, id="watford-80t-dsi"),
+    ]
+
+    @pytest.mark.parametrize("disc_format,per_side_sectors", DOUBLE_SIDED)
+    def test_create_file_formats_second_side(self, disc_format, per_side_sectors, tmp_path):
+        filepath = tmp_path / "test.dsd"
+        with DFS.create_file(filepath, disc_format, title="FRONT"):
+            pass
+        # Side 1 must be a valid, empty catalogue — not a zero-sector disc.
+        with DFS.from_file(filepath, disc_format, side=1) as side1:
+            assert side1._catalogued_surface.disc_info.total_sectors == per_side_sectors
+            assert len(side1.files) == 0
+
+    @pytest.mark.parametrize("disc_format,per_side_sectors", DOUBLE_SIDED)
+    def test_create_file_sides_are_independent(self, disc_format, per_side_sectors, tmp_path):
+        filepath = tmp_path / "test.dsd"
+        with DFS.create_file(filepath, disc_format, title="FRONT") as side0:
+            (side0.root / "$" / "ONLY0").write_bytes(b"only on side 0")
+        # Writing side 0 must not have touched side 1's empty catalogue.
+        with DFS.from_file(filepath, disc_format, side=1) as side1:
+            assert len(side1.files) == 0
+            (side1.root / "$" / "ONLY2").write_bytes(b"only on side 2")
+        # And each side now holds exactly its own file.
+        with DFS.from_file(filepath, disc_format, side=0) as side0:
+            assert [str(p) for p in (side0.root / "$").iterdir()] == ["$.ONLY0"]
+        with DFS.from_file(filepath, disc_format, side=1) as side1:
+            assert [str(p) for p in (side1.root / "$").iterdir()] == ["$.ONLY2"]
+
+    def test_create_file_title_applies_to_side_zero_only(self, tmp_path):
+        """The create title names side 0; other surfaces start untitled."""
+        filepath = tmp_path / "test.dsd"
+        with DFS.create_file(
+            filepath, ACORN_DFS_80T_DOUBLE_SIDED_INTERLEAVED, title="FRONT"
+        ):
+            pass
+        with DFS.from_file(filepath, ACORN_DFS_80T_DOUBLE_SIDED_INTERLEAVED, side=0) as s0:
+            assert s0.title == "FRONT"
+        with DFS.from_file(filepath, ACORN_DFS_80T_DOUBLE_SIDED_INTERLEAVED, side=1) as s1:
+            assert s1.title == ""
+
+
 class TestDFSCreateEdgeCases:
     def test_create_double_sided_each_side_independent(self):
         """Each side of a DSD is independent — creating gives side 0."""
