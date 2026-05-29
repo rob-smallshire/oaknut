@@ -179,6 +179,103 @@ for the games — one per SSD. Walking the whole thing with
 directory.
 
 
+Assemble a double-sided DSD from two SSDs
+-----------------------------------------
+
+A double-sided disc holds **two independent DFS volumes** — Acorn
+drives ``:0`` and ``:2`` — one per physical surface. To combine two
+single-sided ``.ssd`` floppies onto one ``.dsd``, create a blank
+double-sided image and copy one SSD onto each side. The second side
+is addressed with verbatim Acorn drive syntax: ``image::2.$``.
+
+**1. The two source SSDs.**
+
+.. cli-example:: assemble_dsd_from_ssds
+   :section: sources
+
+Two single-sided game floppies — Arcadians and Zalaga — each with a
+handful of files under ``$``.
+
+**2. Create a blank double-sided disc.**
+
+.. cli-example:: assemble_dsd_from_ssds
+   :section: create
+
+``disc create`` with a ``.dsd`` extension lays down an 80-track
+double-sided image and formats **both** sides as empty catalogues, so
+each side is a usable volume from the outset. ``--title`` names side 0;
+side 2 starts untitled.
+
+**3. Copy one SSD onto each side.**
+
+.. cli-example:: assemble_dsd_from_ssds
+   :section: copy
+
+The moves:
+
+- A bare path addresses **drive 0** — the default side — so the first
+  copy needs no drive prefix.
+- ``compendium.dsd::2.$`` addresses **drive 2**, the second side. The
+  two colons are the CLI's image delimiter followed by the Acorn drive
+  colon, preserved verbatim; ``:2`` is the drive, ``$`` the directory.
+- ``$.*`` globs every file in the source's ``$`` directory; the
+  trailing ``/`` on the destination marks it as a directory to copy
+  into.
+- Each side is an independent volume with its own title.
+  ``disc title compendium.dsd::2 Zalaga`` names side 2 — note the drive
+  with **no path**: ``::2.$`` would instead ask for the ``$``
+  directory's title, which DFS has no concept of.
+
+**4. Verify both sides.**
+
+.. cli-example:: assemble_dsd_from_ssds
+   :section: verify
+
+``disc stat`` lists the disc as two volumes, each under the
+designation that addresses it — **Drive :0** and **Drive :2** — with
+its own title, file count and free space. Listing each side then shows
+the game that now lives there.
+
+
+Split a double-sided DSD into two SSDs
+--------------------------------------
+
+The reverse: lift each side of a ``.dsd`` out into its own
+single-sided ``.ssd``. Each side is an independent volume, so this is
+just two copies — one per side — into two freshly-created SSDs.
+
+**1. The two-sided source disc.**
+
+.. cli-example:: split_dsd_into_ssds
+   :section: source
+
+``disc stat`` shows the DSD as two volumes, Drive ``:0`` and Drive
+``:2``, each a full DFS catalogue.
+
+**2. Create the two destination SSDs.**
+
+.. cli-example:: split_dsd_into_ssds
+   :section: create
+
+**3. Copy each side out to its own SSD.**
+
+.. cli-example:: split_dsd_into_ssds
+   :section: extract
+
+Side 0 is the default — no prefix. Side 2 is ``compendium.dsd::2.$``.
+The ``$.*`` glob lifts every file out of each side's ``$`` directory
+into the target SSD.
+
+**4. Verify each extracted SSD.**
+
+.. cli-example:: split_dsd_into_ssds
+   :section: verify
+
+Each single-sided image now holds exactly one side's catalogue — the
+DSD has been separated back into the two floppies it was assembled
+from.
+
+
 Creating a Level 3 File Server disc
 -----------------------------------
 
