@@ -176,7 +176,9 @@ class WatfordDFSCatalogue(Catalogue):
         # Title from sector 0 (bytes 0-9 only - 10 chars max)
         # Bytes 10-11 of sector 0 are reserved for catalog chaining
         title_bytes = bytes(sector0[0:10])
-        title = title_bytes.decode("acorn").rstrip()
+        # The fixed-width title field is padded with spaces or NULs; neither
+        # is part of the title.
+        title = title_bytes.decode("acorn").rstrip(" \x00")
 
         # Cycle number (byte 0x104 in sector 1)
         cycle_number = sector1[4]

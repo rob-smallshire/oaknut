@@ -375,7 +375,10 @@ class OldDirectoryFormat(ADFSDirectoryFormat):
         parent_address = _read_24bit_le(data, tail + _OLD_TAIL_PARENT)
 
         title_bytes = data[tail + _OLD_TAIL_TITLE : tail + _OLD_TAIL_TITLE + 19]
-        title = _strip_name(title_bytes)
+        # _strip_name drops the CR/NUL padding ADFS terminates the field
+        # with; trailing spaces (from a foreign writer) are padding too,
+        # but internal spaces in a multi-word title must survive.
+        title = _strip_name(title_bytes).rstrip(" ")
 
         return _ADFSDirectory(
             name=dir_name,

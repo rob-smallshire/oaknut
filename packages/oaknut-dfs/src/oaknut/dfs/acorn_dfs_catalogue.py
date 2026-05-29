@@ -165,7 +165,9 @@ class AcornDFSCatalogue(Catalogue):
         # Parse title (8 bytes from sector 0 + 4 bytes from sector 1)
         title_part1 = bytes(sector0[0:8]).decode("acorn")
         title_part2 = bytes(sector1[0:4]).decode("acorn")
-        title = (title_part1 + title_part2).rstrip()
+        # The fixed-width title field is padded with spaces or NULs; neither
+        # is part of the title.
+        title = (title_part1 + title_part2).rstrip(" \x00")
 
         # Parse metadata from sector 1
         cycle_number = sector1[4]
