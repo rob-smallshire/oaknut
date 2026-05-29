@@ -138,6 +138,9 @@ a :class:`~oaknut.filesystem.Confidence` and the
 .. autoclass:: oaknut.filesystem.Partition
    :members:
 
+.. autoclass:: oaknut.filesystem.Volume
+   :members:
+
 
 The coordinator
 ---------------
@@ -174,6 +177,10 @@ Exceptions
 .. autoexception:: oaknut.filesystem.FilesystemError
 
 .. autoexception:: oaknut.filesystem.GeometryError
+
+.. autoexception:: oaknut.filesystem.NoSuchVolumeError
+
+.. autoexception:: oaknut.filesystem.VolumeNotFormattedError
 
 .. autoexception:: oaknut.filesystem.ReadOnlyFilesystemError
 
