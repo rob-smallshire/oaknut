@@ -109,7 +109,9 @@ def resolve_mount(
             )
             if geometry is None:
                 geometry = _geometry_from_sidecar(outer_filepath)
-            mount = filesystem.open(reader, geometry)
+            ambiguities = _ambiguities(force_geometry, proposed)
+            surface, geometry, in_path = filesystem.split_volume(in_path, geometry, ambiguities)
+            mount = filesystem.open(reader, geometry, surface=surface)
             chosen_name = partition_name = force_filesystem
         else:
             candidates = identify(outer_filepath)
@@ -133,7 +135,14 @@ def resolve_mount(
                 # CHS only in the .dsc sidecar, not the content. (A reserved
                 # partition reads geometry from its own on-disc structure.)
                 geometry = _geometry_from_sidecar(outer_filepath)
-            mount = filesystem.open(region_view, geometry)
+            # The filesystem peels any leading volume designation (a DFS
+            # drive) from the path, choosing the surface and — when a
+            # non-zero drive disambiguates a length collision — the geometry.
+            # Precedence is explicit --geometry > drive-implied > proposed:
+            # a forced geometry is pinned, so no ambiguities are offered.
+            ambiguities = _ambiguities(force_geometry, chosen)
+            surface, geometry, in_path = filesystem.split_volume(in_path, geometry, ambiguities)
+            mount = filesystem.open(region_view, geometry, surface=surface)
             chosen_name = chosen.filesystem
             partition_name = chosen.partition.selector
     except BaseException:
@@ -190,6 +199,19 @@ def _geometry(filesystem, force_geometry: str | None, proposed: Geometry | None)
     if force_geometry is None:
         return proposed
     return filesystem.geometry_grammar().parse(force_geometry)
+
+
+def _ambiguities(force_geometry: str | None, identification) -> tuple[Geometry, ...]:
+    """Geometry ambiguities to offer ``split_volume``, honouring precedence.
+
+    A forced ``--geometry`` pins the layout, so none are offered and a
+    drive token inconsistent with it errors. Otherwise the identification's
+    own ambiguities are offered, so a non-zero drive may *imply* the
+    double-sided reading of a length-ambiguous image.
+    """
+    if force_geometry is not None or identification is None:
+        return ()
+    return identification.ambiguities
 
 
 def _geometry_from_sidecar(outer_filepath: Path) -> Geometry | None:

@@ -201,10 +201,10 @@ class TestVolumesAndSplitVolume:
         assert fs.split_volume(":2", geom) == (1, geom, "")
 
     def test_split_nonzero_drive_on_single_sided_errors(self):
-        from oaknut.filesystem.exceptions import FilesystemError
+        from oaknut.filesystem.exceptions import NoSuchVolumeError
 
         fs, geom = self._fs_and_geometry("80t-ss")
-        with pytest.raises(FilesystemError, match=r":2"):
+        with pytest.raises(NoSuchVolumeError, match=r":2"):
             fs.split_volume(":2.$.X", geom)
 
     def test_split_nonzero_drive_implies_double_sided_from_ambiguity(self):
@@ -241,7 +241,7 @@ class TestOpenSurface:
             assert back.read_bytes("$.BACK") == b"second side"
 
     def test_open_unformatted_second_side_errors_clearly(self, tmp_path):
-        from oaknut.filesystem.exceptions import FilesystemError
+        from oaknut.filesystem.exceptions import VolumeNotFormattedError
 
         # A 204800-byte image that is genuinely 80T single-sided: its
         # "side 1" under a double-sided reading is unformatted garbage.
@@ -249,5 +249,5 @@ class TestOpenSurface:
         fs = create_filesystem("acorn-dfs")
         double = fs.geometry_grammar().parse("40t-ds")
         with reader_for(image_filepath) as reader:
-            with pytest.raises(FilesystemError, match=r":2"):
+            with pytest.raises(VolumeNotFormattedError, match=r":2"):
                 fs.open(reader, double, surface=1)

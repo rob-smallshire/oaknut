@@ -43,7 +43,9 @@ from oaknut.filesystem.exceptions import (
     FilesystemError,
     FilesystemExtensionError,
     GeometryError,
+    NoSuchVolumeError,
     ReadOnlyFilesystemError,
+    VolumeNotFormattedError,
 )
 from oaknut.filesystem.filesystem import (
     FILESYSTEM_KIND,
@@ -120,6 +122,8 @@ __all__ = [
     # exceptions
     "FilesystemError",
     "GeometryError",
+    "NoSuchVolumeError",
+    "VolumeNotFormattedError",
     "ReadOnlyFilesystemError",
     "FilesystemExtensionError",
 ]

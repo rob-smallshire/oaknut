@@ -34,7 +34,7 @@ from oaknut.filesystem import (
     Volume,
     floppy_geometry,
 )
-from oaknut.filesystem.exceptions import FilesystemError
+from oaknut.filesystem.exceptions import NoSuchVolumeError, VolumeNotFormattedError
 
 # An Acorn DFS path may be prefixed with a drive — ``:N.`` (or bare ``:N``).
 # The leading colon is what distinguishes a drive from a directory named
@@ -269,7 +269,7 @@ class _BaseDFS(Filesystem):
         # designation, not the internal index.
         if surface != 0 and not self._catalogue.matches(dfs._catalogued_surface._surface):
             designation = self.designation_for(surface, geometry)
-            raise FilesystemError(
+            raise VolumeNotFormattedError(
                 f"side {designation} is not a valid {self.name} catalogue; "
                 f"this image is single-sided"
             )
@@ -305,7 +305,7 @@ class _BaseDFS(Filesystem):
             if len(alternative.surface_specs) >= 2:
                 return 1, alternative, residual
         designation = self.designation_for(1, floppy_geometry(tracks=80, sides=2))
-        raise FilesystemError(
+        raise NoSuchVolumeError(
             f"this image is single-sided; it has no side {designation}"
         )
 
