@@ -203,8 +203,8 @@ handful of files under ``$``.
 
 ``disc create`` with a ``.dsd`` extension lays down an 80-track
 double-sided image and formats **both** sides as empty catalogues, so
-each side is a usable volume from the outset. ``--title`` names side 0;
-side 2 starts untitled.
+each side is a usable volume from the outset. No ``--title`` here — both
+sides start blank and are named symmetrically further down.
 
 **3. Copy one SSD onto each side.**
 
@@ -213,20 +213,35 @@ side 2 starts untitled.
 
 The moves:
 
-- A bare path addresses **drive 0** — the default side — so the first
-  copy needs no drive prefix.
-- ``compendium.dsd::2.$`` addresses **drive 2**, the second side. The
-  two colons are the CLI's image delimiter followed by the Acorn drive
-  colon, preserved verbatim; ``:2`` is the drive, ``$`` the directory.
-- ``$.*`` globs every file in the source's ``$`` directory; the
-  trailing ``/`` on the destination marks it as a directory to copy
-  into.
-- Each side is an independent volume with its own title.
-  ``disc title compendium.dsd::2 Zalaga`` names side 2 — note the drive
-  with **no path**: ``::2.$`` would instead ask for the ``$``
-  directory's title, which DFS has no concept of.
+- Each side is addressed explicitly: ``compendium.dsd::0.…`` is **drive
+  0**, ``compendium.dsd::2.…`` is **drive 2**. The two colons are the
+  CLI's image delimiter followed by the Acorn drive colon, preserved
+  verbatim; ``:0`` / ``:2`` is the drive, ``$`` the directory.
+- ``$.*`` globs every file in the source's ``$`` directory. The trailing
+  ``.`` on the destination — ``$.`` — is the **Acorn directory marker**:
+  "copy into the ``$`` directory". It plays the role Unix ``cp`` gives a
+  trailing ``/``, but keeps the path native Acorn. (``/`` is still
+  accepted if you prefer it.) The marker matters because an empty DFS
+  side has no ``$`` entry yet, so the destination directory has to be
+  named as such rather than detected.
 
-**4. Verify both sides.**
+**4. Name each side.**
+
+.. cli-example:: assemble_dsd_from_ssds
+   :section: title
+
+Each side is an independent volume with its own title, set after the
+copy. Two points:
+
+- Addressing a side's **disc title** takes the drive with **no path** —
+  ``compendium.dsd::0`` / ``compendium.dsd::2``. (``::2.$`` would instead
+  ask for the ``$`` *directory's* title, which DFS has no concept of.)
+- Side 0 is named literally; side 2's name is read straight from the
+  source floppy with a command substitution —
+  ```disc title zalaga.ssd``` prints the source disc title, which the
+  outer ``disc title`` then writes onto side 2.
+
+**5. Verify both sides.**
 
 .. cli-example:: assemble_dsd_from_ssds
    :section: verify
@@ -262,9 +277,10 @@ just two copies — one per side — into two freshly-created SSDs.
 .. cli-example:: split_dsd_into_ssds
    :section: extract
 
-Side 0 is the default — no prefix. Side 2 is ``compendium.dsd::2.$``.
-The ``$.*`` glob lifts every file out of each side's ``$`` directory
-into the target SSD.
+Each side is addressed explicitly — ``compendium.dsd::0.…`` and
+``compendium.dsd::2.…``. The ``$.*`` glob lifts every file out of each
+side's ``$`` directory into the target SSD, whose own ``$.`` names the
+destination directory.
 
 **4. Verify each extracted SSD.**
 

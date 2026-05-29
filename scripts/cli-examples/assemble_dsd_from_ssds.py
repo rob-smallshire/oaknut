@@ -12,8 +12,9 @@ Sections:
   sources   ``ls`` — the two single-sided source SSDs.
   create    ``disc create`` — a blank double-sided DSD; both sides are
             formatted as empty catalogues.
-  copy      One ``disc cp`` per side: side 0 (drive ``:0``, the default)
-            and side 2 (drive ``:2``). Each side gets its own title.
+  copy      One ``disc cp`` per side, addressed explicitly: drive ``:0``
+            and drive ``:2``.
+  title     Name each side — one literally, one read from the source SSD.
   verify    ``disc stat`` lists both sides; ``disc ls`` shows each
             side's catalogue under its drive designation.
 """
@@ -37,25 +38,34 @@ with in_tmp_dir():
     silent(f"cp {GAMES_DIR}/Disc003-Zalaga.ssd zalaga.ssd")
 
     section("sources")
-    show("disc ls arcadians.ssd:\\$")
-    show("disc ls zalaga.ssd:\\$")
+    # A bare trailing ``$`` needs no escaping — it is unambiguous in this
+    # position (nothing follows for the shell to expand).
+    show("disc ls arcadians.ssd:$")
+    show("disc ls zalaga.ssd:$")
 
     section("create")
-    show("disc create compendium.dsd --title Arcadians")
+    # No title yet — both sides start blank, named symmetrically below.
+    show("disc create compendium.dsd")
 
     section("copy")
-    # Side 0 is the default — a bare path needs no drive. Side 2 is the
-    # second physical surface, addressed ::2. The `$.*` glob copies every
-    # file in the source's `$` directory; the trailing `/` on the
-    # destination marks it as a directory to copy into.
-    show("disc cp 'arcadians.ssd:$.*' 'compendium.dsd:$/'")
-    show("disc cp 'zalaga.ssd:$.*' 'compendium.dsd::2.$/'")
+    # Address each side explicitly: drive ``:0`` and drive ``:2``. The
+    # `$.*` glob copies every file in the source's `$` directory; the
+    # trailing `.` is the Acorn directory marker on the destination —
+    # "copy into the `$` directory" — so the path stays native Acorn (no
+    # Unix `/`).
+    show("disc cp 'arcadians.ssd:$.*' 'compendium.dsd::0.$.'")
+    show("disc cp 'zalaga.ssd:$.*' 'compendium.dsd::2.$.'")
+
+    section("title")
     # Each side is an independent volume with its own title. Addressing a
-    # side's disc title takes the drive with no path (``::2``); ``::2.$``
-    # would instead ask for the ``$`` directory's title, which DFS lacks.
-    show("disc title 'compendium.dsd::2' Zalaga")
+    # side's disc title takes the drive with no path (``::0`` / ``::2``);
+    # ``::2.$`` would instead ask for the ``$`` directory's title, which
+    # DFS lacks. Name side 0 literally; read side 2's name from the source
+    # SSD with a command substitution.
+    show("disc title 'compendium.dsd::0' Arcadians")
+    show("disc title 'compendium.dsd::2' `disc title zalaga.ssd`")
 
     section("verify")
     show("disc stat compendium.dsd")
-    show("disc ls compendium.dsd:\\$")
+    show("disc ls compendium.dsd:$")
     show("disc ls 'compendium.dsd::2.$'")

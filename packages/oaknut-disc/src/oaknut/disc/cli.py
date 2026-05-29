@@ -1452,8 +1452,17 @@ def _split_parent_leaf(bare: str) -> tuple[str, str]:
 
 
 def _dst_ends_slash(bare: str) -> tuple[str, bool]:
-    """Strip a trailing ``/`` from ``bare`` and report whether one was present."""
+    """Strip a trailing directory marker from ``bare``; report if one was present.
+
+    The marker is the Unix ``/`` or — so a destination reads as a native
+    Acorn path — the Acorn path separator ``.`` (e.g. ``$.`` for the root
+    directory). Either marks the destination as a directory to copy into,
+    which matters when the target directory does not yet exist (an empty
+    DFS side has no ``$`` entry until a file lands in it).
+    """
     if bare.endswith("/") and bare != "/":
+        return bare[:-1], True
+    if bare.endswith(".") and bare != ".":
         return bare[:-1], True
     return bare, False
 
@@ -1821,7 +1830,7 @@ def _check_dst_is_dir(mount, bare: str, slash: bool, *, required: bool) -> None:
     if required:
         raise click.ClickException(
             f"destination {bare!r} must be a directory "
-            "(end with '/' or pre-create it) when the source expands "
+            "(end with '.' or '/', or pre-create it) when the source expands "
             "to multiple items or contains directories"
         )
 

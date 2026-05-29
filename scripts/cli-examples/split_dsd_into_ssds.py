@@ -36,9 +36,10 @@ with in_tmp_dir():
     # Zalaga on side 2 — so the recipe starts from a populated disc.
     silent(f"cp {GAMES_DIR}/Disc002-Arcadians.ssd arcadians.ssd")
     silent(f"cp {GAMES_DIR}/Disc003-Zalaga.ssd zalaga.ssd")
-    silent("disc create compendium.dsd --title Arcadians")
-    silent("disc cp 'arcadians.ssd:$.*' 'compendium.dsd:$/'")
-    silent("disc cp 'zalaga.ssd:$.*' 'compendium.dsd::2.$/'")
+    silent("disc create compendium.dsd")
+    silent("disc cp 'arcadians.ssd:$.*' 'compendium.dsd::0.$.'")
+    silent("disc cp 'zalaga.ssd:$.*' 'compendium.dsd::2.$.'")
+    silent("disc title 'compendium.dsd::0' Arcadians")
     silent("disc title 'compendium.dsd::2' Zalaga")
 
     section("source")
@@ -49,12 +50,12 @@ with in_tmp_dir():
     show("disc create side-2.ssd")
 
     section("extract")
-    # Side 0 is the default — no drive prefix. Side 2 is ::2. The `$.*`
-    # glob lifts every file out of each side's `$` directory into the
-    # target SSD's `$`.
-    show("disc cp 'compendium.dsd:$.*' 'side-0.ssd:$/'")
-    show("disc cp 'compendium.dsd::2.$.*' 'side-2.ssd:$/'")
+    # Address each side explicitly: drive ``:0`` and drive ``:2``. The
+    # `$.*` glob lifts every file out of each side's `$` directory; the
+    # trailing `.` is the Acorn directory marker on the destination.
+    show("disc cp 'compendium.dsd::0.$.*' 'side-0.ssd:$.'")
+    show("disc cp 'compendium.dsd::2.$.*' 'side-2.ssd:$.'")
 
     section("verify")
-    show("disc ls side-0.ssd:\\$")
-    show("disc ls side-2.ssd:\\$")
+    show("disc ls side-0.ssd:$")
+    show("disc ls side-2.ssd:$")

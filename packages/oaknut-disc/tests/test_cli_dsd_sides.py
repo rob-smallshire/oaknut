@@ -42,6 +42,24 @@ def _names_on(runner: CliRunner, compound_path: str) -> set[str]:
     return {tok for line in result.output.splitlines() for tok in line.split()}
 
 
+class TestAcornDirectoryMarker:
+    """A glob copy into an empty directory accepts the Acorn separator ``.``
+    as the directory marker, not only the Unix ``/`` — so the destination
+    reads as a native Acorn path."""
+
+    def test_dot_marks_directory_target_on_empty_side(
+        self, runner: CliRunner, tmp_path: Path
+    ) -> None:
+        src = _make_ssd(tmp_path / "src.ssd", "SRC", {"A": b"a", "B": b"b"})
+        dsd = tmp_path / "out.dsd"
+        assert runner.invoke(cli, ["create", str(dsd)]).exit_code == 0
+        # `$.` — trailing Acorn separator — marks the (as-yet empty) root
+        # directory as the copy target. No Unix `/` required.
+        result = runner.invoke(cli, ["cp", f"{src}:$.*", f"{dsd}::2.$."])
+        assert result.exit_code == 0, result.output
+        assert {"A", "B"} <= _names_on(runner, f"{dsd}::2.$")
+
+
 class TestBuildDsdFromTwoSsds:
     """The headline workflow: two SSDs → one DSD, a side each."""
 
