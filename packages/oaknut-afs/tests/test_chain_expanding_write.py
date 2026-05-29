@@ -8,7 +8,7 @@ and that the resulting chained object is readable end to end.
 from __future__ import annotations
 
 from helpers.afs_image import build_synthetic_adfs_with_afs
-from oaknut.afs.map_sector import _MAX_DATA_EXTENTS
+from oaknut.afs.map_sector import _MAX_DATA_EXTENTS, MAGIC
 
 
 class TestChainExpandingCreate:
@@ -77,3 +77,65 @@ class TestChainExpandingCreate:
         afs = adfs.afs_partition
         (afs.root / "Tiny").write_bytes(b"small")
         assert (afs.root / "Tiny").read_bytes() == b"small"
+
+
+class TestChainOnDiscByteShape:
+    """The bytes that hit disc for a multi-block chain must match the
+    ROM layout: ``'JesMap'`` at offset 0 of the head block, zeros at
+    offset 0..5 of every successor block. See ``Uade10:235-242``
+    (MPCRSP, the only magic-write site) and ``Uade12:160-242``
+    (MKRLN, which allocates successors via ``ALBLK`` + ``CLRSTR`` and
+    never overwrites bytes 0..5).
+    """
+
+    def _fragment_and_write_chained_file(self):
+        # Pre-fragment so the allocator is forced into >48 coalesced
+        # extents. Each AFS cylinder has 31 data sectors (32 minus the
+        # bitmap sector). Marking sectors 4, 8, 12, 16, 20, 24, 28
+        # across every available cylinder forces the cylinder's free
+        # space into ~8 short runs, so a file consuming the whole AFS
+        # region will need many extents.
+        adfs = build_synthetic_adfs_with_afs(start_cylinder=5)
+        afs = adfs.afs_partition
+        shadow = afs._bitmap_shadow()
+        for cyl_index in range(shadow.num_cylinders):
+            for marker in (4, 8, 12, 16, 20, 24, 28):
+                shadow.mark_allocated(cyl_index, marker)
+        shadow.flush()
+        # Pick a payload large enough that the allocator visits enough
+        # cylinders to overflow 48 extents.
+        payload = bytes(i & 0xFF for i in range(400 * 256))
+        (afs.root / "Huge").write_bytes(payload)
+        afs.flush()
+        return adfs, afs
+
+    def test_head_block_has_magic_successors_do_not(self) -> None:
+        adfs, afs = self._fragment_and_write_chained_file()
+        _, entry = afs._resolve(afs.root / "Huge")
+        chain = afs._read_map_chain(entry.sin)
+        assert len(chain.blocks) >= 2, (
+            f"expected a chained file; got {len(chain.blocks)} block(s)"
+        )
+
+        head_raw = afs._read_sector(int(chain.blocks[0].sin))
+        assert head_raw[0:6] == MAGIC, (
+            f"head block must carry the 'JesMap' magic; got {head_raw[0:6]!r}"
+        )
+
+        for i, block in enumerate(chain.blocks[1:], start=1):
+            raw = afs._read_sector(int(block.sin))
+            assert raw[0:6] == b"\x00" * 6, (
+                f"successor block {i} (sin {int(block.sin):#x}) "
+                f"must have zeros at offsets 0..5 to match ROM behaviour, "
+                f"not {raw[0:6]!r}"
+            )
+
+    def test_chained_file_reopens_after_write(self) -> None:
+        # The reader must accept the ROM-shaped successor blocks we
+        # just wrote — i.e. MapChain.walk must parse successors with
+        # is_head=False.
+        adfs, afs = self._fragment_and_write_chained_file()
+        afs.flush()
+        afs2 = adfs.afs_partition
+        readback = (afs2.root / "Huge").read_bytes()
+        assert readback == bytes(i & 0xFF for i in range(400 * 256))

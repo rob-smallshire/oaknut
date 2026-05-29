@@ -13,8 +13,19 @@ On-disc layout (256 bytes, little-endian throughout, per
 ======  =========================================================
 Offset  Meaning
 ======  =========================================================
-  0-5   Magic ``'JesMap'`` (on disc). In memory the server
-        replaces these bytes with ``BLKSN`` / ``BLKNO``.
+  0-5   Magic ``'JesMap'`` on a **head** map block (one whose SIN
+        is referenced from a directory entry or info sector).
+        Zero on a **successor** map block (the second and later
+        blocks of a >48-extent chain). The magic is written only
+        by ``MPCRSP`` (``Uade10.asm:235-242``), which runs on the
+        initial map block of a freshly-created object. ``MKRLN``
+        (``Uade12.asm:160-242``), which allocates successor
+        blocks during chain growth, zeroes the cache buffer via
+        ``CLRSTR`` and never overwrites bytes 0..5, so successors
+        land on disc with zeros there. The ROM read path
+        (``MPGTSZ`` / ``RDMPBK``) inspects neither the magic nor
+        any structured fields at 0..5 — those bytes simply do not
+        participate in reading.
     6   Map sequence number (leading copy, ``MBSQNO``)
     7   Reserved flags byte (``MGFLG``, always zero)
   8-9   Bytes-in-last-block, 16-bit LE (``BILB``). Only the
@@ -40,6 +51,14 @@ past 48 extents. The read path at ``Uade13.asm:462-533``
 as a chain pointer, loads the successor block via ``RDMPBK``,
 and restarts the extent walk. So the maximum data extents per
 map block is **48**, not 49.
+
+Because the magic is head-only, :meth:`MapSector.to_bytes` and
+:meth:`MapSector.from_bytes` take an ``is_head`` flag. The flag
+defaults to ``True`` for the common head-only case; chain walkers
+and writers of multi-block chains must pass ``is_head=False`` for
+each successor block. :class:`MapChain.walk` handles this
+automatically — it parses the first block as a head and every
+subsequent block as a successor.
 
 Terminating a chain uses a zero start-sector, either in a slot
 0..47 (file ended mid-block) or at slot 48 (file exactly fills
@@ -250,10 +269,21 @@ class MapSector:
     # Serialisation
     # ------------------------------------------------------------------
 
-    def to_bytes(self) -> bytes:
-        """Serialise to the 256-byte on-disc form."""
+    def to_bytes(self, *, is_head: bool = True) -> bytes:
+        """Serialise to the 256-byte on-disc form.
+
+        ``is_head`` controls whether the ``'JesMap'`` magic is written
+        at offsets 0..5. Pass ``True`` (the default) for a head block
+        — one whose SIN is referenced from a directory entry or the
+        info sector. Pass ``False`` for a successor block reached via
+        slot 48 of a prior block in a chain; successor blocks land on
+        disc with zeros at 0..5 because the ROM's ``MKRLN`` path
+        (``Uade12``) clears the cache buffer via ``CLRSTR`` and never
+        invokes the magic-write loop. See ``docs/dev/afs-onwire.md``.
+        """
         buf = bytearray(MAP_SECTOR_SIZE)
-        buf[_OFF_MAGIC : _OFF_MAGIC + len(MAGIC)] = MAGIC
+        if is_head:
+            buf[_OFF_MAGIC : _OFF_MAGIC + len(MAGIC)] = MAGIC
         buf[_OFF_SEQ_LEADING] = self.sequence_number
         buf[_OFF_LAST_SECTOR_BYTES : _OFF_LAST_SECTOR_BYTES + 2] = self.last_sector_bytes.to_bytes(
             2, "little"
@@ -280,16 +310,28 @@ class MapSector:
         cls,
         data: bytes,
         sin: SystemInternalName,
+        *,
+        is_head: bool = True,
     ) -> MapSector:
         """Parse a map sector's 256 bytes.
 
         The caller must supply the SIN that was used to locate this
         sector — we cannot recover it from the bytes alone and it's
         needed on the returned object so upper layers can re-read it.
+
+        ``is_head`` controls whether the ``'JesMap'`` magic is checked
+        at offsets 0..5. Pass ``True`` (the default) when the SIN
+        comes from a directory entry or the info sector — the magic
+        is the cheapest on-disc corruption check available for a head
+        block. Pass ``False`` when this block was reached as a
+        successor via slot 48 of a prior block in a chain: real
+        L3FS-server-written successor blocks carry zero at 0..5
+        because the ROM's ``MKRLN`` path never writes the magic on
+        them. See ``docs/dev/afs-onwire.md``.
         """
         if len(data) != MAP_SECTOR_SIZE:
             raise AFSBrokenMapError(f"map sector must be {MAP_SECTOR_SIZE} bytes, got {len(data)}")
-        if data[_OFF_MAGIC : _OFF_MAGIC + len(MAGIC)] != MAGIC:
+        if is_head and data[_OFF_MAGIC : _OFF_MAGIC + len(MAGIC)] != MAGIC:
             raise AFSBrokenMapError(
                 f"bad map magic: {bytes(data[_OFF_MAGIC : _OFF_MAGIC + len(MAGIC)])!r} != {MAGIC!r}"
             )
@@ -356,10 +398,14 @@ class MapSector:
 #: Given an absolute sector address, return its 256 bytes.
 SectorReader = Callable[[Sector], bytes]
 
-#: Signature of a "read a map block" callback: given a SIN, return the
-#: parsed :class:`MapSector` at that address. Usually implemented by
-#: :meth:`oaknut.afs.afs.AFS._read_map_sector`.
-MapBlockReader = Callable[[SystemInternalName], "MapSector"]
+#: Signature of a "read a map block" callback: given a SIN and a
+#: head-vs-successor flag, return the parsed :class:`MapSector` at
+#: that address. ``MapChain.walk`` passes ``True`` for the first
+#: block in the chain and ``False`` for every link, so that the
+#: parser can skip the ``'JesMap'`` magic check on successors (real
+#: L3FS-server-written successors carry zero at offsets 0..5). Usually
+#: implemented by :meth:`oaknut.afs.afs.AFS._read_map_sector`.
+MapBlockReader = Callable[[SystemInternalName, bool], "MapSector"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -395,20 +441,27 @@ class MapChain:
         """Walk the chain starting at ``head_sin``, reading each block.
 
         ``read_map`` is the SIN→MapSector dereferencer — the AFS
-        handle supplies it. Raises :class:`AFSBrokenMapError` if a
-        cycle is detected.
+        handle supplies it. The walker passes ``is_head=True`` to the
+        first call (the directory-referenced head block) and
+        ``is_head=False`` to every subsequent call (chain-followed
+        successors), so the parser can skip the magic check on the
+        successors that the ROM writes without it.
+
+        Raises :class:`AFSBrokenMapError` if a cycle is detected.
         """
         blocks: list[MapSector] = []
         seen: set[int] = set()
         current_sin: Optional[SystemInternalName] = head_sin
+        is_head = True
         while current_sin is not None:
             sin_int = int(current_sin)
             if sin_int in seen:
                 raise AFSBrokenMapError(f"cycle in map chain at sin {sin_int:#x}")
             seen.add(sin_int)
-            block = read_map(current_sin)
+            block = read_map(current_sin, is_head)
             blocks.append(block)
             current_sin = block.next_sin
+            is_head = False
         return cls(tuple(blocks))
 
     # ------------------------------------------------------------------

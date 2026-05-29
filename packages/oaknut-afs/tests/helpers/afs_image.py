@@ -349,11 +349,15 @@ def build_synthetic_adfs_with_afs(
 
     # Chained map files: walk each chain forward, writing each map
     # block's extents + data sectors. The chain pointer in each
-    # non-final block's slot 48 points at the next block's SIN.
+    # non-final block's slot 48 points at the next block's SIN. Only
+    # the head block (index 0) carries the JesMap magic; successor
+    # blocks land on disc with zeros at offsets 0..5 to match the
+    # ROM's MKRLN successor-allocation path.
     for chain, block_sins, per_block_sectors in chain_slots:
         total_sectors_so_far = 0
         for block_index, (block_sin, sector_list) in enumerate(zip(block_sins, per_block_sectors)):
             is_last = block_index == len(block_sins) - 1
+            is_head_block = block_index == 0
             extents = tuple(Extent(start=s, length=1) for s in sector_list)
             # Only the final block carries the meaningful BILB.
             bilb = chain.last_sector_bytes if is_last else 0
@@ -364,7 +368,7 @@ def build_synthetic_adfs_with_afs(
                 last_sector_bytes=bilb,
                 next_sin=next_sin,
             )
-            write_sector(block_sin, map_block.to_bytes())
+            write_sector(block_sin, map_block.to_bytes(is_head=is_head_block))
             for local_idx, sector_addr in enumerate(sector_list):
                 logical_index = total_sectors_so_far + local_idx
                 write_sector(sector_addr, chain.sector_content(logical_index))

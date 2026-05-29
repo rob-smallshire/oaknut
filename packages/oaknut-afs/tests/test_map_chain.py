@@ -13,6 +13,10 @@ These tests build synthetic map block bytes directly and exercise:
 - :class:`ExtentStream` reading bytes across chain boundaries.
 - The BILB field (``last_sector_bytes``) being picked up from the
   final block only.
+- Head vs successor magic handling: head blocks carry ``'JesMap'`` at
+  offset 0; successor blocks carry zeros there per the ROM behaviour
+  documented in ``docs/dev/afs-onwire.md`` and ``Uade12``'s MKRLN
+  successor-allocation path.
 """
 
 from __future__ import annotations
@@ -111,7 +115,7 @@ class TestMapSectorChainRoundTrip:
 
 class TestMapChainWalk:
     def _make_chain_reader(self, blocks: dict[int, MapSector]):
-        def reader(sin: SystemInternalName) -> MapSector:
+        def reader(sin: SystemInternalName, _is_head: bool) -> MapSector:
             return blocks[int(sin)]
 
         return reader
@@ -217,3 +221,182 @@ class TestExtentStreamAcrossChain:
         stream = ExtentStream(block, reader)
         assert stream.size == 10
         assert stream.read_all() == b"x" * 10
+
+
+class TestSuccessorMagic:
+    """Successor map blocks carry zero at offsets 0..5, not ``'JesMap'``.
+
+    The ROM only writes the magic on the initial (head) block of an
+    object via ``MPCRSP`` (Uade10:235-242). ``MKRLN`` (Uade12), which
+    allocates successor blocks during chain growth, clears the cache
+    buffer via ``CLRSTR`` and never invokes the magic-write loop, so
+    bytes 0..5 of a successor block land on disc as zero. Our writer
+    must match that, and our reader must accept it.
+    """
+
+    def _rom_shaped_successor(
+        self,
+        *,
+        first_extent_start: int = 0x9000,
+        first_extent_length: int = 3,
+        last_sector_bytes: int = 17,
+        sequence_number: int = 1,
+    ) -> bytes:
+        """Hand-build a ROM-shaped successor map block.
+
+        Layout: zeros at 0..5 (no magic), MBSQNO at 6, BILB at 8-9,
+        one extent at slot 0, zeros for slots 1..48, LSTSQ at 255.
+        """
+        raw = bytearray(MAP_SECTOR_SIZE)
+        raw[6] = sequence_number  # MBSQNO
+        raw[8:10] = last_sector_bytes.to_bytes(2, "little")
+        raw[10:13] = first_extent_start.to_bytes(3, "little")
+        raw[13:15] = first_extent_length.to_bytes(2, "little")
+        raw[255] = sequence_number  # LSTSQ
+        return bytes(raw)
+
+    # --- to_bytes side ---------------------------------------------
+
+    def test_head_block_serialises_with_magic(self) -> None:
+        block = _block(0x100, [(0x200, 3)], last_sector_bytes=17)
+        raw = block.to_bytes(is_head=True)
+        assert raw[0:6] == b"JesMap"
+
+    def test_head_block_serialises_with_magic_by_default(self) -> None:
+        # Default of is_head=True keeps the public API stable for
+        # callers that haven't switched yet.
+        block = _block(0x100, [(0x200, 3)])
+        raw = block.to_bytes()
+        assert raw[0:6] == b"JesMap"
+
+    def test_successor_block_serialises_without_magic(self) -> None:
+        block = _block(0x101, [(0x9000, 3)], last_sector_bytes=17)
+        raw = block.to_bytes(is_head=False)
+        assert raw[0:6] == b"\x00\x00\x00\x00\x00\x00"
+
+    def test_successor_block_preserves_other_fields(self) -> None:
+        block = _block(
+            0x101,
+            [(0x9000, 3)],
+            last_sector_bytes=17,
+            sequence_number=4,
+        )
+        raw = block.to_bytes(is_head=False)
+        # MBSQNO at 6 and LSTSQ at 255 still set.
+        assert raw[6] == 4
+        assert raw[255] == 4
+        # BILB at 8-9 still set.
+        assert int.from_bytes(raw[8:10], "little") == 17
+        # Extent slot 0 at offset 10.
+        assert int.from_bytes(raw[10:13], "little") == 0x9000
+        assert int.from_bytes(raw[13:15], "little") == 3
+
+    # --- from_bytes side -------------------------------------------
+
+    def test_successor_block_parses_with_zero_magic(self) -> None:
+        # The ROM writes successors with zeros at 0..5. Our parser
+        # must accept that when told it's a successor.
+        raw = self._rom_shaped_successor()
+        parsed = MapSector.from_bytes(
+            raw,
+            SystemInternalName(0x101),
+            is_head=False,
+        )
+        assert parsed.extents == (Extent(Sector(0x9000), 3),)
+        assert parsed.last_sector_bytes == 17
+        assert parsed.sequence_number == 1
+        assert parsed.next_sin is None
+
+    def test_head_block_rejects_missing_magic(self) -> None:
+        # When parsing as a head, the magic check is the cheapest
+        # corruption detector we have and must still fire.
+        raw = bytearray(self._rom_shaped_successor())
+        # Even with is_head=True (default), zeros at 0..5 must reject.
+        with pytest.raises(AFSBrokenMapError, match="bad map magic"):
+            MapSector.from_bytes(bytes(raw), SystemInternalName(0x100))
+
+    def test_head_block_rejects_wrong_magic(self) -> None:
+        raw = bytearray(_block(0x100, [(0x200, 1)]).to_bytes())
+        raw[0:6] = b"GARBAG"
+        with pytest.raises(AFSBrokenMapError, match="bad map magic"):
+            MapSector.from_bytes(bytes(raw), SystemInternalName(0x100))
+
+    def test_successor_block_tolerates_any_bytes_at_0_to_5(self) -> None:
+        # Whatever lives at 0..5 on a successor must not block the
+        # parse — the ROM never inspects those bytes either. We
+        # check with both the all-zero ROM shape and a stale-magic
+        # shape (in case a tool wrote magic there).
+        raw_stale_magic = bytearray(self._rom_shaped_successor())
+        raw_stale_magic[0:6] = b"JesMap"
+        parsed = MapSector.from_bytes(
+            bytes(raw_stale_magic),
+            SystemInternalName(0x101),
+            is_head=False,
+        )
+        assert parsed.extents == (Extent(Sector(0x9000), 3),)
+
+    # --- end-to-end via MapChain.walk ------------------------------
+
+    def test_walk_accepts_rom_shaped_chain(self) -> None:
+        # The whole point: a head block with magic + a successor
+        # block with zero magic, parsed through MapChain.walk, must
+        # produce the expected two-block chain.
+        head_extents = [(0x1000 + i * 4, 1) for i in range(48)]
+        head_block = _block(0x100, head_extents, next_sin=0x101)
+        head_raw = head_block.to_bytes(is_head=True)
+        assert head_raw[0:6] == b"JesMap"
+
+        successor_raw = self._rom_shaped_successor(
+            first_extent_start=0x9000,
+            first_extent_length=2,
+            last_sector_bytes=0,
+        )
+
+        raw_by_sin = {0x100: head_raw, 0x101: successor_raw}
+
+        def read_sector(sin: int) -> bytes:
+            return raw_by_sin[sin]
+
+        # Walk through the AFS-style callable signature: parses with
+        # is_head=True for the head, is_head=False for each link.
+        def read_map(sin: SystemInternalName, is_head: bool) -> MapSector:
+            return MapSector.from_bytes(read_sector(int(sin)), sin, is_head=is_head)
+
+        chain = MapChain.walk(SystemInternalName(0x100), read_map)
+        assert len(chain.blocks) == 2
+        assert chain.blocks[1].extents == (Extent(Sector(0x9000), 2),)
+
+
+class TestWriterRoundTripsROMShape:
+    """When we write a chained object, the bytes hitting disc must
+    match the ROM's layout: magic on the head, zero on each successor.
+    """
+
+    def test_two_block_round_trip_via_full_serialise(self) -> None:
+        head_extents = [(0x1000 + i * 4, 1) for i in range(48)]
+        head_block = _block(0x100, head_extents, next_sin=0x101)
+        tail_block = _block(0x101, [(0x9000, 2)], last_sector_bytes=0)
+
+        head_raw = head_block.to_bytes(is_head=True)
+        tail_raw = tail_block.to_bytes(is_head=False)
+
+        # Head: magic present.
+        assert head_raw[0:6] == b"JesMap"
+        # Tail: magic absent.
+        assert tail_raw[0:6] == b"\x00" * 6
+
+        # Round-trip both via the appropriate is_head, end-to-end:
+        # MapChain.walk through a reader that parses the raw bytes.
+        raw_by_sin = {0x100: head_raw, 0x101: tail_raw}
+
+        def read_map(sin: SystemInternalName, is_head: bool) -> MapSector:
+            return MapSector.from_bytes(
+                raw_by_sin[int(sin)],
+                sin,
+                is_head=is_head,
+            )
+
+        chain = MapChain.walk(SystemInternalName(0x100), read_map)
+        assert len(chain.blocks) == 2
+        assert chain.blocks[0] == head_block
+        assert chain.blocks[1] == tail_block

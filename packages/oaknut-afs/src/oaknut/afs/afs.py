@@ -457,9 +457,13 @@ class AFS:
             )
         return InfoSectorPair.from_bytes_pair(primary_bytes, secondary_bytes).agreed
 
-    def _read_map_sector(self, sin: SystemInternalName) -> MapSector:
+    def _read_map_sector(
+        self,
+        sin: SystemInternalName,
+        is_head: bool = True,
+    ) -> MapSector:
         data = self._read_sector(int(sin))
-        return MapSector.from_bytes(data, sin)
+        return MapSector.from_bytes(data, sin, is_head=is_head)
 
     def _read_map_chain(self, head_sin: SystemInternalName) -> MapChain:
         """Walk a map chain starting at ``head_sin``, returning the
@@ -680,6 +684,12 @@ class AFS:
             else:
                 merged.append(extent)
 
+        # The block we're rewriting is the head of the chain only when
+        # the chain is one block long; otherwise it's an existing
+        # successor whose on-disc bytes 0..5 must stay zero to match
+        # the ROM's MKRLN output (see afs-onwire.md).
+        last_is_head = len(chain.blocks) == 1
+
         if len(merged) <= _MAX_DATA_EXTENTS:
             new_last = MapSector(
                 sin=last_block.sin,
@@ -688,7 +698,9 @@ class AFS:
                 sequence_number=(last_block.sequence_number + 1) & 0xFF,
                 next_sin=last_block.next_sin,
             )
-            self._write_sector(int(last_block.sin), new_last.to_bytes())
+            self._write_sector(
+                int(last_block.sin), new_last.to_bytes(is_head=last_is_head)
+            )
         else:
             # Overflow: keep the first 48 in the current block and
             # spill the rest into a freshly-allocated successor.
@@ -702,7 +714,9 @@ class AFS:
                 sequence_number=(last_block.sequence_number + 1) & 0xFF,
                 next_sin=successor_sin,
             )
-            self._write_sector(int(last_block.sin), updated_last.to_bytes())
+            self._write_sector(
+                int(last_block.sin), updated_last.to_bytes(is_head=last_is_head)
+            )
             successor = MapSector(
                 sin=successor_sin,
                 extents=tuple(spill),
@@ -710,7 +724,7 @@ class AFS:
                 sequence_number=0,
                 next_sin=None,
             )
-            self._write_sector(int(successor_sin), successor.to_bytes())
+            self._write_sector(int(successor_sin), successor.to_bytes(is_head=False))
 
         self._bitmap_shadow().flush()
         return chain.total_sectors() + additional_sectors
@@ -841,9 +855,13 @@ class AFS:
 
         last_sector_bytes = len(data) % MAP_SECTOR_SIZE
 
-        # Build and write each map block.
+        # Build and write each map block. Only the first block of a
+        # chain is a head and carries the 'JesMap' magic; every
+        # successor lands on disc with zeros at offsets 0..5, matching
+        # the ROM's MKRLN successor-allocation path.
         for i, (sin, chunk) in enumerate(zip(block_sins, chunks)):
             is_last = i == n_blocks - 1
+            is_head = i == 0
             next_sin = None if is_last else block_sins[i + 1]
             block = MapSector(
                 sin=sin,
@@ -852,7 +870,7 @@ class AFS:
                 sequence_number=0,
                 next_sin=next_sin,
             )
-            self._write_sector(int(sin), block.to_bytes())
+            self._write_sector(int(sin), block.to_bytes(is_head=is_head))
 
         # Write data sectors (tail-padded if needed).
         cursor = 0
