@@ -237,7 +237,9 @@ class TestDFSPathWalk:
         nameless_step = steps[0]
         nameless_path, nameless_dirs, nameless_files = nameless_step
         assert nameless_path.path == ""
-        assert nameless_dirs == ["$", "A", "Z"]
+        # Directory letters surface in catalogue order (descending start
+        # sector); walk promises every letter, not a particular order.
+        assert sorted(nameless_dirs) == ["$", "A", "Z"]
         assert nameless_files == []
 
         letter_steps = steps[1:]

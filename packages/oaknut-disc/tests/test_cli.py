@@ -1589,23 +1589,6 @@ class TestCpStorageOrder:
             placed = [(p.stat().start_sector, p.name) for p in dfs.path("$").iterdir()]
         return [name for _, name in sorted(placed)]
 
-    @staticmethod
-    def _reverse_catalogue(filepath: Path) -> None:
-        """Reverse the catalogue slot order in place, leaving file data put.
-
-        Turns an oaknut-authored (ascending) catalogue into the
-        descending-start-sector order a real BBC writes, so enumeration
-        order becomes the reverse of physical order — the bug's trigger.
-        """
-        data = bytearray(filepath.read_bytes())
-        num_files = data[256 + 5] // 8
-        for base in (0, 256):  # the two catalogue sectors hold parallel halves
-            start = base + 8
-            records = [bytes(data[start + i * 8 : start + (i + 1) * 8]) for i in range(num_files)]
-            records.reverse()
-            data[start : start + num_files * 8] = b"".join(records)
-        filepath.write_bytes(data)
-
     def test_multi_file_copy_preserves_on_disc_order(
         self, runner: CliRunner, tmp_path: Path, dfs_empty_filepath: Path
     ) -> None:
@@ -1619,12 +1602,11 @@ class TestCpStorageOrder:
             (dfs.root / "$.GAME").write_bytes(b"g" * 400)
         assert self._physical_order(source) == ["BOOT", "LOADER", "GAME"]
 
-        self._reverse_catalogue(source)
-        # Precondition: enumeration order is now the reverse of physical
-        # order, exactly the situation a real DFS disc presents.
+        # Precondition: the catalogue is stored highest-sector-first (as a
+        # real DFS does), so enumeration order is the reverse of physical
+        # order — exactly the situation that a naive copy reverses.
         with DFS.from_file(source) as dfs:
             assert [p.name for p in dfs.path("$").iterdir()] == ["GAME", "LOADER", "BOOT"]
-        assert self._physical_order(source) == ["BOOT", "LOADER", "GAME"]
 
         result = runner.invoke(cli, ["cp", f"{source}:$.*", f"{dfs_empty_filepath}:$/"])
         assert result.exit_code == 0, result.output

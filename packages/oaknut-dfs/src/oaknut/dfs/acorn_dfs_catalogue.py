@@ -367,45 +367,19 @@ class AcornDFSCatalogue(Catalogue):
         if disc_info.num_files >= self.MAX_FILES:
             raise CatalogFullError(f"Catalog full (max {self.MAX_FILES} files)")
 
-        # Get catalog sectors individually
-        sector0 = self._surface.sector_range(0, 1)
-        sector1 = self._surface.sector_range(1, 1)
-
-        # Write to next available entry slot
-        entry_offset = 8 + (disc_info.num_files * 8)
-
-        # Write filename and directory to sector 0
-        filename_padded = filename.ljust(7)
-        sector0[entry_offset : entry_offset + 7] = filename_padded.encode("acorn")
-        dir_byte = ord(directory) & 0x7F
-        if locked:
-            dir_byte |= 0x80
-        sector0[entry_offset + 7] = dir_byte
-
-        # Write addresses/length/sector to sector 1
-        sector1_offset = entry_offset
-        sector1[sector1_offset] = load_address & 0xFF
-        sector1[sector1_offset + 1] = (load_address >> 8) & 0xFF
-        sector1[sector1_offset + 2] = exec_address & 0xFF
-        sector1[sector1_offset + 3] = (exec_address >> 8) & 0xFF
-        sector1[sector1_offset + 4] = length & 0xFF
-        sector1[sector1_offset + 5] = (length >> 8) & 0xFF
-
-        # Pack high bits into extra byte
-        extra_byte = (
-            ((start_sector >> 8) & 0x03)
-            | (((load_address >> 16) & 0x03) << 2)
-            | (((length >> 16) & 0x03) << 4)
-            | (((exec_address >> 16) & 0x03) << 6)
+        # Rebuild the catalogue with the new entry folded in. The rebuild
+        # owns slot order (descending start sector) and the bit packing, so
+        # add and remove cannot drift apart.
+        new_entry = FileEntry(
+            filename=filename,
+            directory=directory,
+            locked=locked,
+            load_address=load_address,
+            exec_address=exec_address,
+            length=length,
+            start_sector=start_sector,
         )
-        sector1[sector1_offset + 6] = extra_byte
-        sector1[sector1_offset + 7] = start_sector & 0xFF
-
-        # Update metadata: increment file count and cycle number
-        sector1[5] = (disc_info.num_files + 1) * 8
-        sector1[4] = (disc_info.cycle_number + 1) & 0xFF
-
-        # Sectors are already writable memoryviews - changes are persisted
+        self._rebuild_catalog([*self.list_files(), new_entry])
 
     def remove_file_entry(self, filename: str) -> None:
         """Remove file from catalog, rebuild catalog."""
@@ -424,7 +398,14 @@ class AcornDFSCatalogue(Catalogue):
         self._rebuild_catalog(files)
 
     def _rebuild_catalog(self, files: list[FileEntry]) -> None:
-        """Rebuild catalog sectors from file list."""
+        """Rebuild catalog sectors from file list.
+
+        Entries are stored in descending start-sector order, the
+        convention a real Acorn DFS keeps: the file in the highest sectors
+        is the first catalogue entry, the one in the lowest (often
+        ``!BOOT``) the last. The caller's ordering of *files* does not
+        matter — physical position alone fixes the slot order.
+        """
         # Clear catalog sectors
         sector0 = self._surface.sector_range(0, 1)
         sector1 = self._surface.sector_range(1, 1)
@@ -442,8 +423,8 @@ class AcornDFSCatalogue(Catalogue):
         sector0[0:8] = title_part1.encode("acorn")
         sector1[0:4] = title_part2.encode("acorn")
 
-        # Write each file entry
-        for i, entry in enumerate(files):
+        # Write each file entry, highest start sector first.
+        for i, entry in enumerate(sorted(files, key=lambda f: f.start_sector, reverse=True)):
             entry_offset = 8 + (i * 8)
 
             # Write filename and directory to sector 0
@@ -466,7 +447,7 @@ class AcornDFSCatalogue(Catalogue):
             # Pack high bits into extra byte
             extra_byte = (
                 ((entry.start_sector >> 8) & 0x03)
-                | (((entry.load_address >> 14) & 0x03) << 2)
+                | (((entry.load_address >> 16) & 0x03) << 2)
                 | (((entry.length >> 16) & 0x03) << 4)
                 | (((entry.exec_address >> 16) & 0x03) << 6)
             )
@@ -729,6 +710,11 @@ class AcornDFSCatalogue(Catalogue):
         if not files:
             return 0
 
+        # Lay files down in physical order so a plain compaction preserves
+        # their relative positions (the stored catalogue is descending, so
+        # its own order must not drive the lay-down). An explicit order then
+        # promotes the named files ahead of the rest.
+        files = sorted(files, key=lambda f: f.start_sector)
         if order:
             files = self._ordered_files(files, order)
 

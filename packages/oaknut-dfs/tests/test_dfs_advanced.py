@@ -250,10 +250,10 @@ class TestCompaction:
         # Should move FILE3 to fill the gap
         assert moved == 2  # Both files rewritten
 
-        # Verify files are sequential now
+        # Verify files are sequential now (no gap); catalogue slot order is
+        # by descending start sector, so compare the sector set, not slots.
         files = dfs.files
-        assert files[0].start_sector == 2
-        assert files[1].start_sector == 3  # No more gap
+        assert sorted(f.start_sector for f in files) == [2, 3]
 
         # Verify data is intact
         assert (dfs.root / "$" / "FILE1").read_bytes() == b"A" * 256
@@ -383,3 +383,55 @@ class TestCompaction:
         dfs.compact(order=["BOOT"])
         placed = sorted(dfs.files, key=lambda f: f.start_sector)
         assert placed[0].path == "$.BOOT"
+
+
+class TestCatalogueOrdering:
+    """Real Acorn DFS stores catalogue entries in descending start-sector
+    order: entry 0 is the highest sector, and the file in the lowest
+    sectors (often ``!BOOT``) is the last entry. oaknut matches it so the
+    bytes it writes are those a real machine would.
+    """
+
+    def _disc(self):
+        buffer = bytearray(102400)
+        buffer[0:8] = b"DISK    "
+        buffer[263] = 200
+        return DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
+
+    def test_entries_descending_by_start_sector(self):
+        dfs = self._disc()
+        (dfs.root / "$" / "BOOT").write_bytes(b"b" * 100)  # sector 2
+        (dfs.root / "$" / "LOADER").write_bytes(b"l" * 100)  # sector 3
+        (dfs.root / "$" / "GAME").write_bytes(b"g" * 100)  # sector 4
+        sectors = [f.start_sector for f in dfs.files]
+        assert sectors == sorted(sectors, reverse=True)
+        # The first-written, lowest-sector file is the last catalogue entry.
+        assert dfs.files[0].path == "$.GAME"
+        assert dfs.files[-1].path == "$.BOOT"
+
+    def test_order_stays_descending_after_remove(self):
+        dfs = self._disc()
+        for name in ("A", "B", "C", "D"):
+            (dfs.root / "$" / name).write_bytes(name.encode() * 100)
+        (dfs.root / "$" / "B").unlink()
+        sectors = [f.start_sector for f in dfs.files]
+        assert sectors == sorted(sectors, reverse=True)
+
+    def test_order_stays_descending_after_compact(self):
+        dfs = self._disc()
+        (dfs.root / "$" / "A").write_bytes(b"a" * 100)
+        (dfs.root / "$" / "B").write_bytes(b"b" * 100)
+        (dfs.root / "$" / "C").write_bytes(b"c" * 100)
+        (dfs.root / "$" / "B").unlink()
+        dfs.compact()
+        sectors = [f.start_sector for f in dfs.files]
+        assert sectors == sorted(sectors, reverse=True)
+
+    def test_high_load_address_survives_catalogue_rebuild(self):
+        # Bits 16-17 of the load address live in the entry's extra byte; a
+        # rebuild (here triggered by a delete) must preserve them.
+        dfs = self._disc()
+        (dfs.root / "$" / "PROG").write_bytes(b"p" * 100, load_address=0x30000)
+        (dfs.root / "$" / "TEMP").write_bytes(b"t" * 100)
+        (dfs.root / "$" / "TEMP").unlink()
+        assert (dfs.root / "$" / "PROG").stat().load_address == 0x30000

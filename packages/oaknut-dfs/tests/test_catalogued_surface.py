@@ -174,15 +174,15 @@ class TestCataloguedSurfaceWriteFile:
             exec_address=0,
         )
 
-        # Verify both files exist
+        # Verify both files exist (catalogue slot order is by descending
+        # start sector, so address the entries by name, not position).
         files = catalogued.list_files()
         assert len(files) == 2
-        assert files[0].filename == "FILE1"
-        assert files[0].start_sector == 2
-        assert files[0].sectors_required == 1
-        assert files[1].filename == "FILE2"
-        assert files[1].start_sector == 3  # After FILE1
-        assert files[1].sectors_required == 2
+        by_name = {f.filename: f for f in files}
+        assert by_name["FILE1"].start_sector == 2
+        assert by_name["FILE1"].sectors_required == 1
+        assert by_name["FILE2"].start_sector == 3  # After FILE1
+        assert by_name["FILE2"].sectors_required == 2
 
 
 class TestCataloguedSurfaceDeleteFile:

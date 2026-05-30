@@ -1018,6 +1018,10 @@ class WatfordDFSCatalogue(Catalogue):
         if not files:
             return 0
 
+        # Lay files down in physical order so a plain compaction preserves
+        # their relative positions; an explicit order promotes the named
+        # files ahead of the rest.
+        files = sorted(files, key=lambda f: f.start_sector)
         if order:
             files = self._ordered_files(files, order)
 
