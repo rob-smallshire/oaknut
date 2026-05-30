@@ -150,15 +150,19 @@ anything.
    read core plus `AcornMetadata` and `Titled`; the write surface gated on
    `is_plain`.
 6. ✅ Entry point wired; `disc identify` / `disc ls` confirmed end-to-end.
-7. ⬜ **Creation** (`disc create --filesystem romfs`): emit a fresh ROM.
-   Optionally bundle a small canned service handler that answers service
-   call `&09` to print a user-settable `*HELP` message (essentially the
-   ROM's title) — turning a created image into a friendly composite ROM
-   rather than a bare filing system. Until then `create` is unimplemented
-   and `creates` stays empty (ROMFS is reached only via `--filesystem`).
-8. ⬜ Optional `disc romfs` admin subcommands (`oaknut.command` axis).
+7. ✅ **Creation** (`disc create foo.rom`): a service-only `&82` header, the
+   `&0D`/`&0E` handler plus a `&09` `*HELP` responder printing the title,
+   a `*title*` block, and padding; 8/16 KiB; `creates = {".rom"}`. The
+   handler runs in a 6502 emulator. `StatusReporting` flags read-only ROMs
+   in `disc stat`.
+8. ✅ `disc romfs` admin subcommands (`oaknut.command` axis): get-/set-
+   copyright and get-/set-version, querying and mutating an existing
+   image's header (set-copyright rebuilds on a length change, for a
+   created-style ROM only).
 9. ⬜ BBC BASIC detokenisation for files stored as tokenised BASIC
    (mirroring the DFS package), once a use-case needs it.
+10. ⬜ Multi-ROM **spanning** reassembler — deferred until a genuine
+    spanning example exists (§7 of the format spec).
 
 ## Test data
 
