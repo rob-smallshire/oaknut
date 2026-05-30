@@ -618,17 +618,17 @@ Control storage order to manage seek times
 ------------------------------------------
 
 A floppy drive — and an emulator faithful to one — seeks from file to
-file as a game loads, so the order files lie in on the disc decides how
-much the head travels. The fast arrangement puts the files a boot loads
-first in the low-numbered sectors, where the head already is.
+file as they are read, so the order files lie in on the disc decides how
+much the head travels. The fast arrangement keeps the files read first —
+a boot file, a loader, opening data — in the low-numbered sectors, where
+the head starts out.
 
 The ``disc storage-order`` command reports this physical order — the
-sequence a sequential read encounters the files, and the order they load
-in:
+files in the order they lie on the disc, from the lowest sector up:
 
 .. cli-example:: storage_order_seek_times
 
-Here a 10K game file sits in the lowest sectors, so reaching ``!BOOT``
+Here a big 10K file sits in the lowest sectors, so reaching ``!BOOT``
 means seeking across the whole disc before loading can even begin.
 ``disc compact --order`` rewrites the layout, laying the named files down
 first, in the lowest sectors; every file it does not name follows in its
