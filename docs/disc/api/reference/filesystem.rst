@@ -92,6 +92,12 @@ protocol.
 .. autoclass:: oaknut.filesystem.StorageOrdered
    :members:
 
+.. autoclass:: oaknut.filesystem.WildcardMatching
+   :members:
+
+.. autoclass:: oaknut.filesystem.WildcardSyntax
+   :members:
+
 .. autoclass:: oaknut.filesystem.UserDatabase
    :members:
 

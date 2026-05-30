@@ -33,6 +33,8 @@ from oaknut.filesystem.capabilities import (
     Titled,
     UserDatabase,
     Validatable,
+    WildcardMatching,
+    WildcardSyntax,
 )
 from oaknut.filesystem.coordinator import (
     create_filesystem,
@@ -99,6 +101,8 @@ __all__ = [
     "RegionHost",
     "StatusReporting",
     "StorageOrdered",
+    "WildcardMatching",
+    "WildcardSyntax",
     # geometry
     "Geometry",
     "GeometryGrammar",

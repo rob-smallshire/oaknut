@@ -351,3 +351,51 @@ class StorageOrdered(Protocol):
     def storage_key(self, path: str) -> "SupportsRichComparison":
         """An opaque, sortable key for *path*'s position on the medium."""
         ...
+
+
+@dataclass(frozen=True)
+class WildcardSyntax:
+    """A filesystem's filename-wildcard vocabulary, for help and errors.
+
+    Each pair is ``(metacharacter, what it matches)`` — Acorn filing
+    systems use ``*`` and ``#``; a DOS/FAT filesystem uses ``*`` and
+    ``?``. This carries only the human-facing description; the matching
+    itself is :meth:`WildcardMatching.matches`, since a syntax like DOS
+    8.3 is more than a choice of metacharacters.
+    """
+
+    metacharacters: tuple[tuple[str, str], ...]
+
+    @property
+    def chars(self) -> str:
+        """Just the metacharacters, e.g. ``"*#"`` — for detecting a pattern."""
+        return "".join(char for char, _meaning in self.metacharacters)
+
+    def summary(self) -> str:
+        """A one-line gloss, e.g. ``"* (any sequence), # (one character)"``."""
+        return ", ".join(f"{char} ({meaning})" for char, meaning in self.metacharacters)
+
+
+@runtime_checkable
+class WildcardMatching(Protocol):
+    """The filesystem owns its filename wildcard syntax and matching.
+
+    Acorn filing systems glob with ``*`` and ``#``, and ``?`` is an
+    ordinary filename character; a DOS/FAT filesystem globs with ``*`` and
+    ``?``. The CLI defers to the mount so a pattern is read in the
+    filesystem's own terms, falling back to a Unix default (``*`` / ``?``)
+    for a mount that does not implement this.
+    """
+
+    @property
+    def wildcard_syntax(self) -> WildcardSyntax:
+        """This filesystem's wildcard vocabulary, for help and diagnostics."""
+        ...
+
+    def is_pattern(self, name: str) -> bool:
+        """Whether *name* contains any wildcard metacharacter of this syntax."""
+        ...
+
+    def matches(self, pattern: str, name: str) -> bool:
+        """Whether *name* matches the wildcard *pattern* under this syntax."""
+        ...
