@@ -86,6 +86,9 @@ protocol.
 .. autoclass:: oaknut.filesystem.Validatable
    :members:
 
+.. autoclass:: oaknut.filesystem.StatusReporting
+   :members:
+
 .. autoclass:: oaknut.filesystem.UserDatabase
    :members:
 
