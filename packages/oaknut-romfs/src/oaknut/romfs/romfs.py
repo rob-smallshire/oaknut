@@ -345,6 +345,21 @@ class ROMFS:
         """Offset at which the filing-system data begins within the image."""
         return self._data_offset
 
+    @property
+    def is_plain(self) -> bool:
+        """Whether nothing but padding follows the filing system.
+
+        A *plain* ROMFS holds only the filing system: everything after the
+        ``&2B`` end marker is a single padding byte to the end of the ROM. A
+        *composite* ROM carries opaque content after the filing system —
+        typically a service handler answering ``*HELP`` (service call &09)
+        or a co-resident language. The writer preserves that content, and
+        the mount treats a composite ROM as read-only to avoid corrupting
+        it. See ``docs/romfs-format-spec.md``.
+        """
+        _, opaque_start = self._suffix_layout(self._fs_end)
+        return opaque_start >= len(self._image)
+
     def with_files(self, files: tuple[ROMFSFile, ...]) -> "ROMFS":
         """A copy with its files replaced, keeping the same ROM container.
 

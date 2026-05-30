@@ -41,18 +41,12 @@ Documentation = "https://rob-smallshire.github.io/oaknut/disc/api/reference/romf
 Repository = "https://github.com/rob-smallshire/oaknut"
 Issues = "https://github.com/rob-smallshire/oaknut/issues"
 
-# NOTE: the oaknut.filesystem / oaknut.command entry points are deliberately
-# absent until the AcornROMFS adapter and its Mount exist. Declaring an entry
-# point that points at a not-yet-written class would make the coordinator's
-# extension loader report a load failure on every `disc identify`. They will
-# be added in the implementation phase, alongside the first passing probe()
-# test against a real ROMFS image:
-#
-#   [project.entry-points."oaknut.filesystem"]
-#   acorn-romfs = "oaknut.romfs.filesystem:AcornROMFS"
-#
-#   [project.entry-points."oaknut.command"]
-#   romfs = "oaknut.romfs.cli:romfs"
+# Filesystem contributed to the oaknut.filesystem axis — discovered at
+# runtime via this entry point, so the detector ships with the format it
+# detects. (A `disc romfs` command group on the oaknut.command axis can be
+# added later, behind the [cli] extra.)
+[project.entry-points."oaknut.filesystem"]
+acorn-romfs = "oaknut.romfs.filesystem:AcornROMFS"
 
 [tool.setuptools.dynamic]
 version = { attr = "oaknut.romfs.__version__" }

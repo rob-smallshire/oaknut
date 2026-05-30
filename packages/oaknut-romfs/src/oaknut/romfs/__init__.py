@@ -22,6 +22,25 @@ See ``docs/romfs-format-spec.md`` for the on-ROM byte layout and
 
 from __future__ import annotations
 
+from oaknut.romfs.crc import crc16_ccitt
+from oaknut.romfs.exceptions import (
+    CRCError,
+    NotAROMFSError,
+    ROMFSError,
+    ROMFullError,
+    TruncatedROMError,
+)
+from oaknut.romfs.romfs import ROMFS, ROMFSFile
+
 __version__ = "12.2.0"
 
-__all__: list[str] = []
+__all__ = [
+    "ROMFS",
+    "ROMFSFile",
+    "ROMFSError",
+    "NotAROMFSError",
+    "CRCError",
+    "TruncatedROMError",
+    "ROMFullError",
+    "crc16_ccitt",
+]

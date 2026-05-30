@@ -10,7 +10,6 @@ from __future__ import annotations
 import struct
 
 import pytest
-
 from oaknut.romfs.block import (
     END_OF_FILESYSTEM,
     FLAG_EMPTY,
