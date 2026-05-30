@@ -1,7 +1,7 @@
 """Recipe: build a game cartridge ROM from a DFS game disc.
 
 Copies the BBC Micro game *Snapper* straight off a DFS floppy onto a fresh
-paged-ROM cartridge with ``disc cp`` — load/exec and lock bits carried
+paged-ROM cartridge with ``disc cp`` — load and exec addresses carried
 across for every file — then gives the cartridge a title and the
 publisher's copyright. The whole game fits comfortably in a 16 KiB ROM.
 """
@@ -28,8 +28,9 @@ with in_tmp_dir():
     show("disc romfs set-copyright SNAPPER.rom '(C) Acornsoft 1982'")
 
     # Copy the whole game across in one go — disc cp carries each file's
-    # load/exec addresses and lock bit. (cp is silent on success.)
-    show("disc cp 'snapper.ssd:$.*' 'SNAPPER.rom:'")
+    # load/exec addresses. A bare image path means its root. (cp is silent
+    # on success.)
+    show("disc cp 'snapper.ssd:$.*' SNAPPER.rom")
 
     # The finished cartridge.
     show("disc stat SNAPPER.rom")

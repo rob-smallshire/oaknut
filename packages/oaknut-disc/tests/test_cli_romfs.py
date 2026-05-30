@@ -128,7 +128,8 @@ class TestRomfsCreate:
         assert (
             runner.invoke(cli, ["romfs", "set-copyright", str(cart), copyright_]).exit_code == 0
         )
-        copied = runner.invoke(cli, ["cp", f"{ssd}:$.*", f"{cart}:"])
+        # A bare image path (no trailing colon) resolves to the ROM's root.
+        copied = runner.invoke(cli, ["cp", f"{ssd}:$.*", str(cart)])
         assert copied.exit_code == 0, copied.output
 
         listing = runner.invoke(cli, ["ls", str(cart)]).output
