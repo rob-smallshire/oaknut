@@ -91,3 +91,42 @@ class TestRomfsCreate:
         assert "HELLO" in listed.output
         dumped = runner.invoke(cli, ["cat", f"{rom}:HELLO"])
         assert dumped.stdout_bytes == b"Acorn ROMFS"
+
+
+class TestRomfsProperties:
+    def _make(self, runner: CliRunner, tmp_path) -> str:
+        rom = tmp_path / "PROPS.rom"
+        runner.invoke(cli, ["create", str(rom), "--title", "PROPS"])
+        return str(rom)
+
+    def test_get_copyright_and_version(self, runner: CliRunner, tmp_path):
+        rom = self._make(runner, tmp_path)
+        assert runner.invoke(cli, ["romfs", "get-copyright", rom]).output.strip() == "(C) oaknut"
+        assert runner.invoke(cli, ["romfs", "get-version", rom]).output.strip() == "1"
+
+    def test_set_version_round_trips(self, runner: CliRunner, tmp_path):
+        rom = self._make(runner, tmp_path)
+        assert runner.invoke(cli, ["romfs", "set-version", rom, "7"]).exit_code == 0
+        assert runner.invoke(cli, ["romfs", "get-version", rom]).output.strip() == "7"
+
+    def test_set_copyright_round_trips(self, runner: CliRunner, tmp_path):
+        rom = self._make(runner, tmp_path)
+        result = runner.invoke(cli, ["romfs", "set-copyright", rom, "(C) 1984 Acornsoft"])
+        assert result.exit_code == 0, result.output
+        assert (
+            runner.invoke(cli, ["romfs", "get-copyright", rom]).output.strip()
+            == "(C) 1984 Acornsoft"
+        )
+        # The ROM is still valid after the rebuild.
+        assert "acorn-romfs" in runner.invoke(cli, ["identify", rom]).output
+
+    def test_bad_copyright_is_a_clean_error(self, runner: CliRunner, tmp_path):
+        rom = self._make(runner, tmp_path)
+        result = runner.invoke(cli, ["romfs", "set-copyright", rom, "no mark"])
+        assert result.exit_code != 0
+        assert "Traceback" not in result.output
+        assert "(C)" in result.output
+
+    def test_set_version_rejects_out_of_range(self, runner: CliRunner, tmp_path):
+        rom = self._make(runner, tmp_path)
+        assert runner.invoke(cli, ["romfs", "set-version", rom, "999"]).exit_code != 0

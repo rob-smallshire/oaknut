@@ -252,31 +252,36 @@ MAX_TITLE_LENGTH = MAX_NAME_LENGTH - 2
 DEFAULT_COPYRIGHT = "(C) oaknut"
 
 
-def build_rom_image(
-    *,
-    title: str,
-    copyright: str = DEFAULT_COPYRIGHT,
-    version: int = 1,
-    size: int = 16384,
-    help_handler: bool = True,
-) -> bytes:
-    """Build a fresh, empty ROMFS paged-ROM image of *size* bytes.
+def _serialise_chain(files: tuple[ROMFSFile, ...], data_address: int) -> bytes:
+    """The block chain for *files* laid out from *data_address* (no end marker)."""
+    offset = 0
+    parts: list[bytes] = []
+    for file in files:
+        chain_length = _chain_length(file.name, file.length)
+        parts.append(_serialise_file(file, data_address + offset + chain_length))
+        offset += chain_length
+    return b"".join(parts)
 
-    Lays out the standard paged-ROM header (a service-only ``&82`` ROM), the
-    ``&0D``/``&0E`` service handler (so the ROM is readable on a real
-    machine, see :mod:`oaknut.romfs.handler`), a single ``*title*`` title
-    block, the ``&2B`` end marker, and ``&FF`` padding to *size*. With
-    *help_handler* the service code also answers ``*HELP`` (``&09``) by
-    printing the title. The result round-trips through
-    :meth:`ROMFS.from_bytes` and is writable (plain and complete). *size* is
-    8192 or 16384.
+
+def _assemble_image(
+    *,
+    header_title: str,
+    copyright: str,
+    version: int,
+    files: tuple[ROMFSFile, ...],
+    size: int,
+    help_handler: bool,
+) -> bytes:
+    """Assemble a whole ROM image from a header, a handler and a file list.
+
+    Lays out the paged-ROM header (a service-only ``&82`` ROM), the service
+    handler, the file chain, the ``&2B`` end marker, and ``&FF`` padding to
+    *size*. Shared by :func:`build_rom_image` and the copyright rebuild path.
     """
     if not copyright.startswith("(C)"):
         raise ROMFSError("a ROMFS copyright must begin with '(C)'")
-    if not 1 <= len(title) <= MAX_TITLE_LENGTH:
-        raise ROMFSError(f"a ROMFS title must be 1-{MAX_TITLE_LENGTH} characters: {title!r}")
 
-    title_bytes = title.encode("latin-1")
+    title_bytes = header_title.encode("latin-1")
     copyright_bytes = copyright.encode("latin-1")
     # Header: 00 00 00 | JMP service | type | copyoff | version | title NUL |
     # (no version string) | 00 copyright NUL. version_str is omitted (empty).
@@ -296,18 +301,111 @@ def build_rom_image(
     assert len(header) == header_length
 
     handler = build_rfs_handler(service_address, data_address, with_help=help_handler)
+    chain = _serialise_chain(files, data_address) + bytes([END_OF_FILESYSTEM])
 
-    title_block = ROMFSFile(f"*{title}*", 0, 0, locked=True, data=b"")
-    end_address = data_address + _chain_length(title_block.name, 0)
-    fs_data = _serialise_file(title_block, end_address) + bytes([END_OF_FILESYSTEM])
-
-    body = bytes(header) + handler + fs_data
+    body = bytes(header) + handler + chain
     if len(body) > size:
         raise ROMFullError(
-            f"ROM full: the header, handler and title need {len(body)} bytes, "
+            f"ROM full: the contents need {len(body)} bytes, "
             f"more than the {size // 1024} KiB ROM holds"
         )
     return body + b"\xff" * (size - len(body))
+
+
+def build_rom_image(
+    *,
+    title: str,
+    copyright: str = DEFAULT_COPYRIGHT,
+    version: int = 1,
+    size: int = 16384,
+    help_handler: bool = True,
+) -> bytes:
+    """Build a fresh, empty ROMFS paged-ROM image of *size* bytes.
+
+    Lays out the standard header, the ``&0D``/``&0E`` service handler (so the
+    ROM is readable on a real machine, see :mod:`oaknut.romfs.handler`), a
+    single ``*title*`` title block, the ``&2B`` end marker, and ``&FF``
+    padding. With *help_handler* the service code also answers ``*HELP``
+    (``&09``) by printing the title. The result round-trips through
+    :meth:`ROMFS.from_bytes` and is writable (plain and complete). *size* is
+    8192 or 16384.
+    """
+    if not 1 <= len(title) <= MAX_TITLE_LENGTH:
+        raise ROMFSError(f"a ROMFS title must be 1-{MAX_TITLE_LENGTH} characters: {title!r}")
+    title_block = ROMFSFile(f"*{title}*", 0, 0, locked=True, data=b"")
+    return _assemble_image(
+        header_title=title,
+        copyright=copyright,
+        version=version,
+        files=(title_block,),
+        size=size,
+        help_handler=help_handler,
+    )
+
+
+def get_copyright(image: bytes) -> str:
+    """The copyright string of the ROMFS *image*."""
+    return ROMFS.from_bytes(image).copyright
+
+
+def get_version(image: bytes) -> int:
+    """The binary version byte of the ROMFS *image*."""
+    return ROMFS.from_bytes(image).version
+
+
+def set_version(image: bytes, version: int) -> bytes:
+    """A copy of *image* with the binary version byte set.
+
+    The version is a single header byte (at ``&8008``), so this never moves
+    anything; it is safe on any ROMFS image.
+    """
+    if not 0 <= version <= 0xFF:
+        raise ROMFSError(f"a ROMFS version must be 0-255: {version}")
+    ROMFS.from_bytes(image)  # validate it is a ROMFS
+    out = bytearray(image)
+    out[_VERSION_OFFSET] = version
+    return bytes(out)
+
+
+def set_copyright(image: bytes, text: str) -> bytes:
+    """A copy of *image* with the copyright string set.
+
+    A same-length string is overwritten in place (safe on any ROM). A
+    different length moves the service handler, so the ROM is **rebuilt** —
+    which regenerates the handler and is therefore only done for a ROM with
+    no language entry and nothing after the filing system (a created ROM);
+    other ROMs raise :class:`ROMFSError` rather than risk their code.
+    """
+    if not text.startswith("(C)"):
+        raise ROMFSError("a ROMFS copyright must begin with '(C)'")
+    rom = ROMFS.from_bytes(image)
+
+    if len(text) == len(rom.copyright):
+        out = bytearray(image)
+        start = out[_COPYRIGHT_PTR_OFFSET] + 1  # past the leading NUL
+        out[start : start + len(text)] = text.encode("latin-1")
+        return bytes(out)
+
+    if rom.rom_type & 0x40:  # bit 6: a language entry, whose code would move
+        raise ROMFSError(
+            "this ROM has a language entry, so changing the copyright length "
+            "would relocate its code; set a same-length copyright, or recreate "
+            "the ROM with `disc create`"
+        )
+    if not (rom.is_complete and rom.is_plain):
+        raise ROMFSError(
+            "this ROM carries code after the filing system (or is incomplete), "
+            "so changing the copyright length is unsafe; set a same-length "
+            "copyright instead"
+        )
+    return _assemble_image(
+        header_title=rom.header_title,
+        copyright=text,
+        version=rom.version,
+        files=rom.files,
+        size=len(image),
+        help_handler=True,
+    )
 
 
 class ROMFS:
@@ -500,15 +598,8 @@ class ROMFS:
             )
         prefix = self._image[: self._data_offset]
 
-        offset = self._data_offset
-        parts: list[bytes] = []
-        for file in self._files:
-            chain_length = _chain_length(file.name, file.length)
-            end_address = ROM_BASE_ADDRESS + offset + chain_length
-            blob = _serialise_file(file, end_address)
-            parts.append(blob)
-            offset += chain_length
-        new_fs_end = offset + 1  # the &2B end marker
+        chain = _serialise_chain(self._files, ROM_BASE_ADDRESS + self._data_offset)
+        new_fs_end = self._data_offset + len(chain) + 1  # the &2B end marker
 
         # The original image's layout after the FS: a padding run, then any
         # opaque trailing content (a language ROM's code).
@@ -529,7 +620,7 @@ class ROMFS:
                 f"this {len(self._image) // 1024} KiB ROM"
             )
 
-        body = b"".join(parts) + bytes([END_OF_FILESYSTEM])
+        body = chain + bytes([END_OF_FILESYSTEM])
         padding = bytes([pad_byte]) * (opaque_start - new_fs_end)
         return prefix + body + padding + opaque
 

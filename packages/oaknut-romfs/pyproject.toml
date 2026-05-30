@@ -43,10 +43,14 @@ Issues = "https://github.com/rob-smallshire/oaknut/issues"
 
 # Filesystem contributed to the oaknut.filesystem axis — discovered at
 # runtime via this entry point, so the detector ships with the format it
-# detects. (A `disc romfs` command group on the oaknut.command axis can be
-# added later, behind the [cli] extra.)
+# detects.
 [project.entry-points."oaknut.filesystem"]
 acorn-romfs = "oaknut.romfs.filesystem:AcornROMFS"
+
+# Admin subcommands contributed to the `disc` CLI on the oaknut.command axis:
+# `disc romfs <subcommand>`. Loaded only with the [cli] extra.
+[project.entry-points."oaknut.command"]
+romfs = "oaknut.romfs.cli:romfs"
 
 [tool.setuptools.dynamic]
 version = { attr = "oaknut.romfs.__version__" }
