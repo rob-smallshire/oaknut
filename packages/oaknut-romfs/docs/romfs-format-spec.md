@@ -588,7 +588,20 @@ genuine spanning image.
   sidecar manifest (e.g. a `.romset` listing members in socket order).
   Reassembly belongs in a native `ROMFS.from_roms([...])`, keeping the
   single-`ImageReader` plug-in contract unchanged.
-- **Near-term behaviour:** identify a fragment (no `+`) and report
-  "ROMFS, continues in another ROM" rather than mis-reporting it as a
-  slightly-broken complete image. Full reassembly waits for a verified
+- **Implemented now: graceful read-only handling of an incomplete ROM.**
+  `ROMFS.from_bytes` no longer fails on a ROM with no `&2B`; it parses the
+  complete files (dropping any dangling trailing file) and sets
+  `is_complete = False`. Such an image still identifies as `acorn-romfs`
+  (demoted to `PROBABLE`, with evidence noting "incomplete"), is fully
+  readable for its complete files, and is **read-only** at the mount —
+  every mutation is refused, like a composite ROM. One ROM alone cannot
+  tell a genuine fragment from a truncated image, so both are handled the
+  same safe way. Full multi-ROM *reassembly* still waits for a verified
   example.
+- **Future: surface incompleteness in `disc stat`.** The clean route, in
+  keeping with the capability-protocol design, is a small status/notes
+  capability on the `oaknut.filesystem` axis that the ROMFS mount
+  implements (returning e.g. "incomplete — multi-ROM fragment; read-only")
+  and that `disc stat`'s `_partition_block` feature-detects and renders as
+  a row — no ROMFS-specific code in `oaknut-disc`. The same hook could
+  also report "read-only (composite ROM)".

@@ -123,3 +123,32 @@ def test_composite_rom_is_read_only():
     # ...but reading still works.
     assert mount.exists("DOOM")
     assert mount.title == "Doom01"
+
+
+def _hopper_fragment() -> bytes:
+    image = _bytes("Electron_Hopper.rom")
+    return image[: image.find(b"*HOPOBJ\x00") + 300]
+
+
+def test_identify_incomplete_fragment():
+    fs = AcornROMFS()
+    ident = fs.probe(reader_for(_hopper_fragment()))
+    assert ident is not None
+    assert ident.filesystem == "acorn-romfs"
+    assert ident.confidence == Confidence.PROBABLE  # demoted from STRONG
+    assert any("incomplete" in line.lower() for line in ident.evidence)
+
+
+def test_incomplete_fragment_is_read_only():
+    data = bytearray(_hopper_fragment())
+    reader = reader_for(data, writable=True)
+    fs = AcornROMFS()
+    mount = fs.open(reader, fs.probe(reader).geometry)
+    # Reading the complete files works...
+    assert mount.exists("HOPPER")
+    assert len(mount.read_bytes("HOPPER")) == 0x3D5
+    # ...but every mutation is refused, since the ROM is part of a larger whole.
+    with pytest.raises(ReadOnlyFilesystemError):
+        mount.write_bytes("NEW", b"x")
+    with pytest.raises(ReadOnlyFilesystemError):
+        mount.remove("HOPPER")

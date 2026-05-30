@@ -15,7 +15,6 @@ preserving the machine-code prefix it does not model. See
 
 from __future__ import annotations
 
-from collections.abc import Iterator
 from dataclasses import dataclass
 
 from oaknut.romfs.block import (
@@ -31,6 +30,7 @@ from oaknut.romfs.crc import crc16_ccitt
 from oaknut.romfs.exceptions import (
     CRCError,
     NotAROMFSError,
+    ROMFSError,
     ROMFullError,
     TruncatedROMError,
 )
@@ -115,31 +115,6 @@ def _find_data_start(buf: bytes) -> int:
     raise NotAROMFSError("no valid ROMFS block found in image")
 
 
-def _iter_blocks(buf: bytes, start: int) -> Iterator[tuple[BlockHeader | None, bytes]]:
-    """Yield ``(header_or_None, data)`` for each block from *start*.
-
-    A header block yields its :class:`BlockHeader`; a ``&23`` continuation
-    block yields ``None`` and its 256 data bytes. Stops at ``&2B``. Every
-    data CRC is verified.
-    """
-    pos = start
-    while pos < len(buf):
-        marker = buf[pos]
-        if marker == END_OF_FILESYSTEM:
-            return
-        if marker == SYNC_BYTE:
-            header, data_offset = BlockHeader.parse(buf, pos)
-            data, pos = _read_data(buf, data_offset, header.block_length)
-            yield header, data
-        elif marker == INTER_BLOCK_MARKER:
-            data, pos = _read_data(buf, pos + 1, BLOCK_DATA_SIZE)
-            yield None, data
-        else:
-            raise TruncatedROMError(
-                f"expected a block marker at offset {pos}, found &{marker:02X}"
-            )
-
-
 def _read_data(buf: bytes, offset: int, length: int) -> tuple[bytes, int]:
     """Read *length* data bytes at *offset*, verify the data CRC, return next pos.
 
@@ -158,35 +133,56 @@ def _read_data(buf: bytes, offset: int, length: int) -> tuple[bytes, int]:
     return data, end + 2
 
 
-def _assemble_files(buf: bytes, start: int) -> list[ROMFSFile]:
-    """Group the block stream from *start* into whole files."""
+def _assemble_files(buf: bytes, start: int) -> tuple[list[ROMFSFile], bool, int]:
+    """Walk the block chain from *start* into whole files.
+
+    Returns ``(files, complete, end)``. *complete* is True only when the
+    chain ended cleanly at the ``&2B`` marker; *end* is the offset just past
+    it. When the data runs off the end of the ROM, or meets a non-marker
+    byte where a block is expected — as a fragment of a multi-ROM filing
+    system does, having no terminator — the walk stops, *complete* is False,
+    *end* is where it stopped, and any dangling (partly-present) trailing
+    file is discarded; the complete files before it are returned. A bad CRC
+    is genuine corruption and still raises.
+    """
     files: list[ROMFSFile] = []
     name = load = execa = end_address = 0
     locked = False
     chunks: list[bytes] = []
     open_file = False
+    pos = start
 
-    for header, data in _iter_blocks(buf, start):
+    while pos < len(buf):
+        marker = buf[pos]
+        if marker == END_OF_FILESYSTEM:
+            return files, True, pos + 1
+        try:
+            if marker == SYNC_BYTE:
+                header, data_offset = BlockHeader.parse(buf, pos)
+                data, pos = _read_data(buf, data_offset, header.block_length)
+            elif marker == INTER_BLOCK_MARKER:
+                header, (data, pos) = None, _read_data(buf, pos + 1, BLOCK_DATA_SIZE)
+            else:
+                break  # non-marker byte: no terminator here — an incomplete ROM
+        except TruncatedROMError:
+            break  # ran off the end mid-block — an incomplete (fragment) ROM
+
         if header is not None and header.block_number == 0:
             if open_file:
-                raise TruncatedROMError(f"file {name!r} did not end before the next began")
+                break  # a new file began before the previous ended — stop, incomplete
             name, load, execa = header.name, header.load_address, header.exec_address
             locked, end_address = header.is_locked, header.end_address
             chunks = [data]
             open_file = True
         else:
             if not open_file:
-                raise TruncatedROMError("continuation block with no file in progress")
+                break  # continuation with no file in progress — stop, incomplete
             chunks.append(data)
         if header is not None and header.is_last:
-            files.append(
-                ROMFSFile(name, load, execa, locked, b"".join(chunks), end_address)
-            )
+            files.append(ROMFSFile(name, load, execa, locked, b"".join(chunks), end_address))
             open_file = False
 
-    if open_file:
-        raise TruncatedROMError(f"file {name!r} has no final block")
-    return files
+    return files, False, pos
 
 
 def _chain_length(name: str, data_length: int) -> int:
@@ -260,6 +256,7 @@ class ROMFS:
         image: bytes,
         data_offset: int,
         fs_end: int,
+        complete: bool,
     ):
         self._files = tuple(files)
         self._rom_type = rom_type
@@ -272,20 +269,24 @@ class ROMFS:
         # source image and carried through with_files, so to_bytes can locate
         # the original padding run and any opaque trailing content.
         self._fs_end = fs_end
+        self._complete = complete
 
     @classmethod
     def from_bytes(cls, buf) -> "ROMFS":
         """Parse a ROMFS image from *buf* (bytes-like).
 
-        Raises :class:`NotAROMFSError` if no valid ROMFS block is found and
-        :class:`CRCError` / :class:`TruncatedROMError` on a corrupt chain.
+        Raises :class:`NotAROMFSError` if no valid ROMFS block is found, and
+        :class:`CRCError` on a corrupt block. A ROM with no ``&2B``
+        terminator — a fragment of a multi-ROM filing system, or a truncated
+        image — does **not** raise: it parses to an *incomplete* ROMFS
+        (:attr:`is_complete` is False) holding the complete files it could
+        read, with any dangling trailing file dropped.
         """
         image = bytes(buf)
         if len(image) <= _TITLE_OFFSET:
             raise NotAROMFSError("image too small to be a paged ROM")
         data_offset = _find_data_start(image)
-        files = _assemble_files(image, data_offset)
-        fs_end = data_offset + sum(_chain_length(f.name, f.length) for f in files) + 1
+        files, complete, fs_end = _assemble_files(image, data_offset)
         return cls(
             tuple(files),
             rom_type=image[_ROM_TYPE_OFFSET],
@@ -295,6 +296,7 @@ class ROMFS:
             image=image,
             data_offset=data_offset,
             fs_end=fs_end,
+            complete=complete,
         )
 
     @property
@@ -362,6 +364,21 @@ class ROMFS:
         return self._data_offset
 
     @property
+    def is_complete(self) -> bool:
+        """Whether the filing system terminates within this ROM (a ``&2B``).
+
+        False marks an *incomplete* image: the block chain ran to the end of
+        the ROM without a terminator. That is how a non-final fragment of a
+        multi-ROM filing system looks (its data continues in the socket
+        below), and also how a truncated image looks — the two are
+        indistinguishable from one ROM alone. Either way the image is read
+        as far as its complete files and is treated as read-only, since it
+        is part of (or a damaged) larger whole. Multi-ROM reassembly is not
+        supported; see ``docs/romfs-format-spec.md`` §7.
+        """
+        return self._complete
+
+    @property
     def is_plain(self) -> bool:
         """Whether nothing but padding follows the filing system.
 
@@ -392,6 +409,7 @@ class ROMFS:
             image=self._image,
             data_offset=self._data_offset,
             fs_end=self._fs_end,
+            complete=self._complete,
         )
 
     def to_bytes(self) -> bytes:
@@ -402,8 +420,16 @@ class ROMFS:
         language ROM's code, as in Countdown To Doom) is kept at its
         original address. The padding run immediately after the original
         ``&2B`` is the only space the filing system may grow into; exceeding
-        it raises :class:`ROMFullError`.
+        it raises :class:`ROMFullError`. An *incomplete* image cannot be
+        serialised (there is no whole filing system to write back); that
+        raises :class:`ROMFSError`.
         """
+        if not self._complete:
+            raise ROMFSError(
+                "cannot serialise an incomplete ROMFS: it is a fragment of a "
+                "multi-ROM filing system (or a truncated image), so there is no "
+                "whole filing system to write back"
+            )
         prefix = self._image[: self._data_offset]
 
         offset = self._data_offset

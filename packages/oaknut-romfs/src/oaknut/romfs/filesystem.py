@@ -89,6 +89,11 @@ class _ROMFSMount:
         return Entry(name=file.name, is_dir=False, length=file.length, path=file.name)
 
     def _require_writable(self) -> None:
+        if not self._romfs.is_complete:
+            raise ReadOnlyFilesystemError(
+                "this ROM has no end marker — it is a fragment of a multi-ROM "
+                "filing system (or a truncated image); ROMFS writes are refused"
+            )
         if not self._romfs.is_plain:
             raise ReadOnlyFilesystemError(
                 "this ROM carries code after the filing system (e.g. a *HELP "
@@ -241,11 +246,18 @@ class AcornROMFS(Filesystem):
             evidence.append(f"title {romfs.title!r}")
         # A CRC-validated block chain plus an Acorn (C) copyright string is a
         # strong, integrity-checked match; without the copyright it is merely
-        # a well-formed chain.
+        # a well-formed chain. An image with no end marker is incomplete — a
+        # fragment of a multi-ROM filing system, or truncated — so it is
+        # demoted and flagged: it is identified and read, but never written.
         confident = romfs.has_service_entry and romfs.copyright.startswith("(C)")
+        if not romfs.is_complete:
+            evidence.append("no end marker — incomplete (multi-ROM fragment?); read-only")
+        confidence = (
+            Confidence.STRONG if (confident and romfs.is_complete) else Confidence.PROBABLE
+        )
         return Identification(
             filesystem=self.name,
-            confidence=Confidence.STRONG if confident else Confidence.PROBABLE,
+            confidence=confidence,
             evidence=tuple(evidence),
             geometry=_linear_geometry(reader.size),
         )

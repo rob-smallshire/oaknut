@@ -110,3 +110,31 @@ def test_whole_corpus_parses_with_valid_crcs():
 def test_rejects_non_romfs():
     with pytest.raises(NotAROMFSError):
         ROMFS.from_bytes(b"\x00" * 16384)
+
+
+def test_complete_roms_report_is_complete():
+    for filepath in ROMFS_DIRPATH.glob("*.rom"):
+        assert ROMFS.from_bytes(filepath.read_bytes()).is_complete, filepath.name
+
+
+def _hopper_fragment() -> bytes:
+    """A Hopper image truncated partway through its last file, HOPOBJ.
+
+    Simulates a ROM whose filing-system data continues into another ROM:
+    no `&2B` terminator, and the trailing file is only partly present.
+    """
+    image = (ROMFS_DIRPATH / "Electron_Hopper.rom").read_bytes()
+    hopobj_block0 = image.find(b"*HOPOBJ\x00")  # sync byte + name + NUL
+    assert hopobj_block0 > 0
+    return image[: hopobj_block0 + 300]  # cut mid-HOPOBJ
+
+
+def test_incomplete_fragment_keeps_complete_files_only():
+    rom = ROMFS.from_bytes(_hopper_fragment())
+    assert not rom.is_complete
+    # The dangling, partly-present HOPOBJ is dropped; the complete files remain.
+    assert [f.name for f in rom.data_files] == ["!BOOT", "HOPPER"]
+    assert rom.title == "Hopper01"
+    # The surviving files are intact and read back correctly.
+    boot = {f.name: f for f in rom.data_files}["!BOOT"]
+    assert boot.length == 0x3A
