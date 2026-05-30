@@ -87,35 +87,60 @@ from a file extension.
 
 ## Identification and registration
 
-When the adapter is ready, registration is two entry points in
-`pyproject.toml` (currently commented out there, pending the first passing
-probe against a real image):
+Registration is the entry point in `pyproject.toml`:
 
 ```toml
 [project.entry-points."oaknut.filesystem"]
 acorn-romfs = "oaknut.romfs.filesystem:AcornROMFS"
-
-[project.entry-points."oaknut.command"]   # optional, [cli] extra
-romfs = "oaknut.romfs.cli:romfs"
 ```
 
 The coordinator discovers ROMFS purely via the entry point; no change to
-`oaknut-disc` or `oaknut-filesystem` is needed.
+`oaknut-disc` or `oaknut-filesystem` is needed. A `disc romfs` command
+group on the `oaknut.command` axis (behind the `[cli]` extra) can be added
+later.
 
-## Build order (test-first)
+## Write contract: plain versus composite ROMs
 
-1. `crc.py` + test against the NAUG `*EXAMPLE*` CRC.
-2. `block.py` + tests parsing the `*EXAMPLE*` header record and a small
-   single-block file, verifying header/data CRCs.
-3. `romfs.py` + tests: parse a real reference ROM's header (title,
-   version, copyright) and enumerate its files.
-4. `filesystem.py` `probe()` + test: a reference ROM identifies as
-   `acorn-romfs` with the expected evidence; a non-ROMFS blob does not.
-5. `_ROMFSMount` read path + tests (`iter_entries`, `read_bytes`,
-   `acorn_meta`, `title`).
-6. Wire the entry point; add a `disc identify` / `disc ls` integration
-   test over a reference image.
-7. (Optional, later) creation/serialisation round-trip.
+A ROMFS image is one of two shapes:
+
+- **Plain ROMFS** — everything after the `&2B` end marker is padding to the
+  end of the ROM (Hopper, Snapper, Starship Command). Fully read/write.
+- **Composite ROM** — opaque content follows the filing system: a service
+  handler answering `*HELP` (service call `&09`) and friends, or a
+  co-resident language (Countdown To Doom). `ROMFS.to_bytes()` preserves
+  that content verbatim at its original address, and the **mount treats a
+  composite ROM as read-only** (`ReadOnlyFilesystemError`), because the
+  trailing code may hold absolute pointers into the filing-system region
+  that a re-layout would invalidate. Reading, `identify`, `ls` and copy-out
+  always work; only mutation is refused. `ROMFS.is_plain` makes the
+  distinction.
+
+The filing system may grow only into the padding run immediately after the
+original `&2B`; exceeding it raises `ROMFullError` rather than overwriting
+anything.
+
+## Build order (test-first) — status
+
+1. ✅ `crc.py` — CRC-16/XMODEM, verified against the NAUG `*EXAMPLE*` and a
+   real Hopper header CRC.
+2. ✅ `block.py` — `BlockHeader` parse/serialise + flag bits, round-trip.
+3. ✅ `romfs.py` read path — header + chain → files, all CRCs verified,
+   against the whole corpus.
+4. ✅ `romfs.py` write path — `to_bytes` byte-exact round-trip over all
+   seven images; `with_files` for mutation; `ROMFullError`.
+5. ✅ `filesystem.py` — `probe()`, `open()`, geometry; the `_ROMFSMount`
+   read core plus `AcornMetadata` and `Titled`; the write surface gated on
+   `is_plain`.
+6. ✅ Entry point wired; `disc identify` / `disc ls` confirmed end-to-end.
+7. ⬜ **Creation** (`disc create --filesystem romfs`): emit a fresh ROM.
+   Optionally bundle a small canned service handler that answers service
+   call `&09` to print a user-settable `*HELP` message (essentially the
+   ROM's title) — turning a created image into a friendly composite ROM
+   rather than a bare filing system. Until then `create` is unimplemented
+   and `creates` stays empty (ROMFS is reached only via `--filesystem`).
+8. ⬜ Optional `disc romfs` admin subcommands (`oaknut.command` axis).
+9. ⬜ BBC BASIC detokenisation for files stored as tokenised BASIC
+   (mirroring the DFS package), once a use-case needs it.
 
 ## Test data
 
