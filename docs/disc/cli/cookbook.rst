@@ -300,8 +300,8 @@ DSD has been separated back into the two floppies it was assembled
 from.
 
 
-Consolidate Acorn discs onto a higher-capacity Watford disc
------------------------------------------------------------
+Consolidate Acorn DFS discs onto a higher-capacity Watford DFS disc
+-------------------------------------------------------------------
 
 Acorn DFS caps a disc at **31 files**; Watford DFS extends the
 catalogue to **62 files per side**. That difference is the whole point
