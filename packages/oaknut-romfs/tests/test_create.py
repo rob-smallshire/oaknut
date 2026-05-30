@@ -38,7 +38,8 @@ def test_help_handler_is_present_by_default():
     handler = build_rfs_handler(0x800C, 0x9000, with_help=True)
     assert handler[0:2] == bytes([0xC9, 0x09])  # CMP #&09 first
     assert bytes([0xBD, 0x09, 0x80]) in handler  # LDA &8009,X (read the title)
-    assert bytes([0x20, 0xEE, 0xFF]) in handler  # JSR OSWRCH (print it)
+    assert bytes([0x20, 0xE3, 0xFF]) in handler  # JSR OSASCI (print each char)
+    assert bytes([0x20, 0xE7, 0xFF]) in handler  # JSR OSNEWL (blank line)
     # The bare handler omits all of that.
     assert build_rfs_handler(0x800C, 0x9000, with_help=False)[0:2] == bytes([0xC9, 0x0D])
 

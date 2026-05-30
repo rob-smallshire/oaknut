@@ -24,7 +24,8 @@ _ROM_ID = 0xF4  # the ROM's own socket number
 _SER_ROM = 0xF5  # the current filing-system ROM (15 - socket)
 _ROM_PTR = 0xF6  # the read pointer (two bytes, &F6/&F7)
 _OSRDRM = 0xFFB9  # OS routine: read a byte from a paged ROM
-_OSWRCH = 0xFFEE  # OS routine: write a character
+_OSASCI = 0xFFE3  # OS routine: write a character (CR also emits LF)
+_OSNEWL = 0xFFE7  # OS routine: write a newline (CR + LF)
 _TITLE_ADDRESS = 0x8009  # the paged-ROM header title is always here
 
 #: Opcode and total length for each (mnemonic, addressing mode) used here.
@@ -124,23 +125,27 @@ _CORE_BODY = [
     (None, "RTS", "imp", None),
 ]
 
-# The optional *HELP (&09) routine: print the ROM's header title (always at
-# &8009) then a newline, preserving A/X/Y, and return without claiming the
-# call so other ROMs also print. The title is the user-set message.
+# The optional *HELP (&09) routine, after Bruce Smith's *Advanced Sideways
+# RAM User Guide* §4: print a blank line, the ROM's header title (always at
+# &8009), and a blank line, for the conventional *HELP layout. Unlike that
+# book's minimal example it preserves A/X/Y and returns with A unchanged
+# (= 9), so the call is *not* claimed and the MOS keeps polling lower ROMs —
+# the sidewrom notes' "restore A and Y and pass on" rule. The title is the
+# user-set message.
 _HELP_ROUTINE = [
     ("dohelp", "PHA", "imp", None),  # save A (= 9)
     (None, "TXA", "imp", None),
     (None, "PHA", "imp", None),  # save X
     (None, "TYA", "imp", None),
     (None, "PHA", "imp", None),  # save Y
+    (None, "JSR", "abs", "OSNEWL"),  # blank line before
     (None, "LDX", "imm", 0x00),
     ("helploop", "LDA", "absx", _TITLE_ADDRESS),  # next title character
     (None, "BEQ", "rel", "helpdone"),  # NUL terminator
-    (None, "JSR", "abs", "OSWRCH"),
+    (None, "JSR", "abs", "OSASCI"),
     (None, "INX", "imp", None),
     (None, "BNE", "rel", "helploop"),  # always (title < 256 bytes)
-    ("helpdone", "LDA", "imm", 0x0D),  # carriage return
-    (None, "JSR", "abs", "OSWRCH"),
+    ("helpdone", "JSR", "abs", "OSNEWL"),  # blank line after
     (None, "PLA", "imp", None),  # restore Y
     (None, "TAY", "imp", None),
     (None, "PLA", "imp", None),  # restore X
@@ -186,7 +191,12 @@ def build_rfs_handler(base_address: int, data_address: int, *, with_help: bool =
     """
     program = _program(with_help)
     labels, _length = _layout(program)
-    externals = {"data": data_address, "OSRDRM": _OSRDRM, "OSWRCH": _OSWRCH}
+    externals = {
+        "data": data_address,
+        "OSRDRM": _OSRDRM,
+        "OSASCI": _OSASCI,
+        "OSNEWL": _OSNEWL,
+    }
 
     def address_of(symbol: str) -> int:
         if symbol in externals:

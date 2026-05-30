@@ -14,6 +14,10 @@ template:
 - **"Code when loading from ROM"** — a control-flow diagram of the MOS
   load-from-ROM routine, naming the state machine and its routines:
   `docs/dev/manuals/LoadFromROM.pdf` (in this repo).
+- **Bruce Smith, *Advanced Sideways RAM User Guide*, ch. 4** — the `*HELP`
+  (`&09`) service handler; the created-ROM help routine follows it (with
+  register preservation added). Notes in the Acornaeology library at
+  `library/books/advanced_sideways_ram_user_guide/notes/chapter_4_the_help_service.md`.
 - **"Sideways ROM authoring notes"** — the most complete single reference,
   compiling the New Advanced User Guide, Bruce Smith's *BBC Micro ROM
   Book* and the *Electron Advanced User Guide*. Covers the paged-ROM
