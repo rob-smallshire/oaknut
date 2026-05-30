@@ -57,6 +57,21 @@ def test_mount_lists_data_files_not_title_block():
     assert mount.title == "Hopper01"
 
 
+def test_storage_order_capability():
+    from oaknut.filesystem import StorageOrdered
+
+    fs = AcornROMFS()
+    reader = reader_for(_bytes("Electron_Hopper.rom"))
+    mount = fs.open(reader, fs.probe(reader).geometry)
+    # ROMFS is a sequential CFS stream, so it has the clearest storage order
+    # of all: the position in the stream, which is the order iter_entries
+    # yields and the order *LOAD/*RUN reads.
+    assert isinstance(mount, StorageOrdered)
+    listed = [entry.path for entry in mount.iter_entries("")]
+    assert [mount.storage_key(path) for path in listed] == list(range(len(listed)))
+    assert sorted(listed, key=mount.storage_key) == listed
+
+
 def test_mount_reads_file_and_metadata():
     fs = AcornROMFS()
     reader = reader_for(_bytes("Electron_Hopper.rom"))

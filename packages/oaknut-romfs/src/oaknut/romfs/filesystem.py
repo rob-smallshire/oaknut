@@ -177,6 +177,17 @@ class _ROMFSMount:
         )
         self._commit(tuple(renamed if f is file else f for f in self._romfs.files))
 
+    # -- StorageOrdered --
+    def storage_key(self, path: str) -> int:
+        # ROMFS stores its files sequentially in the ROM (a CFS block
+        # stream), so a file's position in that stream is its storage
+        # order — also the order *LOAD/*RUN reads them, there being no
+        # seeks on a ROM.
+        for index, file in enumerate(self._data_files()):
+            if file.name == path:
+                return index
+        raise ROMFSError(f"no file named {path!r}")
+
     # -- AcornMetadata --
     def acorn_meta(self, path: str) -> AcornMeta:
         file = self._find(path)
