@@ -360,10 +360,14 @@ A richer handler may also answer:
 - **`&09` — `*HELP`.** Print the ROM name and version; optionally compare
   the text after `*HELP` (via the pointer at `&F2/&F3` plus `Y`, forced
   upper-case with `AND #&DF`) against a keyword to print extended help.
-- **`&03` — auto-boot.** On `Shift-Break`, look for `!BOOT` and `*RUN` /
-  `*LOAD` / `*EXEC` it — which is why the corpus ROMs carry a `!BOOT`.
 - **`&04` — unrecognised `*` command.** If no ROM claims a command the OS
   passes it to the filing system, which may `*RUN` it from the library.
+
+Note what is *absent*: **`&03` (auto-boot)** is for a *filing-system* ROM —
+DFS, ADFS, NFS — to select itself on `Shift-Break` and run a `!BOOT`. A
+ROMFS data ROM does not answer it; the ROM Filing System lives in the MOS,
+not in the ROM (see §2.11). The `!BOOT` files in the corpus are run by the
+MOS's RFS or a loader, not by the data ROM itself.
 
 **Consequence for the write path.** *Reading and identifying* a ROMFS image
 needs none of this — the bytes are self-describing. But **creating** one
@@ -379,6 +383,43 @@ title. The handler is assembled by a small two-pass 6502 assembler so its
 branch and jump targets are correct by construction, and a created ROM has
 been confirmed in a 6502 emulator (`*HELP`, `*CAT`, `CHAIN` and `*TYPE` all
 work).
+
+### 2.11 ROMFS is data, not a filing system — and what "booting" means
+
+A crucial distinction, easy to blur. The **ROM Filing System is part of the
+MOS** — it is the filing system selected by `*ROM`, sitting alongside the
+tape filing system (both live in MOS chapter 18). A paged ROM "for ROMFS"
+does **not** implement a filing system. It only implements the byte-serving
+protocol of §2.10 — answer `&0D` by pointing the OS at its data, answer
+`&0E` with the next byte (plus, optionally, `&09` for `*HELP`). The MOS's
+RFS is what interprets those bytes as a catalogue of files. The ROM is the
+*medium*; the filing system is the *driver*, and the driver is in the OS.
+
+This reframes "booting":
+
+- **Filing-system boot** — `Shift-Break` → service call `&03` → an FS ROM
+  finds and runs `!BOOT` — is the business of a *filing-system* ROM (the
+  DFS ROM, the ADFS ROM, …) or of the MOS's own RFS. A ROMFS *data* ROM has
+  no filing system to boot; for it to hunt for `!BOOT` would be to
+  re-implement the RFS that already lives in the MOS. So a created data ROM
+  does not, and should not, answer `&03`.
+- **Cartridge autostart** — a cartridge that *runs on power-on/reset*, as
+  the Acornsoft Electron titles do, achieves that by being a **language
+  ROM**: ROM type bit 6 set (their `&C2`), with a real `JMP language` entry
+  that the MOS enters at reset. The game's own code then loads its data
+  through the RFS. That autostart is a property of the ROM being a
+  *language*, entirely orthogonal to ROMFS-as-a-filing-system — it just
+  happens that such cartridges *also* carry RFS data for the game to read.
+
+`oaknut` creates **data** ROMs: service-only (`&82`), no language entry, the
+minimal `&0D`/`&0E` (+ `&09`) handler. They are neither languages nor
+filing-system ROMs, so they neither autostart (no language entry) nor
+auto-boot a `!BOOT` (not a data ROM's role). They are driven by hand —
+`*ROM`, then `*EXEC !BOOT` / `*RUN` / `CHAIN` — exactly as §2.10's
+operations allow. A self-*starting* cartridge would be a different artifact:
+a language ROM wrapping a loader, wrapping (optionally) RFS data. That is
+out of scope here, and would not be "a ROMFS feature" so much as a
+language-ROM feature that happens to use ROMFS.
 
 ## 3. The CRC algorithm
 

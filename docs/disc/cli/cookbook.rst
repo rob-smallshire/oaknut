@@ -597,6 +597,8 @@ command.
 On a real machine, select the cartridge with ``*ROM`` and start it with
 ``*EXEC !BOOT`` — Snapper's loader (``*BASIC``, ``CHAIN "SNAP"``, then
 the game code) is just file reads, which the cartridge's ``&0D`` / ``&0E``
-handler serves. It does not *auto*-boot on Shift-Break, though: that
-needs the ROM to answer service call ``&03``, which the minimal created
-handler does not yet do.
+handler serves. It does not *start by itself* on power-on or Shift-Break:
+a ROMFS ROM is **data for the OS's ROM filing system, not a self-starting
+program**. A cartridge that auto-runs (as the Acornsoft Electron titles
+do) is a *language* ROM that happens to carry ROMFS data — a different
+kind of ROM from the plain data cartridge built here.
