@@ -56,14 +56,15 @@ class WatfordDFSCatalogue(Catalogue):
 
         # --- Section 2 (sectors 2–3) ---
 
-        # 0xAA marker in first 12 bytes of sector 2
-        for i in range(12):
+        # 0xAA marker in the 8-byte title slot of sector 2 (0x200); the file
+        # entries that follow at 0x208 must not be clobbered (DiscImage.pdf p9).
+        for i in range(8):
             sectors[0x200 + i] = 0xAA
 
         # Sector 3 bytes 0–3 are null (already zero)
 
         # Synchronise metadata from section 1 to section 2
-        sectors[0x304] = sectors[0x104]  # Cycle number
+        sectors[0x304] = 0  # Section 2's own master sequence number (independent)
         sectors[0x305] = 0  # Number of files × 8 (section 2)
         sectors[0x306] = sectors[0x106]  # Boot option + sector count high
         sectors[0x307] = sectors[0x107]  # Sector count low
@@ -123,18 +124,29 @@ class WatfordDFSCatalogue(Catalogue):
         # the used sectors; the filing system reads it transparently
         # (issue #1), so a declared total exceeding the surface is accepted.
 
-        # WATFORD-SPECIFIC: Check for 0xAA marker in sector 2 (first 12 bytes)
-        if not all(sector2[i] == 0xAA for i in range(12)):
+        # WATFORD-SPECIFIC: 0x200 holds 8 bytes of 0xAA (DiscImage.pdf p9/p11).
+        # The marker occupies section 2's 8-byte title slot only; the 31 file
+        # entries begin at 0x208, so a populated section 2 overwrites bytes 8+.
+        if not all(sector2[i] == 0xAA for i in range(8)):
             return False
 
         # WATFORD-SPECIFIC: Check sector 3 starts with 4 null bytes
         if not all(sector3[i] == 0x00 for i in range(4)):
             return False
 
-        # WATFORD-SPECIFIC: Verify metadata sync between sections 1 and 3
-        if sector3[5] != sector1[5]:  # File count must match
+        # WATFORD-SPECIFIC: section 2 carries its OWN file count, independent
+        # of section 1 — the two sections hold files 1-31 and 32-62, so a disc
+        # with files in just one section has unequal counts. Validate section
+        # 2's count byte on its own terms (a count is a multiple of 8, max 31
+        # files), never against section 1's.
+        section2_count_byte = sector3[5]
+        if section2_count_byte & 0x07:  # Bits 0,1,2 must be clear
             return False
-        if sector3[6] != sector1[6] or sector3[7] != sector1[7]:  # Boot/sectors must match
+        if section2_count_byte // 8 > 31:  # Each section max 31 files
+            return False
+        # Disc-wide metadata (boot option + total sectors) IS mirrored in both
+        # section headers, so those bytes must agree.
+        if sector3[6] != sector1[6] or sector3[7] != sector1[7]:
             return False
 
         # All checks passed - this is Watford DFS
@@ -173,9 +185,10 @@ class WatfordDFSCatalogue(Catalogue):
         sector0 = self._surface.sector_range(0, 1)
         sector1 = self._surface.sector_range(1, 1)
 
-        # Title from sector 0 (bytes 0-9 only - 10 chars max)
-        # Bytes 10-11 of sector 0 are reserved for catalog chaining
-        title_bytes = bytes(sector0[0:10])
+        # Watford title is 10 chars: 8 in sector 0 (0x000) + 2 in sector 1
+        # (0x100), matching initialise. Sector 0 byte 8 onward is file-entry
+        # space, so the title never reaches there.
+        title_bytes = bytes(sector0[0:8]) + bytes(sector1[0:2])
         # The fixed-width title field is padded with spaces or NULs; neither
         # is part of the title.
         title = title_bytes.decode("acorn").rstrip(" \x00")
@@ -409,18 +422,21 @@ class WatfordDFSCatalogue(Catalogue):
         current_count = sector1[5] // 8
         sector1[5] = (current_count + 1) * 8
 
-        # Increment cycle number
-        disc_info = self.get_disc_info()
-        sector1[4] = (disc_info.cycle_number + 1) & 0xFF
+        # Increment THIS section's own master sequence number. Each section
+        # keeps its own (0x304 is "not a copy of 0x104", DiscImage.pdf p9), so
+        # bump the local section's byte, not the disc-wide section-1 value.
+        sector1[4] = (sector1[4] + 1) & 0xFF
 
     def _sync_metadata(self) -> None:
         """Ensure metadata is synchronized between both sections."""
         sector1 = self._surface.sector_range(1, 1)
         sector3 = self._surface.sector_range(3, 1)
 
-        # Copy cycle number, boot option, and sector count from section 1 to section 2
-        # Note: file counts (byte 5) are NOT synchronized - each section has its own count
-        sector3[4] = sector1[4]  # Cycle number
+        # Mirror only the disc-wide metadata (boot option + total sectors) from
+        # section 1 to section 2. The master sequence number (byte 4) and file
+        # count (byte 5) are each section's OWN — section 2's 0x304 is "not a
+        # copy of 0x104" (DiscImage.pdf p9) — so they are deliberately not
+        # synchronised here.
         sector3[6] = sector1[6]  # Boot option + sector count high
         sector3[7] = sector1[7]  # Sector count low
 
@@ -559,17 +575,19 @@ class WatfordDFSCatalogue(Catalogue):
         """
         self.validate_title(title)
 
-        # Update section 1 title (bytes 0-9 of sector 0 only)
-        # Bytes 10-11 of sector 0 are reserved for catalog chaining
+        # Watford title is 10 chars: 8 in sector 0 (0x000) + 2 in sector 1
+        # (0x100). Sector 0 byte 8 onward holds file entries, so the title
+        # must not be written there (doing so corrupted the first file).
         sector0 = self._surface.sector_range(0, 1)
         sector1 = self._surface.sector_range(1, 1)
 
-        title_padded = title[:10].ljust(10)
-        sector0[0:10] = title_padded.encode("acorn")
+        encoded = title[:10].ljust(10).encode("acorn")
+        sector0[0:8] = encoded[:8]
+        sector1[0:2] = encoded[8:10]
 
         # Section 2 has 0xAA marker, not title - no update needed
 
-        # Increment cycle number
+        # Increment section 1's master sequence number (the title lives there).
         sector1[4] = (sector1[4] + 1) & 0xFF
 
         # Changes to sectors are persisted automatically (writable memoryviews)
@@ -906,13 +924,15 @@ class WatfordDFSCatalogue(Catalogue):
             )
 
         sector2 = self._surface.sector_range(2, 1)
-        if not all(sector2[i] == 0xAA for i in range(12)):
+        # The 0xAA marker is 8 bytes (0x200); 0x208 onward is file entries.
+        if not all(sector2[i] == 0xAA for i in range(8)):
             errors.append(DFSValidationError("Missing Watford DFS marker in sector 2"))
 
         sector1 = self._surface.sector_range(1, 1)
         sector3 = self._surface.sector_range(3, 1)
-        if sector1[4] != sector3[4]:
-            errors.append(DFSValidationError("Cycle number mismatch between catalog sections"))
+        # 0x304 is section 2's OWN master sequence number — "not a copy of
+        # 0x104" (DiscImage.pdf p9) — so the two sections may legitimately
+        # differ; only the boot option and disc size (0x306/7) are mirrored.
         if sector1[6] != sector3[6]:
             errors.append(
                 DFSValidationError("Boot option/sector count mismatch between catalog sections")

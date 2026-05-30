@@ -16,10 +16,11 @@ from tests.fixtures import REFERENCE_IMAGES_DIRPATH
 
 _ZALAGA = REFERENCE_IMAGES_DIRPATH / "games" / "Disc003-Zalaga.ssd"
 
-# Acorn DFS splits the 12-byte title across sector 0 (bytes 0-7) and
-# sector 1 (bytes 0-3); Watford keeps 10 bytes in sector 0 (bytes 0-9).
+# Acorn DFS splits the 12-char title across sector 0 (bytes 0-7) and sector 1
+# (bytes 0-3); Watford's 10-char title is sector 0 (bytes 0-7) + sector 1
+# (bytes 0-1).
 _ACORN_TITLE_SPANS = ((0, 0, 8), (256, 0, 4))
-_WATFORD_TITLE_SPANS = ((0, 0, 10),)
+_WATFORD_TITLE_SPANS = ((0, 0, 8), (256, 0, 2))
 
 
 def _image_with_nul_title(source_filepath, target_filepath, title: bytes, spans) -> None:

@@ -101,6 +101,88 @@ class TestWatfordDFSCatalogueMatches:
 
         assert not WatfordDFSCatalogue.matches(watford_dfs_surface)
 
+    def test_matches_with_files_in_section_one_only(self, tmp_path):
+        """A Watford disc with files only in section 1 has unequal per-section
+        file counts (section 2 empty), yet must still identify — the two
+        section counts are independent, not mirrored. Regression: matches()
+        wrongly required sector3[5] == sector1[5], so any non-empty disc with
+        files in just one section failed to identify.
+        """
+        from oaknut.dfs.dfs import DFS
+        from oaknut.dfs.formats import WATFORD_DFS_80T_SINGLE_SIDED
+
+        image_filepath = tmp_path / "section1.ssd"
+        with DFS.create_file(image_filepath, WATFORD_DFS_80T_SINGLE_SIDED, title="Telem") as dfs:
+            for i in range(31):  # exactly fills section 1, leaves section 2 empty
+                (dfs.root / f"$.F{i:02d}").write_bytes(b"x")
+        with DFS.from_file(image_filepath, WATFORD_DFS_80T_SINGLE_SIDED) as dfs:
+            surface = dfs._catalogued_surface._surface
+            assert WatfordDFSCatalogue.matches(surface)
+
+    def test_matches_with_files_in_both_sections(self, tmp_path):
+        """A Watford disc with files in section 2 must still identify. The
+        0xAA marker occupies only sector 2 bytes 0-7 (section 2's 8-byte
+        title slot); file entries begin at byte 8, so a populated section 2
+        overwrites bytes 8+. Regression: the marker check read 12 bytes, so
+        the first section-2 file's name broke identification.
+        """
+        from oaknut.dfs.dfs import DFS
+        from oaknut.dfs.formats import WATFORD_DFS_80T_SINGLE_SIDED
+
+        image_filepath = tmp_path / "both.ssd"
+        with DFS.create_file(image_filepath, WATFORD_DFS_80T_SINGLE_SIDED, title="Telem") as dfs:
+            for i in range(40):  # 31 in section 1, 9 spill into section 2
+                (dfs.root / f"$.F{i:02d}").write_bytes(b"x")
+        with DFS.from_file(image_filepath, WATFORD_DFS_80T_SINGLE_SIDED) as dfs:
+            surface = dfs._catalogued_surface._surface
+            assert WatfordDFSCatalogue.matches(surface)
+            assert dfs.validate() == []
+            assert len(dfs.files) == 40
+
+    def test_matches_rejects_malformed_section_two_count(self, watford_dfs_surface):
+        """Section 2 keeps its own well-formed count byte: the low three bits
+        (a file count is a multiple of 8) must be clear, as for section 1."""
+        buffer = watford_dfs_surface._disc_image.buffer
+        buffer[768 + 5] = 0x0A  # bits 1,3 set -> 0x0A & 0x07 != 0, malformed
+        assert not WatfordDFSCatalogue.matches(watford_dfs_surface)
+
+    def test_title_uses_ten_chars_and_does_not_corrupt_files(self, tmp_path):
+        """A Watford title is 10 chars: 8 in sector 0 (0x000) and 2 in sector
+        1 (0x100), matching initialise. The file entries begin at sector 0
+        byte 8, so the title must not reach there — setting a >8-char title
+        once corrupted the first file. Regression: read/write used
+        sector0[0:10], overlapping entry 0 and disagreeing with initialise.
+        """
+        from oaknut.dfs.dfs import DFS
+        from oaknut.dfs.formats import WATFORD_DFS_80T_SINGLE_SIDED
+
+        names = ["ALPHA", "BRAVO", "CHARLIE"]
+        image_filepath = tmp_path / "titled.ssd"
+        with DFS.create_file(image_filepath, WATFORD_DFS_80T_SINGLE_SIDED, title="Old") as dfs:
+            for name in names:
+                (dfs.root / f"$.{name}").write_bytes(b"data")
+            dfs.title = "JanFeb 84"  # 9 chars -> spills past sector 0 byte 8
+        with DFS.from_file(image_filepath, WATFORD_DFS_80T_SINGLE_SIDED) as dfs:
+            assert dfs.title == "JanFeb 84"
+            got = sorted(p.name for p in (dfs.root / "$").iterdir())
+            assert got == sorted(names)  # no file corrupted by the title write
+
+    def test_section_sequence_numbers_are_independent(self, tmp_path):
+        """Each section keeps its own master sequence number (0x304 is "not a
+        copy of 0x104"): adding files to section 2 increments section 2's
+        number alone. Regression: the writer mirrored section 1's onto 2."""
+        from oaknut.dfs.dfs import DFS
+        from oaknut.dfs.formats import WATFORD_DFS_80T_SINGLE_SIDED
+
+        image_filepath = tmp_path / "seq.ssd"
+        with DFS.create_file(image_filepath, WATFORD_DFS_80T_SINGLE_SIDED) as dfs:
+            for i in range(35):  # 31 fill section 1, 4 spill into section 2
+                (dfs.root / f"$.F{i:02d}").write_bytes(b"x")
+        data = image_filepath.read_bytes()
+        section1_seq = data[256 + 4]  # 0x104 — 31 increments
+        section2_seq = data[768 + 4]  # 0x304 — 4 increments
+        assert section1_seq != section2_seq
+
     def test_matches_rejects_too_few_sectors(self):
         """Test matches() rejects image with fewer than 4 sectors."""
         buffer = bytearray(768)  # Only 3 sectors
@@ -222,6 +304,18 @@ class TestWatfordDFSCatalogueValidation:
         errors = catalogue.validate()
 
         assert any("mismatch" in str(err).lower() for err in errors)
+
+    def test_validate_allows_independent_section_sequence_numbers(self, watford_dfs_surface):
+        """Each section's master sequence number is independent — 0x304 is
+        "not a copy of 0x104" (DiscImage.pdf p9) — so differing values are
+        valid and must not be reported as a mismatch."""
+        buffer = watford_dfs_surface._disc_image.buffer
+        buffer[768 + 4] = (buffer[256 + 4] + 1) & 0xFF  # section-2 seq != section-1
+
+        catalogue = WatfordDFSCatalogue(watford_dfs_surface)
+        errors = catalogue.validate()
+
+        assert not any("cycle" in str(err).lower() for err in errors)
 
 
 class TestWatfordDFSCatalogueMaxFiles:
