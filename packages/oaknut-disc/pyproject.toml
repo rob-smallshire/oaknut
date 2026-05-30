@@ -38,6 +38,7 @@ dependencies = [
     "rich>=13.0",
     "asyoulikeit>=1.2.0",
     "exit-codes>=1.3",
+    "natsort>=8.0",
 ]
 
 [project.urls]

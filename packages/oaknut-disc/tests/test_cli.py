@@ -226,6 +226,35 @@ class TestAccessBytesFormattedCorrectlyOnAFS:
         assert "WR/" in result.output
 
 
+class TestLsSorting:
+    """``disc ls`` lists entries in natural, case-insensitive order."""
+
+    def test_dfs_listing_is_natural_sorted(self, runner: CliRunner, tmp_path: Path) -> None:
+        from oaknut.dfs import ACORN_DFS_80T_SINGLE_SIDED, DFS
+
+        image = tmp_path / "sorted.ssd"
+        with DFS.create_file(image, ACORN_DFS_80T_SINGLE_SIDED, title="SORT") as dfs:
+            # Written low-sector first, so the raw catalogue order (descending
+            # sector) is the reverse; FILE2/FILE10 separate natural order from
+            # plain lexicographic (where "10" sorts before "2").
+            (dfs.root / "$.ALPHA").write_bytes(b"a")
+            (dfs.root / "$.FILE2").write_bytes(b"b")
+            (dfs.root / "$.FILE10").write_bytes(b"c")
+        out = runner.invoke(cli, ["ls", f"{image}:$"]).output
+        assert out.index("ALPHA") < out.index("FILE2") < out.index("FILE10")
+
+    def test_adfs_listing_is_case_insensitive(self, runner: CliRunner, tmp_path: Path) -> None:
+        from oaknut.adfs import ADFS, ADFS_L
+
+        image = tmp_path / "ci.adl"
+        with ADFS.create_file(image, ADFS_L, title="CI") as adfs:
+            (adfs.root / "Banana").write_bytes(b"b")
+            (adfs.root / "apple").write_bytes(b"a")
+        out = runner.invoke(cli, ["ls", str(image)]).output
+        # "apple" before "Banana" — case folded, not ASCII (where B < a).
+        assert out.index("apple") < out.index("Banana")
+
+
 # ---------------------------------------------------------------------------
 # Issue #10 — disc ls --access-byte / -H shows the raw access byte as two
 # hex digits alongside the symbolic column.

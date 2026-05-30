@@ -215,6 +215,7 @@ def ls(compound_path: str, show_access_byte: bool):
     Accepts a ``COMPOUND_PATH`` (the in-image ``INNER_PATH`` is optional and defaults to the root).
     """
     from asyoulikeit.tabular_data import Importance, Report, Reports, TableContent
+    from natsort import natsort_keygen, ns
     from oaknut.file import Access
     from oaknut.filesystem import AcornMetadata, FreeSpace, Titled
 
@@ -256,7 +257,12 @@ def ls(compound_path: str, show_access_byte: bool):
         table.add_column("hex", "Hex")
 
     has_acorn = isinstance(mount, AcornMetadata)
-    for child in mount.iter_entries(target):
+    # List in natural, case-insensitive order — friendlier than the
+    # filesystem's storage order (which a flat DFS keeps highest-sector
+    # first). This is display only; cp / find / storage-order keep the
+    # filesystem's own order.
+    natural_key = natsort_keygen(alg=ns.IGNORECASE)
+    for child in sorted(mount.iter_entries(target), key=lambda e: natural_key(e.name)):
         if child.is_dir:
             row = {
                 "name": child.name,
