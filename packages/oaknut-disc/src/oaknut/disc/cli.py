@@ -2521,7 +2521,7 @@ def create(
     metavar="PATH,...",
     help="Comma-separated paths to lay down first, in the lowest sectors "
     "(repeatable). Remaining files follow in their current order — so "
-    "'--order $.!BOOT,$.LOADER' puts the boot files where they load fastest.",
+    "--order $.!BOOT,$.LOADER puts the boot files where they load fastest.",
 )
 def compact(image: Path, order: tuple[str, ...]) -> None:
     """Defragment a disc image, consolidating free space.
