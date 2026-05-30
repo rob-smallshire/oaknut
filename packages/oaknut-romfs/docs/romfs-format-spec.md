@@ -221,25 +221,29 @@ system.
 
 ### 2.5 The title block
 
-The first object in the chain is a **zero-length file** whose name is the
-filing-system title wrapped in asterisks — mkromfs writes `*TITLE*` via
-`rfs_mkfile("*<title>*", 0, 0, 0, [])`. It functions as the filing
-system's name/catalogue marker, and is the title `*.` displays.
+The first object in the chain is conventionally a **zero-length file**
+naming the filing system — its catalogue/title marker, and the title `*.`
+displays. **Detection is positional: a zero-length *first* file.** The name
+style varies by author:
 
-On the Acornsoft cartridges the title-block names are `*Hopper01*`,
-`*Snap00*`, `*Doom01*`, `*Star01*`, `*Star02*` — the asterisks are part of
-the stored name. Their flag is **`&81` (last + locked)**, *not* the `&C0`
-(last + empty) that mkromfs and the NAUG `*EXAMPLE*` worked-example emit:
-Acorn's own builder leaves the `&40` empty bit clear even on a zero-length
-block and sets the lock bit instead. A reader must therefore treat
-"block length 0", not "empty bit set", as the test for an empty block.
+- **Acornsoft cartridges** wrap it in asterisks: `*Hopper01*`, `*Snap00*`,
+  `*Doom01*`, `*Star01*`, `*Star02*` (the asterisks are part of the stored
+  name). mkromfs likewise writes `*<title>*`.
+- **The BBC Master Demonstration cartridges** use a **bare** name —
+  `DEMO-A`, `DEMO-B` — matching the paged-ROM header title, with no
+  asterisks. So a parser must **not** key off asterisks; key off "first
+  file, length 0". This package strips surrounding asterisks if present
+  and exposes the result as the disc title.
+- **Some ROMs have none.** The BBC Zalaga ROM begins directly with the
+  real `ZALAGA` file (non-zero length), so it has no title block and no
+  `*.` title; its meaningful name is the *header* title `RFS id:298DE`
+  (shown by `*HELP`, §2.9), a separate string.
 
-> **The title block is optional.** The BBC Zalaga ROM (§6) has *no* title
-> block — its filing system begins directly with the `ZALAGA` file. A
-> parser must not assume a leading `*…*` block. When one is absent, the
-> filing system has no `*.`-displayed title; the ROM's *header* title
-> (shown by `*HELP`, §2.9) is a separate string and may or may not be
-> meaningful.
+The Acornsoft title block's flag is **`&81` (last + locked)**, *not* the
+`&C0` (last + empty) that mkromfs and the NAUG `*EXAMPLE*` example emit:
+Acorn leaves the `&40` empty bit clear even on a zero-length block. A
+reader must therefore treat "block length 0", not "empty bit set", as the
+test for an empty block.
 
 ### 2.6 End of filing system
 
@@ -417,24 +421,21 @@ Still to confirm:
    and the Electron cartridges share an identical on-ROM format (§6). Only
    authoring differs (type byte, language entry, presence of a title
    block); the service handler is machine code the parser never executes.
-2. **Multi-ROM spanning.** Largely resolved by the sideways-ROM notes: a
-   file too large for one ROM omits the `+` end marker, and its
-   continuation lives in the socket *immediately below* the first, with the
-   service handler bridging the cross-chip gap. The corpus does not
-   exercise this — Starship Command 1/2 (§6) are two *independent* games,
-   each a self-contained ROM with its own `+` — so the chained-bank reader
-   is unimplemented and untested here.
+2. **Multi-ROM spanning** — see §7. Mechanism understood from MOS 1.20 and
+   the sideways-ROM notes, but **no spanning image is yet in the corpus**
+   to verify a reassembler against, so it is unimplemented.
 3. **Non-Acornsoft / non-cartridge ROMFS** (e.g. mkromfs service-only
    `&82` ROMs) — exercise the `bit 7` type test and the `&C0` empty-flag
    variant once such an image is on hand.
 
 ## 6. Reference corpus
 
-Seven ROM images live at the workspace root under
+Nine ROM images live at the workspace root under
 `tests/data/images/romfs/`, all 16 KiB, all decoding with valid header and
-data CRCs. Six are official **Acornsoft Electron cartridges** and one
-(`Zalaga.rom`) is a **BBC Micro** ROM — and the on-ROM format is
-*identical* across the two machines (§5). They differ only in *authoring*:
+data CRCs: six Acornsoft Electron cartridges, two BBC Master Demonstration
+cartridges (`DEMO-A` / `DEMO-B`), and one BBC Micro ROM (`Zalaga`). The
+on-ROM format is *identical* across machines (§5); they differ only in
+*authoring*:
 
 | | Acornsoft cartridges | Zalaga (BBC) |
 |---|---|---|
@@ -480,10 +481,14 @@ Electron_Starship_Command_2.rom     FS data @ &80BB
   STRCOM2     blk &23  len &002400  load &00002E00  exec &000047B1  last
 ```
 
-Note Countdown To Doom 1 and 2 carry the **same** catalogue (the `INIT`
-load address `&3BFB` and the `!BOOT` are identical) — they are two
-pressings, useful as a duplicate-detection fixture. Starship Command is a
-**two-cartridge** game: `STRCOM1` on disc 1, `STRCOM2` on disc 2.
+Countdown To Doom 1 and 2 are **byte-for-byte identical** whole images —
+the same dump twice (a duplicate-detection fixture). The DOOM game proper
+is not in the filing system: it lives in the 12 KiB composite tail (the
+sideways-ROM code after the `+`), with only a small `Doom01`/`!BOOT`/
+`DOOM`/`INIT` bootstrap in the filing system. Starship Command 1/2 and the
+Master Demonstration A/B are likewise **independent** cartridges, each a
+self-contained ROMFS with its own `+`. None of the four `_1`/`_2` pairs is
+a *spanning* set — see §7.
 
 ```
 Zalaga.rom  (BBC Micro)             FS data @ &810B, no title block
@@ -494,3 +499,73 @@ Zalaga is the parser's robustness fixture: a service-only (`&82`) ROM with
 no title block, a single 46-block file, and a **differing load/exec**
 (`&3000` / `&4522`) — confirmed against a real BBC `*.` showing
 `ZALAGA  2D 2D25  00003000 00004522`.
+
+## 7. Multi-ROM spanning
+
+A ROMFS too large for one 16 KiB ROM may span several ROMs in adjacent
+sockets. This is the one ROMFS feature that does not fit "one filing
+system = one image".
+
+### 7.1 The mechanism (from MOS 1.20)
+
+The OS reads the filing system as a **single byte stream** served a byte
+at a time by the active ROM's service handler:
+
+- The OS finds filing-system data by broadcasting service call `&0D`
+  (initialise) to the sideways ROMs. MOS 1.20's OSBYTE 143 loop scans
+  sockets **15 down to 0** (`LDX #15 … DEX … "point to next lower ROM"`),
+  calling each ROM's service entry; a ROM with RFS data claims and points
+  the OS read pointer (`&F6/&F7`) at its own data start, recording itself
+  as the active RFS ROM (`&F5`).
+- Service call `&0E` returns the next byte and advances that pointer. The
+  loader (`searchForBlockCheckFilingSystem` → `readByteFromROMOrPHROM`)
+  pulls bytes and parses the block chain; the V flag marks "final block on
+  ROMFS", and bit 7 of the block flag ends a file.
+- When a ROM's data is exhausted before a `+` is seen, the filing system
+  **continues in the socket immediately below**: the OS re-initialises
+  (`&0D`) onto the next-lower ROM, whose handler re-points `&F6/&F7` at
+  *its* data start, and the byte stream continues. The sideways-ROM notes
+  call this bridging the "cross-chip gap".
+- The `&2B` end marker — present **only in the final ROM** — stops the
+  scan.
+
+So the logical filing system is the **concatenation of each ROM's data
+region** (the bytes from that ROM's data start to `&BFFF`), in socket
+order, top-priority first, until `&2B`. A single file's block chain may
+straddle a chip boundary; the reader just keeps consuming the stream. Each
+member ROM is itself a valid paged ROM with its own header and `&0D`/`&0E`
+handler — the stream skips those prefixes because each ROM's `&0D` points
+past its own handler.
+
+> **Unverified detail.** That the stream is the concatenation of *data
+> regions* (handler prefixes skipped), rather than of whole 16 KiB images,
+> is derived from the `&0D` pointer semantics, not yet confirmed against a
+> real spanning image. Treat §7 as a design basis, to be pinned down when
+> an example exists.
+
+### 7.2 The corpus has no spanning set
+
+Every multi-ROM product in `tests/data/images/romfs/` is **independent
+cartridges**, not a spanning filing system: Countdown To Doom 1/2 are
+byte-identical duplicates; Starship Command 1/2 are two separate games;
+Master Demonstration A/B are two separate demos. Each member is a complete
+ROMFS terminated by its own `+`. We still lack a genuine spanning image.
+
+### 7.3 Detection and grouping (design)
+
+- **Detection is by content, not filename.** A spanning *fragment* is a
+  ROM whose data runs to `&BFFF` with **no `+`** (equivalently, the last
+  file is left unterminated — its final block never carries bit 7). The
+  final fragment has the `+`. A complete single ROM always has a `+`. This
+  is reliable and needs no convention.
+- **Do not infer a set from `_1`/`_2`.** Every `_1`/`_2` pair in the
+  corpus is independent or duplicate, so joining by that suffix would
+  fabricate a broken filing system. Grouping must be explicit: an ordered
+  CLI source (e.g. `disc ls first.rom+second.rom`, top socket first) or a
+  sidecar manifest (e.g. a `.romset` listing members in socket order).
+  Reassembly belongs in a native `ROMFS.from_roms([...])`, keeping the
+  single-`ImageReader` plug-in contract unchanged.
+- **Near-term behaviour:** identify a fragment (no `+`) and report
+  "ROMFS, continues in another ROM" rather than mis-reporting it as a
+  slightly-broken complete image. Full reassembly waits for a verified
+  example.

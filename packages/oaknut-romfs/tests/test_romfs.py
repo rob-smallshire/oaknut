@@ -78,9 +78,22 @@ def test_starship_is_two_cartridges():
     assert two.title == "Star02"
 
 
+def test_master_demo_cartridges_are_independent_not_spanning():
+    # DEMO-A and DEMO-B are two self-contained cartridges, each a complete
+    # ROMFS with its own title block and end marker — not a spanning set.
+    a = load("BBC_Master_Demonstration_Cartridge_1.rom")
+    b = load("BBC_Master_Demonstration_Cartridge_2.rom")
+    assert a.title == "DEMO-A"
+    assert b.title == "DEMO-B"
+    # DEMO-A carries a service handler after the filing system (composite),
+    # so it is read-only; DEMO-B is plain.
+    assert not a.is_plain
+    assert b.is_plain
+
+
 def test_whole_corpus_parses_with_valid_crcs():
     roms = sorted(ROMFS_DIRPATH.glob("*.rom"))
-    assert len(roms) == 7
+    assert len(roms) == 9
     for filepath in roms:
         rom = ROMFS.from_bytes(filepath.read_bytes())  # strict: raises on any bad CRC
         assert rom.files, f"{filepath.name} parsed no files"

@@ -76,8 +76,8 @@ class _ROMFSMount:
         self._reader = reader
 
     # -- helpers --
-    def _data_files(self) -> list[ROMFSFile]:
-        return [f for f in self._romfs.files if not f.is_title]
+    def _data_files(self) -> tuple[ROMFSFile, ...]:
+        return self._romfs.data_files
 
     def _find(self, path: str) -> ROMFSFile | None:
         for f in self._data_files():
@@ -203,7 +203,7 @@ class _ROMFSMount:
             )
         title_block = ROMFSFile(wrapped, 0, 0, True, b"")
         files = self._romfs.files
-        if files and files[0].is_title:
+        if self._romfs.title_block is not None:
             files = (title_block,) + files[1:]
         else:
             files = (title_block,) + files
@@ -230,7 +230,7 @@ class AcornROMFS(Filesystem):
         except (NotAROMFSError, CRCError, TruncatedROMError):
             return None
 
-        data_files = [f for f in romfs.files if not f.is_title]
+        data_files = romfs.data_files
         evidence = [
             f"ROM type &{romfs.rom_type:02X}"
             + (" (service entry)" if romfs.has_service_entry else ""),

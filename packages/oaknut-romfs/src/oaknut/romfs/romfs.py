@@ -80,15 +80,13 @@ class ROMFSFile:
             return 0
         return (self.length - 1) // BLOCK_DATA_SIZE
 
-    @property
-    def is_title(self) -> bool:
-        """Whether this is a ``*…*``-wrapped, zero-length title block."""
-        return (
-            self.length == 0
-            and len(self.name) >= 2
-            and self.name[0] == "*"
-            and self.name[-1] == "*"
-        )
+
+
+def _unwrap_title(name: str) -> str:
+    """Strip the surrounding asterisks from an Acornsoft-style title block."""
+    if len(name) >= 2 and name[0] == "*" and name[-1] == "*":
+        return name[1:-1]
+    return name
 
 
 def _decode_string(buf: bytes, start: int) -> str:
@@ -301,8 +299,27 @@ class ROMFS:
 
     @property
     def files(self) -> tuple[ROMFSFile, ...]:
-        """All files in catalogue order, including any ``*…*`` title block."""
+        """All files in catalogue order, including any leading title block."""
         return self._files
+
+    @property
+    def title_block(self) -> ROMFSFile | None:
+        """The leading zero-length title block, or ``None``.
+
+        By convention the first file is a zero-length marker naming the
+        disc. Acornsoft wraps the name in asterisks (``*Hopper01*``); the
+        BBC Master demos use a bare name (``DEMO-A``); some ROMs (Zalaga)
+        have none, beginning directly with a real file. Detection is
+        therefore positional — a zero-length *first* file — not name-based.
+        """
+        if self._files and self._files[0].length == 0:
+            return self._files[0]
+        return None
+
+    @property
+    def data_files(self) -> tuple[ROMFSFile, ...]:
+        """The files excluding any leading title block."""
+        return self._files[1:] if self.title_block is not None else self._files
 
     @property
     def rom_type(self) -> int:
@@ -336,9 +353,8 @@ class ROMFS:
         Empty when the image has no title block (as on the BBC Zalaga ROM),
         which is the title ``*.`` displays.
         """
-        if self._files and self._files[0].is_title:
-            return self._files[0].name[1:-1]
-        return ""
+        block = self.title_block
+        return _unwrap_title(block.name) if block is not None else ""
 
     @property
     def data_offset(self) -> int:
