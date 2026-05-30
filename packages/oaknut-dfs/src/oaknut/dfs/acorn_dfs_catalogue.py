@@ -48,19 +48,17 @@ class AcornDFSCatalogue(Catalogue):
         sector1[7] = total_sectors & 0xFF
 
     @classmethod
-    def matches(cls, surface: Surface) -> bool:
-        """
-        Check if surface appears to be standard Acorn DFS format.
+    def match_evidence(cls, surface: Surface) -> list[str] | None:
+        """Identification evidence for standard Acorn DFS, or ``None``.
 
-        Uses heuristics from "Guide to Disc Formats.pdf" to identify
-        Acorn DFS while excluding Watford DFS and other variants.
-
-        Returns:
-            True if surface appears to be standard Acorn DFS
+        Uses the heuristics from "Guide to Disc Formats.pdf" to identify
+        Acorn DFS while excluding Watford DFS and other variants. Each
+        disqualifying check returns ``None``; a well-formed catalogue
+        returns the verified signals. :meth:`matches` derives from this.
         """
         # Need at least 4 sectors to check for Watford DFS markers
         if surface.num_sectors < 4:
-            return False
+            return None
 
         # Read catalogue sectors
         sector0 = surface.sector_range(0, 1)
@@ -69,32 +67,32 @@ class AcornDFSCatalogue(Catalogue):
         # Check 1: Offset 0x001 - 9 bytes of title without top bit set and >31 or =0
         for i in range(1, 10):
             if not cls._is_valid_title_char(sector0[i]):
-                return False
+                return None
 
         # Check 2: Offset 0x100 - 4 bytes of title without top bit set and >31 or =0
         for i in range(4):
             if not cls._is_valid_title_char(sector1[i]):
-                return False
+                return None
 
         # Check 3: Offset 0x105 - bits 0,1,2 should be clear (multiple of 8)
         num_files_byte = sector1[5]
         if num_files_byte & 0x07:  # Bits 0,1,2 set
-            return False
+            return None
         num_files = num_files_byte // 8
         if num_files > cls.MAX_FILES:  # Should be <= 31 for Acorn DFS
-            return False
+            return None
 
         # Check 4: Offset 0x106 - bits 2,3,6,7 should be clear
         boot_sectors_byte = sector1[6]
         if boot_sectors_byte & 0xCC:  # Bits 2,3,6,7 set
-            return False
+            return None
 
         # Check 5: Total sectors calculation and divisibility by 10
         total_sectors = ((boot_sectors_byte & 0x03) << 8) | sector1[7]
         if total_sectors < 4:  # Minimum sectors
-            return False
+            return None
         if total_sectors % 10 != 0:
-            return False
+            return None
 
         # Check 6 (optional): Tracks should be reasonable
         # PDF notes: "not all double-sided discs have the same number of tracks"
@@ -102,7 +100,7 @@ class AcornDFSCatalogue(Catalogue):
         # So we keep this check very lenient - just ensure it's positive
         tracks = total_sectors // 10
         if tracks < 1:
-            return False
+            return None
 
         # A truncated image declares its full (untruncated) sector count
         # while the file holds only the used sectors; the filing system
@@ -117,7 +115,7 @@ class AcornDFSCatalogue(Catalogue):
 
         # If sector 2 starts with 8 bytes of 0xAA, it's Watford
         if all(sector2[i] == 0xAA for i in range(8)):
-            return False
+            return None
 
         # If sector 3 starts with 4 bytes of 0x00 AND has matching boot/sectors
         # then it's Watford
@@ -127,10 +125,11 @@ class AcornDFSCatalogue(Catalogue):
             and sector3[6] == sector1[6]  # matches boot/sectors high
             and sector3[7] == sector1[7]
         ):  # matches sectors low
-            return False
+            return None
 
-        # All checks passed - this is standard Acorn DFS
-        return True
+        # All checks passed - this is standard Acorn DFS.
+        plural = "" if num_files == 1 else "s"
+        return [f"well-formed Acorn DFS catalogue ({num_files} file{plural} in sectors 0–1)"]
 
     @staticmethod
     def _is_valid_title_char(byte: int) -> bool:

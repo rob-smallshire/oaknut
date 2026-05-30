@@ -124,20 +124,29 @@ class Catalogue(ABC):
 
     @classmethod
     @abstractmethod
-    def matches(cls, surface: Surface) -> bool:
+    def match_evidence(cls, surface: "Surface") -> list[str] | None:
+        """Identification evidence for *surface*, or ``None`` if it is not
+        this catalogue format.
+
+        This is the **single source of truth** for identification: one pass
+        that both gates the match (``None`` ⇒ not this format) and collects
+        the human-readable signals reported by ``disc identify``. The
+        boolean :meth:`matches` is derived from it, so the decision and its
+        evidence can never drift apart.
+
+        A non-``None`` result is the list of verified signals (magic bytes,
+        structural checks, per-disc details). Each disqualifying check
+        returns ``None`` instead of contributing evidence.
         """
-        Check if this catalogue type matches the given surface.
+        raise NotImplementedError
 
-        This is a heuristic check based on catalogue structure, magic bytes,
-        validity of metadata, etc.
+    @classmethod
+    def matches(cls, surface: "Surface") -> bool:
+        """Whether *surface* uses this catalogue format.
 
-        Args:
-            surface: The surface to check
-
-        Returns:
-            True if this surface appears to use this catalogue format
+        Derived from :meth:`match_evidence` — there is no separate check.
         """
-        pass
+        return cls.match_evidence(surface) is not None
 
     @abstractmethod
     def get_disc_info(self) -> DiscInfo:

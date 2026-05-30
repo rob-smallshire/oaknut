@@ -207,6 +207,30 @@ class TestWatfordDFSCatalogueMatches:
         buffer[8 + char_offset] |= 0x80
         assert not WatfordDFSCatalogue.matches(surface)
 
+    def test_match_evidence_is_the_single_source_for_matches(self, watford_dfs_surface):
+        """The boolean gate is derived from the evidence — one system, not two.
+        A matched surface yields evidence; breaking a required signal removes
+        both the evidence and the match, in lockstep."""
+        assert WatfordDFSCatalogue.match_evidence(watford_dfs_surface) is not None
+        assert WatfordDFSCatalogue.matches(watford_dfs_surface)
+
+        buffer = watford_dfs_surface._disc_image.buffer
+        buffer[512] = 0x00  # clobber the first byte of the 0xAA marker
+        assert WatfordDFSCatalogue.match_evidence(watford_dfs_surface) is None
+        assert not WatfordDFSCatalogue.matches(watford_dfs_surface)
+
+    def test_untitled_disc_with_files_reports_empty_title(self, tmp_path):
+        """An untitled Watford disc carrying files reports an empty title — not
+        the file-entry bytes the old sector0[0:10] read leaked in."""
+        from oaknut.dfs.dfs import DFS
+        from oaknut.dfs.formats import WATFORD_DFS_80T_SINGLE_SIDED
+
+        image_filepath = tmp_path / "untitled.ssd"
+        with DFS.create_file(image_filepath, WATFORD_DFS_80T_SINGLE_SIDED) as dfs:
+            (dfs.root / "$.840101").write_bytes(b"data")  # name starts "84"
+        with DFS.from_file(image_filepath, WATFORD_DFS_80T_SINGLE_SIDED) as dfs:
+            assert dfs.title == ""
+
     def test_matches_rejects_too_few_sectors(self):
         """Test matches() rejects image with fewer than 4 sectors."""
         buffer = bytearray(768)  # Only 3 sectors

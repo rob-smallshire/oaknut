@@ -251,3 +251,26 @@ class TestOpenSurface:
         with reader_for(image_filepath) as reader:
             with pytest.raises(VolumeNotFormattedError, match=r":2"):
                 fs.open(reader, double, surface=1)
+
+
+class TestIdentificationEvidence:
+    """`disc identify` evidence is collected from the verified signals, not a
+    canned per-filesystem string — and is the same pass that gates the match.
+    """
+
+    def test_acorn_evidence_reports_catalogue_and_count(self, tmp_path):
+        results = identify(_make_dfs_image(tmp_path))  # two files
+        evidence = results[0].evidence
+        assert any("Acorn DFS catalogue" in item for item in evidence)
+        assert any("2 file" in item for item in evidence)  # dynamic, per-disc
+
+    def test_watford_evidence_surfaces_the_verified_signals(self):
+        results = identify(_watford_image_bytes(), suffix_hint=".ssd")
+        evidence = results[0].evidence
+        joined = "; ".join(evidence)
+        assert any("0xAA marker" in item for item in evidence)
+        assert any("extended catalogue" in item for item in evidence)
+        # The >256KB extension-bit guard is now visible as evidence.
+        assert any("extension bit" in item for item in evidence)
+        # Stale wording gone — counts and sequence numbers are NOT synced.
+        assert "synced metadata" not in joined

@@ -237,17 +237,21 @@ class _BaseDFS(Filesystem):
     #: The concrete catalogue class (subclass responsibility).
     _catalogue: type = AcornDFSCatalogue
     _confidence: Confidence = Confidence.PROBABLE
-    _evidence: str = ""
 
     def probe(self, reader: ImageReader) -> Identification | None:
         surface = _flat_surface(reader)
-        if surface is None or not self._catalogue.matches(surface):
+        if surface is None:
+            return None
+        # match_evidence() is the single source of truth: None means "not this
+        # catalogue", otherwise it returns the verified signals to report.
+        evidence = self._catalogue.match_evidence(surface)
+        if evidence is None:
             return None
         geometry, ambiguities = _propose_geometry(reader.size)
         return Identification(
             filesystem=self.name,
             confidence=self._confidence,
-            evidence=(self._evidence,),
+            evidence=tuple(evidence),
             geometry=geometry,
             ambiguities=ambiguities,
         )
@@ -336,7 +340,6 @@ class AcornDFS(_BaseDFS):
 
     _catalogue = AcornDFSCatalogue
     _confidence = Confidence.PROBABLE
-    _evidence = "well-formed Acorn DFS catalogue in sectors 0–1"
     #: The default creator for plain DFS floppies.
     creates = frozenset({".ssd", ".dsd"})
 
@@ -351,5 +354,4 @@ class WatfordDFS(_BaseDFS):
 
     _catalogue = WatfordDFSCatalogue
     _confidence = Confidence.STRONG
-    _evidence = "Watford DFS extended catalogue (0xAA marker, synced metadata)"
     priority = 10
