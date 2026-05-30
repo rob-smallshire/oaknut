@@ -417,9 +417,13 @@ filing-system ROMs, so they neither autostart (no language entry) nor
 auto-boot a `!BOOT` (not a data ROM's role). They are driven by hand —
 `*ROM`, then `*EXEC !BOOT` / `*RUN` / `CHAIN` — exactly as §2.10's
 operations allow. A self-*starting* cartridge would be a different artifact:
-a language ROM wrapping a loader, wrapping (optionally) RFS data. That is
-out of scope here, and would not be "a ROMFS feature" so much as a
-language-ROM feature that happens to use ROMFS.
+a language ROM wrapping a loader, wrapping (optionally) RFS data. It is not
+built here — it would be a language-ROM feature that happens to use ROMFS,
+rather than "a ROMFS feature" — but it is a sensible, well-precedented
+addition (it is how the Acornsoft cartridges work), penciled in as a future
+feature in `docs/architecture.md`: a `--autostart` create option that adds
+a `JMP language` entry and a small stub which `OSCLI`s `*ROM` then
+`*EXEC !BOOT`.
 
 ## 3. The CRC algorithm
 

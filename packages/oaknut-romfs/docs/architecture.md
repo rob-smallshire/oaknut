@@ -163,6 +163,39 @@ anything.
    (mirroring the DFS package), once a use-case needs it.
 10. ⬜ Multi-ROM **spanning** reassembler — deferred until a genuine
     spanning example exists (§7 of the format spec).
+11. ⬜ **Self-starting (language-ROM) cartridges** — see below.
+
+## Future: self-starting cartridges (the language-ROM technique)
+
+A created ROM is a *data* ROM (`&82`): the player must `*ROM` then
+`*EXEC !BOOT` by hand (§2.11 of the format spec). The Acornsoft Electron
+cartridges instead *start themselves* on power-on or `Shift-Break` by being
+**language ROMs** — and we can emit the same.
+
+Sketch (`disc create --autostart`, or a `disc romfs make-bootable`
+transform):
+
+- Set ROM type bit 6 → **`&C2`** (service **+ language** + 6502), and write
+  a real `JMP language` at `&8000` instead of the null `00 00 00`.
+- Emit a short **language stub** beside the `&0D`/`&0E` handler. On entry
+  the MOS has printed the title; the stub flattens the stack
+  (`LDX #&FF : TXS`), re-enables interrupts (`CLI`), then issues the boot
+  via `OSCLI` (`&FFF7`) — e.g. `*ROM` then `*EXEC !BOOT` — so the game's own
+  loader takes over. The boot command would default to `*EXEC !BOOT` (the
+  DFS boot-option-3 equivalent) and be overridable.
+- The stub is hand-assembled by the existing two-pass assembler
+  (`handler.py`); it needs `OSCLI` and an embedded command string. As with
+  the service handler, assemble for correctness then confirm execution in a
+  6502 emulator.
+
+Why it's a clean fit: it reuses the assembler and the create/rebuild path,
+and it is exactly the documented mechanism (§2.11) — a language ROM that
+*also* carries ROMFS data. Caveats: it produces a `&C2` ROM (so it would be
+read-only to our writer afterwards, by the language-entry rule in
+`set_copyright`), and the language-ROM contract has real subtleties (the
+error vector, never returning), so the stub needs care and emulator
+testing. Sensible, but a distinct artifact from the plain data cartridge —
+hence penciled in rather than built.
 
 ## Test data
 
