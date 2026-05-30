@@ -1,0 +1,427 @@
+# The Acorn ROM Filing System (ROMFS) on-ROM format
+
+This document describes the byte layout of a ROMFS paged ROM. It is the
+reference for the parser and serialiser in this package.
+
+ROMFS is documented only sparsely in primary Acorn material. The layout
+here is reconstructed from the OS reader itself plus working generators,
+and cross-checked against the *New Advanced User Guide* (NAUG) service-ROM
+template:
+
+- **Acorn MOS disassembly** — the OS Tape and ROM Filing System source,
+  the authoritative reference for the *read* state machine.
+  <https://tobylobster.github.io/mos/mos/S-s18.html>
+- **"Code when loading from ROM"** — a control-flow diagram of the MOS
+  load-from-ROM routine, naming the state machine and its routines:
+  `docs/dev/manuals/LoadFromROM.pdf` (in this repo).
+- **mkromfs** — Dominic Beesley's Perl + beebasm ROM generator.
+  <https://github.com/dominicbeesley/mkromfs> (`handlesvc.asm`,
+  `mkromfs.pl`). The most precise field-by-field *writer* reference and
+  the basis for the byte tables below.
+- **MakeRFS** — J.G. Harston's 6502 builder, with a fast loader.
+  <https://mdfs.net/Software/BBC/ROMFS/MakeRFS>
+- **UEF2ROM** — converts UEF cassette images to Acorn Electron ROM
+  cartridges (the same ROMFS format).
+  <https://github.com/stardot/UEF2ROM>
+- Stardot discussion: <https://stardot.org.uk/forums/viewtopic.php?t=23135>
+
+> **Verification status.** The paged-ROM header, the per-file block field
+> layout, and the marker-byte / flag-bit semantics below are corroborated
+> by *both* the MOS reader disassembly and the mkromfs writer source, and
+> are high-confidence. The items still marked **(confirm against images)**
+> are the few that the OS reader does not pin down — chiefly where the
+> filing-system data starts within a given generator's ROM, and multi-bank
+> spanning — and should be checked against the reference Electron/BBC ROM
+> images before the parser is finalised.
+
+## 1. The paged-ROM container
+
+A ROMFS ROM is an ordinary Acorn *paged ROM* (sideways ROM or cartridge),
+mapped at `&8000`–`&BFFF` (16 KiB) — 8 KiB ROMs occupy `&8000`–`&9FFF`.
+It begins with the standard paged-ROM header, then a service-call handler,
+then the ROM filing-system data.
+
+### 1.1 Paged-ROM header
+
+From `handlesvc.asm` (offsets are absolute, ROM mapped at `&8000`):
+
+| Offset | Bytes | Field | Notes |
+|-------:|------:|-------|-------|
+| `&8000` | 3 | Language entry | `JMP language` on a language+FS ROM, or `00 00 00` if none |
+| `&8003` | 3 | Service entry | `JMP service` (`4C lo hi`) |
+| `&8006` | 1 | ROM type | bit 7 = service entry; bit 6 = language entry; low nibble = CPU |
+| `&8007` | 1 | Copyright offset | offset, *relative to ROM start*, of the `00` byte before `(C)` |
+| `&8008` | 1 | Binary version | a single version byte |
+| `&8009` | n+1 | Title | ASCII title string, NUL-terminated |
+| … | m | Version string | printable version text (may be empty) |
+| … | 1 | `00` | leading NUL of the copyright field (pointed at by `&8007`) |
+| … | k | Copyright | ASCII copyright string; **must begin `(C)`** |
+| … | 1 | `00` | end of paged-ROM header |
+
+The copyright string starting with `(C)` is mandatory for a valid Acorn
+paged ROM, and the byte at `&8007` must point at the `00` immediately
+preceding it. These two facts give a strong structural check when
+identifying a ROMFS image.
+
+> **Observed on the reference corpus** (six Acornsoft Electron cartridges,
+> §6). The ROM type byte is **`&C2`** — service *and* language entry
+> present (the cartridges are language ROMs too), so `probe()` must test
+> *bit 7* rather than match `&82` (which is what mkromfs, a service-only
+> ROM, emits). Every cartridge carries the generic header title
+> `"ROM Cartridge"`, version `&01`, and copyright `(C) 1984 Acornsoft` at
+> offset `&18`. The *filing-system* title is **not** this header title; it
+> is the `*…*`-wrapped title block (§2.5). So treat the header title as
+> incidental and read the displayed disc title from the title block.
+
+### 1.2 Service handler
+
+Between the header and the filing-system data sits the 6502 service
+handler that responds to OSRDRM-style byte reads (`handlesvc.asm`
+implements service calls `&0D` *initialise filing system* and `&0E` *read
+byte*). The parser does not need to interpret this code; it only needs to
+know that the filing-system data begins *after* it. In mkromfs the data
+starts at a fixed offset that depends only on the lengths of the title,
+version and copyright strings:
+
+```
+DATA_OFFSET = 0x805D + len(version_str) + len(title) + len(copyright)
+```
+
+`0x805D` is the size of the header plus service handler with empty title,
+version and copyright.
+
+> **Do not trust a fixed offset.** On the reference corpus the data start
+> *varies by ROM* — `&80BB` for most, `&829C` for Countdown To Doom —
+> because the hand-written 6502 handler differs in length. The robust
+> approach, confirmed across all six images, is to **scan forward from the
+> header for the first `&2A` whose block header CRC validates**, and treat
+> that as the start of the filing-system data. The mkromfs `DATA_OFFSET`
+> formula above applies only to mkromfs-built ROMs.
+
+## 2. The filing-system data: a chain of CFS blocks
+
+After the header/handler comes the ROM filing-system data: a sequence of
+files, each a chain of one or more blocks in **Cassette Filing System**
+format, terminated by an end-of-filesystem marker.
+
+### 2.1 Marker bytes
+
+| Byte | Char | Meaning |
+|-----:|:----:|---------|
+| `&2A` | `*` | **Synchronisation** — a full block *header* follows. `&2A` = `%00101010`, alternating ones and zeroes (the tape sync pattern) |
+| `&23` | `#` | **Inter-block marker** — a headerless continuation data block follows (a ROMFS shortcut; tape repeats the full header) |
+| `&2B` | `+` | **End of filing system** — no more files (a single byte after the last block) |
+
+These three values and their roles are confirmed by the MOS reader: it
+syncs on `&2A`, reads a continuation block on `&23`, and resets at `&2B`
+when it reaches the end of the ROM's data.
+
+### 2.2 Block header
+
+A header block begins with the `&2A` sync byte, then the following fields
+(this is exactly mkromfs's `pack("Z* L L S S C L", …)` plus the two CRCs):
+
+| Field | Size | Encoding | Notes |
+|-------|-----:|----------|-------|
+| Sync | 1 | `&2A` | start of header block |
+| Name | 1–10 + 1 | ASCII, NUL-terminated | upper-cased; spaces → `_`; truncated to 10 |
+| Load address | 4 | little-endian | Acorn load address |
+| Exec address | 4 | little-endian | Acorn execution address |
+| Block number | 2 | little-endian | 0 for the first block, incrementing |
+| Block length | 2 | little-endian | data bytes *in this block*, 0–256 |
+| Flag | 1 | bitfield | see below |
+| End-of-file address | 4 | little-endian | the **address of the end byte of the file** in paged-ROM space (`&80xx`–`&BFxx`) — i.e. where the *next* file begins. On *tape* this field is four `&00` bytes; ROMFS reuses it as this pointer (MOS) |
+| Header CRC | 2 | **big-endian** | CRC-16 over the header from the name through the end-of-file address |
+
+Then, if block length > 0:
+
+| Field | Size | Encoding |
+|-------|-----:|----------|
+| Data | *block length* | raw bytes |
+| Data CRC | 2 | **big-endian** CRC-16 over the data |
+
+The header CRC and data CRC are stored most-significant-byte first
+(big-endian), unlike the little-endian multi-byte integer fields.
+
+### 2.3 Flag byte
+
+| Bit | Mask | Meaning |
+|----:|-----:|---------|
+| 7 | `&80` | **Last block** of this file |
+| 6 | `&40` | **Empty block** — this block carries no data (block length 0) |
+| 0 | `&01` | **Locked** file (Acorn access "L"; derived from `access & &08`) |
+
+A file of ≤ 256 bytes is a single block whose flag has bit 7 set (it is
+simultaneously the first and the last block). A zero-length file is a
+single block with flag `&C0` (last + empty).
+
+The MOS reader treats a load address of all four `&FF` bytes specially: it
+raises a "Bad address" error, so `&FFFFFFFF` is not a legal load address
+for a ROMFS file.
+
+### 2.4 Multi-block files
+
+For a file spanning *N* > 1 blocks, mkromfs emits:
+
+1. **Block 0** — full header (sync `&2A`), flag *without* `&80`, 256 data
+   bytes, data CRC.
+2. **Middle blocks** (`1 … N-2`) — a single `&23` inter-block marker
+   (no header), 256 data bytes, data CRC.
+3. **Last block** (`N-1`) — full header (sync `&2A`), flag *with* `&80`,
+   the final 1–256 data bytes, data CRC.
+
+So mkromfs repeats the full header on the *last* block as well as the
+first; middle blocks are headerless. The header must reappear on the last
+block because a `&23` continuation block carries no flag byte, so the
+final block re-syncs with `&2A` precisely to deliver the `&80` "last
+block" flag. A `&23` continuation block has no length field either, so it
+is implicitly a full **256-byte** block; only the first and last blocks
+state an explicit block length. The reader is therefore a small state
+machine: at each boundary, `&2A` → parse a header (its flag bit 7 ends the
+file), `&23` → read a 256-byte continuation block, `&2B` → end of filing
+system.
+
+> Generators differ in detail: the MOS reader is happy with `&23` for all
+> blocks after the first, so a builder that emits only block-0 headers and
+> drives completion purely from block lengths is also valid. The reader
+> should tolerate either a header (`&2A`) or an inter-block marker (`&23`)
+> at each boundary and not assume the last block re-syncs.
+
+### 2.5 The title block
+
+The first object in the chain is a **zero-length file** whose name is the
+filing-system title wrapped in asterisks — mkromfs writes `*TITLE*` via
+`rfs_mkfile("*<title>*", 0, 0, 0, [])`. It functions as the filing
+system's name/catalogue marker, and is the title `*.` displays.
+
+On the Acornsoft cartridges the title-block names are `*Hopper01*`,
+`*Snap00*`, `*Doom01*`, `*Star01*`, `*Star02*` — the asterisks are part of
+the stored name. Their flag is **`&81` (last + locked)**, *not* the `&C0`
+(last + empty) that mkromfs and the NAUG `*EXAMPLE*` worked-example emit:
+Acorn's own builder leaves the `&40` empty bit clear even on a zero-length
+block and sets the lock bit instead. A reader must therefore treat
+"block length 0", not "empty bit set", as the test for an empty block.
+
+> **The title block is optional.** The BBC Zalaga ROM (§6) has *no* title
+> block — its filing system begins directly with the `ZALAGA` file. A
+> parser must not assume a leading `*…*` block. When one is absent, the
+> filing system has no `*.`-displayed title; the ROM's *header* title
+> (shown by `*HELP`, §2.9) is a separate string and may or may not be
+> meaningful.
+
+### 2.6 End of filing system
+
+After the last file's last block, a single `&2B` byte marks the end (MOS).
+A reader scanning block boundaries stops when it meets `&2B` — or, more
+defensively, any byte that is neither a `&2A` sync nor a `&23` inter-block
+marker where a block is expected, or when the end-of-file address runs
+past the ROM bank.
+
+### 2.7 The OS read state machine
+
+`LoadFromROM.pdf` traces how the MOS reads a file from ROM, driven by a
+byte `fsReadProgressState`. The same routine serves tape and ROM through a
+unified `readByteFromTapeOrROM`; for ROM the carrier-tone states are
+skipped and there is no ACIA wait. The states are:
+
+| State | Meaning |
+|------:|---------|
+| 0 | done — exit |
+| 1 | looking for carrier tone *(tape only)* |
+| 2 | found carrier tone, waiting for sync byte `&2A` *(tape only)* |
+| 3 | found sync byte `&2A`, now reading header |
+| 4 | header read with non-zero block length, now reading block data |
+| 5 | finished reading this block's data — set state back to 0 |
+
+For ROM, the loader initialises straight to state 4 once a header has been
+read (`setStateForLoadingBlockDataOrReset`), since states 1–3 are the tape
+carrier/sync search. The notable routines:
+
+- **`searchForFile` → `searchForBlockReadHeaderAndCompare`** — walk the
+  block chain reading each header and comparing the filename.
+- **`checkForROMBlockMarker` / `startOfBlock`** — *"checks for the
+  synchronisation byte, which is different for the first block; increments
+  the block number as needed."* This is the OS confirming that the first
+  block of a file carries the `&2A` header while subsequent blocks use the
+  `&23` shortcut, and that blocks are numbered sequentially.
+- **`loadBlock` → `blockNumbersMatch`** — the assembled file's blocks must
+  arrive in order; the loader checks each block number against the
+  expected next value.
+- **`checkFileAttributes` / `loadOrRun`** — apply the load/exec addresses
+  and the flag bits (`*RUN` vs `*LOAD`, locked).
+
+The practical consequence for the parser: read the first header (`&2A`),
+then for each subsequent boundary expect either another header (`&2A`,
+re-syncing to deliver a flag — e.g. the last block) or a `&23`
+continuation block; track the block number to keep blocks in order; stop
+when a header's flag has bit 7 set, or at the `&2B` end marker.
+
+### 2.8 The `*.` catalogue display
+
+`*.` lists the filing system. Each line is, in order:
+
+```
+<name>  <last-block-number>  <total-length>  <load>  <exec>
+```
+
+- **name** — the file name (the title block prints with its `*…*`).
+- **last-block-number** (2 hex digits) — the block number of the file's
+  *final* block, i.e. `total_blocks − 1`. It equals the high byte of the
+  total length whenever the last block is short (the usual case).
+- **total-length** (4 hex digits) — the whole file in bytes:
+  `last_block_number × 256 + last_block_length`.
+- **load**, **exec** (8 hex digits each) — the Acorn load and execution
+  addresses from the file header.
+
+Worked example — `Electron_Hopper.rom`, against a real BBC `*.`:
+
+```
+*Hopper01* 00 0000    00000000 00000000      title block, 0 bytes, 1 block
+!BOOT      00 003A    00001E86 00001E86      0x3A = 58 bytes, 1 block
+HOPPER     03 03D5    00000000 00000000      4 blocks (last = 3), 981 bytes
+HOPOBJ     22 2257    00003000 00003000      35 blocks (last = 0x22), 8791 bytes
+```
+
+So the two numeric columns are the **last block number** and the **total
+length** — not, as one might guess, a block count and a CRC.
+
+### 2.9 `*HELP` versus `*.` — two different "titles"
+
+`*HELP` prints the **paged-ROM header title** (§1.1, at `&8009`) — the
+ROM's own name in the sideways-ROM table — while `*.` lists the
+**filing-system catalogue** (§2.8). They are independent strings:
+
+- Zalaga: `*HELP` → `RFS id:298DE` (a meaningful header title); `*.` lists
+  only `ZALAGA`, with no title block.
+- The Acornsoft cartridges: `*HELP` → the generic `ROM Cartridge`; `*.`
+  shows the `*…*` title block (`*Hopper01*`, …) as the disc title.
+
+The package surfaces the *filing-system* title (the `*…*` block when
+present) via the `Titled` capability, since that is what users see as the
+disc/catalogue name. The header title is incidental metadata.
+
+## 3. The CRC algorithm
+
+Both CRCs are the CFS/tape CRC: CRC-16-CCITT, polynomial `0x1021`,
+initial value `0x0000`, processed most-significant-bit first, **stored
+big-endian**. mkromfs computes it as:
+
+```python
+def crc16_ccitt(data: bytes) -> int:
+    crc = 0
+    for byte in data:
+        crc ^= byte << 8
+        for _ in range(8):
+            if crc & 0x8000:
+                crc = (((crc ^ 0x0810) << 1) + 1) & 0xFFFF
+            else:
+                crc = (crc << 1) & 0xFFFF
+    return crc
+```
+
+The `0x0810`/`+1` formulation is an equivalent rearrangement of the
+standard `0x1021` polynomial step. The header CRC covers the header bytes
+*after* the sync byte (name through next-file pointer); the data CRC
+covers that block's data bytes.
+
+## 4. Worked reference (from the mkromfs NAUG check)
+
+mkromfs ships a sanity check against the NAUG example:
+
+```perl
+crc(pack("Z* L L S S C L", "*EXAMPLE*", 0, 0, 0, 0, 0xC0, 0x809E))
+```
+
+i.e. a title block named `*EXAMPLE*`, load = exec = 0, block 0, length 0,
+flag `&C0` (last + empty), next-file pointer `&809E`. Reproducing this CRC
+is a good first unit test for the CRC implementation, and the whole record
+is a good first fixture for the header parser.
+
+## 5. Open questions
+
+Resolved by the MOS reader disassembly and the reference corpus: the
+marker bytes and their roles (§2.1), the flag-bit meanings (§2.3), the
+end-of-file-address field (§2.2), `&2B` end-of-filesystem detection
+(§2.6), the data-start (scan for first CRC-valid `&2A`, §1.2), the
+title-block convention (`*…*`-wrapped, §2.5), and the `*.` columns (§2.8).
+Still to confirm:
+
+1. ~~**BBC vs. Electron** differences~~ — **resolved**: the BBC Zalaga ROM
+   and the Electron cartridges share an identical on-ROM format (§6). Only
+   authoring differs (type byte, language entry, presence of a title
+   block); the service handler is machine code the parser never executes.
+2. **8 KiB vs. 16 KiB banks** and multi-bank ("ROM N of M") spanning. The
+   corpus shows a game split across *two separate cartridges* (Starship
+   Command 1/2, §6) rather than two banks of one ROM; UEF2ROM's
+   ROM-bank variable handles intra-file splits. How the OS chains banks at
+   read time is not yet pinned down.
+3. **Non-Acornsoft / non-cartridge ROMFS** (e.g. mkromfs service-only
+   `&82` ROMs) — exercise the `bit 7` type test and the `&C0` empty-flag
+   variant once such an image is on hand.
+
+## 6. Reference corpus
+
+Seven ROM images live at the workspace root under
+`tests/data/images/romfs/`, all 16 KiB, all decoding with valid header and
+data CRCs. Six are official **Acornsoft Electron cartridges** and one
+(`Zalaga.rom`) is a **BBC Micro** ROM — and the on-ROM format is
+*identical* across the two machines (§5). They differ only in *authoring*:
+
+| | Acornsoft cartridges | Zalaga (BBC) |
+|---|---|---|
+| ROM type | `&C2` (service + language) | `&82` (service only) |
+| Language entry | `JMP language` | `00 00 00` (none) |
+| Header title | generic `ROM Cartridge` | `RFS id:298DE` |
+| Copyright | `(C) 1984 Acornsoft` | `(C)2006 Richard Ford` |
+| Title block | present (`*…*`) | **absent** |
+
+These are the parser's primary test vectors — each row is
+`name  last-block#  length  load  exec  flags`, exactly as decoded from the
+bytes and (for Hopper and Zalaga) confirmed against a real BBC `*.`:
+
+```
+Electron_Hopper.rom                 FS data @ &80BB
+  *Hopper01*  blk &00  len &000000  load &00000000  exec &00000000  last+lock
+  !BOOT       blk &00  len &00003A  load &00001E86  exec &00001E86  last
+  HOPPER      blk &03  len &0003D5  load &00000000  exec &00000000  last
+  HOPOBJ      blk &22  len &002257  load &00003000  exec &00003000  last+lock
+
+Electron_Snapper.rom                FS data @ &80BB
+  *Snap00*    blk &00  len &000000  load &00000000  exec &00000000  last+lock
+  !BOOT       blk &00  len &00003B  load &00001E87  exec &00001E87  last
+  SNAPPER     blk &04  len &00046A  load &00000000  exec &00000000  last
+  SNAPOBJ     blk &28  len &002847  load &00000E00  exec &00003400  last+lock
+
+Electron_Countdown_To_Doom_1.rom    FS data @ &829C
+  *Doom01*    blk &00  len &000000  load &00000000  exec &00000000  last+lock
+  !BOOT       blk &00  len &000038  load &00001E84  exec &00001E84  last
+  DOOM        blk &04  len &000407  load &00000000  exec &00000000  last
+  INIT        blk &08  len &0008F8  load &00003BFB  exec &00000000  last
+
+Electron_Countdown_To_Doom_2.rom    identical catalogue to _1
+
+Electron_Starship_Command_1.rom     FS data @ &80BB
+  *Star01*    blk &00  len &000000  load &00000000  exec &00000000  last+lock
+  !BOOT       blk &00  len &000038  load &00001E84  exec &00001E84  last
+  STAR        blk &04  len &000402  load &00000000  exec &00000000  last
+  STRCOM1     blk &1F  len &002000  load &00000E00  exec &000047B1  last+lock
+
+Electron_Starship_Command_2.rom     FS data @ &80BB
+  *Star02*    blk &00  len &000000  load &00000000  exec &00000000  last+lock
+  STRCOM2     blk &23  len &002400  load &00002E00  exec &000047B1  last
+```
+
+Note Countdown To Doom 1 and 2 carry the **same** catalogue (the `INIT`
+load address `&3BFB` and the `!BOOT` are identical) — they are two
+pressings, useful as a duplicate-detection fixture. Starship Command is a
+**two-cartridge** game: `STRCOM1` on disc 1, `STRCOM2` on disc 2.
+
+```
+Zalaga.rom  (BBC Micro)             FS data @ &810B, no title block
+  ZALAGA      blk &2D  len &002D25  load &00003000  exec &00004522  last+lock
+```
+
+Zalaga is the parser's robustness fixture: a service-only (`&82`) ROM with
+no title block, a single 46-block file, and a **differing load/exec**
+(`&3000` / `&4522`) — confirmed against a real BBC `*.` showing
+`ZALAGA  2D 2D25  00003000 00004522`.
