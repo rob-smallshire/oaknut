@@ -612,3 +612,30 @@ Loaded into a BBC Micro (here, an emulator), a session looks like this:
    SNAP
    !BOOT
    >*EXEC !BOOT
+
+
+Control storage order to manage seek times
+------------------------------------------
+
+A floppy drive — and an emulator faithful to one — seeks from file to
+file as a game loads, so the order files lie in on the disc decides how
+much the head travels. The fast arrangement puts the files a boot loads
+first in the low-numbered sectors, where the head already is.
+
+The ``disc storage-order`` command reports this physical order — the
+sequence a sequential read encounters the files, and the order they load
+in:
+
+.. cli-example:: storage_order_seek_times
+
+Here a 10K game file sits in the lowest sectors, so reaching ``!BOOT``
+means seeking across the whole disc before loading can even begin.
+``disc compact --order`` rewrites the layout, laying the named files down
+first, in the lowest sectors; every file it does not name follows in its
+existing physical order. The list is a prefix, so naming ``!BOOT`` and
+the loader is enough to bring them to the front and leave the rest where
+they are. The second ``disc storage-order`` confirms the result.
+
+Game discs lock their files, and ``disc compact`` relocates locked files
+like any other — the lock is delete protection, not a hold on a file's
+position — so they need no unlocking first, and stay locked afterwards.
