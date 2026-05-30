@@ -24,6 +24,8 @@ _ROM_ID = 0xF4  # the ROM's own socket number
 _SER_ROM = 0xF5  # the current filing-system ROM (15 - socket)
 _ROM_PTR = 0xF6  # the read pointer (two bytes, &F6/&F7)
 _OSRDRM = 0xFFB9  # OS routine: read a byte from a paged ROM
+_OSWRCH = 0xFFEE  # OS routine: write a character
+_TITLE_ADDRESS = 0x8009  # the paged-ROM header title is always here
 
 #: Opcode and total length for each (mnemonic, addressing mode) used here.
 _OPCODES: dict[tuple[str, str], tuple[int, int]] = {
@@ -32,11 +34,14 @@ _OPCODES: dict[tuple[str, str], tuple[int, int]] = {
     ("LDA", "imm"): (0xA9, 2),
     ("LDA", "zp"): (0xA5, 2),
     ("LDA", "zpy"): (0xB1, 2),  # LDA (zp),Y
+    ("LDA", "absx"): (0xBD, 3),  # LDA addr,X
     ("STA", "zp"): (0x85, 2),
     ("LDY", "imm"): (0xA0, 2),
+    ("LDX", "imm"): (0xA2, 2),
     ("EOR", "imm"): (0x49, 2),
     ("AND", "imm"): (0x29, 2),
     ("INC", "zp"): (0xE6, 2),
+    ("INX", "imp"): (0xE8, 1),
     ("BEQ", "rel"): (0xF0, 2),
     ("BNE", "rel"): (0xD0, 2),
     ("BCC", "rel"): (0x90, 2),
@@ -47,19 +52,38 @@ _OPCODES: dict[tuple[str, str], tuple[int, int]] = {
     ("PLA", "imp"): (0x68, 1),
     ("TAY", "imp"): (0xA8, 1),
     ("TYA", "imp"): (0x98, 1),
+    ("TAX", "imp"): (0xAA, 1),
+    ("TXA", "imp"): (0x8A, 1),
     ("RTS", "imp"): (0x60, 1),
 }
 
 # The handler, as (label, mnemonic, mode, operand). An ``imm`` operand may be
 # an int or ("lo"|"hi", symbol) for the low/high byte of an address; ``abs``
 # and ``rel`` operands are label names (internal labels, or the externals
-# "data" and "OSRDRM"); ``zp``/``zpy`` operands are zero-page addresses.
-_PROGRAM = [
+# "data", "OSRDRM", "OSWRCH"); ``zp``/``zpy`` operands are zero-page
+# addresses; ``absx`` an absolute address.
+
+# Service-call dispatch. With the *HELP handler, &09 is tested first and the
+# "service" entry label sits on it; otherwise it sits on the &0D test.
+_HELP_DISPATCH = [
+    ("service", "CMP", "imm", 0x09),  # *HELP?
+    (None, "BEQ", "rel", "dohelp"),
+    (None, "CMP", "imm", 0x0D),  # initialise filing system?
+    (None, "BEQ", "rel", "initsp"),
+    (None, "CMP", "imm", 0x0E),  # read byte?
+    (None, "BEQ", "rel", "rdbyte"),
+    (None, "RTS", "imp", None),  # not ours
+]
+_PLAIN_DISPATCH = [
     ("service", "CMP", "imm", 0x0D),  # initialise filing system?
     (None, "BEQ", "rel", "initsp"),
     (None, "CMP", "imm", 0x0E),  # read byte?
     (None, "BEQ", "rel", "rdbyte"),
     (None, "RTS", "imp", None),  # not ours
+]
+
+# The &0D / &0E core (the mkromfs / NAUG handler body), shared by both.
+_CORE_BODY = [
     ("initsp", "PHA", "imp", None),
     (None, "JSR", "abs", "invsno"),  # A = inverted *ROM number
     (None, "CMP", "zp", _ROM_ID),
@@ -100,38 +124,78 @@ _PROGRAM = [
     (None, "RTS", "imp", None),
 ]
 
+# The optional *HELP (&09) routine: print the ROM's header title (always at
+# &8009) then a newline, preserving A/X/Y, and return without claiming the
+# call so other ROMs also print. The title is the user-set message.
+_HELP_ROUTINE = [
+    ("dohelp", "PHA", "imp", None),  # save A (= 9)
+    (None, "TXA", "imp", None),
+    (None, "PHA", "imp", None),  # save X
+    (None, "TYA", "imp", None),
+    (None, "PHA", "imp", None),  # save Y
+    (None, "LDX", "imm", 0x00),
+    ("helploop", "LDA", "absx", _TITLE_ADDRESS),  # next title character
+    (None, "BEQ", "rel", "helpdone"),  # NUL terminator
+    (None, "JSR", "abs", "OSWRCH"),
+    (None, "INX", "imp", None),
+    (None, "BNE", "rel", "helploop"),  # always (title < 256 bytes)
+    ("helpdone", "LDA", "imm", 0x0D),  # carriage return
+    (None, "JSR", "abs", "OSWRCH"),
+    (None, "PLA", "imp", None),  # restore Y
+    (None, "TAY", "imp", None),
+    (None, "PLA", "imp", None),  # restore X
+    (None, "TAX", "imp", None),
+    (None, "PLA", "imp", None),  # restore A (= 9)
+    (None, "RTS", "imp", None),  # pass on (do not claim &09)
+]
 
-def _layout() -> tuple[dict[str, int], int]:
+
+def _program(with_help: bool) -> list:
+    """The full instruction list for the chosen handler variant."""
+    if with_help:
+        return _HELP_DISPATCH + _CORE_BODY + _HELP_ROUTINE
+    return _PLAIN_DISPATCH + _CORE_BODY
+
+
+def _layout(program: list) -> tuple[dict[str, int], int]:
     """First pass: assign an offset to each label and return the total length."""
     labels: dict[str, int] = {}
     offset = 0
-    for label, mnemonic, mode, _operand in _PROGRAM:
+    for label, mnemonic, mode, _operand in program:
         if label is not None:
             labels[label] = offset
         offset += _OPCODES[(mnemonic, mode)][1]
     return labels, offset
 
 
-_LABELS, HANDLER_LENGTH = _layout()
+#: Length of the bare &0D/&0E handler — 81 bytes, matching mkromfs.
+HANDLER_LENGTH = _layout(_program(with_help=False))[1]
 
 
-def build_rfs_handler(base_address: int, data_address: int) -> bytes:
+def rfs_handler_length(*, with_help: bool = False) -> int:
+    """The assembled length of the chosen handler variant, in bytes."""
+    return _layout(_program(with_help))[1]
+
+
+def build_rfs_handler(base_address: int, data_address: int, *, with_help: bool = False) -> bytes:
     """Assemble the service handler placed at *base_address*.
 
     *data_address* is the absolute address of the filing-system data the
-    handler points the OS at on initialisation. Returns exactly
-    :data:`HANDLER_LENGTH` bytes.
+    handler points the OS at on initialisation. With *with_help*, a ``&09``
+    ``*HELP`` responder is included that prints the ROM's title.
     """
-    externals = {"data": data_address, "OSRDRM": _OSRDRM}
+    program = _program(with_help)
+    labels, _length = _layout(program)
+    externals = {"data": data_address, "OSRDRM": _OSRDRM, "OSWRCH": _OSWRCH}
 
     def address_of(symbol: str) -> int:
         if symbol in externals:
             return externals[symbol]
-        return base_address + _LABELS[symbol]
+        return base_address + labels[symbol]
 
     out = bytearray()
     offset = 0
-    for _label, mnemonic, mode, operand in _PROGRAM:
+    for _label, mnemonic, mode, operand in program:
         opcode, length = _OPCODES[(mnemonic, mode)]
         out.append(opcode)
         if mode == "imp":
@@ -145,8 +209,11 @@ def build_rfs_handler(base_address: int, data_address: int) -> bytes:
                 out.append(operand & 0xFF)
         elif mode in ("zp", "zpy"):
             out.append(operand & 0xFF)
+        elif mode == "absx":
+            out.append(operand & 0xFF)
+            out.append((operand >> 8) & 0xFF)
         elif mode == "rel":
-            target = _LABELS[operand]
+            target = labels[operand]
             displacement = target - (offset + length)
             if not -128 <= displacement <= 127:
                 raise ValueError(f"branch to {operand} out of range: {displacement}")

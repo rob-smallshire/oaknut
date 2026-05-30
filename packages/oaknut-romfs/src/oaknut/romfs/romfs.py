@@ -35,7 +35,7 @@ from oaknut.romfs.exceptions import (
     ROMFullError,
     TruncatedROMError,
 )
-from oaknut.romfs.handler import HANDLER_LENGTH, build_rfs_handler
+from oaknut.romfs.handler import build_rfs_handler, rfs_handler_length
 
 #: Paged ROMs are mapped at &8000; image offset 0 is this address.
 ROM_BASE_ADDRESS = 0x8000
@@ -258,15 +258,18 @@ def build_rom_image(
     copyright: str = DEFAULT_COPYRIGHT,
     version: int = 1,
     size: int = 16384,
+    help_handler: bool = True,
 ) -> bytes:
     """Build a fresh, empty ROMFS paged-ROM image of *size* bytes.
 
     Lays out the standard paged-ROM header (a service-only ``&82`` ROM), the
     ``&0D``/``&0E`` service handler (so the ROM is readable on a real
     machine, see :mod:`oaknut.romfs.handler`), a single ``*title*`` title
-    block, the ``&2B`` end marker, and ``&FF`` padding to *size*. The result
-    round-trips through :meth:`ROMFS.from_bytes` and is writable (plain and
-    complete). *size* is 8192 or 16384.
+    block, the ``&2B`` end marker, and ``&FF`` padding to *size*. With
+    *help_handler* the service code also answers ``*HELP`` (``&09``) by
+    printing the title. The result round-trips through
+    :meth:`ROMFS.from_bytes` and is writable (plain and complete). *size* is
+    8192 or 16384.
     """
     if not copyright.startswith("(C)"):
         raise ROMFSError("a ROMFS copyright must begin with '(C)'")
@@ -279,7 +282,7 @@ def build_rom_image(
     # (no version string) | 00 copyright NUL. version_str is omitted (empty).
     header_length = 3 + 3 + 1 + 1 + 1 + len(title_bytes) + 1 + 1 + len(copyright_bytes) + 1
     service_address = ROM_BASE_ADDRESS + header_length
-    data_address = service_address + HANDLER_LENGTH
+    data_address = service_address + rfs_handler_length(with_help=help_handler)
     copyright_offset = 9 + len(title_bytes) + 1  # offset of the 00 before "(C)"
 
     header = bytearray()
@@ -292,7 +295,7 @@ def build_rom_image(
     header += b"\x00" + copyright_bytes + b"\x00"
     assert len(header) == header_length
 
-    handler = build_rfs_handler(service_address, data_address)
+    handler = build_rfs_handler(service_address, data_address, with_help=help_handler)
 
     title_block = ROMFSFile(f"*{title}*", 0, 0, locked=True, data=b"")
     end_address = data_address + _chain_length(title_block.name, 0)

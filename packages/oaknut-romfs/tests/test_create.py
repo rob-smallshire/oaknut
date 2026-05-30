@@ -23,11 +23,24 @@ def test_created_rom_round_trips():
 
 
 def test_data_offset_matches_the_mkromfs_anchor():
-    # mkromfs documents data at 0x805D for an empty header, growing by the
-    # title and copyright lengths (no version string).
-    image = build_rom_image(title="X", copyright="(C)", size=16384)
+    # With the bare &0D/&0E handler (no *HELP), data sits at 0x805D for an
+    # empty header — exactly mkromfs — growing by the title and copyright
+    # lengths (no version string).
+    image = build_rom_image(title="X", copyright="(C)", size=16384, help_handler=False)
     rom = ROMFS.from_bytes(image)
     assert rom.data_offset == 0x5D + len("X") + len("(C)")
+
+
+def test_help_handler_is_present_by_default():
+    # The default created ROM answers *HELP (&09) by printing the title.
+    from oaknut.romfs.handler import build_rfs_handler
+
+    handler = build_rfs_handler(0x800C, 0x9000, with_help=True)
+    assert handler[0:2] == bytes([0xC9, 0x09])  # CMP #&09 first
+    assert bytes([0xBD, 0x09, 0x80]) in handler  # LDA &8009,X (read the title)
+    assert bytes([0x20, 0xEE, 0xFF]) in handler  # JSR OSWRCH (print it)
+    # The bare handler omits all of that.
+    assert build_rfs_handler(0x800C, 0x9000, with_help=False)[0:2] == bytes([0xC9, 0x0D])
 
 
 @pytest.mark.parametrize("size", [8192, 16384])
