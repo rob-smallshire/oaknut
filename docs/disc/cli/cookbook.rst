@@ -577,7 +577,7 @@ Electron — a sideways ROM or cartridge. ``disc create`` makes one (the
 ``.rom`` extension infers ROMFS), and the ``disc romfs`` commands query
 and set its paged-ROM header properties.
 
-Here we re-cartridge the Acornsoft Electron game *Zalaga*: lift its
+Here we re-cartridge the BBC Micro game *Zalaga*: lift its
 machine code out of an existing ROM, build a fresh 16 KiB cartridge
 with a title and the game authors' copyright, and add the game back —
 keeping its load and execution addresses so ``*RUN ZALAGA`` launches
