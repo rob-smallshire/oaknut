@@ -191,3 +191,32 @@ class TestRomfsProperties:
     def test_set_version_rejects_out_of_range(self, runner: CliRunner, tmp_path):
         rom = self._make(runner, tmp_path)
         assert runner.invoke(cli, ["romfs", "set-version", rom, "999"]).exit_code != 0
+
+
+class TestRomfsRunOnly:
+    def _rom_with_file(self, runner: CliRunner, tmp_path):
+        rom = tmp_path / "RO.rom"
+        runner.invoke(cli, ["create", str(rom), "--title", "RO"])
+        src = tmp_path / "game.bin"
+        src.write_bytes(b"machine code")
+        runner.invoke(cli, ["put", f"{rom}:GAME", str(src)])
+        return rom
+
+    def _attr(self, runner: CliRunner, rom) -> str:
+        line = next(
+            ln for ln in runner.invoke(cli, ["ls", str(rom)]).output.splitlines() if "GAME" in ln
+        )
+        return line.split()[-1]  # the Attr column
+
+    def test_chmod_sets_the_run_only_bit(self, runner: CliRunner, tmp_path):
+        rom = self._rom_with_file(runner, tmp_path)
+        assert self._attr(runner, rom) == "/"  # newly put: loadable
+        assert runner.invoke(cli, ["chmod", f"{rom}:GAME", "X"]).exit_code == 0
+        assert self._attr(runner, rom) == "X/"  # now *RUN-only
+
+    def test_chmod_clears_the_run_only_bit(self, runner: CliRunner, tmp_path):
+        rom = self._rom_with_file(runner, tmp_path)
+        runner.invoke(cli, ["chmod", f"{rom}:GAME", "X"])
+        assert self._attr(runner, rom) == "X/"
+        assert runner.invoke(cli, ["chmod", f"{rom}:GAME", "WR"]).exit_code == 0
+        assert self._attr(runner, rom) == "/"  # cleared (R/W are not stored on ROMFS)
