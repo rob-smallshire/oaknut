@@ -587,5 +587,28 @@ which carries each file's load and execution addresses across.
 The cartridge responds to ``*HELP`` with its title. To use it, switch to
 the ROM filing system with ``*ROM`` and then use the ordinary filing-system
 commands — ``*CAT`` to list the files, ``*EXEC !BOOT`` to start Snapper,
-and ``*RUN`` / ``*LOAD`` / ``CHAIN`` as usual. (This cartridge has been
-built and run from ROM in a 6502 emulator.)
+and ``*RUN`` / ``*LOAD`` / ``CHAIN`` as usual.
+
+Loaded into a BBC Micro (here, an emulator), a session looks like this:
+
+.. code-block:: text
+
+   BBC Computer 32K
+
+   BASIC
+
+   >*HELP
+
+   Snapper
+
+   OS 1.20
+   >*ROM
+   >*CAT
+
+   *Snapper*
+   Snappe3
+   Snap2
+   SNAPPER
+   SNAP
+   !BOOT
+   >*EXEC !BOOT
