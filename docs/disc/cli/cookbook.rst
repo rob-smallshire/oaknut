@@ -635,7 +635,3 @@ first, in the lowest sectors; every file it does not name follows in its
 existing physical order. The list is a prefix, so naming ``!BOOT`` and
 the loader is enough to bring them to the front and leave the rest where
 they are. The second ``disc storage-order`` confirms the result.
-
-Game discs lock their files, and ``disc compact`` relocates locked files
-like any other — the lock is delete protection, not a hold on a file's
-position — so they need no unlocking first, and stay locked afterwards.
