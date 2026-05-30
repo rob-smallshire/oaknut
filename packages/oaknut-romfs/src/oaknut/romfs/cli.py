@@ -63,9 +63,14 @@ def get_version_command(image: Path) -> None:
 
 @romfs.command(name="set-version")
 @_IMAGE
-@click.argument("version", type=click.IntRange(0, 255))
-def set_version_command(image: Path, version: int) -> None:
-    """Set the paged-ROM binary version byte of IMAGE (0-255)."""
+@click.argument("version")
+def set_version_command(image: Path, version: str) -> None:
+    """Set the paged-ROM binary version byte of IMAGE (0-255).
+
+    VERSION honours a base prefix, like the address commands: ``0x`` hex
+    (e.g. ``0x80``), ``0o`` octal, ``0b`` binary, or a plain decimal value.
+    """
+    from oaknut.file import parse_address
     from oaknut.romfs.romfs import set_version
 
-    image.write_bytes(set_version(image.read_bytes(), version))
+    image.write_bytes(set_version(image.read_bytes(), parse_address(version)))

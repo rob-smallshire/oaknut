@@ -109,6 +109,12 @@ class TestRomfsProperties:
         assert runner.invoke(cli, ["romfs", "set-version", rom, "7"]).exit_code == 0
         assert runner.invoke(cli, ["romfs", "get-version", rom]).output.strip() == "7"
 
+    def test_set_version_accepts_hex(self, runner: CliRunner, tmp_path):
+        # Like the address commands, the value honours a base prefix.
+        rom = self._make(runner, tmp_path)
+        assert runner.invoke(cli, ["romfs", "set-version", rom, "0x2A"]).exit_code == 0
+        assert runner.invoke(cli, ["romfs", "get-version", rom]).output.strip() == "42"
+
     def test_set_copyright_round_trips(self, runner: CliRunner, tmp_path):
         rom = self._make(runner, tmp_path)
         result = runner.invoke(cli, ["romfs", "set-copyright", rom, "(C) 1984 Acornsoft"])
