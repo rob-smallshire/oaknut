@@ -183,6 +183,30 @@ class TestWatfordDFSCatalogueMatches:
         section2_seq = data[768 + 4]  # 0x304 — 4 increments
         assert section1_seq != section2_seq
 
+    @pytest.mark.parametrize("char_offset", [5, 6], ids=["length-bit-18", "start-sector-bit-10"])
+    def test_matches_rejects_watford_extension_bits_in_file_entry(self, char_offset, tmp_path):
+        """A file entry whose filename char 0x005 or 0x006 has its top bit set
+        carries Watford's >256KB extension (length bit 18 / start-sector bit
+        10, DiscImage.pdf p9). This reader handles only the <=256KB layout, so
+        such an image is discounted rather than mis-read as standard Watford.
+        """
+        from oaknut.dfs.dfs import DFS
+        from oaknut.dfs.formats import WATFORD_DFS_80T_SINGLE_SIDED
+
+        image_filepath = tmp_path / "ext.ssd"
+        with DFS.create_file(image_filepath, WATFORD_DFS_80T_SINGLE_SIDED, title="Big") as dfs:
+            (dfs.root / "$.DATA").write_bytes(b"x")
+
+        spec = WATFORD_DFS_80T_SINGLE_SIDED.surface_specs[0]
+        buffer = bytearray(image_filepath.read_bytes())
+        surface = DiscImage(memoryview(buffer), [spec]).surface(0)
+        assert WatfordDFSCatalogue.matches(surface)  # clean disc identifies
+
+        # First section-1 entry sits at sector 0 offset 8; set the top bit of
+        # the addressed filename character.
+        buffer[8 + char_offset] |= 0x80
+        assert not WatfordDFSCatalogue.matches(surface)
+
     def test_matches_rejects_too_few_sectors(self):
         """Test matches() rejects image with fewer than 4 sectors."""
         buffer = bytearray(768)  # Only 3 sectors

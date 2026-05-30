@@ -149,6 +149,20 @@ class WatfordDFSCatalogue(Catalogue):
         if sector3[6] != sector1[6] or sector3[7] != sector1[7]:
             return False
 
+        # WATFORD-SPECIFIC: the top bits of filename chars 0x005 and 0x006 carry
+        # Watford's >256KB extension — length bit 18 and start-sector bit 10
+        # (DiscImage.pdf p9). This reader handles only the standard <=256KB
+        # layout (18-bit length, 10-bit start sector), so an entry with either
+        # bit set is a larger Watford disc whose sizes/sectors we would
+        # mis-read: discount it rather than identify it as standard Watford.
+        for entries_sector, count_byte in ((sector0, sector1[5]), (sector2, sector3[5])):
+            for index in range(count_byte // 8):
+                name_offset = 8 + index * 8
+                if entries_sector[name_offset + 5] & 0x80:
+                    return False
+                if entries_sector[name_offset + 6] & 0x80:
+                    return False
+
         # All checks passed - this is Watford DFS
         return True
 
