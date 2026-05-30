@@ -21,6 +21,7 @@ from asyoulikeit.cli import (
     report_output,
 )
 from exit_codes import ExitCode
+from natsort import natsort_keygen, ns
 from oaknut.cli import (
     SECTOR_SIZE,
     address_cell,
@@ -39,6 +40,12 @@ from .cli_identify import (
 )
 from .cli_paths import parse_compound_path
 from .mount import partition_selectors, partition_volumes, resolve_mount
+
+# Natural, case-insensitive ordering for directory listings (``ls`` and
+# ``tree``). Display only — it never reorders what a command writes, just
+# how entries are shown, so a flat DFS catalogue's storage order does not
+# leak into the human-facing listing.
+_natural_name_key = natsort_keygen(alg=ns.IGNORECASE)
 
 # ---------------------------------------------------------------------------
 # Alias-aware Click group
@@ -215,7 +222,6 @@ def ls(compound_path: str, show_access_byte: bool):
     Accepts a ``COMPOUND_PATH`` (the in-image ``INNER_PATH`` is optional and defaults to the root).
     """
     from asyoulikeit.tabular_data import Importance, Report, Reports, TableContent
-    from natsort import natsort_keygen, ns
     from oaknut.file import Access
     from oaknut.filesystem import AcornMetadata, FreeSpace, Titled
 
@@ -257,12 +263,7 @@ def ls(compound_path: str, show_access_byte: bool):
         table.add_column("hex", "Hex")
 
     has_acorn = isinstance(mount, AcornMetadata)
-    # List in natural, case-insensitive order — friendlier than the
-    # filesystem's storage order (which a flat DFS keeps highest-sector
-    # first). This is display only; cp / find / storage-order keep the
-    # filesystem's own order.
-    natural_key = natsort_keygen(alg=ns.IGNORECASE)
-    for child in sorted(mount.iter_entries(target), key=lambda e: natural_key(e.name)):
+    for child in sorted(mount.iter_entries(target), key=lambda e: _natural_name_key(e.name)):
         if child.is_dir:
             row = {
                 "name": child.name,
@@ -358,8 +359,11 @@ def _build_tree_whole_image(compound_path: str, tc) -> None:
 
 
 def _attach_children_mount(mount, path: str, parent_tree_node) -> None:
-    """Attach every entry under *path* in *mount*, recursing into directories."""
-    for child in mount.iter_entries(path):
+    """Attach every entry under *path* in *mount*, recursing into directories.
+
+    Siblings are shown in natural, case-insensitive order, matching ``ls``.
+    """
+    for child in sorted(mount.iter_entries(path), key=lambda e: _natural_name_key(e.name)):
         node = parent_tree_node.add_child(name=child.name)
         if child.is_dir:
             _attach_children_mount(mount, child.path, node)

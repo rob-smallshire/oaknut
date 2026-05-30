@@ -254,6 +254,17 @@ class TestLsSorting:
         # "apple" before "Banana" — case folded, not ASCII (where B < a).
         assert out.index("apple") < out.index("Banana")
 
+    def test_tree_listing_is_natural_sorted(self, runner: CliRunner, tmp_path: Path) -> None:
+        from oaknut.dfs import ACORN_DFS_80T_SINGLE_SIDED, DFS
+
+        image = tmp_path / "tree.ssd"
+        with DFS.create_file(image, ACORN_DFS_80T_SINGLE_SIDED, title="TREE") as dfs:
+            (dfs.root / "$.ALPHA").write_bytes(b"a")
+            (dfs.root / "$.FILE2").write_bytes(b"b")
+            (dfs.root / "$.FILE10").write_bytes(b"c")
+        out = runner.invoke(cli, ["tree", str(image)]).output
+        assert out.index("ALPHA") < out.index("FILE2") < out.index("FILE10")
+
 
 # ---------------------------------------------------------------------------
 # Issue #10 — disc ls --access-byte / -H shows the raw access byte as two
