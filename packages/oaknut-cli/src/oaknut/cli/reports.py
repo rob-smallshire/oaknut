@@ -27,6 +27,16 @@ def size_cell(sectors: int) -> ByAudience:
     return ByAudience(machine=num_bytes, human=format_capacity(num_bytes))
 
 
+def bytes_cell(num_bytes: int) -> ByAudience:
+    """A byte count as an audience-aware cell.
+
+    Like :func:`size_cell`, but for a value already in bytes (a file
+    length) rather than sectors: humans read friendly IEC units
+    (``9.9 KiB``); machine formatters get the raw integer.
+    """
+    return ByAudience(machine=num_bytes, human=format_capacity(num_bytes))
+
+
 def address_cell(address: int) -> ByAudience:
     """A 32-bit Acorn address as an audience-aware cell.
 

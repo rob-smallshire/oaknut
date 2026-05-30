@@ -25,6 +25,7 @@ from natsort import natsort_keygen, ns
 from oaknut.cli import (
     SECTOR_SIZE,
     address_cell,
+    bytes_cell,
     contributed_commands,
     kv_table,
     size_cell,
@@ -1045,29 +1046,30 @@ def storage_order(compound_path: str):
         mount = resolved.mount
         if not isinstance(mount, StorageOrdered):
             raise click.ClickException(f"{resolved.filesystem} has no defined storage order")
-        paths = _all_file_paths(mount)
-        paths.sort(key=mount.storage_key)
+        files = _all_files(mount)
+        files.sort(key=lambda entry: mount.storage_key(entry.path))
 
     table = TableContent(title="storage order")
     table.add_column("path", "Path", header=True)
-    for path in paths:
-        table.add_row(path=path)
+    table.add_column("size", "Size")
+    for entry in files:
+        table.add_row(path=entry.path, size=bytes_cell(entry.length))
     return Reports(paths=Report(data=table))
 
 
-def _all_file_paths(mount) -> list[str]:
-    """Every file path in *mount*, walked recursively (directories excluded)."""
-    paths: list[str] = []
+def _all_files(mount) -> list:
+    """Every file entry in *mount*, walked recursively (directories excluded)."""
+    files = []
 
     def walk(path: str) -> None:
         for child in mount.iter_entries(path):
             if child.is_dir:
                 walk(child.path)
             else:
-                paths.append(child.path)
+                files.append(child)
 
     walk(mount.path_root())
-    return paths
+    return files
 
 
 def _render_free_map_lines(data, width: int) -> list[str]:

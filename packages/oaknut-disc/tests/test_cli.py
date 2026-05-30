@@ -1666,15 +1666,29 @@ class TestStorageOrderCommand:
 
         image = tmp_path / "d.ssd"
         with DFS.create_file(image, ACORN_DFS_80T_SINGLE_SIDED, title="D") as dfs:
-            (dfs.root / "$.BOOT").write_bytes(b"b" * 400)  # lowest sectors
-            (dfs.root / "$.LOADER").write_bytes(b"l" * 400)
-            (dfs.root / "$.GAME").write_bytes(b"g" * 400)  # highest sectors
+            (dfs.root / "$.BOOT").write_bytes(b"b" * 100)  # lowest sectors
+            (dfs.root / "$.LOADER").write_bytes(b"l" * 200)
+            (dfs.root / "$.GAME").write_bytes(b"g" * 9000)  # highest sectors
 
         result = runner.invoke(cli, ["storage-order", str(image)])
         assert result.exit_code == 0, result.output
         out = result.output
         # Physical order, not the catalogue's descending order or alphabetical.
         assert out.index("$.BOOT") < out.index("$.LOADER") < out.index("$.GAME")
+        # Size column carries the raw byte count for machine consumers.
+        assert "9000" in out
+
+    def test_size_column_is_human_readable_in_display(
+        self, runner: CliRunner, tmp_path: Path
+    ) -> None:
+        from oaknut.dfs import ACORN_DFS_80T_SINGLE_SIDED, DFS
+
+        image = tmp_path / "big.ssd"
+        with DFS.create_file(image, ACORN_DFS_80T_SINGLE_SIDED, title="BIG") as dfs:
+            (dfs.root / "$.BIG").write_bytes(b"g" * 9000)
+        out = runner.invoke(cli, ["storage-order", "--as", "display", str(image)]).output
+        # The same size renders in friendly IEC units for humans.
+        assert "KiB" in out
 
     def test_errors_on_filesystem_without_storage_order(
         self, runner: CliRunner, adfs_image_filepath: Path

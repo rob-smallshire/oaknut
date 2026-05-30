@@ -31,6 +31,7 @@ from oaknut.cli.help import (
 from oaknut.cli.reports import (
     SECTOR_SIZE,
     address_cell,
+    bytes_cell,
     kv_table,
     size_cell,
 )
@@ -46,6 +47,7 @@ __all__ = [
     "use_plain_help",
     "SECTOR_SIZE",
     "address_cell",
+    "bytes_cell",
     "kv_table",
     "size_cell",
 ]

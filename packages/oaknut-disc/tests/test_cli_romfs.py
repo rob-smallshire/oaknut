@@ -57,8 +57,9 @@ class TestRomfsCrossCopy:
 
         def storage_order(target: str) -> list[str]:
             out = runner.invoke(cli, ["storage-order", target]).output
+            # Rows are TSV "path<TAB>size"; take the path column only.
             return [
-                line.strip()
+                line.split("\t")[0].strip()
                 for line in out.splitlines()
                 if line.strip() and not line.lstrip().startswith("#")
             ]
