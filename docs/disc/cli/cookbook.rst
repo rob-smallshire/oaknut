@@ -300,6 +300,64 @@ DSD has been separated back into the two floppies it was assembled
 from.
 
 
+Consolidate Acorn discs onto a higher-capacity Watford disc
+-----------------------------------------------------------
+
+Acorn DFS caps a disc at **31 files**; Watford DFS extends the
+catalogue to **62 files per side**. That difference is the whole point
+of this recipe. Daily telemetry — one file per day — fills an Acorn
+disc in a month (up to 31 days), so four months of 1984 temperature
+readings for Cambridge sit on four separate single-sided Acorn
+floppies. A single double-sided Watford disc swallows all four: two
+months a side. It is also a copy from one DFS variant to another.
+
+**1. The four monthly Acorn discs.**
+
+.. cli-example:: consolidate_telemetry
+   :section: inputs
+
+Each ``.ssd`` is one month, holding files named ``84MMDD`` — a day's 24
+hourly temperatures in degrees Celsius, carriage-return separated (the
+Acorn line ending). January's catalogue holds 31 files: Acorn's ceiling,
+hit exactly.
+
+**2. Create a blank Watford disc.**
+
+.. cli-example:: consolidate_telemetry
+   :section: create
+
+``--filesystem watford-dfs`` is required: ``disc create`` infers Acorn
+DFS from the ``.dsd`` extension, so the Watford variant must be named
+explicitly. The double-sided geometry gives two 62-file catalogues.
+
+**3. Copy two months onto each side.**
+
+.. cli-example:: consolidate_telemetry
+   :section: copy
+
+Side 0 takes January and February, side 2 March and April —
+``telem.dsd::0.$.`` and ``telem.dsd::2.$.``. Each ``disc cp`` reads an
+Acorn catalogue and writes a Watford one; the file data and load/exec
+addresses carry across unchanged.
+
+**4. Name each side.**
+
+.. cli-example:: consolidate_telemetry
+   :section: title
+
+A Watford title is 10 characters (two fewer than Acorn's 12), so
+``Jan-Feb 84`` and ``Mar-Apr 84`` fit exactly.
+
+**5. Verify the consolidation.**
+
+.. cli-example:: consolidate_telemetry
+   :section: verify
+
+Side 0 carries 60 files (31 + 29 — 1984 was a leap year) and side 2
+carries 61 (31 + 30). Both are well past the 31 a single Acorn disc
+could hold, which is exactly why the four discs became one.
+
+
 Creating a Level 3 File Server disc
 -----------------------------------
 
