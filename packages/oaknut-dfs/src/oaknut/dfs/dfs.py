@@ -1102,13 +1102,14 @@ class DFS:
         rebuild entries sequentially, consolidating all free space at the end.
 
         *order* is a partial list of paths to lay down first, in the lowest
-        sectors; unlisted files follow in their current order.
+        sectors; unlisted files follow in their current order. Locked files
+        are relocated like any other and stay locked — the lock is delete
+        protection, not a placement constraint.
 
         Returns:
             Number of files compacted
 
         Raises:
-            PermissionError: If any file is locked (catalogue-specific)
             FileNotFoundError: If *order* names a file not on the disc
         """
         return self._catalogued_surface.catalogue.compact(order=order)

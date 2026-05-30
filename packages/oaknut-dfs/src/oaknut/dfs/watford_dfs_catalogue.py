@@ -998,22 +998,17 @@ class WatfordDFSCatalogue(Catalogue):
         free space at the end.
 
         *order* is a partial list of paths to lay down first, in the lowest
-        sectors; unlisted files follow in their current order.
+        sectors; unlisted files follow in their current order. The lock bit
+        is logical delete protection, not a placement constraint, so locked
+        files are relocated like any other and stay locked.
 
         Returns:
             Number of files compacted
 
         Raises:
-            PermissionError: If locked files present
             FileNotFoundError: If *order* names a file not on the disc
         """
         files = self.list_files()
-
-        # Check for locked files
-        locked_files = [f for f in files if f.locked]
-        if locked_files:
-            names = ", ".join(f.path for f in locked_files)
-            raise PermissionError(f"Cannot compact: locked files present: {names}")
 
         if not files:
             return 0

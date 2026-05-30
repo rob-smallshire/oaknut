@@ -692,20 +692,17 @@ class AcornDFSCatalogue(Catalogue):
         order. It lets a caller put boot/loader files where they load
         fastest. An empty order keeps the existing order.
 
+        The lock bit is logical delete/overwrite protection, not a
+        constraint on physical placement, so locked files are relocated
+        like any other and stay locked.
+
         Returns:
             Number of files compacted
 
         Raises:
-            PermissionError: If locked files present
             FileNotFoundError: If *order* names a file not on the disc
         """
         files = self.list_files()
-
-        # Check for locked files
-        locked_files = [f for f in files if f.locked]
-        if locked_files:
-            names = ", ".join(f.path for f in locked_files)
-            raise PermissionError(f"Cannot compact: locked files present: {names}")
 
         if not files:
             return 0

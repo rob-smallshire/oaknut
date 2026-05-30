@@ -259,24 +259,44 @@ class TestCompaction:
         assert (dfs.root / "$" / "FILE1").read_bytes() == b"A" * 256
         assert (dfs.root / "$" / "FILE3").read_bytes() == b"C" * 256
 
-    def test_compact_with_locked_files_raises(self):
-        """Test compact raises error if locked files present."""
-        buffer = bytearray(102400)
+    def test_compact_moves_locked_files_and_keeps_them_locked(self):
+        """Compaction relocates a locked file and leaves it locked.
 
+        The lock bit is logical delete/overwrite protection, not a
+        constraint on physical placement — a real ``*COMPACT`` moves locked
+        files — so compaction must not refuse them.
+        """
+        buffer = bytearray(102400)
         buffer[0:8] = b"DISK    "
-        buffer[256:260] = b"    "
-        buffer[260] = 0
-        buffer[261] = 0
-        buffer[262] = 0x00
         buffer[263] = 200
 
         dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
+        (dfs.root / "$" / "FIRST").write_bytes(b"A" * 256)  # sector 2
+        (dfs.root / "$" / "LOCKED").write_bytes(b"B" * 256, access=Access.LWR)  # sector 3
+        (dfs.root / "$" / "FIRST").unlink()  # leave a gap at sector 2
 
-        # Add a locked file
-        (dfs.root / "$" / "LOCKED").write_bytes(b"data", access=Access.LWR)
+        dfs.compact()
 
-        with pytest.raises(PermissionError, match="locked files present"):
-            dfs.compact()
+        locked_entry = next(f for f in dfs.files if f.filename == "LOCKED")
+        assert locked_entry.start_sector == 2  # moved down to fill the gap
+        assert locked_entry.locked  # and still locked
+        assert (dfs.root / "$" / "LOCKED").read_bytes() == b"B" * 256
+
+    def test_compact_order_promotes_a_locked_file(self):
+        """``--order`` works through locked files too (e.g. a locked !BOOT)."""
+        buffer = bytearray(102400)
+        buffer[0:8] = b"DISK    "
+        buffer[263] = 200
+
+        dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
+        (dfs.root / "$" / "GAME").write_bytes(b"g" * 300)
+        (dfs.root / "$" / "BOOT").write_bytes(b"b" * 300, access=Access.LWR)  # locked
+
+        dfs.compact(order=["$.BOOT"])
+
+        boot = next(f for f in dfs.files if f.filename == "BOOT")
+        assert boot.start_sector == 2  # promoted to the lowest sector
+        assert boot.locked
 
     def test_compact_already_compact(self):
         """Test compact on already compact disk."""
