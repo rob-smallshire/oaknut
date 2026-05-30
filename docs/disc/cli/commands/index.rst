@@ -79,6 +79,11 @@ Inspection
 
    .. cli-example:: cmd_freemap
 
+.. oaknut-command:: oaknut.disc.cli:storage-order
+   :prog: disc storage-order
+
+   .. cli-example:: cmd_storage_order
+
 .. oaknut-command:: oaknut.disc.cli:validate
    :prog: disc validate
 

@@ -1616,6 +1616,34 @@ class TestCpStorageOrder:
         assert self._physical_order(dfs_empty_filepath) == ["BOOT", "LOADER", "GAME"]
 
 
+class TestStorageOrderCommand:
+    """``disc storage-order`` lists a partition's files in physical order,
+    and errors on a filesystem with no defined storage order.
+    """
+
+    def test_lists_files_in_physical_order(self, runner: CliRunner, tmp_path: Path) -> None:
+        from oaknut.dfs import ACORN_DFS_80T_SINGLE_SIDED, DFS
+
+        image = tmp_path / "d.ssd"
+        with DFS.create_file(image, ACORN_DFS_80T_SINGLE_SIDED, title="D") as dfs:
+            (dfs.root / "$.BOOT").write_bytes(b"b" * 400)  # lowest sectors
+            (dfs.root / "$.LOADER").write_bytes(b"l" * 400)
+            (dfs.root / "$.GAME").write_bytes(b"g" * 400)  # highest sectors
+
+        result = runner.invoke(cli, ["storage-order", str(image)])
+        assert result.exit_code == 0, result.output
+        out = result.output
+        # Physical order, not the catalogue's descending order or alphabetical.
+        assert out.index("$.BOOT") < out.index("$.LOADER") < out.index("$.GAME")
+
+    def test_errors_on_filesystem_without_storage_order(
+        self, runner: CliRunner, adfs_image_filepath: Path
+    ) -> None:
+        result = runner.invoke(cli, ["storage-order", str(adfs_image_filepath)])
+        assert result.exit_code != 0
+        assert "storage order" in result.output.lower()
+
+
 class TestCpRecursive:
     """``-r`` / ``--recursive`` copies a source directory and its
     contents, creating intermediate destination directories as
