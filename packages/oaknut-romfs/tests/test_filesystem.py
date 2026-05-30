@@ -106,6 +106,16 @@ def test_remove_respects_lock():
     assert "HOPOBJ" not in {f.name for f in ROMFS.from_bytes(bytes(data)).files}
 
 
+def test_mount_treats_slash_name_as_a_flat_filename():
+    fs = AcornROMFS()
+    reader = reader_for(_bytes("Electron_Tree_Of_Knowledge_1.rom"))
+    mount = fs.open(reader, fs.probe(reader).geometry)
+    names = {entry.name for entry in mount.iter_entries("")}
+    assert "M/C" in names  # the slash is part of the name, not a path
+    assert mount.exists("M/C")
+    assert len(mount.read_bytes("M/C")) > 0
+
+
 def test_composite_rom_is_read_only():
     mount, _ = _open_writable("Electron_Countdown_To_Doom_1.rom")
     with pytest.raises(ReadOnlyFilesystemError):

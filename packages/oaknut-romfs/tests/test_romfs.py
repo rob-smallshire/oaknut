@@ -91,9 +91,17 @@ def test_master_demo_cartridges_are_independent_not_spanning():
     assert b.is_plain
 
 
+def test_filename_may_contain_a_slash():
+    # ROMFS/CFS names are flat byte strings: '/' is a legal filename
+    # character, not a path separator. Tree Of Knowledge has a file "M/C".
+    by_name = {f.name: f for f in load("Electron_Tree_Of_Knowledge_1.rom").files}
+    assert "M/C" in by_name
+    assert by_name["M/C"].load_address == 0x5240
+
+
 def test_whole_corpus_parses_with_valid_crcs():
     roms = sorted(ROMFS_DIRPATH.glob("*.rom"))
-    assert len(roms) == 9
+    assert len(roms) == 11
     for filepath in roms:
         rom = ROMFS.from_bytes(filepath.read_bytes())  # strict: raises on any bad CRC
         assert rom.files, f"{filepath.name} parsed no files"

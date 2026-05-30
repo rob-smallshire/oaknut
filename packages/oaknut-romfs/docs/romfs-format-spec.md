@@ -430,12 +430,13 @@ Still to confirm:
 
 ## 6. Reference corpus
 
-Nine ROM images live at the workspace root under
+Eleven ROM images live at the workspace root under
 `tests/data/images/romfs/`, all 16 KiB, all decoding with valid header and
-data CRCs: six Acornsoft Electron cartridges, two BBC Master Demonstration
-cartridges (`DEMO-A` / `DEMO-B`), and one BBC Micro ROM (`Zalaga`). The
-on-ROM format is *identical* across machines (§5); they differ only in
-*authoring*:
+data CRCs: eight Acornsoft Electron cartridges (including the two-disc
+Countdown To Doom, Starship Command and Tree Of Knowledge), two BBC Master
+Demonstration cartridges (`DEMO-A` / `DEMO-B`), and one BBC Micro ROM
+(`Zalaga`). The on-ROM format is *identical* across machines (§5); they
+differ only in *authoring*:
 
 | | Acornsoft cartridges | Zalaga (BBC) |
 |---|---|---|
@@ -481,17 +482,34 @@ Electron_Starship_Command_1.rom     FS data @ &80BB
 Electron_Starship_Command_2.rom     FS data @ &80BB
   *Star02*    blk &00  len &000000  load &00000000  exec &00000000  last+lock
   STRCOM2     blk &23  len &002400  load &00002E00  exec &000047B1  last
+
+Electron_Tree_Of_Knowledge_1.rom    FS data @ &80BB
+  *Tree01*    blk &00  len &000000  load &00000000  exec &00000000  last+lock
+  !BOOT       blk &00  len &000039  load &00001E85  exec &00001E85  last
+  KNOWL       blk &04  len &000406  load &00000000  exec &00000000  last
+  TREE        blk &2F  len &002FC1  load &00000000  exec &00000000  last
+  M/C         blk &05  len &0005BB  load &00005240  exec &00005240  last
+
+Electron_Tree_Of_Knowledge_2.rom    FS data @ &80BB
+  *Tree02*    blk &00  len &000000  load &00000000  exec &00000000  last+lock
+  CLASS       blk &09  len &000941  load &00004A51  exec &00000000  last
+  FRUIT       blk &05  len &00057B  load &00004A51  exec &00000000  last
 ```
+
+`Tree Of Knowledge 1` carries a file named **`M/C`** — a `/` in a
+filename. ROMFS / CFS names are flat byte strings terminated by NUL, so
+`/` is an ordinary name character, **not** a path separator. The flat
+mount addresses it as the whole name; nothing splits on `/`.
 
 Countdown To Doom is a **two-disc** game: part 1 (`*Doom01*` — a
 `!BOOT`/`DOOM`/`INIT` bootstrap whose real game code is in the 12 KiB
 composite tail after the `+`, §1.2) and part 2 (`*Doom02*` — the single
 large `DOOM2` file, a plain ROM with `&FF` padding). The two are
 **independent** cartridges with different catalogues, *not* a spanning
-pair. Starship Command 1/2 and the Master Demonstration A/B are likewise
-two independent cartridges each. So none of the four `_1`/`_2` pairs is a
-*spanning* set — each member is a self-contained ROMFS with its own `+`
-(see §7).
+pair. Starship Command, Tree Of Knowledge and the Master Demonstration are
+likewise two independent cartridges each. So **every** `_1`/`_2` pair in
+the corpus is independent, none a *spanning* set — each member is a
+self-contained ROMFS with its own `+` (see §7).
 
 ```
 Zalaga.rom  (BBC Micro)             FS data @ &810B, no title block
@@ -549,8 +567,9 @@ past its own handler.
 ### 7.2 The corpus has no spanning set
 
 Every multi-ROM product in `tests/data/images/romfs/` is **independent
-cartridges**, not a spanning filing system: Countdown To Doom 1/2 are two
-discs of one game (`*Doom01*` / `*Doom02*`); Starship Command 1/2 are two
+cartridges**, not a spanning filing system: Countdown To Doom 1/2
+(`*Doom01*` / `*Doom02*`) and Tree Of Knowledge 1/2 (`*Tree01*` /
+`*Tree02*`) are two discs of one game; Starship Command 1/2 are two
 separate games; Master Demonstration A/B are two separate demos. Each
 member is a complete ROMFS terminated by its own `+`. We still lack a
 genuine spanning image.
