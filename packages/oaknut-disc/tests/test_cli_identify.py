@@ -72,6 +72,13 @@ class TestDescribeFilesystem:
         result = runner.invoke(cli, ["describe-filesystem", "nonsense"])
         assert result.exit_code != 0
 
+    def test_reports_acorn_wildcard_syntax(self, runner: CliRunner):
+        result = runner.invoke(cli, ["describe-filesystem", "acorn-dfs"])
+        assert result.exit_code == 0
+        assert "Wildcards:" in result.output
+        # Acorn uses * and #, not the Unix ?.
+        assert "# (exactly one character)" in result.output
+
     def test_shows_geometry_presets(self, runner: CliRunner):
         # The geometry grammar is the discoverable menu for --geometry.
         result = runner.invoke(cli, ["describe-filesystem", "adfs"])

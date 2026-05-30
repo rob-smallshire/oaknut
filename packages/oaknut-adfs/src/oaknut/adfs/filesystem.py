@@ -33,7 +33,7 @@ from oaknut.filesystem import (
     Partition,
     floppy_geometry,
 )
-from oaknut.filesystem.wildcards import AcornWildcards
+from oaknut.filesystem.wildcards import ACORN_WILDCARDS, AcornWildcards
 
 # The old free-space map occupies sectors 0–1.
 _MAP_BYTES = 512
@@ -269,6 +269,8 @@ class ADFS(Filesystem):
     Server) or DRDOS FAT filesystem may live — is reported for the
     coordinator to recurse into; ADFS itself stays ignorant of it.
     """
+
+    wildcard_syntax = ACORN_WILDCARDS
 
     extensions = frozenset({".adf", ".ads", ".adm", ".adl", ".dat"})
     #: ADFS is the default creator for all its extensions, including the

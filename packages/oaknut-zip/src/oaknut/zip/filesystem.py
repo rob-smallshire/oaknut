@@ -32,7 +32,7 @@ from oaknut.filesystem import (
     ImageReader,
     ReadOnlyFilesystemError,
 )
-from oaknut.filesystem.wildcards import AcornWildcards
+from oaknut.filesystem.wildcards import ACORN_WILDCARDS, AcornWildcards
 
 from .api import resolved_entries
 
@@ -147,6 +147,7 @@ class Zip(Filesystem):
     archive API recovers.
     """
 
+    wildcard_syntax = ACORN_WILDCARDS
     extensions = frozenset({".zip"})
 
     def probe(self, reader: ImageReader) -> Identification | None:

@@ -169,8 +169,10 @@ def describe_filesystem_command() -> click.Command:
         — the named presets and any parameterised (capacity / CHS /
         floppy) forms.
         """
+        syntax = create_filesystem(name).wildcard_syntax
+        description = f"{describe_filesystem(name)}\n\nWildcards: {syntax.summary()}"
         return Reports(
-            filesystem=Report(data=ScalarContent(value=describe_filesystem(name), title=name)),
+            filesystem=Report(data=ScalarContent(value=description, title=name)),
             geometries=Report(data=_geometry_table(name)),
         )
 

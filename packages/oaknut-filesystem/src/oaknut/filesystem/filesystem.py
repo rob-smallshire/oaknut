@@ -14,11 +14,12 @@ from abc import abstractmethod
 from pathlib import Path
 
 from oaknut.extension import Extension, namespace_for
-from oaknut.filesystem.capabilities import Mount
+from oaknut.filesystem.capabilities import Mount, WildcardSyntax
 from oaknut.filesystem.exceptions import FilesystemError
 from oaknut.filesystem.geometry import Geometry, GeometryGrammar
 from oaknut.filesystem.identification import Identification, Volume
 from oaknut.filesystem.reader import ImageReader
+from oaknut.filesystem.wildcards import UNIX_WILDCARDS
 
 #: The extension *kind* (axis) filesystems belong to.
 FILESYSTEM_KIND = "filesystem"
@@ -55,6 +56,10 @@ class Filesystem(Extension):
     #: an ADFS disc) leaves it empty and is reached only via
     #: ``--filesystem``.
     creates: frozenset[str] = frozenset()
+    #: This filesystem's filename wildcard vocabulary, reported by
+    #: ``disc describe-filesystem``. Defaults to Unix (``*`` / ``?``); the
+    #: Acorn filing systems override it with ``*`` / ``#`` (``?`` literal).
+    wildcard_syntax: WildcardSyntax = UNIX_WILDCARDS
 
     @classmethod
     def _kind(cls) -> str:

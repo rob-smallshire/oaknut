@@ -35,7 +35,7 @@ from oaknut.filesystem import (
     floppy_geometry,
 )
 from oaknut.filesystem.exceptions import NoSuchVolumeError, VolumeNotFormattedError
-from oaknut.filesystem.wildcards import AcornWildcards
+from oaknut.filesystem.wildcards import ACORN_WILDCARDS, AcornWildcards
 
 # An Acorn DFS path may be prefixed with a drive — ``:N.`` (or bare ``:N``).
 # The leading colon is what distinguishes a drive from a directory named
@@ -242,6 +242,7 @@ class _DFSMount(AcornWildcards):
 class _BaseDFS(Filesystem):
     """Shared behaviour for the flat-catalogue DFS-family filesystems."""
 
+    wildcard_syntax = ACORN_WILDCARDS
     extensions = frozenset({".ssd", ".dsd"})
 
     #: The concrete catalogue class (subclass responsibility).

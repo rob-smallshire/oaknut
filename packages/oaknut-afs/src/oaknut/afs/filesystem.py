@@ -32,7 +32,7 @@ from oaknut.filesystem import (
     Identification,
     ImageReader,
 )
-from oaknut.filesystem.wildcards import AcornWildcards
+from oaknut.filesystem.wildcards import ACORN_WILDCARDS, AcornWildcards
 
 # The info sector sits at sector 1 of the AFS region (start_cylinder*spc
 # + 1). The coordinator hands AFS a window starting at the region base,
@@ -265,6 +265,7 @@ class AFS(Filesystem):
     this filesystem operates on a window of just that region.
     """
 
+    wildcard_syntax = ACORN_WILDCARDS
     extensions = frozenset({".dat"})
 
     def probe(self, reader: ImageReader) -> Identification | None:

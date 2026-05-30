@@ -31,7 +31,7 @@ from oaknut.filesystem import (
     ImageReader,
 )
 from oaknut.filesystem.exceptions import ReadOnlyFilesystemError
-from oaknut.filesystem.wildcards import AcornWildcards
+from oaknut.filesystem.wildcards import ACORN_WILDCARDS, AcornWildcards
 from oaknut.romfs.block import MAX_NAME_LENGTH
 from oaknut.romfs.exceptions import CRCError, NotAROMFSError, ROMFSError, TruncatedROMError
 from oaknut.romfs.romfs import MAX_TITLE_LENGTH, ROMFS, ROMFSFile, build_rom_image
@@ -252,6 +252,7 @@ class AcornROMFS(Filesystem):
     so the filing system is flat (no directories). Up to a 16 KiB image.
     """
 
+    wildcard_syntax = ACORN_WILDCARDS
     extensions = _EXTENSIONS
     #: ROMFS is the default creator for `.rom` images.
     creates = _EXTENSIONS
