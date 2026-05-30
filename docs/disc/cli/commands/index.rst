@@ -284,6 +284,38 @@ AFS (Acorn Level 3 File Server)
    .. cli-example:: cmd_afs_merge
 
 
+ROMFS (Acorn ROM Filing System)
+-------------------------------
+
+These query and tweak the paged-ROM *header* properties of an existing
+ROMFS image; the image itself is made with ``disc create``.
+
+.. oaknut-command:: oaknut.romfs.cli:get_copyright_command
+   :prog: disc romfs get-copyright
+
+   .. cli-example:: cmd_romfs_get_copyright
+
+.. oaknut-command:: oaknut.romfs.cli:set_copyright_command
+   :prog: disc romfs set-copyright
+
+   A same-length copyright is written in place. A different length moves
+   the service handler, so the ROM is rebuilt — done only for a
+   created-style ROM (no language entry, nothing after the filing system);
+   other ROMs are refused to protect their code.
+
+   .. cli-example:: cmd_romfs_set_copyright
+
+.. oaknut-command:: oaknut.romfs.cli:get_version_command
+   :prog: disc romfs get-version
+
+   .. cli-example:: cmd_romfs_get_version
+
+.. oaknut-command:: oaknut.romfs.cli:set_version_command
+   :prog: disc romfs set-version
+
+   .. cli-example:: cmd_romfs_set_version
+
+
 Diagnostics
 -----------
 
