@@ -468,7 +468,9 @@ Electron_Countdown_To_Doom_1.rom    FS data @ &829C
   DOOM        blk &04  len &000407  load &00000000  exec &00000000  last
   INIT        blk &08  len &0008F8  load &00003BFB  exec &00000000  last
 
-Electron_Countdown_To_Doom_2.rom    identical catalogue to _1
+Electron_Countdown_To_Doom_2.rom    FS data @ &80BB  (part 2, plain)
+  *Doom02*    blk &00  len &000000  load &00000000  exec &00000000  last+lock
+  DOOM2       blk &3C  len &003C08  load &00000000  exec &00000000  last
 
 Electron_Starship_Command_1.rom     FS data @ &80BB
   *Star01*    blk &00  len &000000  load &00000000  exec &00000000  last+lock
@@ -481,14 +483,15 @@ Electron_Starship_Command_2.rom     FS data @ &80BB
   STRCOM2     blk &23  len &002400  load &00002E00  exec &000047B1  last
 ```
 
-Countdown To Doom 1 and 2 are **byte-for-byte identical** whole images —
-the same dump twice (a duplicate-detection fixture). The DOOM game proper
-is not in the filing system: it lives in the 12 KiB composite tail (the
-sideways-ROM code after the `+`), with only a small `Doom01`/`!BOOT`/
-`DOOM`/`INIT` bootstrap in the filing system. Starship Command 1/2 and the
-Master Demonstration A/B are likewise **independent** cartridges, each a
-self-contained ROMFS with its own `+`. None of the four `_1`/`_2` pairs is
-a *spanning* set — see §7.
+Countdown To Doom is a **two-disc** game: part 1 (`*Doom01*` — a
+`!BOOT`/`DOOM`/`INIT` bootstrap whose real game code is in the 12 KiB
+composite tail after the `+`, §1.2) and part 2 (`*Doom02*` — the single
+large `DOOM2` file, a plain ROM with `&FF` padding). The two are
+**independent** cartridges with different catalogues, *not* a spanning
+pair. Starship Command 1/2 and the Master Demonstration A/B are likewise
+two independent cartridges each. So none of the four `_1`/`_2` pairs is a
+*spanning* set — each member is a self-contained ROMFS with its own `+`
+(see §7).
 
 ```
 Zalaga.rom  (BBC Micro)             FS data @ &810B, no title block
@@ -546,10 +549,11 @@ past its own handler.
 ### 7.2 The corpus has no spanning set
 
 Every multi-ROM product in `tests/data/images/romfs/` is **independent
-cartridges**, not a spanning filing system: Countdown To Doom 1/2 are
-byte-identical duplicates; Starship Command 1/2 are two separate games;
-Master Demonstration A/B are two separate demos. Each member is a complete
-ROMFS terminated by its own `+`. We still lack a genuine spanning image.
+cartridges**, not a spanning filing system: Countdown To Doom 1/2 are two
+discs of one game (`*Doom01*` / `*Doom02*`); Starship Command 1/2 are two
+separate games; Master Demonstration A/B are two separate demos. Each
+member is a complete ROMFS terminated by its own `+`. We still lack a
+genuine spanning image.
 
 ### 7.3 Detection and grouping (design)
 
@@ -559,8 +563,8 @@ ROMFS terminated by its own `+`. We still lack a genuine spanning image.
   final fragment has the `+`. A complete single ROM always has a `+`. This
   is reliable and needs no convention.
 - **Do not infer a set from `_1`/`_2`.** Every `_1`/`_2` pair in the
-  corpus is independent or duplicate, so joining by that suffix would
-  fabricate a broken filing system. Grouping must be explicit: an ordered
+  corpus is independent (a separate disc of a multi-disc game), so joining
+  by that suffix would fabricate a broken filing system. Grouping must be explicit: an ordered
   CLI source (e.g. `disc ls first.rom+second.rom`, top socket first) or a
   sidecar manifest (e.g. a `.romset` listing members in socket order).
   Reassembly belongs in a native `ROMFS.from_roms([...])`, keeping the
