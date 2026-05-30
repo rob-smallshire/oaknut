@@ -21,12 +21,22 @@ from dataclasses import dataclass
 from oaknut.romfs.block import (
     BLOCK_DATA_SIZE,
     END_OF_FILESYSTEM,
+    FLAG_LAST,
+    FLAG_LOCKED,
     INTER_BLOCK_MARKER,
     SYNC_BYTE,
     BlockHeader,
 )
 from oaknut.romfs.crc import crc16_ccitt
-from oaknut.romfs.exceptions import CRCError, NotAROMFSError, TruncatedROMError
+from oaknut.romfs.exceptions import (
+    CRCError,
+    NotAROMFSError,
+    ROMFullError,
+    TruncatedROMError,
+)
+
+#: Paged ROMs are mapped at &8000; image offset 0 is this address.
+ROM_BASE_ADDRESS = 0x8000
 
 # Paged-ROM header offsets (relative to the ROM base, conventionally &8000).
 _ROM_TYPE_OFFSET = 6
@@ -35,6 +45,8 @@ _VERSION_OFFSET = 8
 _TITLE_OFFSET = 9
 #: ROM type bit 7: a service entry is present (set by every ROMFS ROM).
 _SERVICE_ENTRY_BIT = 0x80
+# Fixed header overhead per block: sync + name NUL + 17 fixed bytes + 2 CRC.
+_HEADER_OVERHEAD = 1 + 1 + 17 + 2
 
 
 @dataclass(frozen=True)
@@ -179,6 +191,63 @@ def _assemble_files(buf: bytes, start: int) -> list[ROMFSFile]:
     return files
 
 
+def _chain_length(name: str, data_length: int) -> int:
+    """The on-ROM byte length of one file's block chain.
+
+    Mirrors :func:`_serialise_file`: a header on the first and last blocks,
+    a one-byte ``&23`` marker on the middle blocks, plus two CRC bytes per
+    data block. An empty file is a single header block with no data.
+    """
+    header = len(name) + _HEADER_OVERHEAD
+    if data_length == 0:
+        return header
+    blocks = (data_length + BLOCK_DATA_SIZE - 1) // BLOCK_DATA_SIZE
+    total = 0
+    for index in range(blocks):
+        block_data = min(BLOCK_DATA_SIZE, data_length - index * BLOCK_DATA_SIZE)
+        leader = header if (index == 0 or index == blocks - 1) else 1
+        total += leader + block_data + 2
+    return total
+
+
+def _serialise_file(file: "ROMFSFile", end_address: int) -> bytes:
+    """Encode one file's block chain (see ``docs/romfs-format-spec.md`` §2.4)."""
+    flag_base = FLAG_LOCKED if file.locked else 0
+    out = bytearray()
+    if file.length == 0:
+        header = BlockHeader(
+            file.name,
+            file.load_address,
+            file.exec_address,
+            0,
+            0,
+            FLAG_LAST | flag_base,
+            end_address,
+        )
+        return header.to_bytes()
+    blocks = (file.length + BLOCK_DATA_SIZE - 1) // BLOCK_DATA_SIZE
+    for index in range(blocks):
+        block_data = file.data[index * BLOCK_DATA_SIZE : (index + 1) * BLOCK_DATA_SIZE]
+        is_last = index == blocks - 1
+        if index == 0 or is_last:
+            flag = flag_base | (FLAG_LAST if is_last else 0)
+            header = BlockHeader(
+                file.name,
+                file.load_address,
+                file.exec_address,
+                index,
+                len(block_data),
+                flag,
+                end_address,
+            )
+            out += header.to_bytes()
+        else:
+            out += bytes([INTER_BLOCK_MARKER])
+        out += block_data
+        out += crc16_ccitt(block_data).to_bytes(2, "big")
+    return bytes(out)
+
+
 class ROMFS:
     """An Acorn ROM Filing System image, parsed into its files."""
 
@@ -192,6 +261,7 @@ class ROMFS:
         copyright: str,
         image: bytes,
         data_offset: int,
+        fs_end: int,
     ):
         self._files = tuple(files)
         self._rom_type = rom_type
@@ -200,6 +270,10 @@ class ROMFS:
         self._copyright = copyright
         self._image = bytes(image)
         self._data_offset = data_offset
+        # Offset just past the original image's &2B end marker — fixed by the
+        # source image and carried through with_files, so to_bytes can locate
+        # the original padding run and any opaque trailing content.
+        self._fs_end = fs_end
 
     @classmethod
     def from_bytes(cls, buf) -> "ROMFS":
@@ -213,6 +287,7 @@ class ROMFS:
             raise NotAROMFSError("image too small to be a paged ROM")
         data_offset = _find_data_start(image)
         files = _assemble_files(image, data_offset)
+        fs_end = data_offset + sum(_chain_length(f.name, f.length) for f in files) + 1
         return cls(
             tuple(files),
             rom_type=image[_ROM_TYPE_OFFSET],
@@ -221,6 +296,7 @@ class ROMFS:
             copyright=_decode_string(image, image[_COPYRIGHT_PTR_OFFSET] + 1),
             image=image,
             data_offset=data_offset,
+            fs_end=fs_end,
         )
 
     @property
@@ -268,3 +344,73 @@ class ROMFS:
     def data_offset(self) -> int:
         """Offset at which the filing-system data begins within the image."""
         return self._data_offset
+
+    def with_files(self, files: tuple[ROMFSFile, ...]) -> "ROMFS":
+        """A copy with its files replaced, keeping the same ROM container.
+
+        The header/handler prefix, header metadata and image size are
+        carried over; :meth:`to_bytes` lays the new chain out within the
+        same ROM, so the result re-parses as the same kind of image.
+        """
+        return ROMFS(
+            tuple(files),
+            rom_type=self._rom_type,
+            header_title=self._header_title,
+            version=self._version,
+            copyright=self._copyright,
+            image=self._image,
+            data_offset=self._data_offset,
+            fs_end=self._fs_end,
+        )
+
+    def to_bytes(self) -> bytes:
+        """Serialise to a whole ROM image of the original size.
+
+        The header/handler prefix is preserved verbatim, the file chain and
+        ``&2B`` end marker are rebuilt, and any opaque trailing content (a
+        language ROM's code, as in Countdown To Doom) is kept at its
+        original address. The padding run immediately after the original
+        ``&2B`` is the only space the filing system may grow into; exceeding
+        it raises :class:`ROMFullError`.
+        """
+        prefix = self._image[: self._data_offset]
+
+        offset = self._data_offset
+        parts: list[bytes] = []
+        for file in self._files:
+            chain_length = _chain_length(file.name, file.length)
+            end_address = ROM_BASE_ADDRESS + offset + chain_length
+            blob = _serialise_file(file, end_address)
+            parts.append(blob)
+            offset += chain_length
+        new_fs_end = offset + 1  # the &2B end marker
+
+        # The original image's layout after the FS: a padding run, then any
+        # opaque trailing content (a language ROM's code).
+        pad_byte, opaque_start = self._suffix_layout(self._fs_end)
+        opaque = self._image[opaque_start:]
+
+        if new_fs_end > opaque_start:
+            overflow = new_fs_end - opaque_start
+            raise ROMFullError(
+                f"the filing system needs {overflow} byte(s) more than the ROM has free; "
+                "it would overwrite content after the filing system"
+            )
+
+        body = b"".join(parts) + bytes([END_OF_FILESYSTEM])
+        padding = bytes([pad_byte]) * (opaque_start - new_fs_end)
+        return prefix + body + padding + opaque
+
+    def _suffix_layout(self, original_fs_end: int) -> tuple[int, int]:
+        """The padding byte and the offset where opaque trailing content begins.
+
+        Free space is the run of a single byte value immediately following
+        the original ``&2B``; anything after it is opaque and preserved.
+        """
+        if original_fs_end >= len(self._image):
+            return 0xFF, len(self._image)
+        pad_byte = self._image[original_fs_end]
+        opaque_start = original_fs_end
+        while opaque_start < len(self._image) and self._image[opaque_start] == pad_byte:
+            opaque_start += 1
+        return pad_byte, opaque_start
