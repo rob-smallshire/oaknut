@@ -89,6 +89,9 @@ protocol.
 .. autoclass:: oaknut.filesystem.StatusReporting
    :members:
 
+.. autoclass:: oaknut.filesystem.StorageOrdered
+   :members:
+
 .. autoclass:: oaknut.filesystem.UserDatabase
    :members:
 

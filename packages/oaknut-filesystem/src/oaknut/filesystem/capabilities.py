@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
+    from _typeshed import SupportsRichComparison
     from oaknut.file import AcornMeta, BootOption
     from oaknut.filesystem.identification import Partition
 
@@ -315,4 +316,29 @@ class StatusReporting(Protocol):
 
     def status_notes(self) -> tuple[str, ...]:
         """Short status advisories for this partition (empty when none)."""
+        ...
+
+
+@runtime_checkable
+class StorageOrdered(Protocol):
+    """The filesystem can order its paths by physical position on the medium.
+
+    :meth:`storage_key` returns an opaque sort key for a path; sorting a
+    directory's siblings by it yields the order in which their data is laid
+    down on the medium — ascending start sector for a random-access
+    filesystem (DFS, ADFS), stream order for a sequential one (CFS/ROMFS).
+    A multi-file ``cp`` uses it to reproduce the source's on-disc order at
+    the destination instead of reversing it (a flat catalogue read
+    highest-sector-first, re-laid lowest-sector-first, would otherwise
+    flip the order and slow loading on a seeking drive).
+
+    The key is comparable only against other keys from the *same* mount and
+    carries no meaning beyond ordering — the caller never inspects it.
+    Filesystems with no storage order (a hash table) or one that is
+    ill-defined (a fragmented AFS file spans many extents, so it has no
+    single position) do not implement this.
+    """
+
+    def storage_key(self, path: str) -> "SupportsRichComparison":
+        """An opaque, sortable key for *path*'s position on the medium."""
         ...

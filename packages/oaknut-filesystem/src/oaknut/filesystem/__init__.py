@@ -29,6 +29,7 @@ from oaknut.filesystem.capabilities import (
     RegionHost,
     Sized,
     StatusReporting,
+    StorageOrdered,
     Titled,
     UserDatabase,
     Validatable,
@@ -97,6 +98,7 @@ __all__ = [
     "UserDatabase",
     "RegionHost",
     "StatusReporting",
+    "StorageOrdered",
     # geometry
     "Geometry",
     "GeometryGrammar",
