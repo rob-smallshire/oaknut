@@ -1,0 +1,61 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "oaknut-romfs"
+dynamic = ["version"]
+authors = [{ name = "Robert Smallshire", email = "robert@smallshire.org.uk" }]
+description = "Python library for Acorn ROM Filing System (ROMFS) paged-ROM images"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.11"
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+]
+dependencies = [
+    "oaknut-file>=10.0",
+    "oaknut-discimage>=10.0",
+    "oaknut-filesystem>=10.0",
+    "oaknut-basic>=10.0",
+]
+
+# The `cli` extra pulls the shared CLI toolkit so this package can
+# contribute `disc romfs` subcommands. The library core never imports it,
+# so a bare install stays CLI-free.
+[project.optional-dependencies]
+cli = ["oaknut-cli>=10.0"]
+
+[project.urls]
+Homepage = "https://github.com/rob-smallshire/oaknut/tree/master/packages/oaknut-romfs"
+Documentation = "https://rob-smallshire.github.io/oaknut/disc/api/reference/romfs.html"
+Repository = "https://github.com/rob-smallshire/oaknut"
+Issues = "https://github.com/rob-smallshire/oaknut/issues"
+
+# NOTE: the oaknut.filesystem / oaknut.command entry points are deliberately
+# absent until the AcornROMFS adapter and its Mount exist. Declaring an entry
+# point that points at a not-yet-written class would make the coordinator's
+# extension loader report a load failure on every `disc identify`. They will
+# be added in the implementation phase, alongside the first passing probe()
+# test against a real ROMFS image:
+#
+#   [project.entry-points."oaknut.filesystem"]
+#   acorn-romfs = "oaknut.romfs.filesystem:AcornROMFS"
+#
+#   [project.entry-points."oaknut.command"]
+#   romfs = "oaknut.romfs.cli:romfs"
+
+[tool.setuptools.dynamic]
+version = { attr = "oaknut.romfs.__version__" }
+
+[tool.setuptools.packages.find]
+where = ["src"]

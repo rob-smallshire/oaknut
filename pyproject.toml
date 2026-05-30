@@ -69,6 +69,7 @@ oaknut-basic = { workspace = true }
 oaknut-dfs   = { workspace = true }
 oaknut-adfs  = { workspace = true }
 oaknut-afs   = { workspace = true }
+oaknut-romfs = { workspace = true }
 oaknut-zip   = { workspace = true }
 oaknut-disc  = { workspace = true }
 
@@ -92,6 +93,7 @@ workspace = [
     "oaknut-dfs",
     "oaknut-adfs",
     "oaknut-afs",
+    "oaknut-romfs",
     "oaknut-zip",
     "oaknut-disc",
 ]
@@ -158,6 +160,9 @@ filename = "packages/oaknut-adfs/src/oaknut/adfs/__init__.py"
 filename = "packages/oaknut-afs/src/oaknut/afs/__init__.py"
 
 [[tool.bumpversion.files]]
+filename = "packages/oaknut-romfs/src/oaknut/romfs/__init__.py"
+
+[[tool.bumpversion.files]]
 filename = "packages/oaknut-zip/src/oaknut/zip/__init__.py"
 
 [[tool.bumpversion.files]]
@@ -180,6 +185,7 @@ testpaths = [
     "packages/oaknut-dfs/tests",
     "packages/oaknut-adfs/tests",
     "packages/oaknut-afs/tests",
+    "packages/oaknut-romfs/tests",
     "packages/oaknut-zip/tests",
     "packages/oaknut-disc/tests",
 ]
