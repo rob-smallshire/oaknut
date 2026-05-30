@@ -105,6 +105,16 @@ class TestFormatAccessText:
         result = format_access_text(None)
         assert result == "/"
 
+    def test_run_only(self):
+        # Access.X (run-only, CFS/ROMFS copy protection) renders as "X" in the
+        # owner part, and round-trips through parse_access.
+        from oaknut.file import Access, parse_access
+
+        assert format_access_text(int(Access.X)) == "X/"
+        assert parse_access("X/") == Access.X
+        # It is a distinct bit from the disc delete-lock.
+        assert not (Access.X & Access.L)
+
 
 class TestParseAccess:
     """Test parse_access() — the reverse of format_access_text/hex."""
@@ -173,4 +183,4 @@ class TestParseAccess:
     # Error cases
     def test_invalid_letter_raises(self):
         with pytest.raises(ValueError, match="nrecogni"):
-            parse_access("XWR/R")
+            parse_access("QWR/R")

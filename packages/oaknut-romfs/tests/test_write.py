@@ -37,7 +37,7 @@ def test_replace_file_data_reparses():
     # Shrink HOPOBJ to a single small block; the image stays 16 KiB and
     # re-parses with the new contents and recomputed catalogue figures.
     new_files = tuple(
-        ROMFSFile(f.name, f.load_address, f.exec_address, f.locked, b"hello")
+        ROMFSFile(f.name, f.load_address, f.exec_address, f.run_only, b"hello")
         if f.name == "HOPOBJ"
         else f
         for f in rom.files

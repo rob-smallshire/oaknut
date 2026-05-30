@@ -175,7 +175,15 @@ The header CRC and data CRC are stored most-significant-byte first
 | 7 | `&80` | **Last block** of this file |
 | 6 | `&40` | **No data** in this block (block length 0); set by `OPENOUT…:CLOSE#` |
 | 5–1 | — | unused |
-| 0 | `&01` | **Protected**: the file may only be `*RUN`, not `*LOAD`ed. Surfaced as Acorn access "L" (locked) via `AcornMetadata` |
+| 0 | `&01` | **`*RUN`-only** copy protection: the file may be `*RUN` but not `*LOAD`ed / `*EXEC`ed / `CHAIN`ed. The MOS calls it "locked" and raises `"Locked"` on a load (OS 1.20 `checkFileAttributes` → `fileLocked`). It is **read** protection, not the disc filing systems' delete-lock |
+
+bit 0 is its own access axis — surfaced as **`Access.X`** ("run-only"),
+*not* `Access.L` (the DFS/ADFS delete-lock). The two never map to each
+other: copying a delete-locked DFS file into ROMFS does not `*RUN`-protect
+it (which would make its loader unrunnable), and a `*RUN`-only ROMFS file
+copied to a disc does not become delete-locked. ROMFS itself has no
+delete-lock — the medium is read-only / rebuilt wholesale — so a created
+ROM's `disc rm` is never gated by it.
 
 A file of ≤ 256 bytes is a single block whose flag has bit 7 set (it is
 simultaneously the first and the last block). A zero-length file is a
@@ -243,7 +251,7 @@ style varies by author:
   `*.` title; its meaningful name is the *header* title `RFS id:298DE`
   (shown by `*HELP`, §2.9), a separate string.
 
-The Acornsoft title block's flag is **`&81` (last + locked)**, *not* the
+The Acornsoft title block's flag is **`&81` (last + run-only)**, *not* the
 `&C0` (last + empty) that mkromfs and the NAUG `*EXAMPLE*` example emit:
 Acorn leaves the `&40` empty bit clear even on a zero-length block. A
 reader must therefore treat "block length 0", not "empty bit set", as the
@@ -288,7 +296,7 @@ carrier/sync search. The notable routines:
   arrive in order; the loader checks each block number against the
   expected next value.
 - **`checkFileAttributes` / `loadOrRun`** — apply the load/exec addresses
-  and the flag bits (`*RUN` vs `*LOAD`, locked).
+  and the flag bits (`*RUN` vs `*LOAD`, run-only).
 
 The practical consequence for the parser: read the first header (`&2A`),
 then for each subsequent boundary expect either another header (`&2A`,

@@ -32,8 +32,11 @@ FLAG_LAST = 0x80
 #: Flag bit: this block carries no data (mkromfs sets it; Acorn does not —
 #: test ``block_length == 0`` rather than this bit to detect an empty file).
 FLAG_EMPTY = 0x40
-#: Flag bit: the file is locked.
-FLAG_LOCKED = 0x01
+#: Flag bit: the file is *RUN-only — a form of copy protection. The MOS
+#: refuses to ``*LOAD`` / ``*EXEC`` / ``CHAIN`` it (only ``*RUN``); the OS
+#: calls this "locked", but it is read-protection, not the disc filing
+#: systems' delete-lock (see ``oaknut.file.Access.X``).
+FLAG_RUN_ONLY = 0x01
 
 #: Maximum file-name length (characters), excluding the NUL terminator.
 MAX_NAME_LENGTH = 10
@@ -75,9 +78,9 @@ class BlockHeader:
         return self.block_length == 0
 
     @property
-    def is_locked(self) -> bool:
-        """Whether the file is locked (flag bit 0)."""
-        return bool(self.flag & FLAG_LOCKED)
+    def is_run_only(self) -> bool:
+        """Whether the file is *RUN-only / copy-protected (flag bit 0)."""
+        return bool(self.flag & FLAG_RUN_ONLY)
 
     def field_bytes(self) -> bytes:
         """The header bytes the CRC is taken over: name through end address.

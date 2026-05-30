@@ -8,10 +8,11 @@ geometry (a ROM is a flat byte range, not a sectored disc).
 
 ROMFS is flat, so the mount does not advertise
 :class:`~oaknut.filesystem.HierarchicalDirectories`; it provides the
-``AcornMetadata`` (load/exec + lock) and ``Titled`` capabilities. Writes
-are supported on *plain* ROMFS images; a *composite* ROM (one carrying a
-service handler or language after the filing system) is read-only, so its
-trailing code is never corrupted.
+``AcornMetadata`` (load/exec + the `*RUN`-only copy-protection bit, surfaced
+as ``Access.X``) and ``Titled`` capabilities. Writes are supported on
+*plain* ROMFS images; a *composite* ROM (one carrying a service handler or
+language after the filing system) is read-only, so its trailing code is
+never corrupted.
 """
 
 from __future__ import annotations
@@ -146,7 +147,7 @@ class _ROMFSMount:
         existing = self._find(path)
         if existing is not None:
             replacement = ROMFSFile(
-                path, existing.load_address, existing.exec_address, existing.locked, bytes(data)
+                path, existing.load_address, existing.exec_address, existing.run_only, bytes(data)
             )
             files = tuple(replacement if f is existing else f for f in self._romfs.files)
         else:
@@ -157,8 +158,10 @@ class _ROMFSMount:
         file = self._find(path)
         if file is None:
             raise ROMFSError(f"no file named {path!r}")
-        if file.locked and not force:
-            raise ReadOnlyFilesystemError(f"{path!r} is locked; use force to remove it")
+        # No lock gate: a ROMFS file's protection bit is *RUN-only copy
+        # protection, not a delete-lock, and ROMFS has no delete-protection
+        # concept at all (the medium is rebuilt wholesale). *force* is accepted
+        # for the Mount contract but has nothing to override.
         self._commit(tuple(f for f in self._romfs.files if f is not file))
 
     def rename(self, old_path: str, new_path: str) -> None:
@@ -170,7 +173,7 @@ class _ROMFSMount:
                 f"ROMFS file names are 1–{MAX_NAME_LENGTH} characters: {new_path!r}"
             )
         renamed = ROMFSFile(
-            new_path, file.load_address, file.exec_address, file.locked, file.data
+            new_path, file.load_address, file.exec_address, file.run_only, file.data
         )
         self._commit(tuple(renamed if f is file else f for f in self._romfs.files))
 
@@ -179,7 +182,7 @@ class _ROMFSMount:
         file = self._find(path)
         if file is None:
             raise ROMFSError(f"no file named {path!r}")
-        access = Access.L if file.locked else Access(0)
+        access = Access.X if file.run_only else Access(0)
         return AcornMeta(
             load_address=file.load_address, exec_address=file.exec_address, access=int(access)
         )
@@ -190,8 +193,13 @@ class _ROMFSMount:
             raise ROMFSError(f"no file named {path!r}")
         load = file.load_address if meta.load_address is None else meta.load_address
         execa = file.exec_address if meta.exec_address is None else meta.exec_address
-        locked = bool(meta.access & Access.L)
-        updated = ROMFSFile(file.name, load, execa, locked, file.data)
+        # The run-only (copy-protection) bit is its own access axis, Access.X —
+        # NOT the disc filing systems' delete-lock Access.L. Taking it only
+        # from X means a ROMFS→ROMFS copy preserves it, while a locked DFS/ADFS
+        # file imported here does not become *RUN-only (which would otherwise
+        # make it unloadable: *EXEC / CHAIN would fail with "Locked").
+        run_only = bool(meta.access & Access.X)
+        updated = ROMFSFile(file.name, load, execa, run_only, file.data)
         self._commit(tuple(updated if f is file else f for f in self._romfs.files))
 
     # -- StatusReporting --

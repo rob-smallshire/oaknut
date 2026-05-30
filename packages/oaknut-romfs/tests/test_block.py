@@ -14,7 +14,7 @@ from oaknut.romfs.block import (
     END_OF_FILESYSTEM,
     FLAG_EMPTY,
     FLAG_LAST,
-    FLAG_LOCKED,
+    FLAG_RUN_ONLY,
     INTER_BLOCK_MARKER,
     SYNC_BYTE,
     BlockHeader,
@@ -31,7 +31,7 @@ def test_marker_byte_values():
 def test_flag_bit_values():
     assert FLAG_LAST == 0x80
     assert FLAG_EMPTY == 0x40
-    assert FLAG_LOCKED == 0x01
+    assert FLAG_RUN_ONLY == 0x01
 
 
 def _hopper_boot_block() -> bytes:
@@ -60,10 +60,10 @@ def test_parse_real_header():
 
 def test_flag_properties():
     last = BlockHeader("X", 0, 0, 0, 0x3A, FLAG_LAST, 0)  # non-empty last block
-    assert last.is_last and not last.is_empty and not last.is_locked
+    assert last.is_last and not last.is_empty and not last.is_run_only
 
-    title = BlockHeader("X", 0, 0, 0, 0, FLAG_LAST | FLAG_LOCKED, 0)  # &81 corpus title block
-    assert title.is_last and title.is_locked and title.is_empty  # length 0 -> empty
+    title = BlockHeader("X", 0, 0, 0, 0, FLAG_LAST | FLAG_RUN_ONLY, 0)  # &81 corpus title block
+    assert title.is_last and title.is_run_only and title.is_empty  # length 0 -> empty
 
     mid = BlockHeader("X", 0, 0, 1, 256, 0x00, 0)
     assert not mid.is_last
@@ -90,7 +90,7 @@ def test_serialise_round_trip():
         exec_address=0x3000,
         block_number=0x22,
         block_length=0x57,
-        flag=FLAG_LAST | FLAG_LOCKED,
+        flag=FLAG_LAST | FLAG_RUN_ONLY,
         end_address=0xA839,
     )
     encoded = original.to_bytes()

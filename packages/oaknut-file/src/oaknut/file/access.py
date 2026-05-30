@@ -37,16 +37,20 @@ class Access(IntFlag):
     R = 0x01  # Owner read
     W = 0x02  # Owner write
     E = 0x04  # Execute only
-    L = 0x08  # Locked (prevents delete, overwrite, rename)
+    L = 0x08  # Locked (prevents delete, overwrite, rename — disc filesystems)
     PR = 0x10  # Public read
     PW = 0x20  # Public write
+    X = 0x40  # Run-only: may be *RUN but not *LOADed (CFS/ROMFS copy protection)
 
     # Convenience composites.
     WR = R | W
     LWR = L | R | W
 
 
-_OWNER_LETTERS = {"L": Access.L, "W": Access.W, "R": Access.R, "E": Access.E}
+#: ``X`` (run-only) is a distinct axis from ``L`` (delete-lock): it is the
+#: cassette/ROM filing-system copy protection (a file that may be *RUN but
+#: not *LOADed), and does not map to or from the disc filesystems' lock.
+_OWNER_LETTERS = {"L": Access.L, "W": Access.W, "R": Access.R, "E": Access.E, "X": Access.X}
 _PUBLIC_LETTERS = {"W": Access.PW, "R": Access.PR}
 
 
@@ -126,6 +130,8 @@ def format_access_text(attr: int | None) -> str:
         owner += "W"
     if attr & Access.R:
         owner += "R"
+    if attr & Access.X:
+        owner += "X"
 
     public = ""
     if attr & Access.PW:

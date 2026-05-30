@@ -21,7 +21,7 @@ from oaknut.romfs.block import (
     BLOCK_DATA_SIZE,
     END_OF_FILESYSTEM,
     FLAG_LAST,
-    FLAG_LOCKED,
+    FLAG_RUN_ONLY,
     INTER_BLOCK_MARKER,
     MAX_NAME_LENGTH,
     SYNC_BYTE,
@@ -57,12 +57,16 @@ class ROMFSFile:
 
     *data* is the whole file, reassembled across its blocks. *end_address*
     is the paged-ROM address just past the file, as stored in its headers.
+    *run_only* is the copy-protection bit (flag bit 0): a `*RUN`-only file
+    the MOS will not `*LOAD` / `*EXEC` / `CHAIN`. The OS calls it "locked",
+    but it is read-protection, distinct from the disc filing systems'
+    delete-lock (`oaknut.file.Access.L`) — it is `oaknut.file.Access.X`.
     """
 
     name: str
     load_address: int
     exec_address: int
-    locked: bool
+    run_only: bool
     data: bytes
     end_address: int = 0
 
@@ -149,7 +153,7 @@ def _assemble_files(buf: bytes, start: int) -> tuple[list[ROMFSFile], bool, int]
     """
     files: list[ROMFSFile] = []
     name = load = execa = end_address = 0
-    locked = False
+    run_only = False
     chunks: list[bytes] = []
     open_file = False
     pos = start
@@ -173,7 +177,7 @@ def _assemble_files(buf: bytes, start: int) -> tuple[list[ROMFSFile], bool, int]
             if open_file:
                 break  # a new file began before the previous ended — stop, incomplete
             name, load, execa = header.name, header.load_address, header.exec_address
-            locked, end_address = header.is_locked, header.end_address
+            run_only, end_address = header.is_run_only, header.end_address
             chunks = [data]
             open_file = True
         else:
@@ -181,7 +185,7 @@ def _assemble_files(buf: bytes, start: int) -> tuple[list[ROMFSFile], bool, int]
                 break  # continuation with no file in progress — stop, incomplete
             chunks.append(data)
         if header is not None and header.is_last:
-            files.append(ROMFSFile(name, load, execa, locked, b"".join(chunks), end_address))
+            files.append(ROMFSFile(name, load, execa, run_only, b"".join(chunks), end_address))
             open_file = False
 
     return files, False, pos
@@ -208,7 +212,7 @@ def _chain_length(name: str, data_length: int) -> int:
 
 def _serialise_file(file: "ROMFSFile", end_address: int) -> bytes:
     """Encode one file's block chain (see ``docs/romfs-format-spec.md`` §2.4)."""
-    flag_base = FLAG_LOCKED if file.locked else 0
+    flag_base = FLAG_RUN_ONLY if file.run_only else 0
     out = bytearray()
     if file.length == 0:
         header = BlockHeader(
@@ -332,7 +336,7 @@ def build_rom_image(
     """
     if not 1 <= len(title) <= MAX_TITLE_LENGTH:
         raise ROMFSError(f"a ROMFS title must be 1-{MAX_TITLE_LENGTH} characters: {title!r}")
-    title_block = ROMFSFile(f"*{title}*", 0, 0, locked=True, data=b"")
+    title_block = ROMFSFile(f"*{title}*", 0, 0, run_only=True, data=b"")
     return _assemble_image(
         header_title=title,
         copyright=copyright,

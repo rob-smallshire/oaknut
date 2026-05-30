@@ -66,7 +66,8 @@ def test_mount_reads_file_and_metadata():
     meta = mount.acorn_meta("HOPOBJ")
     assert meta.load_address == 0x3000
     assert meta.exec_address == 0x3000
-    assert meta.access & Access.L  # HOPOBJ is locked
+    assert meta.access & Access.X  # HOPOBJ is *RUN-only (copy-protected)
+    assert not meta.access & Access.L  # not the disc delete-lock
 
 
 def test_zalaga_has_no_title():
@@ -98,12 +99,32 @@ def test_set_metadata_and_rename_round_trip():
     assert by_name["RENAMED"].exec_address == 0x5678
 
 
-def test_remove_respects_lock():
+def test_remove_ignores_run_only_protection():
+    # The *RUN-only bit is read-protection (copy protection), not a
+    # delete-lock — and ROMFS has no delete-lock at all — so removing a
+    # run-only file just works, no force needed.
     mount, data = _open_writable("Electron_Hopper.rom")
-    with pytest.raises(ReadOnlyFilesystemError):
-        mount.remove("HOPOBJ")  # locked
-    mount.remove("HOPOBJ", force=True)
+    assert mount.acorn_meta("HOPOBJ").access & Access.X  # HOPOBJ is run-only
+    mount.remove("HOPOBJ")
     assert "HOPOBJ" not in {f.name for f in ROMFS.from_bytes(bytes(data)).files}
+
+
+def test_run_only_is_a_distinct_axis_from_the_disc_lock():
+    # Importing a delete-locked DFS/ADFS file (Access.L) must NOT make the
+    # ROMFS file *RUN-only (Access.X) — that would make it unloadable. But a
+    # genuine Access.X (a ROMFS→ROMFS copy) is preserved.
+    mount, data = _open_writable("Electron_Hopper.rom")
+
+    mount.write_bytes("FROMDFS", b"loader")
+    mount.set_acorn_meta("FROMDFS", AcornMeta(load_address=0x1900, exec_address=0x8023,
+                                              access=int(Access.L | Access.R | Access.W)))
+    mount.write_bytes("FROMROM", b"object")
+    mount.set_acorn_meta("FROMROM", AcornMeta(load_address=0x3000, exec_address=0x3000,
+                                              access=int(Access.X)))
+
+    by_name = {f.name: f for f in ROMFS.from_bytes(bytes(data)).data_files}
+    assert not by_name["FROMDFS"].run_only  # disc lock did NOT make it *RUN-only
+    assert by_name["FROMROM"].run_only  # an explicit Access.X is preserved
 
 
 def test_status_notes_via_capability():

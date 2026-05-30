@@ -135,6 +135,9 @@ class TestRomfsCreate:
         for name in ("Snappe3", "SNAPPER", "!BOOT"):
             assert name in listing
         assert "$." not in listing  # flat ROMFS names, no DFS root leak
+        # The DFS files were delete-locked; that must NOT become ROMFS's
+        # *RUN-only bit (Access.X), or *EXEC !BOOT / CHAIN would fail "Locked".
+        assert "X/" not in listing
         assert (
             runner.invoke(cli, ["romfs", "get-copyright", str(cart)]).output.strip() == copyright_
         )

@@ -33,7 +33,7 @@ def test_hopper_header():
 def test_hopper_catalogue():
     rom = load("Electron_Hopper.rom")
     catalogue = [
-        (f.name, f.length, f.load_address, f.exec_address, f.locked) for f in rom.files
+        (f.name, f.length, f.load_address, f.exec_address, f.run_only) for f in rom.files
     ]
     assert catalogue == [
         ("*Hopper01*", 0x0000, 0x00000000, 0x00000000, True),
@@ -65,7 +65,7 @@ def test_zalaga_bbc_no_title_block():
     assert zalaga.length == 0x2D25
     assert zalaga.load_address == 0x00003000
     assert zalaga.exec_address == 0x00004522
-    assert zalaga.locked
+    assert zalaga.run_only
     assert zalaga.last_block_number == 0x2D
 
 
