@@ -57,6 +57,27 @@ class TestRomfsCreate:
         assert result.exit_code == 0, result.output
         assert rom.stat().st_size == 8192
 
+    def test_overfilling_a_rom_is_a_clean_error(self, runner: CliRunner, tmp_path):
+        rom = tmp_path / "SMALL.rom"
+        assert (
+            runner.invoke(
+                cli, ["create", str(rom), "--filesystem", "acorn-romfs", "--geometry", "8k"]
+            ).exit_code
+            == 0
+        )
+        big = tmp_path / "big.bin"
+        big.write_bytes(b"\x00" * 9000)  # larger than an 8 KiB ROM
+
+        result = runner.invoke(cli, ["put", f"{rom}:BIG", str(big)])
+        assert result.exit_code != 0
+        # A clean, accurate diagnostic — not a traceback, and not the
+        # misleading "would overwrite content" wording (this ROM is plain).
+        assert "Traceback" not in result.output
+        assert "ROM full" in result.output
+        assert "too large for this 8 KiB ROM" in result.output
+        # The failed write left the ROM untouched.
+        assert "BIG" not in runner.invoke(cli, ["ls", str(rom)]).output
+
     def test_create_then_put_a_file_in_and_back_out(self, runner: CliRunner, tmp_path):
         rom = tmp_path / "WORK.rom"
         assert runner.invoke(cli, ["create", str(rom), "--title", "WORK"]).exit_code == 0

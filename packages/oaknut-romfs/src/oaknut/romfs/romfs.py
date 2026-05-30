@@ -303,7 +303,10 @@ def build_rom_image(
 
     body = bytes(header) + handler + fs_data
     if len(body) > size:
-        raise ROMFullError(f"ROM contents ({len(body)} bytes) exceed the {size}-byte image")
+        raise ROMFullError(
+            f"ROM full: the header, handler and title need {len(body)} bytes, "
+            f"more than the {size // 1024} KiB ROM holds"
+        )
     return body + b"\xff" * (size - len(body))
 
 
@@ -514,9 +517,16 @@ class ROMFS:
 
         if new_fs_end > opaque_start:
             overflow = new_fs_end - opaque_start
+            byte_s = "byte" if overflow == 1 else "bytes"
+            if opaque:
+                # A composite ROM: the FS would run into the trailing code.
+                raise ROMFullError(
+                    f"ROM full: the filing system is {overflow} {byte_s} too large; "
+                    f"it would overwrite the {len(opaque)}-byte program that follows it"
+                )
             raise ROMFullError(
-                f"the filing system needs {overflow} byte(s) more than the ROM has free; "
-                "it would overwrite content after the filing system"
+                f"ROM full: the filing system is {overflow} {byte_s} too large for "
+                f"this {len(self._image) // 1024} KiB ROM"
             )
 
         body = b"".join(parts) + bytes([END_OF_FILESYSTEM])

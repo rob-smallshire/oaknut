@@ -60,8 +60,17 @@ def test_replace_file_data_reparses():
 def test_growth_beyond_capacity_raises():
     # Countdown To Doom is a language ROM: code sits immediately after the
     # filing system, so there is no padding to grow into. Adding a large
-    # file must refuse rather than overwrite that code.
+    # file must refuse rather than overwrite that code — and say so.
     rom = ROMFS.from_bytes((ROMFS_DIRPATH / "Electron_Countdown_To_Doom_1.rom").read_bytes())
     bloated = rom.with_files(rom.files + (ROMFSFile("BIG", 0, 0, False, b"\x00" * 8192),))
-    with pytest.raises(ROMFullError):
+    with pytest.raises(ROMFullError, match="overwrite the .* program that follows"):
+        bloated.to_bytes()
+
+
+def test_plain_rom_full_message_names_the_capacity():
+    # On a plain ROM there is no trailing program — the message says the FS
+    # is simply too large for the ROM, not that it would overwrite anything.
+    rom = ROMFS.from_bytes((ROMFS_DIRPATH / "Electron_Hopper.rom").read_bytes())
+    bloated = rom.with_files(rom.files + (ROMFSFile("BIG", 0, 0, False, b"\x00" * 16384),))
+    with pytest.raises(ROMFullError, match="too large for this 16 KiB ROM"):
         bloated.to_bytes()
