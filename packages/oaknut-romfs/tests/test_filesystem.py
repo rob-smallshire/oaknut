@@ -72,6 +72,18 @@ def test_storage_order_capability():
     assert sorted(listed, key=mount.storage_key) == listed
 
 
+def test_wildcard_matching_capability():
+    from oaknut.filesystem import WildcardMatching
+
+    fs = AcornROMFS()
+    reader = reader_for(_bytes("Electron_Hopper.rom"))
+    mount = fs.open(reader, fs.probe(reader).geometry)
+    # ROMFS holds Acorn files, so it globs with Acorn wildcards (* and #).
+    assert isinstance(mount, WildcardMatching)
+    assert mount.wildcard_syntax.chars == "*#"
+    assert not mount.is_pattern("HOPOBJ?")  # ? is an ordinary character
+
+
 def test_mount_reads_file_and_metadata():
     fs = AcornROMFS()
     reader = reader_for(_bytes("Electron_Hopper.rom"))

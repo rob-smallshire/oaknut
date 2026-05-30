@@ -32,6 +32,7 @@ from oaknut.filesystem import (
     ImageReader,
     ReadOnlyFilesystemError,
 )
+from oaknut.filesystem.wildcards import AcornWildcards
 
 from .api import resolved_entries
 
@@ -52,7 +53,7 @@ def _read_only(action: str) -> NoReturn:
     raise ReadOnlyFilesystemError(f"cannot {action}: ZIP archives are read-only")
 
 
-class _ZipMount:
+class _ZipMount(AcornWildcards):
     """A read-only :class:`~oaknut.filesystem.Mount` over a ZIP archive.
 
     Members are addressed by their cleaned path (``dir/file``) — a

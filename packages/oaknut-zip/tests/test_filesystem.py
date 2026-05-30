@@ -44,6 +44,10 @@ class TestMount:
         with reader_for(_make_zip(tmp_path)) as reader:
             mount = filesystem.open(reader)
             assert isinstance(mount, Mount)
+            from oaknut.filesystem import WildcardMatching
+
+            assert isinstance(mount, WildcardMatching)
+            assert mount.wildcard_syntax.chars == "*#"  # Acorn wildcards
             names = {entry.name for entry in mount.iter_entries("")}
             assert "hello.txt" in names
             assert mount.read_bytes("hello.txt") == b"hi there"

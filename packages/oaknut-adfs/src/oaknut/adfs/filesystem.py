@@ -33,6 +33,7 @@ from oaknut.filesystem import (
     Partition,
     floppy_geometry,
 )
+from oaknut.filesystem.wildcards import AcornWildcards
 
 # The old free-space map occupies sectors 0–1.
 _MAP_BYTES = 512
@@ -86,7 +87,7 @@ def _reserved_regions(reader: ImageReader) -> tuple[Partition, ...]:
     return ()
 
 
-class _ADFSMount:
+class _ADFSMount(AcornWildcards):
     """A :class:`~oaknut.filesystem.Mount` over an :class:`ADFS` instance.
 
     Implements the core plus ``HierarchicalDirectories``, ``AcornMetadata``,

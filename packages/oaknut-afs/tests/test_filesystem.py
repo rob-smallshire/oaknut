@@ -69,6 +69,10 @@ class TestMount:
             # the capability — otherwise `disc compact` would offer it and
             # then fail. Honest advertisement: it simply is not Compactable.
             assert not isinstance(mount, Compactable)
+            from oaknut.filesystem import WildcardMatching
+
+            assert isinstance(mount, WildcardMatching)
+            assert mount.wildcard_syntax.chars == "*#"  # Acorn wildcards
             assert len(mount.user_names()) >= 1
 
 

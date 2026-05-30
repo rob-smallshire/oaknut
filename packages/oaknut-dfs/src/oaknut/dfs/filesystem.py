@@ -35,6 +35,7 @@ from oaknut.filesystem import (
     floppy_geometry,
 )
 from oaknut.filesystem.exceptions import NoSuchVolumeError, VolumeNotFormattedError
+from oaknut.filesystem.wildcards import AcornWildcards
 
 # An Acorn DFS path may be prefixed with a drive — ``:N.`` (or bare ``:N``).
 # The leading colon is what distinguishes a drive from a directory named
@@ -95,7 +96,7 @@ def _propose_geometry(size: int) -> tuple[Geometry | None, tuple[Geometry, ...]]
     return None, ()
 
 
-class _DFSMount:
+class _DFSMount(AcornWildcards):
     """A :class:`~oaknut.filesystem.Mount` over a :class:`DFS` instance.
 
     Implements the core plus ``AcornMetadata``, ``Titled``, ``Bootable``

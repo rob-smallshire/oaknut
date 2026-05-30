@@ -31,6 +31,7 @@ from oaknut.filesystem import (
     ImageReader,
 )
 from oaknut.filesystem.exceptions import ReadOnlyFilesystemError
+from oaknut.filesystem.wildcards import AcornWildcards
 from oaknut.romfs.block import MAX_NAME_LENGTH
 from oaknut.romfs.exceptions import CRCError, NotAROMFSError, ROMFSError, TruncatedROMError
 from oaknut.romfs.romfs import MAX_TITLE_LENGTH, ROMFS, ROMFSFile, build_rom_image
@@ -63,7 +64,7 @@ _GEOMETRY_PRESETS = {
 }
 
 
-class _ROMFSMount:
+class _ROMFSMount(AcornWildcards):
     """A :class:`~oaknut.filesystem.Mount` over a :class:`ROMFS` instance.
 
     Implements the flat core plus ``AcornMetadata`` and ``Titled``. The

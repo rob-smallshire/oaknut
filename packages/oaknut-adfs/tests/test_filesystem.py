@@ -106,6 +106,10 @@ class TestMount:
             assert isinstance(mount, Titled)
             assert isinstance(mount, Bootable)
             assert isinstance(mount, RegionHost)
+            from oaknut.filesystem import WildcardMatching
+
+            assert isinstance(mount, WildcardMatching)
+            assert mount.wildcard_syntax.chars == "*#"  # Acorn wildcards
             assert mount.title == "TESTDISC"
             assert mount.reserved_regions() == ()  # a floppy reserves nothing
 

@@ -132,6 +132,17 @@ class TestMount:
             # … but is flat, so it is not hierarchical.
             assert not isinstance(mount, HierarchicalDirectories)
 
+            # It globs with Acorn wildcards: * and #, with ? an ordinary
+            # filename character.
+            from oaknut.filesystem import WildcardMatching
+
+            assert isinstance(mount, WildcardMatching)
+            assert mount.wildcard_syntax.chars == "*#"
+            assert mount.is_pattern("HE#")
+            assert not mount.is_pattern("ZALAGA?")  # ? is literal here
+            assert mount.matches("ZALAGA?", "ZALAGA?")
+            assert not mount.matches("ZALAGA?", "ZALAGAB")
+
             meta = mount.acorn_meta("$.HELLO")
             assert meta.load_address == 0x1900
             assert meta.exec_address == 0x8023

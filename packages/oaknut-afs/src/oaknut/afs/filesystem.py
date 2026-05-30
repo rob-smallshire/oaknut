@@ -32,6 +32,7 @@ from oaknut.filesystem import (
     Identification,
     ImageReader,
 )
+from oaknut.filesystem.wildcards import AcornWildcards
 
 # The info sector sits at sector 1 of the AFS region (start_cylinder*spc
 # + 1). The coordinator hands AFS a window starting at the region base,
@@ -71,7 +72,7 @@ def _window_disc(reader: ImageReader) -> UnifiedDisc:
     return UnifiedDisc(DiscImage(buffer, [spec]))
 
 
-class _AFSMount:
+class _AFSMount(AcornWildcards):
     """A :class:`~oaknut.filesystem.Mount` over an AFS region.
 
     Implements the core plus ``HierarchicalDirectories``,
