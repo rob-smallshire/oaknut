@@ -5,9 +5,14 @@ Some ``disc`` commands accept a glob pattern in the ``INNER_PATH`` —
 ``disc find`` to locate matching paths, ``disc cp``, ``disc mv``,
 ``disc rm``, ``disc chmod``, ``disc lock``, ``disc unlock``,
 ``disc set-load``, and ``disc set-exec`` to apply an operation
-across every matching entry. The pattern language is the same in
-every case: Acorn wildcards, case-insensitive, anchored to a single
-filename component unless an explicit recursive flag is given.
+across every matching entry. The pattern language belongs to the
+filing system, and the CLI defers to it: on every Acorn filing system
+(DFS, ADFS, AFS, ROMFS, and ZIPped Acorn files) the wildcards are
+``*`` and ``#``, matching is case-insensitive, and a pattern is
+anchored to a single filename component unless an explicit recursive
+flag is given. A filing system that declares no syntax of its own
+falls back to Unix wildcards (``*`` and ``?``); ``disc
+describe-filesystem`` reports what a given filing system uses.
 
 
 Metacharacters
@@ -22,6 +27,13 @@ Metacharacters
      - Any sequence of characters (including the empty sequence)
    * - ``#``
      - Exactly one character
+
+``?`` is **not** a wildcard on the Acorn filing systems — it is an
+ordinary filename character, so a file catalogued as ``ZALAGA?`` is
+addressed by that literal name, and ``$.S#`` (not ``$.S?``) matches a
+two-character name beginning ``S``. The single-character wildcard on
+Acorn is ``#``. (A DOS/FAT filing system, by contrast, uses ``?`` for
+that role; the table above is the Acorn set.)
 
 Matching is case-insensitive on every supported filing system: Acorn
 catalogues preserve case but compare without regard to it. ``*HELLO``,
