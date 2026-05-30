@@ -735,18 +735,6 @@ def find(compound_path: str):
     return Reports(matches=Report(data=table))
 
 
-def _match_acorn_wildcard(pattern: str, name: str) -> bool:
-    """Match a name against an Acorn-style wildcard pattern.
-
-    ``*`` matches any sequence, ``?`` matches one character.
-    Case-insensitive to match Acorn convention.
-    """
-    import fnmatch
-
-    # Acorn wildcards use the same semantics as fnmatch.
-    return fnmatch.fnmatch(name.upper(), pattern.upper())
-
-
 def _find_recursive(mount, path: str, pattern: str, prefix: str, rows: list[dict]) -> None:
     """Walk *mount* from *path*, collecting entries matching *pattern*.
 
@@ -754,8 +742,9 @@ def _find_recursive(mount, path: str, pattern: str, prefix: str, rows: list[dict
     single-partition image, ``adfs:`` / ``afs:`` on a partitioned one —
     so every row is directly consumable by a follow-up command.
     """
+    matcher = _matcher(mount)
     for child in mount.iter_entries(path):
-        if _match_acorn_wildcard(pattern, child.name) or _match_acorn_wildcard(pattern, child.path):
+        if matcher.matches(pattern, child.name) or matcher.matches(pattern, child.path):
             rows.append({"path": f"{prefix}{child.path}"})
         if child.is_dir:
             _find_recursive(mount, child.path, pattern, prefix, rows)
@@ -860,9 +849,10 @@ def _collect_matches(mount, path: str, pattern: str, prefix: str, out: list) -> 
     Files only — directories have no content to operate on; descend into
     them but never act on them.
     """
+    matcher = _matcher(mount)
     for child in mount.iter_entries(path):
         if not child.is_dir and (
-            _match_acorn_wildcard(pattern, child.name) or _match_acorn_wildcard(pattern, child.path)
+            matcher.matches(pattern, child.name) or matcher.matches(pattern, child.path)
         ):
             out.append((f"{prefix}{child.path}", mount, child.path))
         if child.is_dir:
@@ -1494,22 +1484,18 @@ def cp(src: str, dst: str, force: bool, recursive: bool) -> None:
 # ---------------------------------------------------------------------------
 
 
-_WILDCARD_CHARS = ("*", "?", "#")
+def _matcher(mount):
+    """The mount's own wildcard matcher, or the Unix default (``*`` / ``?``).
 
+    The CLI knows no wildcard rules itself — it asks the filesystem, so an
+    Acorn name globs with ``*`` and ``#`` (``?`` an ordinary character)
+    while a DOS one would use ``*`` and ``?``. A mount that declares no
+    syntax falls back to Unix wildcards.
+    """
+    from oaknut.filesystem import WildcardMatching
+    from oaknut.filesystem.wildcards import UNIX_MATCHER
 
-def _has_wildcard(path: str) -> bool:
-    return any(ch in path for ch in _WILDCARD_CHARS)
-
-
-def _acorn_to_fnmatch(pattern: str) -> str:
-    """Translate Acorn wildcards (``#``) to fnmatch syntax."""
-    return pattern.replace("#", "?")
-
-
-def _match_acorn(pattern: str, name: str) -> bool:
-    import fnmatch
-
-    return fnmatch.fnmatch(name.upper(), _acorn_to_fnmatch(pattern.upper()))
+    return mount if isinstance(mount, WildcardMatching) else UNIX_MATCHER
 
 
 def _split_parent_leaf(bare: str) -> tuple[str, str]:
@@ -1543,9 +1529,10 @@ def _expand_target_paths(mount, pattern: str) -> list[str]:
     (wildcards in directory components are unsupported). No match is an
     error. The mount-based counterpart of :func:`_expand_path_spec`.
     """
-    if _has_wildcard(pattern):
+    matcher = _matcher(mount)
+    if matcher.is_pattern(pattern):
         parent, leaf_pattern = _split_parent_leaf(pattern)
-        if _has_wildcard(parent):
+        if matcher.is_pattern(parent):
             raise click.ClickException(
                 f"wildcards in directory components are not supported: {pattern!r}"
             )
@@ -1554,9 +1541,13 @@ def _expand_target_paths(mount, pattern: str) -> list[str]:
             raise click.ClickException(
                 f"parent directory of glob does not exist: {parent or '$'!r}"
             )
-        matches = [e.path for e in mount.iter_entries(parent) if _match_acorn(leaf_pattern, e.name)]
+        matches = [
+            e.path for e in mount.iter_entries(parent) if matcher.matches(leaf_pattern, e.name)
+        ]
         if not matches:
-            raise click.ClickException(f"no matches for {pattern!r}")
+            raise click.ClickException(
+                f"no matches for {pattern!r} (wildcards: {matcher.wildcard_syntax.summary()})"
+            )
         return matches
     if not mount.exists(pattern):
         raise click.ClickException(f"path not found: {pattern}")
@@ -1684,7 +1675,7 @@ def _collect_copy_items(
     src_is_dfs = _uses_dfs_paths(src_mount)
     dst_is_dfs = _uses_dfs_paths(dst_mount)
 
-    if _has_wildcard(src_bare):
+    if _matcher(src_mount).is_pattern(src_bare):
         matches = _expand_glob(src_mount, src_bare)
         if not matches:
             raise click.ClickException(f"no matches for {src_bare!r}")
@@ -1780,15 +1771,16 @@ def _expand_glob(src_mount, src_bare: str) -> list[str]:
     Only the leaf component of ``src_bare`` may contain wildcards; the
     parent directory path is navigated literally.
     """
+    matcher = _matcher(src_mount)
     parent, leaf_pattern = _split_parent_leaf(src_bare)
-    if _has_wildcard(parent):
+    if matcher.is_pattern(parent):
         raise click.ClickException(
             f"wildcards in directory components are not supported: {src_bare!r}"
         )
     parent = parent or src_mount.path_root()
     if not src_mount.exists(parent) or not src_mount.stat(parent).is_dir:
         raise click.ClickException(f"parent directory of glob does not exist: {parent or '$'!r}")
-    matched = [e for e in src_mount.iter_entries(parent) if _match_acorn(leaf_pattern, e.name)]
+    matched = [e for e in src_mount.iter_entries(parent) if matcher.matches(leaf_pattern, e.name)]
     return [e.path for e in _in_storage_order(src_mount, matched)]
 
 

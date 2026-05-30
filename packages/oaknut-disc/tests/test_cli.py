@@ -450,6 +450,64 @@ def _collect_names(node: dict) -> list[str]:
 # ---------------------------------------------------------------------------
 
 
+class TestAcornWildcards:
+    """On Acorn images the wildcards are ``*`` and ``#``; ``?`` is an
+    ordinary filename character. The CLI defers to the filesystem, so
+    ``find`` and ``cp`` agree (they once used different engines).
+    """
+
+    @staticmethod
+    def _image_with_question_mark(tmp_path: Path) -> Path:
+        from oaknut.dfs import ACORN_DFS_80T_SINGLE_SIDED, DFS
+
+        image = tmp_path / "q.ssd"
+        with DFS.create_file(image, ACORN_DFS_80T_SINGLE_SIDED, title="Q") as dfs:
+            (dfs.root / "$.AX").write_bytes(b"x")
+            (dfs.root / "$.A?").write_bytes(b"q")  # ? is legal in a DFS name
+        return image
+
+    def test_find_question_mark_is_literal(self, runner: CliRunner, tmp_path: Path) -> None:
+        image = self._image_with_question_mark(tmp_path)
+        out = runner.invoke(cli, ["find", f"{image}:A?"]).output
+        # ? matches only the literal A?, not AX (it is not a wildcard).
+        assert "$.A?" in out
+        assert "AX" not in out
+
+    def test_find_hash_is_the_single_char_wildcard(
+        self, runner: CliRunner, tmp_path: Path
+    ) -> None:
+        image = self._image_with_question_mark(tmp_path)
+        out = runner.invoke(cli, ["find", f"{image}:A#"]).output
+        # # matches exactly one character, so both A-and-one-char names.
+        assert "$.AX" in out
+        assert "$.A?" in out
+
+    def test_cp_question_mark_is_literal(
+        self, runner: CliRunner, tmp_path: Path, dfs_empty_filepath: Path
+    ) -> None:
+        image = self._image_with_question_mark(tmp_path)
+        result = runner.invoke(cli, ["cp", f"{image}:$.A?", f"{dfs_empty_filepath}:$.AQ"])
+        assert result.exit_code == 0, result.output
+        listed = runner.invoke(cli, ["ls", f"{dfs_empty_filepath}:$"]).output
+        assert "AQ" in listed  # the single literal file copied, no glob expansion
+
+    def test_no_match_error_names_the_wildcard_syntax(
+        self, runner: CliRunner, dfs_image_filepath: Path
+    ) -> None:
+        result = runner.invoke(cli, ["rm", f"{dfs_image_filepath}:$.NOPE*"])
+        assert result.exit_code != 0
+        assert "#" in result.output  # the filesystem's wildcards are reported
+
+    def test_matcher_falls_back_to_unix(self) -> None:
+        from oaknut.disc.cli import _matcher
+        from oaknut.filesystem.wildcards import UNIX_MATCHER
+
+        class Bare:  # a mount that declares no wildcard syntax
+            pass
+
+        assert _matcher(Bare()) is UNIX_MATCHER
+
+
 class TestFind:
     def test_find_dfs_bare_paths(self, runner: CliRunner, dfs_image_filepath: Path) -> None:
         """Single-partition DFS image: output stays unprefixed for
