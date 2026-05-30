@@ -366,10 +366,14 @@ needs none of this — the bytes are self-describing. But **creating** one
 does: a freshly serialised filing system is unreadable by a real machine
 until a `&0D`/`&0E` handler is prepended. This is exactly the opaque
 preamble this package preserves (§1.2) and refuses to mutate (the
-plain-versus-composite split in `docs/architecture.md`). A future `disc
-create --filesystem romfs` must emit such a handler — minimally `&0D`/`&0E`,
-optionally `&09` for a user-settable `*HELP` message — making the created
-ROM a deliberately *composite* image.
+plain-versus-composite split in `docs/architecture.md`). `disc create
+--filesystem romfs` therefore emits such a handler (`oaknut.romfs.handler`):
+the bare `&0D`/`&0E` handler is the canonical mkromfs/NAUG one (81 bytes,
+data at `&805D`), and by default a `&09` `*HELP` responder is added that
+prints the ROM's title — so the created ROM answers `*HELP` with its
+title. The handler is assembled by a small two-pass 6502 assembler so its
+branch and jump targets are correct by construction; on-hardware execution
+awaits 6502-emulator verification.
 
 ## 3. The CRC algorithm
 
@@ -598,10 +602,9 @@ genuine spanning image.
   tell a genuine fragment from a truncated image, so both are handled the
   same safe way. Full multi-ROM *reassembly* still waits for a verified
   example.
-- **Future: surface incompleteness in `disc stat`.** The clean route, in
-  keeping with the capability-protocol design, is a small status/notes
-  capability on the `oaknut.filesystem` axis that the ROMFS mount
-  implements (returning e.g. "incomplete — multi-ROM fragment; read-only")
-  and that `disc stat`'s `_partition_block` feature-detects and renders as
-  a row — no ROMFS-specific code in `oaknut-disc`. The same hook could
-  also report "read-only (composite ROM)".
+- **Implemented: incompleteness in `disc stat`.** A `StatusReporting`
+  capability on the `oaknut.filesystem` axis carries short status notes;
+  the ROMFS mount returns "incomplete — … (read-only)" for a fragment and
+  "composite — … (read-only)" for a composite ROM, and `disc stat`'s
+  `_partition_block` feature-detects it and renders a Notes row — no
+  ROMFS-specific code in `oaknut-disc`.

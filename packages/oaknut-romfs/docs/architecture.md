@@ -69,15 +69,32 @@ Dependencies flow strictly downward, mirroring oaknut-dfs.
 
 | Capability | Provided? | Why |
 |---|:--:|---|
-| `Mount` (core) | yes | flat list + read; `path_root()` is `""` |
+| `Mount` (core) | yes | flat list + read + write; `path_root()` is `""` |
 | `AcornMetadata` | yes | CFS load/exec + lock bit |
 | `Titled` | yes | the ROM title string |
+| `StatusReporting` | yes | flags an incomplete (fragment) or composite ROM as read-only in `disc stat` |
 | `HierarchicalDirectories` | **no** | ROMFS is flat — no directories |
 | `Bootable` | **no** | no `*OPT 4` boot byte on ROM |
 | `FreeSpace` / `Sized` | maybe | ROM is fixed; free space is the unused tail to the `&2B` marker / bank end |
 | `Validatable` | yes (later) | header + per-block CRC verification |
 | `RegionHost` | **no** | ROMFS reserves nothing |
 | `UserDatabase`, `Compactable`, `FreeMap`, `PhysicalGeometry` | **no** | not applicable to ROM |
+
+### Creation
+
+`disc create foo.rom` (or `--filesystem acorn-romfs`) builds a fresh image
+via `build_rom_image`: a service-only (`&82`) paged-ROM header, a service
+handler, a `*title*` title block, the `&2B` marker, and `&FF` padding. Only
+the two real sizes are offered — **16 KiB** (default) and **8 KiB** (`--geometry
+8k`). `creates = {".rom"}`, so `.rom` infers ROMFS.
+
+The handler is assembled by a small two-pass 6502 assembler
+(`handler.py`) so branch/jump targets are correct by construction. The bare
+`&0D`/`&0E` handler is the canonical mkromfs/NAUG one — exactly 81 bytes,
+putting data at `&805D` for an empty header (the test anchor). By default a
+`&09` `*HELP` responder is also included, printing the title (so the title
+is the `*HELP` message). On-hardware execution is pending 6502-emulator
+verification.
 
 Writing (`write_bytes`, `create`) is deferred. The medium is read-only
 ROM; identification and reading come first. If image creation is added
