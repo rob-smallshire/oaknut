@@ -246,13 +246,9 @@ class _AFSMount:
             regions.append((run_start, index - run_start))
         return FreeMapData(free_regions=tuple(regions), total_sectors=num_cylinders * spc)
 
-    # -- Compactable --
-    def compact(self, *, order=()) -> int:
-        if order:
-            raise ValueError("AFS compaction does not support an explicit file order")
-        result = self._afs.compact()
-        self._afs.flush()
-        return result
+    # AFS compaction is not implemented, so the mount deliberately does not
+    # expose ``compact`` — advertising Compactable it cannot honour would
+    # make ``disc compact`` offer the operation and then fail.
 
     # -- UserDatabase --
     def user_names(self) -> tuple[str, ...]:

@@ -3,6 +3,7 @@
 from oaknut.filesystem import (
     AcornMetadata,
     Bootable,
+    Compactable,
     Confidence,
     HierarchicalDirectories,
     Mount,
@@ -64,6 +65,10 @@ class TestMount:
             assert isinstance(mount, Titled)  # AFS has a disc name
             # … but no *OPT-style boot option.
             assert not isinstance(mount, Bootable)
+            # AFS compaction is not implemented, so the mount must not claim
+            # the capability — otherwise `disc compact` would offer it and
+            # then fail. Honest advertisement: it simply is not Compactable.
+            assert not isinstance(mount, Compactable)
             assert len(mount.user_names()) >= 1
 
 
