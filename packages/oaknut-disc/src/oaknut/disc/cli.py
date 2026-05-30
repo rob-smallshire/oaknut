@@ -2456,15 +2456,35 @@ def create(
 
 @cli.command()
 @click.argument("image", type=click.Path(exists=True, path_type=Path))
-def compact(image: Path) -> None:
-    """Defragment a disc image, consolidating free space."""
-    from oaknut.filesystem import Compactable
+@click.option(
+    "--order",
+    "order",
+    multiple=True,
+    metavar="PATH,...",
+    help="Comma-separated paths to lay down first, in the lowest sectors "
+    "(repeatable). Remaining files follow in their current order — so "
+    "'--order $.!BOOT,$.LOADER' puts the boot files where they load fastest.",
+)
+def compact(image: Path, order: tuple[str, ...]) -> None:
+    """Defragment a disc image, consolidating free space.
+
+    With ``--order``, the named files are placed first (in the lowest
+    sectors), which only filesystems with a defined on-disc order accept.
+    """
+    from oaknut.filesystem import Compactable, StorageOrdered
+
+    order_paths = tuple(spec for chunk in order for spec in chunk.split(",") if spec)
 
     with resolve_mount(str(image), writable=True) as resolved:
         mount = resolved.mount
         if not isinstance(mount, Compactable):
             raise click.ClickException(f"{resolved.filesystem} images cannot be compacted")
-        mount.compact()
+        if order_paths and not isinstance(mount, StorageOrdered):
+            raise click.ClickException(
+                f"{resolved.filesystem} images do not support --order "
+                "(no defined on-disc file order)"
+            )
+        mount.compact(order=order_paths)
 
 
 # ---------------------------------------------------------------------------

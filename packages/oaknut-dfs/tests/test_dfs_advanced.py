@@ -343,3 +343,43 @@ class TestCompaction:
         assert st.load_address == 0x1900
         assert st.exec_address == 0x8023
         assert st.length == 500
+
+    def _three_file_disc(self):
+        buffer = bytearray(102400)
+        buffer[0:8] = b"DISK    "
+        buffer[263] = 200
+        dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
+        (dfs.root / "$" / "GAME").write_bytes(b"g" * 300)
+        (dfs.root / "$" / "LOADER").write_bytes(b"l" * 300)
+        (dfs.root / "$" / "BOOT").write_bytes(b"b" * 300)
+        return dfs
+
+    def test_compact_with_order_lays_listed_files_first(self):
+        """An explicit order places the named files in the lowest sectors."""
+        dfs = self._three_file_disc()
+        dfs.compact(order=["$.BOOT", "$.LOADER"])
+        placed = sorted(dfs.files, key=lambda f: f.start_sector)
+        # BOOT then LOADER first (lowest sectors), GAME — unlisted — follows.
+        assert [f.path for f in placed] == ["$.BOOT", "$.LOADER", "$.GAME"]
+        assert placed[0].start_sector == 2
+        assert (dfs.root / "$" / "BOOT").read_bytes() == b"b" * 300
+
+    def test_compact_order_is_a_partial_prefix(self):
+        """Only the prefix is positioned; the rest keep their current order."""
+        dfs = self._three_file_disc()
+        dfs.compact(order=["$.BOOT"])
+        placed = sorted(dfs.files, key=lambda f: f.start_sector)
+        # BOOT first; GAME and LOADER follow in their existing catalogue order.
+        assert [f.path for f in placed] == ["$.BOOT", "$.GAME", "$.LOADER"]
+
+    def test_compact_order_unknown_path_raises(self):
+        dfs = self._three_file_disc()
+        with pytest.raises(FileNotFoundError, match="NOPE"):
+            dfs.compact(order=["$.NOPE"])
+
+    def test_compact_order_accepts_bare_filename(self):
+        """A bare name resolves against the default $ directory."""
+        dfs = self._three_file_disc()
+        dfs.compact(order=["BOOT"])
+        placed = sorted(dfs.files, key=lambda f: f.start_sector)
+        assert placed[0].path == "$.BOOT"

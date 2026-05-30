@@ -1,5 +1,6 @@
 """Watford DFS catalog implementation."""
 
+from collections.abc import Sequence
 from typing import Optional
 
 from oaknut.dfs.catalogue import Catalogue, DiscInfo, FileEntry, ParsedFilename
@@ -988,7 +989,7 @@ class WatfordDFSCatalogue(Catalogue):
 
         return errors
 
-    def compact(self) -> int:
+    def compact(self, *, order: Sequence[str] = ()) -> int:
         """
         Compact disk by removing fragmentation.
 
@@ -996,11 +997,15 @@ class WatfordDFSCatalogue(Catalogue):
         starting from sector 2 (after catalog sectors 0-3). This consolidates
         free space at the end.
 
+        *order* is a partial list of paths to lay down first, in the lowest
+        sectors; unlisted files follow in their current order.
+
         Returns:
             Number of files compacted
 
         Raises:
             PermissionError: If locked files present
+            FileNotFoundError: If *order* names a file not on the disc
         """
         files = self.list_files()
 
@@ -1012,6 +1017,9 @@ class WatfordDFSCatalogue(Catalogue):
 
         if not files:
             return 0
+
+        if order:
+            files = self._ordered_files(files, order)
 
         # Read all file data from sectors (with metadata)
         file_data = []

@@ -1094,20 +1094,24 @@ class DFS:
         """
         return self._catalogued_surface.catalogue.validate()
 
-    def compact(self) -> int:
+    def compact(self, *, order: Sequence[str] = ()) -> int:
         """
         Compact disk by removing fragmentation.
 
         Delegates to catalogue which works at the sector level to
         rebuild entries sequentially, consolidating all free space at the end.
 
+        *order* is a partial list of paths to lay down first, in the lowest
+        sectors; unlisted files follow in their current order.
+
         Returns:
             Number of files compacted
 
         Raises:
             PermissionError: If any file is locked (catalogue-specific)
+            FileNotFoundError: If *order* names a file not on the disc
         """
-        return self._catalogued_surface.catalogue.compact()
+        return self._catalogued_surface.catalogue.compact(order=order)
 
     def export_all(
         self,

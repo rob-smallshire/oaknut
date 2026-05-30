@@ -230,8 +230,8 @@ class _DFSMount:
         return self._navigate(path).stat().start_sector
 
     # -- Compactable --
-    def compact(self) -> int:
-        return self._dfs.compact()
+    def compact(self, *, order=()) -> int:
+        return self._dfs.compact(order=order)
 
     # -- Validatable --
     def validate(self) -> list:

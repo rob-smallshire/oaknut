@@ -1,6 +1,7 @@
 """Abstract base class for disk catalogs and related data structures."""
 
 from abc import ABC, abstractmethod
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Optional
 
@@ -164,6 +165,32 @@ class Catalogue(ABC):
             if entry.path.upper() == filename.upper():
                 return entry
         return None
+
+    def _ordered_files(self, files: list[FileEntry], order: Sequence[str]) -> list[FileEntry]:
+        """Return *files* with the *order* paths first, the rest unchanged.
+
+        *order* is a partial list of paths to lay down first, in the given
+        order; any file it does not name keeps its current relative position
+        after them. Each path is resolved against the catalogue's own naming
+        (a bare name takes the default ``$`` directory), so ``"!BOOT"`` and
+        ``"$.!BOOT"`` are the same file.
+
+        Raises:
+            FileNotFoundError: If *order* names a file not in *files*.
+        """
+        by_path = {f.path.upper(): f for f in files}
+        head: list[FileEntry] = []
+        positioned: set[str] = set()
+        for spec in order:
+            key = self.parse_filename(spec).path.upper()
+            if key not in by_path:
+                raise FileNotFoundError(f"File not found: {spec}")
+            if key in positioned:
+                continue
+            positioned.add(key)
+            head.append(by_path[key])
+        tail = [f for f in files if f.path.upper() not in positioned]
+        return head + tail
 
     @abstractmethod
     def add_file_entry(

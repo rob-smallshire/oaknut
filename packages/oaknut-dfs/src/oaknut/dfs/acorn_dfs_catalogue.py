@@ -1,5 +1,7 @@
 """Acorn DFS catalog implementation."""
 
+from collections.abc import Sequence
+
 from oaknut.dfs.catalogue import Catalogue, DiscInfo, FileEntry, ParsedFilename
 from oaknut.dfs.exceptions import CatalogFullError, DFSValidationError
 from oaknut.discimage.surface import Surface
@@ -697,18 +699,24 @@ class AcornDFSCatalogue(Catalogue):
 
         return errors
 
-    def compact(self) -> int:
+    def compact(self, *, order: Sequence[str] = ()) -> int:
         """
         Compact Acorn DFS catalogue by removing fragmentation.
 
         Reads file data from sectors, then rewrites files sequentially
         starting from sector 2. This consolidates free space at the end.
 
+        *order* is a partial list of paths to lay down first, in the lowest
+        sectors (in the given order); unlisted files follow in their current
+        order. It lets a caller put boot/loader files where they load
+        fastest. An empty order keeps the existing order.
+
         Returns:
             Number of files compacted
 
         Raises:
             PermissionError: If locked files present
+            FileNotFoundError: If *order* names a file not on the disc
         """
         files = self.list_files()
 
@@ -720,6 +728,9 @@ class AcornDFSCatalogue(Catalogue):
 
         if not files:
             return 0
+
+        if order:
+            files = self._ordered_files(files, order)
 
         # Read all file data from sectors (with metadata)
         file_data = []

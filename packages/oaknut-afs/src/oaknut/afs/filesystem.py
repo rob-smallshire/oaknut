@@ -247,7 +247,9 @@ class _AFSMount:
         return FreeMapData(free_regions=tuple(regions), total_sectors=num_cylinders * spc)
 
     # -- Compactable --
-    def compact(self) -> int:
+    def compact(self, *, order=()) -> int:
+        if order:
+            raise ValueError("AFS compaction does not support an explicit file order")
         result = self._afs.compact()
         self._afs.flush()
         return result

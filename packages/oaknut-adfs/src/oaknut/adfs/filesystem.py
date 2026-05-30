@@ -245,7 +245,9 @@ class _ADFSMount:
         return FreeMapData(free_regions=regions, total_sectors=fsm.total_sectors)
 
     # -- Compactable --
-    def compact(self) -> int:
+    def compact(self, *, order=()) -> int:
+        if order:
+            raise ValueError("ADFS compaction does not support an explicit file order")
         return self._adfs.compact()
 
     # -- Validatable --

@@ -13,7 +13,7 @@ refined as the concrete filesystems are wrapped (Phase B).
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
@@ -261,8 +261,17 @@ class FreeMap(Protocol):
 class Compactable(Protocol):
     """The filesystem can defragment in place, consolidating free space."""
 
-    def compact(self) -> int:
-        """Defragment, returning a filesystem-defined measure of work done."""
+    def compact(self, *, order: Sequence[str] = ()) -> int:
+        """Defragment, returning a filesystem-defined measure of work done.
+
+        *order* is a partial list of paths to lay down first, in the
+        lowest/earliest positions (in the given order); files it does not
+        name follow in their current order. It lets a caller place boot or
+        loader files where they load fastest. A filesystem whose layout
+        order is fixed or undefined rejects a non-empty *order*; the CLI
+        offers ``--order`` only where the mount also reports a storage
+        order (:class:`StorageOrdered`).
+        """
         ...
 
 

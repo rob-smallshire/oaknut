@@ -471,6 +471,25 @@ class TestWatfordDFSCatalogueFileOperations:
         files = catalogue.list_files()
         assert len(files) == 2
 
+    def test_compact_with_order(self, watford_dfs_surface):
+        """An explicit order positions the named file first (Watford layout)."""
+        catalogue = WatfordDFSCatalogue(watford_dfs_surface)
+        catalogue.add_file_entry(
+            filename="FILE1", directory="$", load_address=0, exec_address=0,
+            length=256, start_sector=4, locked=False,
+        )
+        catalogue.add_file_entry(
+            filename="FILE2", directory="$", load_address=0, exec_address=0,
+            length=256, start_sector=5, locked=False,
+        )
+
+        catalogue.compact(order=["$.FILE2"])
+
+        placed = sorted(catalogue.list_files(), key=lambda f: f.start_sector)
+        # FILE2 first, in the lowest data sector (4, after the 0-3 catalogue).
+        assert [f.path for f in placed] == ["$.FILE2", "$.FILE1"]
+        assert placed[0].start_sector == 4
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

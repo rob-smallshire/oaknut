@@ -2552,6 +2552,38 @@ class TestCompact:
         assert result.exit_code == 0
         assert result.output == ""
 
+    @staticmethod
+    def _physical_order(filepath: Path) -> list[str]:
+        from oaknut.dfs import DFS
+
+        with DFS.from_file(filepath) as dfs:
+            placed = [(p.stat().start_sector, p.name) for p in dfs.path("$").iterdir()]
+        return [name for _, name in sorted(placed)]
+
+    def test_compact_order_places_named_files_first(
+        self, runner: CliRunner, tmp_path: Path
+    ) -> None:
+        from oaknut.dfs import ACORN_DFS_80T_SINGLE_SIDED, DFS
+
+        image = tmp_path / "game.ssd"
+        with DFS.create_file(image, ACORN_DFS_80T_SINGLE_SIDED, title="Game") as dfs:
+            (dfs.root / "$.GAME").write_bytes(b"g" * 400)
+            (dfs.root / "$.LOADER").write_bytes(b"l" * 400)
+            (dfs.root / "$.BOOT").write_bytes(b"b" * 400)
+        assert self._physical_order(image) == ["GAME", "LOADER", "BOOT"]
+
+        result = runner.invoke(cli, ["compact", str(image), "--order", "$.BOOT,$.LOADER"])
+        assert result.exit_code == 0, result.output
+        # BOOT and LOADER moved to the lowest sectors; GAME follows.
+        assert self._physical_order(image) == ["BOOT", "LOADER", "GAME"]
+
+    def test_compact_order_rejected_on_adfs(
+        self, runner: CliRunner, adfs_image_filepath: Path
+    ) -> None:
+        result = runner.invoke(cli, ["compact", str(adfs_image_filepath), "--order", "$.Anything"])
+        assert result.exit_code != 0
+        assert "order" in result.output.lower()
+
 
 # ---------------------------------------------------------------------------
 # AFS-specific commands
