@@ -23,6 +23,7 @@ from oaknut.romfs.block import (
     FLAG_LAST,
     FLAG_LOCKED,
     INTER_BLOCK_MARKER,
+    MAX_NAME_LENGTH,
     SYNC_BYTE,
     BlockHeader,
 )
@@ -34,6 +35,7 @@ from oaknut.romfs.exceptions import (
     ROMFullError,
     TruncatedROMError,
 )
+from oaknut.romfs.handler import HANDLER_LENGTH, build_rfs_handler
 
 #: Paged ROMs are mapped at &8000; image offset 0 is this address.
 ROM_BASE_ADDRESS = 0x8000
@@ -240,6 +242,66 @@ def _serialise_file(file: "ROMFSFile", end_address: int) -> bytes:
         out += block_data
         out += crc16_ccitt(block_data).to_bytes(2, "big")
     return bytes(out)
+
+
+#: The maximum title length: the title block is stored as ``*title*``, a
+#: CFS name of at most MAX_NAME_LENGTH characters.
+MAX_TITLE_LENGTH = MAX_NAME_LENGTH - 2
+
+#: Default copyright for a created ROM (a valid Acorn copyright begins "(C)").
+DEFAULT_COPYRIGHT = "(C) oaknut"
+
+
+def build_rom_image(
+    *,
+    title: str,
+    copyright: str = DEFAULT_COPYRIGHT,
+    version: int = 1,
+    size: int = 16384,
+) -> bytes:
+    """Build a fresh, empty ROMFS paged-ROM image of *size* bytes.
+
+    Lays out the standard paged-ROM header (a service-only ``&82`` ROM), the
+    ``&0D``/``&0E`` service handler (so the ROM is readable on a real
+    machine, see :mod:`oaknut.romfs.handler`), a single ``*title*`` title
+    block, the ``&2B`` end marker, and ``&FF`` padding to *size*. The result
+    round-trips through :meth:`ROMFS.from_bytes` and is writable (plain and
+    complete). *size* is 8192 or 16384.
+    """
+    if not copyright.startswith("(C)"):
+        raise ROMFSError("a ROMFS copyright must begin with '(C)'")
+    if not 1 <= len(title) <= MAX_TITLE_LENGTH:
+        raise ROMFSError(f"a ROMFS title must be 1-{MAX_TITLE_LENGTH} characters: {title!r}")
+
+    title_bytes = title.encode("latin-1")
+    copyright_bytes = copyright.encode("latin-1")
+    # Header: 00 00 00 | JMP service | type | copyoff | version | title NUL |
+    # (no version string) | 00 copyright NUL. version_str is omitted (empty).
+    header_length = 3 + 3 + 1 + 1 + 1 + len(title_bytes) + 1 + 1 + len(copyright_bytes) + 1
+    service_address = ROM_BASE_ADDRESS + header_length
+    data_address = service_address + HANDLER_LENGTH
+    copyright_offset = 9 + len(title_bytes) + 1  # offset of the 00 before "(C)"
+
+    header = bytearray()
+    header += b"\x00\x00\x00"  # null language entry
+    header += bytes([0x4C, service_address & 0xFF, (service_address >> 8) & 0xFF])  # JMP service
+    header += bytes([0x82])  # ROM type: service entry, 6502, no language
+    header += bytes([copyright_offset])
+    header += bytes([version & 0xFF])
+    header += title_bytes + b"\x00"
+    header += b"\x00" + copyright_bytes + b"\x00"
+    assert len(header) == header_length
+
+    handler = build_rfs_handler(service_address, data_address)
+
+    title_block = ROMFSFile(f"*{title}*", 0, 0, locked=True, data=b"")
+    end_address = data_address + _chain_length(title_block.name, 0)
+    fs_data = _serialise_file(title_block, end_address) + bytes([END_OF_FILESYSTEM])
+
+    body = bytes(header) + handler + fs_data
+    if len(body) > size:
+        raise ROMFullError(f"ROM contents ({len(body)} bytes) exceed the {size}-byte image")
+    return body + b"\xff" * (size - len(body))
 
 
 class ROMFS:

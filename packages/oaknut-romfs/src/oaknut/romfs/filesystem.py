@@ -32,7 +32,7 @@ from oaknut.filesystem import (
 from oaknut.filesystem.exceptions import ReadOnlyFilesystemError
 from oaknut.romfs.block import MAX_NAME_LENGTH
 from oaknut.romfs.exceptions import CRCError, NotAROMFSError, ROMFSError, TruncatedROMError
-from oaknut.romfs.romfs import ROMFS, ROMFSFile
+from oaknut.romfs.romfs import MAX_TITLE_LENGTH, ROMFS, ROMFSFile, build_rom_image
 
 #: ROMFS images conventionally use this extension.
 _EXTENSIONS = frozenset({".rom"})
@@ -233,6 +233,8 @@ class AcornROMFS(Filesystem):
     """
 
     extensions = _EXTENSIONS
+    #: ROMFS is the default creator for `.rom` images.
+    creates = _EXTENSIONS
 
     def __init__(self, name: str = "acorn-romfs", **kwargs):
         super().__init__(name=name, **kwargs)
@@ -276,3 +278,14 @@ class AcornROMFS(Filesystem):
 
     def geometry_grammar(self) -> GeometryGrammar:
         return GeometryGrammar(presets=dict(_GEOMETRY_PRESETS), kinds=())
+
+    def default_geometry(self, suffix: str) -> Geometry | None:
+        # A paged ROM is conventionally 16 KiB; 8 KiB is offered as a preset.
+        return _GEOMETRY_PRESETS["16k"] if suffix.lower() == ".rom" else None
+
+    def create(self, filepath, geometry: Geometry, *, title: str) -> None:
+        # The title block is stored as `*title*`, so it is capped shorter than
+        # a full CFS name; fall back to the file's stem, and truncate.
+        name = (title or filepath.stem)[:MAX_TITLE_LENGTH] or "ROMFS"
+        image = build_rom_image(title=name, size=geometry.image_size)
+        filepath.write_bytes(image)
