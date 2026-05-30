@@ -300,3 +300,19 @@ class RegionHost(Protocol):
     def reserved_regions(self) -> tuple["Partition", ...]:
         """The regions reserved within this filesystem, for recursion."""
         ...
+
+
+@runtime_checkable
+class StatusReporting(Protocol):
+    """The filesystem can report human-readable status notes for ``stat``.
+
+    Notes are short advisories about the partition as a whole — for example
+    that a ROMFS image is an incomplete fragment of a multi-ROM set, or is
+    read-only because it carries code after the filing system. ``disc stat``
+    renders them as a line; most filesystems have nothing to say and do not
+    implement this.
+    """
+
+    def status_notes(self) -> tuple[str, ...]:
+        """Short status advisories for this partition (empty when none)."""
+        ...

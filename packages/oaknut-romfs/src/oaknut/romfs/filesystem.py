@@ -194,6 +194,14 @@ class _ROMFSMount:
         updated = ROMFSFile(file.name, load, execa, locked, file.data)
         self._commit(tuple(updated if f is file else f for f in self._romfs.files))
 
+    # -- StatusReporting --
+    def status_notes(self) -> tuple[str, ...]:
+        if not self._romfs.is_complete:
+            return ("incomplete — appears to be a fragment of a multi-ROM set (read-only)",)
+        if not self._romfs.is_plain:
+            return ("composite — carries code after the filing system (read-only)",)
+        return ()
+
     # -- Titled --
     @property
     def title(self) -> str:

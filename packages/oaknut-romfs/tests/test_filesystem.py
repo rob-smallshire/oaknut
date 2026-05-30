@@ -106,6 +106,27 @@ def test_remove_respects_lock():
     assert "HOPOBJ" not in {f.name for f in ROMFS.from_bytes(bytes(data)).files}
 
 
+def test_status_notes_via_capability():
+    from oaknut.filesystem import StatusReporting
+
+    fs = AcornROMFS()
+    # A plain, complete ROM is writable and has nothing to report.
+    reader = reader_for(_bytes("Electron_Hopper.rom"))
+    plain = fs.open(reader, fs.probe(reader).geometry)
+    assert isinstance(plain, StatusReporting)
+    assert plain.status_notes() == ()
+
+    # A composite ROM reports it is read-only.
+    creader = reader_for(_bytes("Electron_Countdown_To_Doom_1.rom"))
+    composite = fs.open(creader, fs.probe(creader).geometry)
+    assert any("read-only" in note for note in composite.status_notes())
+
+    # An incomplete fragment reports it is read-only.
+    freader = reader_for(_hopper_fragment())
+    fragment = fs.open(freader, fs.probe(freader).geometry)
+    assert any("incomplete" in note for note in fragment.status_notes())
+
+
 def test_mount_treats_slash_name_as_a_flat_filename():
     fs = AcornROMFS()
     reader = reader_for(_bytes("Electron_Tree_Of_Knowledge_1.rom"))

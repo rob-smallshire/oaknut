@@ -535,12 +535,17 @@ def _partition_block(mount, title: str, *, geometry: bool = False, range_text: s
         HierarchicalDirectories,
         PhysicalGeometry,
         Sized,
+        StatusReporting,
         Titled,
     )
 
     pairs: list[tuple[str, str, object]] = []
     if isinstance(mount, Titled) and mount.title:
         pairs.append(("title", "Title", mount.title))
+    if isinstance(mount, StatusReporting):
+        notes = mount.status_notes()
+        if notes:
+            pairs.append(("notes", "Notes", "; ".join(notes)))
     if geometry and isinstance(mount, PhysicalGeometry):
         pairs.append(("geometry", "Geometry", mount.disc_geometry().label))
     if range_text is not None:
@@ -553,12 +558,15 @@ def _partition_block(mount, title: str, *, geometry: bool = False, range_text: s
         boot = mount.boot_option
         pairs.append(("boot_option", "Boot option", f"{boot.name} ({boot.value})"))
     if not isinstance(mount, HierarchicalDirectories):
-        # A flat catalogue: count the files across its directory letters.
-        files = sum(
-            1
-            for letter in mount.iter_entries(mount.path_root())
-            for _ in mount.iter_entries(letter.path)
-        )
+        # A flat catalogue. DFS nests files one level under directory letters
+        # ($, A, …); ROMFS lists files directly at the root. Count generically:
+        # a root file counts as one, a root directory counts its children.
+        files = 0
+        for entry in mount.iter_entries(mount.path_root()):
+            if entry.is_dir:
+                files += sum(1 for _ in mount.iter_entries(entry.path))
+            else:
+                files += 1
         pairs.append(("files", "Files", files))
     return kv_table(title, pairs)
 
