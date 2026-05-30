@@ -40,7 +40,7 @@ import stevedore.extension
 from oaknut.exception import ConfigurationError
 from oaknut.extension._text import first_line, normalize_name, strip_lines
 
-__version__ = "12.3.0"
+__version__ = "12.4.0"
 
 #: Entry-point namespaces are formed as ``"<NAMESPACE_PREFIX>.<kind>"``.
 NAMESPACE_PREFIX = "oaknut"
