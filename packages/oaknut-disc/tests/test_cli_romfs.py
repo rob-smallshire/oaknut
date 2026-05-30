@@ -36,6 +36,39 @@ class TestRomfsCrossCopy:
         # And it is addressable by its flat name.
         assert runner.invoke(cli, ["cat", f"{rom}:DATA"]).stdout_bytes == b"payload!"
 
+    def test_cp_from_ordered_disc_preserves_storage_order(self, runner: CliRunner, tmp_path):
+        # The cartridge case: a game disc is laid out with its boot files in
+        # the lowest sectors so they load first, and that order must survive
+        # the copy into the ROM's sequential stream. The DFS catalogue is
+        # stored highest-sector-first, so a copy that followed it would lay
+        # the files into the ROM reversed — slow-loading on real hardware.
+        from oaknut.dfs import ACORN_DFS_80T_SINGLE_SIDED, DFS
+
+        ssd = tmp_path / "game.ssd"
+        with DFS.create_file(ssd, ACORN_DFS_80T_SINGLE_SIDED, title="GAME") as dfs:
+            (dfs.root / "$.BOOT").write_bytes(b"b" * 400)  # lowest sectors
+            (dfs.root / "$.LOADER").write_bytes(b"l" * 400)
+            (dfs.root / "$.GAME").write_bytes(b"g" * 400)  # highest sectors
+
+        rom = tmp_path / "CART.rom"
+        assert runner.invoke(cli, ["create", str(rom), "--title", "CART"]).exit_code == 0
+        copied = runner.invoke(cli, ["cp", f"{ssd}:$.*", f"{rom}:"])
+        assert copied.exit_code == 0, copied.output
+
+        def storage_order(target: str) -> list[str]:
+            out = runner.invoke(cli, ["storage-order", target]).output
+            return [
+                line.strip()
+                for line in out.splitlines()
+                if line.strip() and not line.lstrip().startswith("#")
+            ]
+
+        # The disc's physical order, then the ROM's stream order — equal
+        # leaf-for-leaf (ROMFS names are flat, the disc's carry the $ dir).
+        source_leaves = [path.split(".")[-1] for path in storage_order(str(ssd))]
+        assert source_leaves == ["BOOT", "LOADER", "GAME"]
+        assert storage_order(str(rom)) == source_leaves
+
 
 class TestRomfsIdentifyAndList:
     def test_identify(self, runner: CliRunner):
