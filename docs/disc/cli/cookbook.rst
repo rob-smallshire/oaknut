@@ -577,19 +577,26 @@ Electron — a sideways ROM or cartridge. ``disc create`` makes one (the
 ``.rom`` extension infers ROMFS), and the ``disc romfs`` commands query
 and set its paged-ROM header properties.
 
-Here we re-cartridge the BBC Micro game *Zalaga* (Aardvark Software):
-lift its
-machine code out of an existing ROM, build a fresh 16 KiB cartridge
-with a title and the game authors' copyright, and add the game back —
-keeping its load and execution addresses so ``*RUN ZALAGA`` launches
-it on a real machine.
+Here we put the BBC Micro game *Snapper* (Acornsoft, 1982) onto a
+cartridge: create a fresh 16 KiB ROM with a title and the publisher's
+copyright, then copy the whole game off its DFS floppy with ``disc cp``,
+which carries each file's load/exec addresses and lock bit across.
 
 .. cli-example:: game_cartridge
 
 ``disc create`` writes a service-only paged ROM whose handler answers
 the OS filing-system service calls (``&0D`` / ``&0E``) and prints the
-title on ``*HELP`` (``&09``). The copyright here is longer than the
-default, which changes the header length, so the ROM is rebuilt around
-the new string — done because a freshly created ROM has no language
-entry or trailing code to disturb. The result is a self-contained
-cartridge: ``*ROM`` then ``*RUN ZALAGA``.
+title on ``*HELP`` (``&09``). The copyright is longer than the default,
+which changes the header length, so the ROM is rebuilt around the new
+string — safe here because a freshly created ROM has no language entry
+or trailing code to disturb. ``disc cp`` copies between any pair of
+filing systems, mapping each to its own path conventions (the flat
+ROMFS keeps the DFS files' bare names), so the whole game lands in one
+command.
+
+On a real machine, select the cartridge with ``*ROM`` and start it with
+``*EXEC !BOOT`` — Snapper's loader (``*BASIC``, ``CHAIN "SNAP"``, then
+the game code) is just file reads, which the cartridge's ``&0D`` / ``&0E``
+handler serves. It does not *auto*-boot on Shift-Break, though: that
+needs the ROM to answer service call ``&03``, which the minimal created
+handler does not yet do.

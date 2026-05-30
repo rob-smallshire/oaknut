@@ -1,9 +1,9 @@
-"""Recipe: build a game cartridge ROM from an existing game.
+"""Recipe: build a game cartridge ROM from a DFS game disc.
 
-Pulls the Zalaga machine-code game out of a reference ROMFS image, then
-builds a fresh paged-ROM cartridge for it — a title, the authors'
-copyright, and (by default) a ``*HELP`` responder — keeping the game's
-load/exec so ``*RUN ZALAGA`` launches it on a real machine.
+Copies the BBC Micro game *Snapper* straight off a DFS floppy onto a fresh
+paged-ROM cartridge with ``disc cp`` — load/exec and lock bits carried
+across for every file — then gives the cartridge a title and the
+publisher's copyright. The whole game fits comfortably in a 16 KiB ROM.
 """
 
 from __future__ import annotations
@@ -14,25 +14,23 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from cli_example_helper import in_tmp_dir, show, silent  # noqa: E402
+from cli_example_helper import in_tmp_dir, show  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
-ZALAGA_ROM = REPO_ROOT / "tests" / "data" / "images" / "romfs" / "Zalaga.rom"
+SNAPPER_SSD = REPO_ROOT / "tests" / "data" / "images" / "games" / "Disc001-SnapperV2.ssd"
 
 with in_tmp_dir():
-    shutil.copy(ZALAGA_ROM, "original.rom")
+    shutil.copy(SNAPPER_SSD, "snapper.ssd")
 
-    # Lift the game's machine code out of the original cartridge.
-    silent("disc get original.rom:ZALAGA ZALAGA")
+    # A fresh 16 KiB cartridge with a title and a *HELP responder, stamped
+    # with the publisher's copyright.
+    show("disc create SNAPPER.rom --title Snapper")
+    show("disc romfs set-copyright SNAPPER.rom '(C) Acornsoft 1982'")
 
-    # Build a fresh 16 KiB cartridge, give it a title, and stamp the
-    # authors' copyright (a length change, so the ROM is rebuilt).
-    show("disc create ZALAGA.rom --title Zalaga")
-    show("disc romfs set-copyright ZALAGA.rom '(C) Nick Pelling & Mike Tomlinson'")
-
-    # Add the game, keeping its load/exec so *RUN ZALAGA launches it.
-    show("disc put ZALAGA.rom:ZALAGA ZALAGA --load 0x3000 --exec 0x4522")
+    # Copy the whole game across in one go — disc cp carries each file's
+    # load/exec addresses and lock bit. (cp is silent on success.)
+    show("disc cp 'snapper.ssd:$.*' 'SNAPPER.rom:'")
 
     # The finished cartridge.
-    show("disc identify ZALAGA.rom")
-    show("disc ls ZALAGA.rom")
+    show("disc stat SNAPPER.rom")
+    show("disc ls SNAPPER.rom")

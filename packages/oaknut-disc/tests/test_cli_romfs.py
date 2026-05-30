@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import shutil
+
 from click.testing import CliRunner
 from oaknut.disc.cli import cli
 
@@ -10,7 +12,7 @@ from tests.fixtures import REFERENCE_IMAGES_DIRPATH
 ROMFS_DIRPATH = REFERENCE_IMAGES_DIRPATH / "romfs"
 _HOPPER = ROMFS_DIRPATH / "Electron_Hopper.rom"  # plain, complete
 _COUNTDOWN = ROMFS_DIRPATH / "Electron_Countdown_To_Doom_1.rom"  # composite
-_ZALAGA = ROMFS_DIRPATH / "Zalaga.rom"  # a single machine-code game file
+_SNAPPER_SSD = REFERENCE_IMAGES_DIRPATH / "games" / "Disc001-SnapperV2.ssd"  # a whole DFS game
 
 
 class TestRomfsCrossCopy:
@@ -116,33 +118,31 @@ class TestRomfsCreate:
         assert dumped.stdout_bytes == b"Acorn ROMFS"
 
     def test_build_a_game_cartridge(self, runner: CliRunner, tmp_path):
-        # The cookbook "Create a game cartridge ROM" workflow: lift a game
-        # out of one ROM and re-cartridge it with a title and copyright.
-        game = tmp_path / "ZALAGA"
-        assert runner.invoke(cli, ["get", f"{_ZALAGA}:ZALAGA", str(game)]).exit_code == 0
-
-        cart = tmp_path / "ZALAGA.rom"
-        assert runner.invoke(cli, ["create", str(cart), "--title", "Zalaga"]).exit_code == 0
-        copyright_ = "(C) Nick Pelling & Mike Tomlinson"
+        # The cookbook "Create a game cartridge ROM" workflow: copy a whole
+        # DFS game onto a fresh cartridge with disc cp, plus title/copyright.
+        ssd = tmp_path / "snapper.ssd"
+        shutil.copy(_SNAPPER_SSD, ssd)
+        cart = tmp_path / "SNAPPER.rom"
+        assert runner.invoke(cli, ["create", str(cart), "--title", "Snapper"]).exit_code == 0
+        copyright_ = "(C) Acornsoft 1982"
         assert (
             runner.invoke(cli, ["romfs", "set-copyright", str(cart), copyright_]).exit_code == 0
         )
-        assert (
-            runner.invoke(
-                cli,
-                ["put", f"{cart}:ZALAGA", str(game), "--load", "0x3000", "--exec", "0x4522"],
-            ).exit_code
-            == 0
-        )
+        copied = runner.invoke(cli, ["cp", f"{ssd}:$.*", f"{cart}:"])
+        assert copied.exit_code == 0, copied.output
 
-        assert "ZALAGA" in runner.invoke(cli, ["ls", str(cart)]).output
+        listing = runner.invoke(cli, ["ls", str(cart)]).output
+        for name in ("Snappe3", "SNAPPER", "!BOOT"):
+            assert name in listing
+        assert "$." not in listing  # flat ROMFS names, no DFS root leak
         assert (
             runner.invoke(cli, ["romfs", "get-copyright", str(cart)]).output.strip() == copyright_
         )
-        # The game bytes survived the round-trip onto the new cartridge.
-        back = tmp_path / "ZALAGA.out"
-        assert runner.invoke(cli, ["get", f"{cart}:ZALAGA", str(back)]).exit_code == 0
-        assert back.read_bytes() == game.read_bytes()
+        # A game file's bytes survived the copy onto the cartridge.
+        from_ssd, from_rom = tmp_path / "a", tmp_path / "b"
+        assert runner.invoke(cli, ["get", f"{ssd}:$.Snappe3", str(from_ssd)]).exit_code == 0
+        assert runner.invoke(cli, ["get", f"{cart}:Snappe3", str(from_rom)]).exit_code == 0
+        assert from_ssd.read_bytes() == from_rom.read_bytes()
 
 
 class TestRomfsProperties:
