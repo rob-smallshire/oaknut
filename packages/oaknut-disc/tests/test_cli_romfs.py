@@ -10,6 +10,7 @@ from tests.fixtures import REFERENCE_IMAGES_DIRPATH
 ROMFS_DIRPATH = REFERENCE_IMAGES_DIRPATH / "romfs"
 _HOPPER = ROMFS_DIRPATH / "Electron_Hopper.rom"  # plain, complete
 _COUNTDOWN = ROMFS_DIRPATH / "Electron_Countdown_To_Doom_1.rom"  # composite
+_ZALAGA = ROMFS_DIRPATH / "Zalaga.rom"  # a single machine-code game file
 
 
 class TestRomfsIdentifyAndList:
@@ -91,6 +92,35 @@ class TestRomfsCreate:
         assert "HELLO" in listed.output
         dumped = runner.invoke(cli, ["cat", f"{rom}:HELLO"])
         assert dumped.stdout_bytes == b"Acorn ROMFS"
+
+    def test_build_a_game_cartridge(self, runner: CliRunner, tmp_path):
+        # The cookbook "Create a game cartridge ROM" workflow: lift a game
+        # out of one ROM and re-cartridge it with a title and copyright.
+        game = tmp_path / "ZALAGA"
+        assert runner.invoke(cli, ["get", f"{_ZALAGA}:ZALAGA", str(game)]).exit_code == 0
+
+        cart = tmp_path / "ZALAGA.rom"
+        assert runner.invoke(cli, ["create", str(cart), "--title", "Zalaga"]).exit_code == 0
+        copyright_ = "(C) Nick Pelling & Mike Tomlinson"
+        assert (
+            runner.invoke(cli, ["romfs", "set-copyright", str(cart), copyright_]).exit_code == 0
+        )
+        assert (
+            runner.invoke(
+                cli,
+                ["put", f"{cart}:ZALAGA", str(game), "--load", "0x3000", "--exec", "0x4522"],
+            ).exit_code
+            == 0
+        )
+
+        assert "ZALAGA" in runner.invoke(cli, ["ls", str(cart)]).output
+        assert (
+            runner.invoke(cli, ["romfs", "get-copyright", str(cart)]).output.strip() == copyright_
+        )
+        # The game bytes survived the round-trip onto the new cartridge.
+        back = tmp_path / "ZALAGA.out"
+        assert runner.invoke(cli, ["get", f"{cart}:ZALAGA", str(back)]).exit_code == 0
+        assert back.read_bytes() == game.read_bytes()
 
 
 class TestRomfsProperties:

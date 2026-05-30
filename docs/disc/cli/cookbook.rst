@@ -567,3 +567,28 @@ For just the paths of the files that matched, strip the header with
 
 .. cli-example:: grep_each_file
    :section: paths
+
+
+Create a game cartridge ROM
+---------------------------
+
+ROMFS is the paged-ROM filing system of the BBC Micro and Acorn
+Electron — a sideways ROM or cartridge. ``disc create`` makes one (the
+``.rom`` extension infers ROMFS), and the ``disc romfs`` commands query
+and set its paged-ROM header properties.
+
+Here we re-cartridge the Acornsoft Electron game *Zalaga*: lift its
+machine code out of an existing ROM, build a fresh 16 KiB cartridge
+with a title and the game authors' copyright, and add the game back —
+keeping its load and execution addresses so ``*RUN ZALAGA`` launches
+it on a real machine.
+
+.. cli-example:: game_cartridge
+
+``disc create`` writes a service-only paged ROM whose handler answers
+the OS filing-system service calls (``&0D`` / ``&0E``) and prints the
+title on ``*HELP`` (``&09``). The copyright here is longer than the
+default, which changes the header length, so the ROM is rebuilt around
+the new string — done because a freshly created ROM has no language
+entry or trailing code to disturb. The result is a self-contained
+cartridge: ``*ROM`` then ``*RUN ZALAGA``.
