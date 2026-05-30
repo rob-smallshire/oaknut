@@ -1620,11 +1620,9 @@ def _collect_copy_items(
     "exec": int, "access": int}``. The plan is linear; the write phase
     executes items in order.
     """
-    from oaknut.filesystem import HierarchicalDirectories
-
     items: list[dict] = []
-    src_is_dfs = not isinstance(src_mount, HierarchicalDirectories)
-    dst_is_dfs = not isinstance(dst_mount, HierarchicalDirectories)
+    src_is_dfs = _uses_dfs_paths(src_mount)
+    dst_is_dfs = _uses_dfs_paths(dst_mount)
 
     if _has_wildcard(src_bare):
         matches = _expand_glob(src_mount, src_bare)
@@ -1816,6 +1814,22 @@ def _file_item(src_mount, src_path: str, rel_dst: str) -> dict:
         "exec": exec_addr,
         "access": access,
     }
+
+
+def _uses_dfs_paths(mount) -> bool:
+    """Whether *mount* uses DFS's ``$.``-rooted, single-letter-directory paths.
+
+    cp flattens ADFS-style paths onto that model for a DFS destination, but
+    must not impose it on a filesystem that is merely *flat*. Path joining is
+    the filesystem's own concern, so ask the mount: a DFS-family root-level
+    name comes back ``$.``-prefixed, whereas a truly flat filesystem (ROMFS)
+    keeps it bare. Hierarchical filesystems (ADFS, AFS) are never DFS.
+    """
+    from oaknut.filesystem import HierarchicalDirectories
+
+    if isinstance(mount, HierarchicalDirectories):
+        return False
+    return mount.join(mount.path_root(), "x").startswith("$")
 
 
 def _join(parent: str, leaf: str) -> str:

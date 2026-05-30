@@ -13,6 +13,28 @@ _COUNTDOWN = ROMFS_DIRPATH / "Electron_Countdown_To_Doom_1.rom"  # composite
 _ZALAGA = ROMFS_DIRPATH / "Zalaga.rom"  # a single machine-code game file
 
 
+class TestRomfsCrossCopy:
+    def test_cp_into_rom_keeps_flat_names(self, runner: CliRunner, tmp_path):
+        # Regression: copying a DFS file into a flat ROMFS must not leak the
+        # DFS "$." root into the ROMFS name (cp once treated every flat
+        # filesystem as DFS and remapped paths through its "$." model).
+        ssd = tmp_path / "src.ssd"
+        assert runner.invoke(cli, ["create", str(ssd), "--title", "SRC"]).exit_code == 0
+        payload = tmp_path / "data.bin"
+        payload.write_bytes(b"payload!")
+        assert runner.invoke(cli, ["put", f"{ssd}:$.DATA", str(payload)]).exit_code == 0
+
+        rom = tmp_path / "CART.rom"
+        assert runner.invoke(cli, ["create", str(rom), "--title", "CART"]).exit_code == 0
+        copied = runner.invoke(cli, ["cp", f"{ssd}:$.DATA", f"{rom}:DATA"])
+        assert copied.exit_code == 0, copied.output
+
+        listing = runner.invoke(cli, ["ls", str(rom)]).output
+        assert "$." not in listing  # the name is flat "DATA", not "$.DATA"
+        # And it is addressable by its flat name.
+        assert runner.invoke(cli, ["cat", f"{rom}:DATA"]).stdout_bytes == b"payload!"
+
+
 class TestRomfsIdentifyAndList:
     def test_identify(self, runner: CliRunner):
         result = runner.invoke(cli, ["identify", str(_HOPPER)])
