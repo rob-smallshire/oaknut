@@ -14,6 +14,13 @@ template:
 - **"Code when loading from ROM"** — a control-flow diagram of the MOS
   load-from-ROM routine, naming the state machine and its routines:
   `docs/dev/manuals/LoadFromROM.pdf` (in this repo).
+- **"Sideways ROM authoring notes"** — the most complete single reference,
+  compiling the New Advanced User Guide, Bruce Smith's *BBC Micro ROM
+  Book* and the *Electron Advanced User Guide*. Covers the paged-ROM
+  header bit-by-bit, every MOS service call, and the RFS block format and
+  `&0D`/`&0E` handler with worked 6502. In the sibling Beebium repo at
+  `docs/manuals/sidewrom.pdf`. It corroborates §1–§3 below field-for-field
+  and is the source for the service-call interface in §2.10.
 - **mkromfs** — Dominic Beesley's Perl + beebasm ROM generator.
   <https://github.com/dominicbeesley/mkromfs> (`handlesvc.asm`,
   `mkromfs.pl`). The most precise field-by-field *writer* reference and
@@ -49,7 +56,7 @@ From `handlesvc.asm` (offsets are absolute, ROM mapped at `&8000`):
 |-------:|------:|-------|-------|
 | `&8000` | 3 | Language entry | `JMP language` on a language+FS ROM, or `00 00 00` if none |
 | `&8003` | 3 | Service entry | `JMP service` (`4C lo hi`) |
-| `&8006` | 1 | ROM type | bit 7 = service entry; bit 6 = language entry; low nibble = CPU |
+| `&8006` | 1 | ROM type | bitfield — see below |
 | `&8007` | 1 | Copyright offset | offset, *relative to ROM start*, of the `00` byte before `(C)` |
 | `&8008` | 1 | Binary version | a single version byte |
 | `&8009` | n+1 | Title | ASCII title string, NUL-terminated |
@@ -62,6 +69,20 @@ The copyright string starting with `(C)` is mandatory for a valid Acorn
 paged ROM, and the byte at `&8007` must point at the `00` immediately
 preceding it. These two facts give a strong structural check when
 identifying a ROMFS image.
+
+**ROM type byte (`&8006`) bits:**
+
+| Bit(s) | Meaning |
+|-------:|---------|
+| 7 | Service entry present (set by every ROMFS ROM; `probe()` tests this) |
+| 6 | Language entry present |
+| 5 | Has a second-processor (Tube) relocation address |
+| 4 | Supports Electron firmkeys (`KEY+FUNC` / `KEY+CAPS`) |
+| 3–0 | CPU type: `0000` 6502 BASIC, `0010` 6502 (not BASIC), `0011` 68000, `1000` Z80, `1001` 32016, `1011` 80186, `1100` 80286, `1101` ARM |
+
+So the corpus's `&C2` is `service + language + 6502` and Zalaga's `&82`
+is `service + 6502` (no language). Identify on **bit 7**, never the whole
+byte.
 
 > **Observed on the reference corpus** (six Acornsoft Electron cartridges,
 > §6). The ROM type byte is **`&C2`** — service *and* language entry
@@ -130,7 +151,7 @@ A header block begins with the `&2A` sync byte, then the following fields
 | Block number | 2 | little-endian | 0 for the first block, incrementing |
 | Block length | 2 | little-endian | data bytes *in this block*, 0–256 |
 | Flag | 1 | bitfield | see below |
-| End-of-file address | 4 | little-endian | the **address of the end byte of the file** in paged-ROM space (`&80xx`–`&BFxx`) — i.e. where the *next* file begins. On *tape* this field is four `&00` bytes; ROMFS reuses it as this pointer (MOS) |
+| End-of-file address | 4 | little-endian | the **address of the first byte after the end of the file** in paged-ROM space (`&80xx`–`&BFxx`) — i.e. where the *next* file begins. Lets the OS catalogue quickly by skipping over each file's data rather than reading it; `*OPT1,2` forces the slow read-everything path. On *tape* this field is four `&00` bytes; ROMFS reuses it (MOS) |
 | Header CRC | 2 | **big-endian** | CRC-16 over the header from the name through the end-of-file address |
 
 Then, if block length > 0:
@@ -148,8 +169,9 @@ The header CRC and data CRC are stored most-significant-byte first
 | Bit | Mask | Meaning |
 |----:|-----:|---------|
 | 7 | `&80` | **Last block** of this file |
-| 6 | `&40` | **Empty block** — this block carries no data (block length 0) |
-| 0 | `&01` | **Locked** file (Acorn access "L"; derived from `access & &08`) |
+| 6 | `&40` | **No data** in this block (block length 0); set by `OPENOUT…:CLOSE#` |
+| 5–1 | — | unused |
+| 0 | `&01` | **Protected**: the file may only be `*RUN`, not `*LOAD`ed. Surfaced as Acorn access "L" (locked) via `AcornMetadata` |
 
 A file of ≤ 256 bytes is a single block whose flag has bit 7 set (it is
 simultaneously the first and the last block). A zero-length file is a
@@ -186,6 +208,16 @@ system.
 > drives completion purely from block lengths is also valid. The reader
 > should tolerate either a header (`&2A`) or an inter-block marker (`&23`)
 > at each boundary and not assume the last block re-syncs.
+
+> **Files whose length is an exact multiple of 256.** The sideways-ROM
+> notes say a final block with bit 6 (no data) may be appended so the
+> end-of-file flag has somewhere to live. The Acorn corpus does **not** do
+> this: `STRCOM1` (8192 bytes) and `STRCOM2` (9216 bytes) end on a full
+> 256-byte block with bit 7 set and no trailing empty block, and both
+> round-trip byte-exact. This package's serialiser follows the corpus (no
+> trailing empty block); the round-trip test guards the assumption, and a
+> future image built the other way would surface as a round-trip failure
+> to be handled then. The *parser* copes with either form regardless.
 
 ### 2.5 The title block
 
@@ -300,6 +332,41 @@ The package surfaces the *filing-system* title (the `*…*` block when
 present) via the `Titled` capability, since that is what users see as the
 disc/catalogue name. The header title is incidental metadata.
 
+### 2.10 How the OS reads a ROM: the service-call interface
+
+The filing-system data is inert on its own. The OS reads it through the
+ROM's **service handler** (the machine code between the header and the
+data), driven by MOS service calls. A ROMFS ROM must answer at least:
+
+- **`&0D` — initialise the ROM filing system.** On entry `Y` = `15 − next
+  ROM to scan`. If that selects *this* ROM (`15 − Y == &F4`, the current
+  ROM socket), the handler points the OS read pointer at the start of the
+  filing-system data: `STA &F6` / `STA &F7` (low/high of the data address),
+  sets `&F5` = `15 − own ROM number`, and claims the call.
+- **`&0E` — return the next byte.** If this is the selected ROM, load the
+  byte at `(&F6),Y=0`, increment the `&F6/&F7` pointer (carry into `&F7`),
+  and claim. This is the byte-at-a-time spigot the loader in §2.7 pulls.
+
+A richer handler may also answer:
+
+- **`&09` — `*HELP`.** Print the ROM name and version; optionally compare
+  the text after `*HELP` (via the pointer at `&F2/&F3` plus `Y`, forced
+  upper-case with `AND #&DF`) against a keyword to print extended help.
+- **`&03` — auto-boot.** On `Shift-Break`, look for `!BOOT` and `*RUN` /
+  `*LOAD` / `*EXEC` it — which is why the corpus ROMs carry a `!BOOT`.
+- **`&04` — unrecognised `*` command.** If no ROM claims a command the OS
+  passes it to the filing system, which may `*RUN` it from the library.
+
+**Consequence for the write path.** *Reading and identifying* a ROMFS image
+needs none of this — the bytes are self-describing. But **creating** one
+does: a freshly serialised filing system is unreadable by a real machine
+until a `&0D`/`&0E` handler is prepended. This is exactly the opaque
+preamble this package preserves (§1.2) and refuses to mutate (the
+plain-versus-composite split in `docs/architecture.md`). A future `disc
+create --filesystem romfs` must emit such a handler — minimally `&0D`/`&0E`,
+optionally `&09` for a user-settable `*HELP` message — making the created
+ROM a deliberately *composite* image.
+
 ## 3. The CRC algorithm
 
 Both CRCs are the CFS/tape CRC: CRC-16-CCITT, polynomial `0x1021`,
@@ -350,11 +417,13 @@ Still to confirm:
    and the Electron cartridges share an identical on-ROM format (§6). Only
    authoring differs (type byte, language entry, presence of a title
    block); the service handler is machine code the parser never executes.
-2. **8 KiB vs. 16 KiB banks** and multi-bank ("ROM N of M") spanning. The
-   corpus shows a game split across *two separate cartridges* (Starship
-   Command 1/2, §6) rather than two banks of one ROM; UEF2ROM's
-   ROM-bank variable handles intra-file splits. How the OS chains banks at
-   read time is not yet pinned down.
+2. **Multi-ROM spanning.** Largely resolved by the sideways-ROM notes: a
+   file too large for one ROM omits the `+` end marker, and its
+   continuation lives in the socket *immediately below* the first, with the
+   service handler bridging the cross-chip gap. The corpus does not
+   exercise this — Starship Command 1/2 (§6) are two *independent* games,
+   each a self-contained ROM with its own `+` — so the chained-bank reader
+   is unimplemented and untested here.
 3. **Non-Acornsoft / non-cartridge ROMFS** (e.g. mkromfs service-only
    `&82` ROMs) — exercise the `bit 7` type test and the `&C0` empty-flag
    variant once such an image is on hand.
