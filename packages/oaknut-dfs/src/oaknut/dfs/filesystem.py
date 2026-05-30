@@ -220,6 +220,15 @@ class _DFSMount:
         total = surface.catalogue.get_disc_info().total_sectors
         return FreeMapData(free_regions=regions, total_sectors=total)
 
+    # -- StorageOrdered --
+    def storage_key(self, path: str) -> int:
+        # DFS lays each file's data in a contiguous run, so its start
+        # sector totally orders the files by physical position. The
+        # catalogue's own entry order does not (a real DFS lists files
+        # highest-sector-first), so a caller wanting on-disc order must
+        # sort by this rather than trust enumeration order.
+        return self._navigate(path).stat().start_sector
+
     # -- Compactable --
     def compact(self) -> int:
         return self._dfs.compact()

@@ -137,6 +137,23 @@ class TestMount:
             assert meta.exec_address == 0x8023
             assert mount.title == "DEMO"
 
+    def test_storage_order_tracks_sectors_not_names(self, tmp_path):
+        from oaknut.filesystem import StorageOrdered
+
+        # ZED is written first so it occupies the lowest sectors; ABLE
+        # follows in higher sectors. Storage order must therefore put ZED
+        # before ABLE — the on-disc order, not the alphabetical one.
+        image_filepath = tmp_path / "ord.ssd"
+        with DFS.create_file(image_filepath, ACORN_DFS_80T_SINGLE_SIDED, title="ORD") as dfs:
+            (dfs.root / "$.ZED").write_bytes(b"z" * 300)
+            (dfs.root / "$.ABLE").write_bytes(b"a" * 300)
+        filesystem = create_filesystem("acorn-dfs")
+        with reader_for(image_filepath) as reader:
+            mount = filesystem.open(reader, filesystem.probe(reader).geometry)
+            assert isinstance(mount, StorageOrdered)
+            ordered = sorted(["$.ABLE", "$.ZED"], key=mount.storage_key)
+            assert ordered == ["$.ZED", "$.ABLE"]
+
 
 class TestGeometryGrammar:
     def test_presets(self):
