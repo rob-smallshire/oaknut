@@ -376,8 +376,9 @@ the bare `&0D`/`&0E` handler is the canonical mkromfs/NAUG one (81 bytes,
 data at `&805D`), and by default a `&09` `*HELP` responder is added that
 prints the ROM's title — so the created ROM answers `*HELP` with its
 title. The handler is assembled by a small two-pass 6502 assembler so its
-branch and jump targets are correct by construction; on-hardware execution
-awaits 6502-emulator verification.
+branch and jump targets are correct by construction, and a created ROM has
+been confirmed in a 6502 emulator (`*HELP`, `*CAT`, `CHAIN` and `*TYPE` all
+work).
 
 ## 3. The CRC algorithm
 

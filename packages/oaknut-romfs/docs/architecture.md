@@ -93,8 +93,9 @@ The handler is assembled by a small two-pass 6502 assembler
 `&0D`/`&0E` handler is the canonical mkromfs/NAUG one — exactly 81 bytes,
 putting data at `&805D` for an empty header (the test anchor). By default a
 `&09` `*HELP` responder is also included, printing the title (so the title
-is the `*HELP` message). On-hardware execution is pending 6502-emulator
-verification.
+is the `*HELP` message). A created ROM has been confirmed in a 6502
+emulator: `*HELP` prints the title, and `*CAT` / `CHAIN` / `*TYPE` read
+files correctly.
 
 Writing (`write_bytes`, `create`) is deferred. The medium is read-only
 ROM; identification and reading come first. If image creation is added

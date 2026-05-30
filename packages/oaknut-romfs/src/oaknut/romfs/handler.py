@@ -14,7 +14,8 @@ result is exactly 81 bytes, matching mkromfs (which places the filing-system
 data at ``&805D`` for an empty header).
 
 The handler is hand-assembled and verified for layout and length here;
-execution on real hardware is to be confirmed against a 6502 emulator.
+its execution is confirmed in a 6502 emulator (a created ROM answers
+``*HELP``, ``*CAT``, ``CHAIN`` and ``*TYPE`` correctly).
 """
 
 from __future__ import annotations
