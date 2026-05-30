@@ -40,6 +40,25 @@ class TestCompactBasic:
         assert stat.exec_address == 0x8023
         assert stat.locked is True
 
+    def test_compact_preserves_full_access_flags(self):
+        # The richer access flags (owner execute, not only the lock bit)
+        # live in the directory entry beside the file; relocating it on
+        # compaction must carry every flag across.
+        adfs = ADFS.create(ADFS_S)
+        (adfs.root / "Gap").write_bytes(b"x" * 512)  # deleted below, leaving a gap
+        (adfs.root / "Prog").write_bytes(b"code", load_address=0x1900, exec_address=0x8023)
+        (adfs.root / "Prog").chmod(Access.R | Access.W | Access.E | Access.L)
+        (adfs.root / "Gap").unlink()
+
+        adfs.compact()
+
+        stat = (adfs.root / "Prog").stat()
+        assert stat.owner_read is True
+        assert stat.owner_write is True
+        assert stat.owner_execute is True
+        assert stat.locked is True
+        assert (adfs.root / "Prog").read_bytes() == b"code"
+
     def test_compact_preserves_title(self):
         adfs = ADFS.create(ADFS_S, title="MyDisc")
         (adfs.root / "File").write_bytes(b"data")

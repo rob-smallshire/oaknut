@@ -490,6 +490,27 @@ class TestWatfordDFSCatalogueFileOperations:
         assert [f.path for f in placed] == ["$.FILE2", "$.FILE1"]
         assert placed[0].start_sector == 4
 
+    def test_compact_preserves_attributes(self, watford_dfs_surface):
+        """Compaction carries load/exec/lock across the two-section rebuild."""
+        catalogue = WatfordDFSCatalogue(watford_dfs_surface)
+        catalogue.add_file_entry(
+            filename="KEEP", directory="$", load_address=0x1900, exec_address=0x8023,
+            length=256, start_sector=4, locked=True,
+        )
+        catalogue.add_file_entry(
+            filename="GAP", directory="$", load_address=0, exec_address=0,
+            length=256, start_sector=10, locked=False,  # gap between 4 and 10
+        )
+        catalogue.remove_file_entry("$.GAP")
+
+        catalogue.compact()
+
+        keep = next(f for f in catalogue.list_files() if f.filename == "KEEP")
+        assert keep.load_address == 0x1900
+        assert keep.exec_address == 0x8023
+        assert keep.locked is True
+        assert keep.start_sector == 4  # moved down to fill the gap
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
