@@ -1696,6 +1696,24 @@ def _collect_copy_items(
     return items
 
 
+def _in_storage_order(src_mount, entries: list) -> list:
+    """Return *entries* in the source's physical lay-down order.
+
+    When the source advertises ``StorageOrdered``, sort the siblings by
+    its opaque storage key so a multi-file copy reproduces the on-disc
+    order rather than catalogue-enumeration order — a flat DFS catalogue
+    lists files highest-sector-first, which a copy would otherwise lay
+    back lowest-sector-first and so reverse. Filesystems that do not
+    advertise the capability keep their natural enumeration order (which
+    for a sequential medium already is its storage order).
+    """
+    from oaknut.filesystem import StorageOrdered
+
+    if not isinstance(src_mount, StorageOrdered):
+        return entries
+    return sorted(entries, key=lambda entry: src_mount.storage_key(entry.path))
+
+
 def _expand_glob(src_mount, src_bare: str) -> list[str]:
     """Paths of children of the literal parent matching the leaf pattern.
 
@@ -1710,7 +1728,8 @@ def _expand_glob(src_mount, src_bare: str) -> list[str]:
     parent = parent or src_mount.path_root()
     if not src_mount.exists(parent) or not src_mount.stat(parent).is_dir:
         raise click.ClickException(f"parent directory of glob does not exist: {parent or '$'!r}")
-    return [e.path for e in src_mount.iter_entries(parent) if _match_acorn(leaf_pattern, e.name)]
+    matched = [e for e in src_mount.iter_entries(parent) if _match_acorn(leaf_pattern, e.name)]
+    return [e.path for e in _in_storage_order(src_mount, matched)]
 
 
 def _map_dst_path_for_dfs(path: str) -> str:
@@ -1784,7 +1803,7 @@ def _walk_tree(
     destination root in a DFS → ADFS/AFS copy. DFS's other letters become
     subdirectories as usual.
     """
-    for child in src_mount.iter_entries(dir_path):
+    for child in _in_storage_order(src_mount, list(src_mount.iter_entries(dir_path))):
         if src_is_dfs and child.is_dir and child.name == "$":
             _walk_tree(src_mount, child.path, dst_prefix, items, src_is_dfs=src_is_dfs)
             continue

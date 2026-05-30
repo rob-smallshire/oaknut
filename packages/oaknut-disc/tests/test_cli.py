@@ -1570,6 +1570,70 @@ class TestCpGlob:
         assert "0x00001900" in stat.output  # load address
 
 
+class TestCpStorageOrder:
+    """A multi-file copy reproduces the source's on-disc order.
+
+    A real DFS stores its catalogue highest-sector-first, so following
+    catalogue order during a copy lays the files back lowest-sector-first
+    and reverses the physical layout — the boot files a user put in low
+    sectors end up in high ones, slow to load on a seeking drive. The
+    copy must honour the source's storage order instead.
+    """
+
+    @staticmethod
+    def _physical_order(filepath: Path) -> list[str]:
+        """File names in ascending start-sector (physical lay-down) order."""
+        from oaknut.dfs import DFS
+
+        with DFS.from_file(filepath) as dfs:
+            placed = [(p.stat().start_sector, p.name) for p in dfs.path("$").iterdir()]
+        return [name for _, name in sorted(placed)]
+
+    @staticmethod
+    def _reverse_catalogue(filepath: Path) -> None:
+        """Reverse the catalogue slot order in place, leaving file data put.
+
+        Turns an oaknut-authored (ascending) catalogue into the
+        descending-start-sector order a real BBC writes, so enumeration
+        order becomes the reverse of physical order — the bug's trigger.
+        """
+        data = bytearray(filepath.read_bytes())
+        num_files = data[256 + 5] // 8
+        for base in (0, 256):  # the two catalogue sectors hold parallel halves
+            start = base + 8
+            records = [bytes(data[start + i * 8 : start + (i + 1) * 8]) for i in range(num_files)]
+            records.reverse()
+            data[start : start + num_files * 8] = b"".join(records)
+        filepath.write_bytes(data)
+
+    def test_multi_file_copy_preserves_on_disc_order(
+        self, runner: CliRunner, tmp_path: Path, dfs_empty_filepath: Path
+    ) -> None:
+        from oaknut.dfs import ACORN_DFS_80T_SINGLE_SIDED, DFS
+
+        source = tmp_path / "ordered.ssd"
+        with DFS.create_file(source, ACORN_DFS_80T_SINGLE_SIDED, title="Ordered") as dfs:
+            # Written low-sector first; on a real disc these load fastest.
+            (dfs.root / "$.BOOT").write_bytes(b"b" * 400)
+            (dfs.root / "$.LOADER").write_bytes(b"l" * 400)
+            (dfs.root / "$.GAME").write_bytes(b"g" * 400)
+        assert self._physical_order(source) == ["BOOT", "LOADER", "GAME"]
+
+        self._reverse_catalogue(source)
+        # Precondition: enumeration order is now the reverse of physical
+        # order, exactly the situation a real DFS disc presents.
+        with DFS.from_file(source) as dfs:
+            assert [p.name for p in dfs.path("$").iterdir()] == ["GAME", "LOADER", "BOOT"]
+        assert self._physical_order(source) == ["BOOT", "LOADER", "GAME"]
+
+        result = runner.invoke(cli, ["cp", f"{source}:$.*", f"{dfs_empty_filepath}:$/"])
+        assert result.exit_code == 0, result.output
+
+        # The destination's physical order matches the source's, rather
+        # than being reversed by following catalogue order.
+        assert self._physical_order(dfs_empty_filepath) == ["BOOT", "LOADER", "GAME"]
+
+
 class TestCpRecursive:
     """``-r`` / ``--recursive`` copies a source directory and its
     contents, creating intermediate destination directories as
