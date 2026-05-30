@@ -580,26 +580,12 @@ and set its paged-ROM header properties.
 Here we put the BBC Micro game *Snapper* (Acornsoft, 1982) onto a
 cartridge: create a fresh 16 KiB ROM with a title and the publisher's
 copyright, then copy the whole game off its DFS floppy with ``disc cp``,
-which carries each file's load/exec addresses and lock bit across.
+which carries each file's load and execution addresses across.
 
 .. cli-example:: game_cartridge
 
-``disc create`` writes a service-only paged ROM whose handler answers
-the OS filing-system service calls (``&0D`` / ``&0E``) and prints the
-title on ``*HELP`` (``&09``). The copyright is longer than the default,
-which changes the header length, so the ROM is rebuilt around the new
-string — safe here because a freshly created ROM has no language entry
-or trailing code to disturb. ``disc cp`` copies between any pair of
-filing systems, mapping each to its own path conventions (the flat
-ROMFS keeps the DFS files' bare names), so the whole game lands in one
-command.
-
-On a real machine, select the cartridge with ``*ROM`` and start it with
-``*EXEC !BOOT`` — Snapper's loader (``*BASIC``, ``CHAIN "SNAP"``, then
-the game code) is just file reads, which the cartridge's ``&0D`` / ``&0E``
-handler serves. (This cartridge has been built and run from ROM in a 6502
-emulator.) It does not *start by itself* on power-on or Shift-Break:
-a ROMFS ROM is **data for the OS's ROM filing system, not a self-starting
-program**. A cartridge that auto-runs (as the Acornsoft Electron titles
-do) is a *language* ROM that happens to carry ROMFS data — a different
-kind of ROM from the plain data cartridge built here.
+The cartridge responds to ``*HELP`` with its title. To use it, switch to
+the ROM filing system with ``*ROM`` and then use the ordinary filing-system
+commands — ``*CAT`` to list the files, ``*EXEC !BOOT`` to start Snapper,
+and ``*RUN`` / ``*LOAD`` / ``CHAIN`` as usual. (This cartridge has been
+built and run from ROM in a 6502 emulator.)
