@@ -25,6 +25,15 @@ template:
   `&0D`/`&0E` handler with worked 6502. In the sibling Beebium repo at
   `docs/manuals/sidewrom.pdf`. It corroborates §1–§3 below field-for-field
   and is the source for the service-call interface in §2.10.
+- **New Advanced User Guide**, §17.5 (Acorn Computers) — the original
+  published reference for the `*ROM` filing system: the on-ROM data format,
+  the `&0D`/`&0E` service calls, and a complete worked `&0D`/`&0E` handler
+  in BBC BASIC. In-repo extract at `docs/dev/manuals/ROMFS-Advanced-Guide.pdf`.
+  The mkromfs handler (and hence ours) descends from this example. **Its
+  printed handler has a defect**: it masks the serial-ROM scan number with
+  `AND #&F`, so a ROM in sideways socket 0 re-claims itself past the `&2B`
+  end marker and loops `*CAT` forever. The genuine Acornsoft ROMs guard this
+  with `CMP #&10` / `BCS`; oaknut's created handler does too (see §2.10).
 - **mkromfs** — Dominic Beesley's Perl + beebasm ROM generator.
   <https://github.com/dominicbeesley/mkromfs> (`handlesvc.asm`,
   `mkromfs.pl`). The most precise field-by-field *writer* reference and
