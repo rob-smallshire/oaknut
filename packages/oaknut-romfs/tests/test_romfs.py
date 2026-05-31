@@ -101,7 +101,7 @@ def test_filename_may_contain_a_slash():
 
 def test_whole_corpus_parses_with_valid_crcs():
     roms = sorted(ROMFS_DIRPATH.glob("*.rom"))
-    assert len(roms) == 11
+    assert len(roms) == 12
     for filepath in roms:
         rom = ROMFS.from_bytes(filepath.read_bytes())  # strict: raises on any bad CRC
         assert rom.files, f"{filepath.name} parsed no files"

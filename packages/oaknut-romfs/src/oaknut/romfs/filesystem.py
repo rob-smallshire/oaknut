@@ -18,6 +18,7 @@ never corrupted.
 from __future__ import annotations
 
 from collections.abc import Iterable
+from dataclasses import replace
 
 from oaknut.discimage import BYTES_PER_SECTOR, SurfaceSpec
 from oaknut.file import Access, AcornMeta
@@ -173,9 +174,9 @@ class _ROMFSMount(AcornWildcards):
             raise ROMFSError(
                 f"ROMFS file names are 1–{MAX_NAME_LENGTH} characters: {new_path!r}"
             )
-        renamed = ROMFSFile(
-            new_path, file.load_address, file.exec_address, file.run_only, file.data
-        )
+        # Only the name changes; keep every other field (including the
+        # preserved flag bits) so an otherwise-untouched file stays byte-exact.
+        renamed = replace(file, name=new_path)
         self._commit(tuple(renamed if f is file else f for f in self._romfs.files))
 
     # -- StorageOrdered --
@@ -211,7 +212,7 @@ class _ROMFSMount(AcornWildcards):
         # file imported here does not become *RUN-only (which would otherwise
         # make it unloadable: *EXEC / CHAIN would fail with "Locked").
         run_only = bool(meta.access & Access.X)
-        updated = ROMFSFile(file.name, load, execa, run_only, file.data)
+        updated = replace(file, load_address=load, exec_address=execa, run_only=run_only)
         self._commit(tuple(updated if f is file else f for f in self._romfs.files))
 
     # -- StatusReporting --

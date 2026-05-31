@@ -61,6 +61,15 @@ class ROMFSFile:
     the MOS will not `*LOAD` / `*EXEC` / `CHAIN`. The OS calls it "locked",
     but it is read-protection, distinct from the disc filing systems'
     delete-lock (`oaknut.file.Access.L`) — it is `oaknut.file.Access.X`.
+
+    *flag_extra* preserves the block-flag bits this class does not otherwise
+    model — chiefly the ``&40`` "no data" bit some generators (mkromfs, the
+    New Advanced User Guide example) set on a zero-length block, which Acorn's
+    own ROMs leave clear. Captured on parse and re-emitted on serialise so a
+    round-trip is byte-exact; ``0`` for files this library creates, which
+    follow the Acornsoft convention. The ``last`` (``&80``) and ``*RUN``-only
+    (``&01``) bits are *not* held here — they are derived from the block
+    position and *run_only* respectively.
     """
 
     name: str
@@ -69,6 +78,7 @@ class ROMFSFile:
     run_only: bool
     data: bytes
     end_address: int = 0
+    flag_extra: int = 0
 
     @property
     def length(self) -> int:
@@ -178,6 +188,9 @@ def _assemble_files(buf: bytes, start: int) -> tuple[list[ROMFSFile], bool, int]
                 break  # a new file began before the previous ended — stop, incomplete
             name, load, execa = header.name, header.load_address, header.exec_address
             run_only, end_address = header.is_run_only, header.end_address
+            # Preserve any flag bits we do not derive (the &40 "no data" bit
+            # and the unused bits 1–5) so re-serialising is byte-exact.
+            flag_extra = header.flag & ~(FLAG_LAST | FLAG_RUN_ONLY)
             chunks = [data]
             open_file = True
         else:
@@ -185,7 +198,11 @@ def _assemble_files(buf: bytes, start: int) -> tuple[list[ROMFSFile], bool, int]
                 break  # continuation with no file in progress — stop, incomplete
             chunks.append(data)
         if header is not None and header.is_last:
-            files.append(ROMFSFile(name, load, execa, run_only, b"".join(chunks), end_address))
+            files.append(
+                ROMFSFile(
+                    name, load, execa, run_only, b"".join(chunks), end_address, flag_extra
+                )
+            )
             open_file = False
 
     return files, False, pos
@@ -212,7 +229,7 @@ def _chain_length(name: str, data_length: int) -> int:
 
 def _serialise_file(file: "ROMFSFile", end_address: int) -> bytes:
     """Encode one file's block chain (see ``docs/romfs-format-spec.md`` §2.4)."""
-    flag_base = FLAG_RUN_ONLY if file.run_only else 0
+    flag_base = file.flag_extra | (FLAG_RUN_ONLY if file.run_only else 0)
     out = bytearray()
     if file.length == 0:
         header = BlockHeader(
