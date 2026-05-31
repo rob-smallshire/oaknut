@@ -51,9 +51,54 @@ from oaknut.file.host_bridge import (
     export_with_metadata,
     import_with_metadata,
 )
+from oaknut.filesystem import NameGrammar
 
 if TYPE_CHECKING:
     from oaknut.file import BootOption
+
+#: What an ADFS directory entry's ten-byte name field can *hold and ADFS
+#: can read back*, not what its command parser would accept — oaknut
+#: manipulates discs that are legally representable, including the
+#: parser-illegal names byte-edited onto game discs. The hard limits come
+#: from the on-disc format (ADFS 1.30 disassembly): ten bytes maximum
+#: (over-length is a "Bad name" error, not a truncation); each name byte
+#: is seven-bit because bit 7 carries the file's access flags; and CR
+#: terminates the field. The ``.`` / ``:`` separators are representable
+#: but oaknut's dotted-path syntax cannot yet address them. Everything
+#: else — wildcards, directory specials, spaces, control bytes — is
+#: stored and read verbatim. See :class:`oaknut.filesystem.NameGrammar`.
+ADFS_NAME_GRAMMAR = NameGrammar(
+    max_length=10,
+    forbidden=".:\r",
+    forbidden_reason="oaknut's . and : path separators, and CR (the field terminator)",
+    seven_bit=True,
+    allow_control=True,
+    case="insensitive",
+    codec="ascii",
+    notes=(
+        "Each name byte is seven-bit: bit 7 holds the file's access flags "
+        "(R, W, L, D in bytes 0-3), so a name cannot carry an eighth bit.",
+        "The field otherwise holds any byte, so oaknut stores and reads the "
+        "parser-illegal names found on byte-edited discs — wildcards (* #), "
+        "the directory specials ($ & @ ^ %), spaces and quotes. Reading "
+        "never rejects a name.",
+    ),
+)
+
+
+def _validate_adfs_leaf(name: str) -> None:
+    """Validate a *new* leaf name against :data:`ADFS_NAME_GRAMMAR`.
+
+    Applied only when *creating* a name (write, mkdir, rename target) —
+    never on navigation or read, so a byte-edited disc whose names break
+    these rules still lists and reads. The grammar raises
+    :class:`ValueError`; re-raise it as an :class:`ADFSPathError`.
+    """
+    try:
+        ADFS_NAME_GRAMMAR.validate(name)
+    except ValueError as exc:
+        raise ADFSPathError(str(exc)) from exc
+
 
 _ADFS_SECTORS_PER_TRACK = 16
 _ADFS_BYTES_PER_SECTOR = 256
@@ -648,6 +693,7 @@ class ADFSPath(AcornPath):
         parts = self._path.split(".")
         if len(parts) < 2 or parts[0] != "$":
             raise ADFSPathError(f"Invalid path: {self._path!r}")
+        _validate_adfs_leaf(parts[-1])
 
         self._adfs._write_file(
             parts,
@@ -729,6 +775,7 @@ class ADFSPath(AcornPath):
         """
         if self._path == "$":
             raise ADFSPathError("Cannot mkdir root directory")
+        _validate_adfs_leaf(self._path.split(".")[-1])
 
         if parents:
             parent = self.parent
@@ -779,6 +826,7 @@ class ADFSPath(AcornPath):
             target_path = target
 
         target_parts = target_path.split(".")
+        _validate_adfs_leaf(target_parts[-1])
         self._adfs._rename(self._path.split("."), target_parts)
         return ADFSPath(self._adfs, target_path)
 
