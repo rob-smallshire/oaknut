@@ -252,13 +252,21 @@ class AcornDFSCatalogue(Catalogue):
 
     def validate_filename(self, filename: str) -> None:
         """
-        Validate Acorn DFS filename constraints.
+        Validate that *filename* is storable in a DFS catalogue entry.
 
-        Per "Guide to Disc Formats.pdf", forbidden characters are:
-        - '#', '*', ':', '.', '!'
-        - Exception: '!' is allowed as the first character (e.g., !BOOT)
-        - Top-bit set characters (>127)
-        - Control characters (<32)
+        The check is deliberately liberal: it forbids only what the
+        seven-byte name field cannot represent, not what the command
+        line finds awkward to type. So ``#`` and ``*`` (wildcards) and a
+        non-leading ``!`` are *allowed* — real discs store them (Guardian
+        ships ``GUARD#1`` / ``GUARD#2``), and selecting them by wildcard
+        versus literal is a concern for the matching layer, not storage.
+
+        Forbidden:
+        - ``:`` and ``.`` — drive and directory separators; a name
+          carrying one cannot be addressed through the dotted-path
+          syntax yet (escaping is a separate, later concern).
+        - Top-bit-set characters (>127) and control characters (<32) —
+          outside the seven-bit name field.
         """
         if not filename:
             raise ValueError("Filename cannot be empty")
@@ -268,19 +276,12 @@ class AcornDFSCatalogue(Catalogue):
                 f"Filename too long: '{filename}' (max {self.MAX_FILENAME_LENGTH} chars)"
             )
 
-        # Check for forbidden characters
-        forbidden = set("#*:.")
-        for i, char in enumerate(filename):
-            # Check for forbidden characters
+        # Only the path separators are unstorable through the path
+        # syntax; wildcard metacharacters (# *) and ! are valid name bytes.
+        forbidden = set(":.")
+        for char in filename:
             if char in forbidden:
                 raise ValueError(f"Forbidden character '{char}' in filename '{filename}'")
-
-            # '!' is only allowed as the first character
-            if char == "!" and i != 0:
-                raise ValueError(
-                    f"'!' is only allowed as the first character, "
-                    f"not at position {i} in '{filename}'"
-                )
 
             # Check for top-bit set characters
             code_point = ord(char)

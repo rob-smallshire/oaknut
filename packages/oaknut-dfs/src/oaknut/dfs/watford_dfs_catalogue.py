@@ -838,13 +838,13 @@ class WatfordDFSCatalogue(Catalogue):
 
     def validate_filename(self, filename: str) -> None:
         """
-        Validate filename.
+        Validate that *filename* is storable in a Watford catalogue entry.
 
-        Args:
-            filename: Filename to validate
-
-        Raises:
-            ValueError: If filename invalid
+        Liberal by the same rule as Acorn DFS (see
+        :meth:`AcornDFSCatalogue.validate_filename`): wildcard
+        metacharacters (``#`` ``*``) and a non-leading ``!`` are valid
+        name bytes the format stores; only the ``:`` / ``.`` separators
+        and bytes outside the seven-bit name field are rejected.
         """
         if not filename:
             raise ValueError("Filename cannot be empty")
@@ -854,19 +854,12 @@ class WatfordDFSCatalogue(Catalogue):
                 f"Filename too long: '{filename}' (max {self.MAX_FILENAME_LENGTH} chars)"
             )
 
-        # Check for forbidden characters
-        forbidden = set("#*:.")
-        for i, char in enumerate(filename):
-            # Check for forbidden characters
+        # Only the path separators are unstorable through the path
+        # syntax; wildcard metacharacters (# *) and ! are valid name bytes.
+        forbidden = set(":.")
+        for char in filename:
             if char in forbidden:
                 raise ValueError(f"Forbidden character '{char}' in filename '{filename}'")
-
-            # '!' is only allowed as the first character
-            if char == "!" and i != 0:
-                raise ValueError(
-                    f"'!' is only allowed as the first character, "
-                    f"not at position {i} in '{filename}'"
-                )
 
             # Check for top-bit set characters
             code_point = ord(char)

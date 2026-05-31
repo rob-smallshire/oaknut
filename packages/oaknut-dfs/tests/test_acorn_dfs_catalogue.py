@@ -653,8 +653,8 @@ class TestAcornDFSCatalogueValidateFilename:
         with pytest.raises(ValueError, match="Filename too long.*max 7 chars"):
             catalogue.validate_filename("TOOLONGNAME")
 
-    def test_validate_filename_forbids_hash(self):
-        """Test validate_filename rejects '#' character."""
+    def test_validate_filename_allows_hash(self):
+        """'#' is a wildcard at the command line but a storable name byte."""
         buffer = bytearray(102400)
         buffer[0:8] = b"DISK    "
         buffer[256:260] = b"    "
@@ -674,11 +674,11 @@ class TestAcornDFSCatalogueValidateFilename:
         surface = disc.surface(0)
         catalogue = AcornDFSCatalogue(surface)
 
-        with pytest.raises(ValueError, match="Forbidden character '#'"):
-            catalogue.validate_filename("TEST#1")
+        # Should not raise — real discs ship GUARD#1 / GUARD#2.
+        catalogue.validate_filename("TEST#1")
 
-    def test_validate_filename_forbids_asterisk(self):
-        """Test validate_filename rejects '*' character."""
+    def test_validate_filename_allows_asterisk(self):
+        """'*' is a wildcard at the command line but a storable name byte."""
         buffer = bytearray(102400)
         buffer[0:8] = b"DISK    "
         buffer[256:260] = b"    "
@@ -698,8 +698,8 @@ class TestAcornDFSCatalogueValidateFilename:
         surface = disc.surface(0)
         catalogue = AcornDFSCatalogue(surface)
 
-        with pytest.raises(ValueError, match="Forbidden character '\\*'"):
-            catalogue.validate_filename("TEST*1")
+        # Should not raise.
+        catalogue.validate_filename("TEST*1")
 
     def test_validate_filename_forbids_colon(self):
         """Test validate_filename rejects ':' character."""
@@ -773,8 +773,8 @@ class TestAcornDFSCatalogueValidateFilename:
         # Should not raise
         catalogue.validate_filename("!BOOT")
 
-    def test_validate_filename_forbids_bang_not_at_start(self):
-        """Test validate_filename rejects '!' not at first position."""
+    def test_validate_filename_allows_bang_not_at_start(self):
+        """'!' is storable anywhere in a name, not only as the leading char."""
         buffer = bytearray(102400)
         buffer[0:8] = b"DISK    "
         buffer[256:260] = b"    "
@@ -794,8 +794,8 @@ class TestAcornDFSCatalogueValidateFilename:
         surface = disc.surface(0)
         catalogue = AcornDFSCatalogue(surface)
 
-        with pytest.raises(ValueError, match="'!' is only allowed as the first character"):
-            catalogue.validate_filename("TEST!")
+        # Should not raise.
+        catalogue.validate_filename("TEST!")
 
     def test_validate_filename_forbids_top_bit_set(self):
         """Test validate_filename rejects characters with top bit set."""
