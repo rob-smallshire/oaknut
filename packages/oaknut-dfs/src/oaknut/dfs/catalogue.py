@@ -13,16 +13,23 @@ if TYPE_CHECKING:
 
 
 #: The shared name-storage grammar for the flat-catalogue DFS filesystems
-#: (Acorn DFS and Watford DFS both use a seven-byte, seven-bit name field).
-#: Liberal: the wildcard metacharacters ``*`` and ``#`` and a non-leading
-#: ``!`` are valid name bytes — real discs store them (Guardian's
-#: ``GUARD#1`` / ``GUARD#2``) — and only the path separators and bytes
-#: outside the field are refused. See :class:`oaknut.filesystem.NameGrammar`.
+#: (Acorn DFS and Watford DFS both use a seven-byte name field). Liberal:
+#: gated by what the field can hold and DFS can read back, not by what its
+#: command parser would type. The hard limits come from the DFS 2.24 ROM:
+#: seven characters, and a seven-bit field — ``prtnam`` masks bit 7 of
+#: each name byte on read (``AND #&7F``), so an eighth bit cannot survive.
+#: The field is space-padded, so the wildcard metacharacters ``*`` / ``#``,
+#: a non-leading ``!``, and control bytes are all valid name bytes the ROM
+#: rejects only at the ``*`` prompt — real discs store them (Guardian's
+#: ``GUARD#1`` / ``GUARD#2``). Only the ``.`` / ``:`` separators (oaknut's
+#: path syntax) and the eighth bit are refused. See
+#: :class:`oaknut.filesystem.NameGrammar`.
 DFS_NAME_GRAMMAR = NameGrammar(
     max_length=7,
     forbidden=":.",
     forbidden_reason="the drive (:) and directory (.) separators",
     seven_bit=True,
+    allow_control=True,
     case="fold-upper",
     codec="acorn",
     notes=(

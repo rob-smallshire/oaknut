@@ -821,8 +821,9 @@ class TestAcornDFSCatalogueValidateFilename:
         with pytest.raises(ValueError, match="has top bit set"):
             catalogue.validate_filename("TEST\x80")
 
-    def test_validate_filename_forbids_control_chars(self):
-        """Test validate_filename rejects control characters."""
+    def test_validate_filename_allows_control_chars(self):
+        """A control byte is held in the space-padded field and read back,
+        so it is storable — the DFS ROM rejects it only at the * prompt."""
         buffer = bytearray(102400)
         buffer[0:8] = b"DISK    "
         buffer[256:260] = b"    "
@@ -842,8 +843,8 @@ class TestAcornDFSCatalogueValidateFilename:
         surface = disc.surface(0)
         catalogue = AcornDFSCatalogue(surface)
 
-        with pytest.raises(ValueError, match="Control character"):
-            catalogue.validate_filename("TEST\x01")
+        # Should not raise.
+        catalogue.validate_filename("TEST\x01")
 
 
 class TestAcornDFSCatalogueValidateDirectory:

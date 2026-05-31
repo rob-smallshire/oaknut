@@ -71,13 +71,22 @@ class TestStorageLayerStillBounded:
             dfs.path("$.TOOLONGNAME").write_bytes(b"x")
 
     @pytest.mark.parametrize("disc_format", FORMATS)
-    def test_control_character_rejected(self, disc_format):
-        dfs = DFS.create(disc_format)
-        with pytest.raises(ValueError):
-            dfs.path("$.A\x01B").write_bytes(b"x")
-
-    @pytest.mark.parametrize("disc_format", FORMATS)
     def test_top_bit_set_rejected(self, disc_format):
+        # The DFS ROM masks bit 7 of each name byte on read, so an eighth
+        # bit cannot round-trip — a genuine hard limit.
         dfs = DFS.create(disc_format)
         with pytest.raises(ValueError):
             dfs.path("$.A\xffB").write_bytes(b"x")
+
+
+class TestControlCharactersAreStorable:
+    """A control byte is held in the space-padded field and read back, so
+    it is storable even though the command parser refuses it."""
+
+    @pytest.mark.parametrize("disc_format", FORMATS)
+    def test_write_then_read_back(self, disc_format):
+        dfs = DFS.create(disc_format)
+        name = "A\x01B"
+        dfs.path(f"$.{name}").write_bytes(b"ctrl")
+        assert dfs.path(f"$.{name}").read_bytes() == b"ctrl"
+        assert name in {entry.filename for entry in dfs.files}
