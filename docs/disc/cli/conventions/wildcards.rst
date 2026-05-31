@@ -73,6 +73,36 @@ command:
    :section: find
 
 
+Addressing a literal ``*`` or ``#``
+-----------------------------------
+
+Because ``*`` and ``#`` are pattern characters, a file whose *name*
+contains one cannot be singled out by typing that name — the command
+reads it as a glob. As a pattern, ``guard#1`` matches ``guard#1`` and
+``guard41`` alike (``#`` is "any one character"), so a plain ``disc cp
+'disc.ssd:$.guard#1' …`` copies both.
+
+Pass ``--no-wildcards`` to switch that command to literal matching, so
+the name addresses exactly the file that bears the character::
+
+   disc cp --no-wildcards 'disc.ssd:$.guard#1' 'out.ssd:$.guard#1'
+
+The flag is accepted by every command that expands a pattern against
+existing entries — ``disc cp``, ``disc rm``, ``disc chmod``,
+``disc lock``, ``disc unlock``, ``disc set-load``, and
+``disc set-exec`` — and the default is ``--wildcards`` (patterns on).
+Path *structure* is still parsed under ``--no-wildcards``: the ``.``
+between components remains a separator, so only the wildcard
+metacharacters are taken literally.
+
+Commands that already address a single path literally need no flag.
+``disc get`` and ``disc cat`` navigate their ``INNER_PATH`` verbatim,
+so ``disc get 'disc.ssd:$.guard#1' .`` extracts that one file with no
+expansion. A worked end-to-end example — creating ``guard#1`` /
+``guard#2`` and retrieving one of them — is in the
+:doc:`cookbook </cli/cookbook>`.
+
+
 Filename length matters
 -----------------------
 

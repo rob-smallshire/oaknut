@@ -76,6 +76,63 @@ filesystems, and where information is lost in either direction) live
 in :doc:`/api/patterns/metadata`.
 
 
+Files whose names contain wildcard characters
+---------------------------------------------
+
+A filename can contain ``*`` or ``#`` — the very characters that are
+wildcards at the command line. The game Guardian, for instance, ships
+``guard#1`` and ``guard#2`` on its disc. ``disc`` stores and addresses
+these names faithfully.
+
+**1. Create the wildcard-named files.**
+
+Writing them is unremarkable — quote the path so the shell leaves the
+``#`` and ``$`` alone, and ``disc put`` stores the name verbatim:
+
+.. cli-example:: wildcard_literal_names
+   :section: create
+
+The disc already held ``guard41`` and ``guard42``; now it carries
+``guard#1`` and ``guard#2`` too. (DFS folds names to upper case on
+write, so ``disc ls`` shows ``GUARD#1``; matching is
+case-insensitive.)
+
+**2. Copy the whole disc, wildcard names and all.**
+
+A bulk copy treats the ``#`` files like any other — the wildcard in
+``$.*`` is on the *source* side and matches every entry, so the lot
+lands on a fresh blank SSD:
+
+.. cli-example:: wildcard_literal_names
+   :section: copy
+
+**3. The trap: retrieving one of them by name.**
+
+Now the ``#`` bites. As a pattern, ``guard#1`` means "``guard``, any
+one character, ``1``" — which matches both ``GUARD#1`` *and*
+``GUARD41``, so a plain copy quietly picks up the neighbour:
+
+.. cli-example:: wildcard_literal_names
+   :section: decoy
+
+**4. The fix: --no-wildcards.**
+
+``--no-wildcards`` turns off pattern interpretation for that one
+command, so ``guard#1`` addresses exactly the file with the ``#`` in
+it and the ``guard41`` decoy is left behind:
+
+.. cli-example:: wildcard_literal_names
+   :section: literal
+
+The same flag is available on every selecting command — ``cp``,
+``rm``, ``chmod``, ``lock``, ``unlock``, ``set-load``, ``set-exec`` —
+whenever a literal ``*`` or ``#`` in a name would otherwise be read as
+a wildcard. Extracting a single file to the host with ``disc get``
+needs no flag at all: it addresses its path literally, never as a
+pattern. The full wildcard grammar and the ``--no-wildcards`` opt-out
+are covered in :doc:`conventions/wildcards`.
+
+
 Browse a ZIP archive
 --------------------
 
