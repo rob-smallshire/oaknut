@@ -92,6 +92,25 @@ class TestDescribeFilesystem:
         # The wildcard bytes are storable; this is where users learn it.
         assert "* and # are stored literally" in result.output
 
+    def test_reports_afs_filename_rules(self, runner: CliRunner):
+        result = runner.invoke(cli, ["describe-filesystem", "afs"])
+        assert result.exit_code == 0
+        assert "Filename rules:" in result.output
+        assert "up to 10 characters" in result.output
+        # AFS forbids the separators and the space pad byte.
+        assert "Forbidden: : . space" in result.output
+        assert "matched case-insensitively" in result.output
+
+    def test_reports_romfs_filename_rules(self, runner: CliRunner):
+        result = runner.invoke(cli, ["describe-filesystem", "acorn-romfs"])
+        assert result.exit_code == 0
+        assert "Filename rules:" in result.output
+        assert "up to 10 characters" in result.output
+        # ROMFS is flat and case-sensitive, with no forbidden characters.
+        assert "Forbidden: none" in result.output
+        assert "case-sensitive" in result.output
+        assert "eight-bit" in result.output
+
     def test_shows_geometry_presets(self, runner: CliRunner):
         # The geometry grammar is the discoverable menu for --geometry.
         result = runner.invoke(cli, ["describe-filesystem", "adfs"])

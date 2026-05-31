@@ -83,7 +83,7 @@ class TestParse:
 
 class TestValidation:
     def test_too_long_component(self) -> None:
-        with pytest.raises(AFSPathError, match="exceeds 10"):
+        with pytest.raises(AFSPathError, match="too long"):
             AFSPath.root() / ("X" * 11)
 
     def test_dotted_string_is_split_into_components(self) -> None:
@@ -99,11 +99,11 @@ class TestValidation:
         assert (AFSPath.root() / "").parts == AFSPath.root().parts
 
     def test_component_with_space(self) -> None:
-        with pytest.raises(AFSPathError, match="forbidden character"):
+        with pytest.raises(AFSPathError, match="Forbidden character"):
             AFSPath.root() / "has space"
 
     def test_component_with_colon(self) -> None:
-        with pytest.raises(AFSPathError, match="forbidden character"):
+        with pytest.raises(AFSPathError, match="Forbidden character"):
             AFSPath.root() / "has:colon"
 
     def test_exactly_10_chars_accepted(self) -> None:

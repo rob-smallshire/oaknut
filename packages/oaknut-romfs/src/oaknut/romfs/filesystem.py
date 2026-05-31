@@ -30,6 +30,7 @@ from oaknut.filesystem import (
     GeometryGrammar,
     Identification,
     ImageReader,
+    NameGrammar,
 )
 from oaknut.filesystem.exceptions import ReadOnlyFilesystemError
 from oaknut.filesystem.wildcards import ACORN_WILDCARDS, AcornWildcards
@@ -39,6 +40,38 @@ from oaknut.romfs.romfs import MAX_TITLE_LENGTH, ROMFS, ROMFSFile, build_rom_ima
 
 #: ROMFS images conventionally use this extension.
 _EXTENSIONS = frozenset({".rom"})
+
+#: ROMFS stores CFS-format names: up to ten bytes, GSREAD-parsed, so
+#: eight-bit and case-sensitive (the cassette filing system compares
+#: names byte-for-byte). The OS 1.20 ROM rejects an eleventh character
+#: with a "Bad String" error rather than truncating, so over-length is an
+#: error here too. ROMFS is flat — it has no directories — so ``.`` and
+#: ``/`` are ordinary name characters, not separators, and nothing but
+#: length and codec bounds the name. See
+#: :class:`oaknut.filesystem.NameGrammar`.
+ROMFS_NAME_GRAMMAR = NameGrammar(
+    max_length=MAX_NAME_LENGTH,
+    forbidden="",
+    seven_bit=False,
+    allow_control=True,
+    case="sensitive",
+    codec="latin-1",
+    notes=(
+        "Flat namespace: . and / are ordinary name characters, not separators.",
+    ),
+)
+
+
+def _validate_romfs_name(name: str) -> None:
+    """Validate *name* against :data:`ROMFS_NAME_GRAMMAR`.
+
+    The grammar raises :class:`ValueError`; re-raise it as a
+    :class:`ROMFSError` so the filesystem's error type is unchanged.
+    """
+    try:
+        ROMFS_NAME_GRAMMAR.validate(name)
+    except ValueError as exc:
+        raise ROMFSError(str(exc)) from exc
 
 
 def _linear_geometry(size: int) -> Geometry:
@@ -144,8 +177,7 @@ class _ROMFSMount(AcornWildcards):
         return file.data
 
     def write_bytes(self, path: str, data: bytes) -> None:
-        if not 1 <= len(path) <= MAX_NAME_LENGTH:
-            raise ROMFSError(f"ROMFS file names are 1–{MAX_NAME_LENGTH} characters: {path!r}")
+        _validate_romfs_name(path)
         existing = self._find(path)
         if existing is not None:
             replacement = ROMFSFile(
@@ -170,10 +202,7 @@ class _ROMFSMount(AcornWildcards):
         file = self._find(old_path)
         if file is None:
             raise ROMFSError(f"no file named {old_path!r}")
-        if not 1 <= len(new_path) <= MAX_NAME_LENGTH:
-            raise ROMFSError(
-                f"ROMFS file names are 1–{MAX_NAME_LENGTH} characters: {new_path!r}"
-            )
+        _validate_romfs_name(new_path)
         # Only the name changes; keep every other field (including the
         # preserved flag bits) so an otherwise-untouched file stays byte-exact.
         renamed = replace(file, name=new_path)
@@ -254,6 +283,7 @@ class AcornROMFS(Filesystem):
     """
 
     wildcard_syntax = ACORN_WILDCARDS
+    name_grammar = ROMFS_NAME_GRAMMAR
     extensions = _EXTENSIONS
     #: ROMFS is the default creator for `.rom` images.
     creates = _EXTENSIONS

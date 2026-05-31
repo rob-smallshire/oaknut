@@ -34,6 +34,7 @@ from oaknut.file.host_bridge import (
     DEFAULT_EXPORT_META_FORMAT,
     DEFAULT_IMPORT_META_FORMATS,
 )
+from oaknut.filesystem import NameGrammar
 
 if TYPE_CHECKING:
     from os import PathLike
@@ -47,6 +48,23 @@ if TYPE_CHECKING:
 
 ROOT = "$"
 SEPARATOR = "."
+
+#: The storable-name grammar for an AFS leaf, per ``Uade02`` and
+#: Beebmaster's PDF: up to ten ASCII characters, with the ``.`` / ``:``
+#: separators and the space pad byte forbidden. Liberal otherwise — the
+#: wildcard metacharacters ``*`` and ``#`` are valid name bytes. The
+#: single source of truth for :func:`_validate_part` and the grammar
+#: ``disc describe-filesystem`` reports. See
+#: :class:`oaknut.filesystem.NameGrammar`.
+AFS_NAME_GRAMMAR = NameGrammar(
+    max_length=MAX_NAME_LENGTH,
+    forbidden=":. ",
+    forbidden_reason="the directory (.) and disc (:) separators and the space pad byte",
+    seven_bit=True,
+    case="insensitive",
+    codec="ascii",
+    notes=("The wildcard characters * and # are valid name bytes.",),
+)
 
 
 @dataclass(frozen=True)
@@ -72,24 +90,21 @@ class AFSStat:
 
 
 def _validate_part(part: str) -> None:
-    """Validate a single path component.
+    """Validate a single path component against :data:`AFS_NAME_GRAMMAR`.
 
-    The rules come from ``Uade02`` and Beebmaster's PDF:
-
-    - non-empty
-    - ≤ 10 characters
-    - must not contain the separator ``.`` or the disc-introducer
-      ``:`` or a space (space is used as a pad character on disc)
+    The root marker passes unconditionally; otherwise the shared grammar
+    decides (length, the ``.`` / ``:`` / space exclusions, the seven-bit
+    ASCII bound). The grammar raises :class:`ValueError`; re-raise it as
+    an :class:`AFSPathError` so the path layer's contract is unchanged.
     """
     if not part:
         raise AFSPathError("path component must not be empty")
     if part == ROOT:
         return  # the root marker is always valid
-    if len(part) > MAX_NAME_LENGTH:
-        raise AFSPathError(f"path component {part!r} exceeds {MAX_NAME_LENGTH} characters")
-    for ch in part:
-        if ch in (SEPARATOR, ":", " "):
-            raise AFSPathError(f"path component {part!r} contains forbidden character {ch!r}")
+    try:
+        AFS_NAME_GRAMMAR.validate(part)
+    except ValueError as exc:
+        raise AFSPathError(str(exc)) from exc
 
 
 class AFSPath(AcornPath):

@@ -435,7 +435,9 @@ class NameGrammar:
     seven_bit: bool = True
     #: Permit control characters (< 0x20). Almost never true.
     allow_control: bool = False
-    #: ``"fold-upper"`` (names are upper-cased) or ``"preserve"``.
+    #: How case is handled: ``"fold-upper"`` (stored upper-cased),
+    #: ``"insensitive"`` (stored as written, matched case-insensitively),
+    #: or ``"sensitive"`` (case distinguishes names).
     case: str = "fold-upper"
     #: Text codec a name must round-trip through, or ``None``. Looked up
     #: by name at validation time, so this module need not import it.
@@ -474,12 +476,16 @@ class NameGrammar:
         """A multi-line description of the rules, for ``describe-filesystem``."""
         lines = [f"Length: up to {self.max_length} characters."]
         if self.forbidden:
-            shown = " ".join(self.forbidden)
+            shown = " ".join("space" if char == " " else char for char in self.forbidden)
             reason = f" ({self.forbidden_reason})" if self.forbidden_reason else ""
             lines.append(f"Forbidden: {shown}{reason}.")
         else:
             lines.append("Forbidden: none beyond the byte-range limits below.")
-        case = "folded to upper case" if self.case == "fold-upper" else "case-preserving"
+        case = {
+            "fold-upper": "folded to upper case",
+            "insensitive": "preserved as written, matched case-insensitively",
+            "sensitive": "case-sensitive",
+        }.get(self.case, "case-preserving")
         lines.append(f"Case: {case}.")
         byte_range = "seven-bit (0x20–0x7E)" if self.seven_bit else "eight-bit"
         control = "" if self.allow_control else ", no control characters"

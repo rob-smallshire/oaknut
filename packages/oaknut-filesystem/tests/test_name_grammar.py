@@ -71,3 +71,24 @@ class TestSummary:
     def test_no_forbidden_reads_cleanly(self):
         text = NameGrammar(max_length=10).summary()
         assert "Forbidden: none" in text
+
+    def test_space_renders_as_a_word(self):
+        # A forbidden space would vanish into the join; show it as a word.
+        text = NameGrammar(max_length=10, forbidden=":. ").summary()
+        assert "Forbidden: : . space" in text
+
+    @pytest.mark.parametrize(
+        "case,expected",
+        [
+            ("fold-upper", "folded to upper case"),
+            ("insensitive", "preserved as written, matched case-insensitively"),
+            ("sensitive", "case-sensitive"),
+        ],
+    )
+    def test_case_handling_is_described(self, case, expected):
+        text = NameGrammar(max_length=8, case=case).summary()
+        assert expected in text
+
+    def test_eight_bit_grammar_reads_as_eight_bit(self):
+        text = NameGrammar(max_length=10, seven_bit=False, allow_control=True).summary()
+        assert "Bytes: eight-bit." in text
