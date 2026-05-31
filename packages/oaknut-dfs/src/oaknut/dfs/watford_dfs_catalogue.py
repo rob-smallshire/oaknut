@@ -3,7 +3,13 @@
 from collections.abc import Sequence
 from typing import Optional
 
-from oaknut.dfs.catalogue import Catalogue, DiscInfo, FileEntry, ParsedFilename
+from oaknut.dfs.catalogue import (
+    DFS_NAME_GRAMMAR,
+    Catalogue,
+    DiscInfo,
+    FileEntry,
+    ParsedFilename,
+)
 from oaknut.dfs.exceptions import CatalogFullError, DFSValidationError
 from oaknut.discimage.surface import Surface
 
@@ -837,48 +843,14 @@ class WatfordDFSCatalogue(Catalogue):
         return ParsedFilename(directory=directory, filename=filename)
 
     def validate_filename(self, filename: str) -> None:
+        """Validate that *filename* is storable in a Watford catalogue entry.
+
+        Delegates to the shared :data:`DFS_NAME_GRAMMAR` — Watford and
+        Acorn DFS use the same seven-byte, seven-bit name field, so they
+        share one liberal rule (see
+        :meth:`AcornDFSCatalogue.validate_filename`).
         """
-        Validate that *filename* is storable in a Watford catalogue entry.
-
-        Liberal by the same rule as Acorn DFS (see
-        :meth:`AcornDFSCatalogue.validate_filename`): wildcard
-        metacharacters (``#`` ``*``) and a non-leading ``!`` are valid
-        name bytes the format stores; only the ``:`` / ``.`` separators
-        and bytes outside the seven-bit name field are rejected.
-        """
-        if not filename:
-            raise ValueError("Filename cannot be empty")
-
-        if len(filename) > self.MAX_FILENAME_LENGTH:
-            raise ValueError(
-                f"Filename too long: '{filename}' (max {self.MAX_FILENAME_LENGTH} chars)"
-            )
-
-        # Only the path separators are unstorable through the path
-        # syntax; wildcard metacharacters (# *) and ! are valid name bytes.
-        forbidden = set(":.")
-        for char in filename:
-            if char in forbidden:
-                raise ValueError(f"Forbidden character '{char}' in filename '{filename}'")
-
-            # Check for top-bit set characters
-            code_point = ord(char)
-            if code_point > 127:
-                raise ValueError(
-                    f"Character '{char}' (code {code_point}) has top bit set in '{filename}'"
-                )
-
-            # Check for control characters
-            if code_point < 32:
-                raise ValueError(
-                    f"Control character (code {code_point}) not allowed in '{filename}'"
-                )
-
-        # Validate Acorn encoding compatibility
-        try:
-            filename.encode("acorn")
-        except (UnicodeEncodeError, LookupError) as e:
-            raise ValueError(f"Filename contains invalid characters: {e}")
+        DFS_NAME_GRAMMAR.validate(filename)
 
     def validate_directory(self, directory: str) -> None:
         """

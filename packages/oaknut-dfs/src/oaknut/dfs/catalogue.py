@@ -6,9 +6,32 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Optional
 
 from oaknut.discimage.surface import Surface
+from oaknut.filesystem import NameGrammar
 
 if TYPE_CHECKING:
     from oaknut.dfs.exceptions import DFSValidationError
+
+
+#: The shared name-storage grammar for the flat-catalogue DFS filesystems
+#: (Acorn DFS and Watford DFS both use a seven-byte, seven-bit name field).
+#: Liberal: the wildcard metacharacters ``*`` and ``#`` and a non-leading
+#: ``!`` are valid name bytes — real discs store them (Guardian's
+#: ``GUARD#1`` / ``GUARD#2``) — and only the path separators and bytes
+#: outside the field are refused. See :class:`oaknut.filesystem.NameGrammar`.
+DFS_NAME_GRAMMAR = NameGrammar(
+    max_length=7,
+    forbidden=":.",
+    forbidden_reason="the drive (:) and directory (.) separators",
+    seven_bit=True,
+    case="fold-upper",
+    codec="acorn",
+    notes=(
+        "The wildcard characters * and # are stored literally; address "
+        "such a file with --no-wildcards rather than by pattern.",
+        "A separator (. or :) in a name cannot yet be expressed through "
+        "the dotted-path syntax.",
+    ),
+)
 
 
 @dataclass(frozen=True)

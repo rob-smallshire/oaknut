@@ -79,6 +79,19 @@ class TestDescribeFilesystem:
         # Acorn uses * and #, not the Unix ?.
         assert "# (exactly one character)" in result.output
 
+    def test_reports_filename_rules(self, runner: CliRunner):
+        # describe-filesystem is the discovery point for what a filesystem
+        # will store — length, forbidden characters, byte range, and the
+        # liberal handling of wildcard metacharacters.
+        result = runner.invoke(cli, ["describe-filesystem", "acorn-dfs"])
+        assert result.exit_code == 0
+        assert "Filename rules:" in result.output
+        assert "up to 7 characters" in result.output
+        assert "Forbidden: : ." in result.output
+        assert "seven-bit" in result.output
+        # The wildcard bytes are storable; this is where users learn it.
+        assert "* and # are stored literally" in result.output
+
     def test_shows_geometry_presets(self, runner: CliRunner):
         # The geometry grammar is the discoverable menu for --geometry.
         result = runner.invoke(cli, ["describe-filesystem", "adfs"])

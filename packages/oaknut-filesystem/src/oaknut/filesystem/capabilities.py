@@ -399,3 +399,90 @@ class WildcardMatching(Protocol):
     def matches(self, pattern: str, name: str) -> bool:
         """Whether *name* matches the wildcard *pattern* under this syntax."""
         ...
+
+
+@dataclass(frozen=True)
+class NameGrammar:
+    """The rules a leaf filename must satisfy to be *stored* on a filesystem.
+
+    Both enforcing and self-describing: :meth:`validate` raises on a name
+    the on-disc name field cannot hold, and :meth:`summary` renders the
+    same rules for ``disc describe-filesystem``. A filesystem advertises
+    its grammar through :attr:`Filesystem.name_grammar`.
+
+    Deliberately *liberal*: it constrains only what the format genuinely
+    cannot represent, never what the command line finds awkward. Wildcard
+    metacharacters are therefore valid name bytes unless a filesystem
+    truly cannot store them — selecting such a name literally versus as a
+    pattern is the matching layer's concern (see :class:`WildcardMatching`
+    and the ``--no-wildcards`` option), not storage's. Reading is always
+    liberal: a name already on the medium is never refused.
+
+    The fields cover the Acorn filing systems' single fixed-width name
+    field. A filesystem whose names are not one bounded field (DOS 8.3,
+    say) supplies its own object with the same ``validate``/``summary``
+    surface rather than reusing this.
+    """
+
+    #: Maximum number of characters in a name.
+    max_length: int
+    #: Characters that may not appear anywhere in a name.
+    forbidden: str = ""
+    #: Human gloss naming *why* :attr:`forbidden` are excluded, e.g.
+    #: ``"the drive (:) and directory (.) separators"``.
+    forbidden_reason: str = ""
+    #: Reject bytes with the top bit set (the seven-bit name field).
+    seven_bit: bool = True
+    #: Permit control characters (< 0x20). Almost never true.
+    allow_control: bool = False
+    #: ``"fold-upper"`` (names are upper-cased) or ``"preserve"``.
+    case: str = "fold-upper"
+    #: Text codec a name must round-trip through, or ``None``. Looked up
+    #: by name at validation time, so this module need not import it.
+    codec: str | None = None
+    #: Extra human-facing lines for :meth:`summary` — anything notable a
+    #: reader should know (which metacharacters are storable, and so on).
+    notes: tuple[str, ...] = ()
+
+    def validate(self, name: str) -> None:
+        """Raise :class:`ValueError` if *name* cannot be stored.
+
+        Liberal: enforces only length, the :attr:`forbidden` set, the
+        seven-bit / control-character bounds, and codec round-tripping.
+        """
+        if not name:
+            raise ValueError("Filename cannot be empty")
+        if len(name) > self.max_length:
+            raise ValueError(f"Filename too long: '{name}' (max {self.max_length} chars)")
+        for char in name:
+            if char in self.forbidden:
+                raise ValueError(f"Forbidden character '{char}' in filename '{name}'")
+            code_point = ord(char)
+            if self.seven_bit and code_point > 127:
+                raise ValueError(
+                    f"Character '{char}' (code {code_point}) has top bit set in '{name}'"
+                )
+            if not self.allow_control and code_point < 32:
+                raise ValueError(f"Control character (code {code_point}) not allowed in '{name}'")
+        if self.codec is not None:
+            try:
+                name.encode(self.codec)
+            except (UnicodeEncodeError, LookupError) as exc:
+                raise ValueError(f"Filename contains invalid characters: {exc}")
+
+    def summary(self) -> str:
+        """A multi-line description of the rules, for ``describe-filesystem``."""
+        lines = [f"Length: up to {self.max_length} characters."]
+        if self.forbidden:
+            shown = " ".join(self.forbidden)
+            reason = f" ({self.forbidden_reason})" if self.forbidden_reason else ""
+            lines.append(f"Forbidden: {shown}{reason}.")
+        else:
+            lines.append("Forbidden: none beyond the byte-range limits below.")
+        case = "folded to upper case" if self.case == "fold-upper" else "case-preserving"
+        lines.append(f"Case: {case}.")
+        byte_range = "seven-bit (0x20–0x7E)" if self.seven_bit else "eight-bit"
+        control = "" if self.allow_control else ", no control characters"
+        lines.append(f"Bytes: {byte_range}{control}.")
+        lines.extend(self.notes)
+        return "\n".join(lines)

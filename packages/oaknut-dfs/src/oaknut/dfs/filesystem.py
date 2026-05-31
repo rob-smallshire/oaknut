@@ -18,6 +18,7 @@ import re
 from collections.abc import Iterable
 
 from oaknut.dfs.acorn_dfs_catalogue import AcornDFSCatalogue
+from oaknut.dfs.catalogue import DFS_NAME_GRAMMAR
 from oaknut.dfs.dfs import DFS
 from oaknut.dfs.watford_dfs_catalogue import WatfordDFSCatalogue
 from oaknut.discimage import BYTES_PER_SECTOR, DiscFormat, DiscImage, SurfaceSpec
@@ -243,6 +244,7 @@ class _BaseDFS(Filesystem):
     """Shared behaviour for the flat-catalogue DFS-family filesystems."""
 
     wildcard_syntax = ACORN_WILDCARDS
+    name_grammar = DFS_NAME_GRAMMAR
     extensions = frozenset({".ssd", ".dsd"})
 
     #: The concrete catalogue class (subclass responsibility).

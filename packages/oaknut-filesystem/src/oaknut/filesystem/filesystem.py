@@ -14,7 +14,7 @@ from abc import abstractmethod
 from pathlib import Path
 
 from oaknut.extension import Extension, namespace_for
-from oaknut.filesystem.capabilities import Mount, WildcardSyntax
+from oaknut.filesystem.capabilities import Mount, NameGrammar, WildcardSyntax
 from oaknut.filesystem.exceptions import FilesystemError
 from oaknut.filesystem.geometry import Geometry, GeometryGrammar
 from oaknut.filesystem.identification import Identification, Volume
@@ -60,6 +60,12 @@ class Filesystem(Extension):
     #: ``disc describe-filesystem``. Defaults to Unix (``*`` / ``?``); the
     #: Acorn filing systems override it with ``*`` / ``#`` (``?`` literal).
     wildcard_syntax: WildcardSyntax = UNIX_WILDCARDS
+    #: The rules a name must satisfy to be *written* on this filesystem,
+    #: reported by ``disc describe-filesystem`` and (where the filesystem
+    #: routes through it) enforced on write. ``None`` when the filesystem
+    #: does not yet advertise its grammar. Reading is always liberal,
+    #: independent of this.
+    name_grammar: NameGrammar | None = None
 
     @classmethod
     def _kind(cls) -> str:

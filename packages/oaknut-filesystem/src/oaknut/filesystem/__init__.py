@@ -25,6 +25,7 @@ from oaknut.filesystem.capabilities import (
     FreeSpace,
     HierarchicalDirectories,
     Mount,
+    NameGrammar,
     PhysicalGeometry,
     RegionHost,
     Sized,
@@ -103,6 +104,7 @@ __all__ = [
     "StorageOrdered",
     "WildcardMatching",
     "WildcardSyntax",
+    "NameGrammar",
     # geometry
     "Geometry",
     "GeometryGrammar",

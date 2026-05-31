@@ -98,6 +98,9 @@ protocol.
 .. autoclass:: oaknut.filesystem.WildcardSyntax
    :members:
 
+.. autoclass:: oaknut.filesystem.NameGrammar
+   :members:
+
 .. autoclass:: oaknut.filesystem.UserDatabase
    :members:
 

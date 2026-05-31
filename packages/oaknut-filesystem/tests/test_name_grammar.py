@@ -1,0 +1,73 @@
+"""Tests for NameGrammar — the storable-name rules behind a filesystem's
+write validation and its ``describe-filesystem`` reporting."""
+
+import pytest
+from oaknut.filesystem import NameGrammar
+
+# A grammar shaped like the DFS one: seven-bit, seven characters, the two
+# path separators forbidden, names folded to upper case.
+DFS_LIKE = NameGrammar(
+    max_length=7,
+    forbidden=":.",
+    forbidden_reason="the drive (:) and directory (.) separators",
+    seven_bit=True,
+    case="fold-upper",
+    notes=("The wildcard characters * and # are stored literally.",),
+)
+
+
+class TestValidate:
+    def test_accepts_a_plain_name(self):
+        DFS_LIKE.validate("HELLO")  # no raise
+
+    @pytest.mark.parametrize("name", ["GUARD#1", "SAVE*", "DATA!1", "!BOOT"])
+    def test_accepts_wildcard_and_bang_bytes(self, name):
+        # The liberal core: metacharacters are storable name bytes.
+        DFS_LIKE.validate(name)
+
+    def test_rejects_empty(self):
+        with pytest.raises(ValueError, match="empty"):
+            DFS_LIKE.validate("")
+
+    def test_rejects_overlength(self):
+        with pytest.raises(ValueError, match="too long"):
+            DFS_LIKE.validate("TOOLONGNAME")
+
+    @pytest.mark.parametrize("name", ["A.B", "A:B"])
+    def test_rejects_forbidden_separator(self, name):
+        with pytest.raises(ValueError, match="Forbidden character"):
+            DFS_LIKE.validate(name)
+
+    def test_rejects_top_bit_set(self):
+        with pytest.raises(ValueError, match="top bit set"):
+            DFS_LIKE.validate("A\xffB")
+
+    def test_rejects_control_character(self):
+        with pytest.raises(ValueError, match="Control character"):
+            DFS_LIKE.validate("A\x01B")
+
+    def test_allow_control_permits_low_bytes(self):
+        grammar = NameGrammar(max_length=8, allow_control=True)
+        grammar.validate("A\x01B")  # no raise
+
+    def test_codec_round_trip_is_enforced(self):
+        # A codec that cannot encode the name fails validation.
+        grammar = NameGrammar(max_length=8, seven_bit=False, codec="ascii")
+        with pytest.raises(ValueError, match="invalid characters"):
+            grammar.validate("café")
+
+
+class TestSummary:
+    def test_summary_covers_each_rule(self):
+        text = DFS_LIKE.summary()
+        assert "up to 7 characters" in text
+        assert "Forbidden: : . (the drive (:) and directory (.) separators)" in text
+        assert "folded to upper case" in text
+        assert "seven-bit" in text
+        assert "no control characters" in text
+        # Notes are appended verbatim.
+        assert "* and # are stored literally" in text
+
+    def test_no_forbidden_reads_cleanly(self):
+        text = NameGrammar(max_length=10).summary()
+        assert "Forbidden: none" in text
