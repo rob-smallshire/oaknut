@@ -109,6 +109,15 @@ class TestValidation:
     def test_exactly_10_chars_accepted(self) -> None:
         AFSPath.root() / ("A" * 10)
 
+    def test_control_character_is_accepted(self) -> None:
+        # The field is space-padded, not terminated, so a control byte is
+        # representable and AFS reads it back — only top-bit and the
+        # separators are refused.
+        assert (AFSPath.root() / "A\x01B").parts == ("$", "A\x01B")
+
+    def test_wildcard_characters_are_accepted(self) -> None:
+        assert (AFSPath.root() / "GAME*").parts == ("$", "GAME*")
+
 
 class TestFspath:
     def test_str_protocol(self) -> None:

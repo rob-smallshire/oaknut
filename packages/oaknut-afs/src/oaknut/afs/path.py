@@ -61,9 +61,14 @@ AFS_NAME_GRAMMAR = NameGrammar(
     forbidden=":. ",
     forbidden_reason="the directory (.) and disc (:) separators and the space pad byte",
     seven_bit=True,
+    allow_control=True,
     case="insensitive",
     codec="ascii",
-    notes=("The wildcard characters * and # are valid name bytes.",),
+    notes=(
+        "Wildcards (* #) and control characters are valid name bytes — the "
+        "field is space-padded, not terminated, so AFS reads them back. The "
+        "command parser refuses more than the field's hard limits do.",
+    ),
 )
 
 
