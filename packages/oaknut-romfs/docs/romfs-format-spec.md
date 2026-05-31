@@ -511,19 +511,24 @@ Still to confirm:
 2. **Multi-ROM spanning** — see §7. Mechanism understood from MOS 1.20 and
    the sideways-ROM notes, but **no spanning image is yet in the corpus**
    to verify a reassembler against, so it is unimplemented.
-3. **Non-Acornsoft / non-cartridge ROMFS** (e.g. mkromfs service-only
-   `&82` ROMs) — exercise the `bit 7` type test and the `&C0` empty-flag
-   variant once such an image is on hand.
+3. ~~**Non-Acornsoft / non-cartridge ROMFS**~~ — **resolved**: a genuine
+   mkromfs build (`Snapper_mkromfs.rom`, service-only `&82`, `&C0`
+   empty-flag title block) is now in the corpus. It exercises the `bit 7`
+   type test, and the reader preserves the `&C0` "no data" bit so it
+   round-trips byte-exact (the writer otherwise re-derives the flag; see
+   `ROMFSFile.flag_extra`).
 
 ## 6. Reference corpus
 
-Eleven ROM images live at the workspace root under
+Twelve ROM images live at the workspace root under
 `tests/data/images/romfs/`, all 16 KiB, all decoding with valid header and
 data CRCs: eight Acornsoft Electron cartridges (including the two-disc
 Countdown To Doom, Starship Command and Tree Of Knowledge), two BBC Master
-Demonstration cartridges (`DEMO-A` / `DEMO-B`), and one BBC Micro ROM
-(`Zalaga`). The on-ROM format is *identical* across machines (§5); they
-differ only in *authoring*:
+Demonstration cartridges (`DEMO-A` / `DEMO-B`), one BBC Micro ROM
+(`Zalaga`), and one tool-built image — `Snapper_mkromfs.rom`, produced by
+Dominic Beesley's `mkromfs` (service-only `&82`, a `&C0` empty-flag title
+block, and the unguarded handler from §2.10). The on-ROM format is
+*identical* across machines (§5); they differ only in *authoring*:
 
 | | Acornsoft cartridges | Zalaga (BBC) |
 |---|---|---|
@@ -608,86 +613,137 @@ no title block, a single 46-block file, and a **differing load/exec**
 (`&3000` / `&4522`) — confirmed against a real BBC `*.` showing
 `ZALAGA  2D 2D25  00003000 00004522`.
 
-## 7. Multi-ROM spanning
+## 7. Multi-ROM (slot-spanning) filing systems
 
-A ROMFS too large for one 16 KiB ROM may span several ROMs in adjacent
-sockets. This is the one ROMFS feature that does not fit "one filing
-system = one image".
+A filing system larger than one 16 KiB ROM can be carried by several ROMs
+fitted in adjacent sideways sockets; the OS presents them as one
+catalogue. The mechanism below was pinned down from the MOS catalogue/read
+loop while diagnosing the socket-0 handler bug (§2.10), and corroborated
+by *New Advanced User Guide* §17.5.
 
-### 7.1 The mechanism (from MOS 1.20)
+> **Status.** The mechanism is well-established (it is the exact code path
+> that makes a lone socket-0 ROM loop `*CAT`). **No verified slot-spanning
+> image is yet in the corpus**, so the creating/reading/writing guidance in
+> §7.4 is a design grounded in that mechanism, to be confirmed on real
+> hardware before it is built.
 
-The OS reads the filing system as a **single byte stream** served a byte
-at a time by the active ROM's service handler:
+### 7.1 How the OS chains ROMs
 
-- The OS finds filing-system data by broadcasting service call `&0D`
-  (initialise) to the sideways ROMs. MOS 1.20's OSBYTE 143 loop scans
-  sockets **15 down to 0** (`LDX #15 … DEX … "point to next lower ROM"`),
-  calling each ROM's service entry; a ROM with RFS data claims and points
-  the OS read pointer (`&F6/&F7`) at its own data start, recording itself
-  as the active RFS ROM (`&F5`).
-- Service call `&0E` returns the next byte and advances that pointer. The
-  loader (`searchForBlockCheckFilingSystem` → `readByteFromROMOrPHROM`)
-  pulls bytes and parses the block chain; the V flag marks "final block on
-  ROMFS", and bit 7 of the block flag ends a file.
-- When a ROM's data is exhausted before a `+` is seen, the filing system
-  **continues in the socket immediately below**: the OS re-initialises
-  (`&0D`) onto the next-lower ROM, whose handler re-points `&F6/&F7` at
-  *its* data start, and the byte stream continues. The sideways-ROM notes
-  call this bridging the "cross-chip gap".
-- The `&2B` end marker — present **only in the final ROM** — stops the
-  scan.
+The OS reads a byte stream served by the active ROM's `&0E` handler, and
+*selects* which ROM serves it with `&0D`:
 
-So the logical filing system is the **concatenation of each ROM's data
-region** (the bytes from that ROM's data start to `&BFFF`), in socket
-order, top-priority first, until `&2B`. A single file's block chain may
-straddle a chip boundary; the reader just keeps consuming the stream. Each
-member ROM is itself a valid paged ROM with its own header and `&0D`/`&0E`
-handler — the stream skips those prefixes because each ROM's `&0D` points
-past its own handler.
+- **Selection (`&0D`).** The OS scans sideways sockets high→low. A ROM with
+  RFS data claims the call, records itself as the active RFS ROM in `&F5`,
+  and points the read pointer `&F6/&F7` at *its own* data start (past its
+  header and handler). The highest-priority RFS ROM is selected first.
+- **Reading (`&0E`).** Returns the next byte and advances `&F6/&F7`.
+  Crucially, **the standard handler never signals "end of ROM"** — it just
+  keeps returning bytes (and, past the data, `&FF` padding). So the only
+  thing that ends a ROM's contribution to the stream is a `&2B` *in the
+  data*.
+- **Hand-off at `&2B`.** When the read loop reads a `&2B` it does
+  `INC &F5` and re-issues `&0D` to find the **next-lower** claiming RFS
+  ROM. If one claims, reading continues from *its* data start; if none
+  does, the filing system ends. This is exactly the loop that makes a lone
+  socket-0 ROM re-claim itself and loop `*CAT` forever (§2.10).
 
-> **Unverified detail.** That the stream is the concatenation of *data
-> regions* (handler prefixes skipped), rather than of whole 16 KiB images,
-> is derived from the `&0D` pointer semantics, not yet confirmed against a
-> real spanning image. Treat §7 as a design basis, to be pinned down when
-> an example exists.
+So the logical filing system is the **concatenation of whole, self-
+contained member ROMs**, read top-socket→bottom, ending at the `&2B` of
+the lowest member.
 
-### 7.2 The corpus has no spanning set
+### 7.2 The hard constraint: no file crosses a ROM boundary
 
-Every multi-ROM product in `tests/data/images/romfs/` is **independent
-cartridges**, not a spanning filing system: Countdown To Doom 1/2
-(`*Doom01*` / `*Doom02*`) and Tree Of Knowledge 1/2 (`*Tree01*` /
-`*Tree02*`) are two discs of one game; Starship Command 1/2 are two
-separate games; Master Demonstration A/B are two separate demos. Each
-member is a complete ROMFS terminated by its own `+`. We still lack a
-genuine spanning image.
+Because each member self-terminates with its **own `&2B`** (the NAUG calls
+it the "end of ROM marker", per ROM), and the OS only hands off *at* a
+`&2B`:
 
-### 7.3 Detection and grouping (design)
+- **Every file lives wholly within one member ROM.** A file's CFS block
+  chain cannot straddle a join — there is no mechanism to resume a
+  half-read file in the next ROM. (This corrects an earlier guess that a
+  chain could "straddle the chip boundary"; it cannot.)
+- **Each member is an independently valid ROMFS**: its own paged-ROM
+  header, its own `&0D`/`&0E` handler, its own block chain, its own `&2B`,
+  padded to its bank size. Fitted on its own, a member still catalogues and
+  reads correctly.
+- **Members are ordered by socket priority, highest first.** The OS reads
+  the highest-socket member first, so the `!BOOT` / loader belongs in that
+  member; lower members hold continuation files only.
+- **Each member keeps its own title block**, so the combined catalogue
+  shows them all (e.g. `*Doom01*` then `*Doom02*`); by convention the
+  title's trailing digits are the part number.
+- **The socket-0 caveat applies to whichever member is lowest.** With the
+  unguarded mkromfs/NAUG handler a member in socket 0 loops `*CAT`;
+  oaknut's handler carries the `CMP #&10` guard (§2.10), so its members are
+  safe in any socket.
 
-- **Detection is by content, not filename.** A spanning *fragment* is a
-  ROM whose data runs to `&BFFF` with **no `+`** (equivalently, the last
-  file is left unterminated — its final block never carries bit 7). The
-  final fragment has the `+`. A complete single ROM always has a `+`. This
-  is reliable and needs no convention.
-- **Do not infer a set from `_1`/`_2`.** Every `_1`/`_2` pair in the
-  corpus is independent (a separate disc of a multi-disc game), so joining
-  by that suffix would fabricate a broken filing system. Grouping must be explicit: an ordered
-  CLI source (e.g. `disc ls first.rom+second.rom`, top socket first) or a
-  sidecar manifest (e.g. a `.romset` listing members in socket order).
-  Reassembly belongs in a native `ROMFS.from_roms([...])`, keeping the
-  single-`ImageReader` plug-in contract unchanged.
-- **Implemented now: graceful read-only handling of an incomplete ROM.**
-  `ROMFS.from_bytes` no longer fails on a ROM with no `&2B`; it parses the
-  complete files (dropping any dangling trailing file) and sets
-  `is_complete = False`. Such an image still identifies as `acorn-romfs`
-  (demoted to `PROBABLE`, with evidence noting "incomplete"), is fully
-  readable for its complete files, and is **read-only** at the mount —
-  every mutation is refused, like a composite ROM. One ROM alone cannot
-  tell a genuine fragment from a truncated image, so both are handled the
-  same safe way. Full multi-ROM *reassembly* still waits for a verified
-  example.
-- **Implemented: incompleteness in `disc stat`.** A `StatusReporting`
-  capability on the `oaknut.filesystem` axis carries short status notes;
-  the ROMFS mount returns "incomplete — … (read-only)" for a fragment and
-  "composite — … (read-only)" for a composite ROM, and `disc stat`'s
-  `_partition_block` feature-detects it and renders a Notes row — no
-  ROMFS-specific code in `oaknut-disc`.
+The corpus pairs show this *shape* without being one volume: Countdown To
+Doom 1/2, Starship Command 1/2 and Tree Of Knowledge 1/2 each carry
+`!BOOT` + loader + early files in part 1 and continuation data with no
+`!BOOT` in part 2. But they are distributed as separate discs/cartridges
+(§6), not a co-resident set — complementary contents are consistent with
+slot-spanning but are not proof of it.
+
+### 7.3 A set cannot be detected from content
+
+A well-formed member is a complete, standalone ROMFS — it has its own
+`&2B`, header and handler, so there is **no byte signal** that it is "part
+2 of a set". Therefore:
+
+- **Grouping must be explicit**, never inferred. Either an ordered source
+  (top socket first, e.g. `first.rom second.rom`) or a sidecar manifest
+  listing members in socket order. Never join by an `_1`/`_2` filename
+  suffix — every such pair in the corpus is independent, so that would
+  fabricate a set.
+- The **incomplete-ROM handling** below is for genuinely **truncated or
+  damaged** images, *not* for recognising set members — a normal member is
+  complete and indistinguishable from a standalone ROM.
+
+### 7.4 Creating, reading and writing sets in `oaknut-romfs` (design)
+
+The single-image plug-in contract stays: one `ImageReader` = one member
+ROM = one `Mount`. A *set* is a thin native layer above that, never a
+single `Mount` straddling several images.
+
+**Reading.** A native aggregate — `ROMFS.from_roms([top, …, bottom])` (or a
+`ROMFSSet`) — parses each member with `ROMFS.from_bytes` and concatenates
+their file lists in socket order, which is exactly what the OS catalogue
+shows. The flat CFS namespace is *not* de-duplicated across members, so the
+set is the simple concatenation, member title blocks included. A single
+member still reads standalone.
+
+**Creating.** Given a file list and a per-member capacity (8 or 16 KiB):
+- Pack **whole** files into members in order — a bin-packing problem, each
+  member sized to fit its files plus header + handler + `&2B`. A file too
+  large for one member **cannot be stored at all**: it cannot be split, so
+  fail with a clear error rather than silently truncating.
+- Emit each member as a self-contained ROMFS (the existing
+  `build_rom_image` path): the `!BOOT` / loader in the first
+  (highest-socket) member, each member terminated by `&2B`, each carrying
+  the guarded handler.
+- Give each member a title block following the part-number convention
+  (`*Name01*`, `*Name02*`, …).
+
+**Writing.** Members are independent and each ≤ 16 KiB, so rewrite only the
+affected member wholesale (the existing write path):
+- A file lives in exactly one member; editing it rewrites that member only.
+- Adding a file places it in a member with room; if none has room, add a
+  member (or fail, if the socket/capacity budget is fixed).
+- No cross-member rebalancing is needed for correctness, though a
+  `compact`-style repack could even out free space across members.
+
+### 7.5 Implemented today (single-ROM safety net)
+
+- **Graceful read-only handling of an incomplete ROM.** `ROMFS.from_bytes`
+  does not fail on a ROM with no `&2B`; it parses the complete files
+  (dropping any dangling trailing file) and sets `is_complete = False`.
+  Such an image still identifies as `acorn-romfs` (demoted to `PROBABLE`,
+  evidence noting "incomplete"), is readable for its complete files, and is
+  **read-only** at the mount. One ROM alone cannot tell a genuine fragment
+  from a truncated image, so both are handled the same safe way. Multi-ROM
+  *reassembly* (§7.4) still waits for a verified example.
+- **Incompleteness in `disc stat`.** A `StatusReporting` capability on the
+  `oaknut.filesystem` axis carries short status notes; the ROMFS mount
+  returns "incomplete — … (read-only)" for a fragment and "composite — …
+  (read-only)" for a composite ROM, and `disc stat`'s `_partition_block`
+  feature-detects it and renders a Notes row — no ROMFS-specific code in
+  `oaknut-disc`.
