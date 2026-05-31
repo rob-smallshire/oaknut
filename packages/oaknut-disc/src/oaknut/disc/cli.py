@@ -686,10 +686,11 @@ _alias("*TYPE", "type")
 @click.argument("compound_path", metavar="OUTER:INNER")
 @report_output(reports={"matches": "Paths matching the wildcard pattern."})
 def find(compound_path: str):
-    """Find files matching an Acorn wildcard pattern.
+    """Find files matching a wildcard pattern.
 
     Accepts an ``OUTER_PATH`` (lists every file) or a ``COMPOUND_PATH``
-    whose ``INNER_PATH`` is the wildcard pattern.
+    whose ``INNER_PATH`` is the wildcard pattern, in the filesystem's own
+    wildcard syntax (see ``disc describe-filesystem``).
 
     Accepts the same ``adfs:`` / ``afs:`` / ``dfs:`` prefixes as
     every other command to scope the search to a single partition.
@@ -1350,25 +1351,39 @@ def put(
 # ---------------------------------------------------------------------------
 
 
+# Shared by every command that expands a user pattern against existing
+# entries. The default interprets the filesystem's wildcards; --no-wildcards
+# matches the pattern literally, the only way to address a file whose name
+# itself contains a metacharacter (a DFS GUARD#1 next to a GUARD41).
+_wildcards_option = click.option(
+    "--wildcards/--no-wildcards",
+    default=True,
+    help="Interpret wildcards in PATH (default); --no-wildcards matches literally.",
+)
+
+
 @cli.command()
 @click.argument("compound_path", metavar="OUTER:INNER")
 @click.argument("paths", nargs=-1)
 @click.option("-f", "--force", is_flag=True, help="Ignore missing, override locks.")
 @click.option("-r", "--recursive", is_flag=True, help="Remove directories recursively.")
 @click.option("--dry-run", is_flag=True, help="Print what would be removed.")
+@_wildcards_option
 def rm(
     compound_path: str,
     paths: tuple[str, ...],
     force: bool,
     recursive: bool,
     dry_run: bool,
+    wildcards: bool,
 ) -> None:
     """Delete file(s) from the image (Acorn alias: *DELETE).
 
     Accepts a ``COMPOUND_PATH`` followed by zero or more bare ``INNER_PATH``
     arguments — the first entry to delete travels in the ``COMPOUND_PATH``,
-    additional in-image paths follow. Each path may contain Acorn
-    wildcards (``*``, ``#``); ``-r`` descends into directory matches
+    additional in-image paths follow. Each path may contain the
+    filesystem's wildcards (see ``disc describe-filesystem``) unless
+    ``--no-wildcards`` is given; ``-r`` descends into directory matches
     and removes children before the directory itself.
     """
     from .mount import split_selector
@@ -1390,7 +1405,9 @@ def rm(
         for pattern in bare_patterns:
             # --force downgrades "no matches" to a no-op.
             try:
-                targets = list(_iter_target_paths(mount, pattern, recursive=recursive))
+                targets = list(
+                    _iter_target_paths(mount, pattern, recursive=recursive, wildcards=wildcards)
+                )
             except click.ClickException:
                 if force:
                     continue
@@ -1456,7 +1473,8 @@ _alias("*RENAME", "mv")
     is_flag=True,
     help="Copy directories recursively.",
 )
-def cp(src: str, dst: str, force: bool, recursive: bool) -> None:
+@_wildcards_option
+def cp(src: str, dst: str, force: bool, recursive: bool, wildcards: bool) -> None:
     """Copy file(s) or a tree within or between disc images.
 
     Acorn alias: *COPY.
@@ -1466,17 +1484,17 @@ def cp(src: str, dst: str, force: bool, recursive: bool) -> None:
     name the same image on both sides
     (``disc cp image.adl:$.Original image.adl:$.Copy``).
 
-    Source paths may contain Acorn wildcards (``*`` = any sequence,
-    ``#`` = any single character); when a wildcard expands to multiple
-    matches the destination must denote a directory — either trailing
-    ``/`` or an existing directory.  ``-r``/``--recursive`` copies a
-    directory and everything under it, creating intermediate
-    destination directories as needed.  Copies across DFS, ADFS, and
-    AFS in any combination; load/exec addresses are preserved and
-    access attributes are mapped best-effort (DFS only has the locked
-    bit).
+    Source paths may contain the filesystem's wildcards (see ``disc
+    describe-filesystem``) unless ``--no-wildcards`` is given; when a
+    wildcard expands to multiple matches the destination must denote a
+    directory — either trailing ``/`` or an existing directory.
+    ``-r``/``--recursive`` copies a directory and everything under it,
+    creating intermediate destination directories as needed.  Copies
+    across DFS, ADFS, and AFS in any combination; load/exec addresses
+    are preserved and access attributes are mapped best-effort (DFS only
+    has the locked bit).
     """
-    _cp_dispatch(src, dst, force=force, recursive=recursive)
+    _cp_dispatch(src, dst, force=force, recursive=recursive, wildcards=wildcards)
 
 
 # ---------------------------------------------------------------------------
@@ -1521,16 +1539,20 @@ def _dst_ends_slash(bare: str) -> tuple[str, bool]:
     return bare, False
 
 
-def _expand_target_paths(mount, pattern: str) -> list[str]:
+def _expand_target_paths(mount, pattern: str, *, wildcards: bool = True) -> list[str]:
     """Resolve *pattern* to a list of existing in-partition path strings.
 
     A literal path resolves to a one-element list; an Acorn wildcard on
     the *leaf* component expands against the parent directory's entries
     (wildcards in directory components are unsupported). No match is an
     error. The mount-based counterpart of :func:`_expand_path_spec`.
+
+    With *wildcards* false the pattern is taken literally even when it
+    contains metacharacters — the only way to address a file whose name
+    itself contains a ``*`` or ``#``.
     """
     matcher = _matcher(mount)
-    if matcher.is_pattern(pattern):
+    if wildcards and matcher.is_pattern(pattern):
         parent, leaf_pattern = _split_parent_leaf(pattern)
         if matcher.is_pattern(parent):
             raise click.ClickException(
@@ -1564,21 +1586,30 @@ def _walk_post_order_mount(mount, path: str):
     yield path
 
 
-def _iter_target_paths(mount, pattern: str, *, recursive: bool):
+def _iter_target_paths(mount, pattern: str, *, recursive: bool, wildcards: bool = True):
     """Enumerate in-partition paths for a bulk-mutating command on *mount*.
 
     Expands wildcards on *pattern* and, when *recursive*, walks each
     directory match post-order (children before the directory). The
-    mount-based counterpart of :func:`_iter_targets`.
+    mount-based counterpart of :func:`_iter_targets`. With *wildcards*
+    false the pattern is matched literally.
     """
-    for seed in _expand_target_paths(mount, pattern):
+    for seed in _expand_target_paths(mount, pattern, wildcards=wildcards):
         if recursive and mount.stat(seed).is_dir:
             yield from _walk_post_order_mount(mount, seed)
         else:
             yield seed
 
 
-def _mutate_access(compound_path: str, *, recursive: bool, dry_run: bool, verb, transform) -> None:
+def _mutate_access(
+    compound_path: str,
+    *,
+    recursive: bool,
+    dry_run: bool,
+    verb,
+    transform,
+    wildcards: bool = True,
+) -> None:
     """Apply an access-byte *transform* to every target of *compound_path*.
 
     *transform* maps the current :class:`~oaknut.file.Access` to the new
@@ -1603,7 +1634,9 @@ def _mutate_access(compound_path: str, *, recursive: bool, dry_run: bool, verb, 
             )
         flat = not isinstance(mount, HierarchicalDirectories)
         pattern = resolved.path or mount.path_root()
-        for target in _iter_target_paths(mount, pattern, recursive=recursive):
+        for target in _iter_target_paths(
+            mount, pattern, recursive=recursive, wildcards=wildcards
+        ):
             if flat and mount.stat(target).is_dir:
                 continue  # a flat catalogue's directories are notional
             if dry_run:
@@ -1621,7 +1654,9 @@ def _mutate_access(compound_path: str, *, recursive: bool, dry_run: bool, verb, 
             )
 
 
-def _cp_dispatch(src_spec: str, dst_spec: str, *, force: bool, recursive: bool) -> None:
+def _cp_dispatch(
+    src_spec: str, dst_spec: str, *, force: bool, recursive: bool, wildcards: bool = True
+) -> None:
     """Orchestrate a cp invocation.
 
     Handles single-file copy, wildcard expansion on the source,
@@ -1646,6 +1681,7 @@ def _cp_dispatch(src_spec: str, dst_spec: str, *, force: bool, recursive: bool) 
             dst_bare=dst_bare,
             dst_slash=dst_slash,
             recursive=recursive,
+            wildcards=wildcards,
         )
 
         for item in items:
@@ -1663,6 +1699,7 @@ def _collect_copy_items(
     dst_bare: str,
     dst_slash: bool,
     recursive: bool,
+    wildcards: bool = True,
 ) -> list[dict]:
     """Walk the source side once, returning a plan of copy items.
 
@@ -1675,7 +1712,7 @@ def _collect_copy_items(
     src_is_dfs = _uses_dfs_paths(src_mount)
     dst_is_dfs = _uses_dfs_paths(dst_mount)
 
-    if _matcher(src_mount).is_pattern(src_bare):
+    if wildcards and _matcher(src_mount).is_pattern(src_bare):
         matches = _expand_glob(src_mount, src_bare)
         if not matches:
             raise click.ClickException(f"no matches for {src_bare!r}")
@@ -2017,11 +2054,13 @@ _alias("*CDIR", "mkdir")
 @click.option(
     "--dry-run", is_flag=True, help="Print what would change without modifying the image."
 )
+@_wildcards_option
 def chmod(
     compound_path: str,
     access: str,
     recursive: bool,
     dry_run: bool,
+    wildcards: bool,
 ) -> None:
     """Set file access permissions (Acorn alias: *ACCESS).
 
@@ -2030,8 +2069,9 @@ def chmod(
     ACCESS is symbolic (e.g. LWR/R, WR/WR) or hex (0x0B, 33).
     DFS only supports the L (locked) bit; other flags are ignored.
 
-    PATH may contain Acorn wildcards (``*``, ``#``) to apply the
-    same access to every matching file.  ``-r`` recurses into any
+    PATH may contain the filesystem's wildcards (see ``disc
+    describe-filesystem``) to apply the same access to every matching
+    file, unless ``--no-wildcards`` is given.  ``-r`` recurses into any
     directory match.
     """
     from oaknut.file import parse_access
@@ -2045,6 +2085,7 @@ def chmod(
         dry_run=dry_run,
         verb=lambda target: f"would chmod {target} {access}",
         transform=lambda _current: flags,
+        wildcards=wildcards,
     )
 
 
@@ -2057,11 +2098,12 @@ _alias("*ACCESS", "chmod")
 @click.option(
     "--dry-run", is_flag=True, help="Print what would change without modifying the image."
 )
-def lock(compound_path: str, recursive: bool, dry_run: bool) -> None:
+@_wildcards_option
+def lock(compound_path: str, recursive: bool, dry_run: bool, wildcards: bool) -> None:
     """Lock a file.
 
     Accepts a ``COMPOUND_PATH``.
-    PATH may be a wildcard; ``-r`` recurses.
+    PATH may be a wildcard (unless ``--no-wildcards``); ``-r`` recurses.
     """
     from oaknut.file import Access
 
@@ -2071,6 +2113,7 @@ def lock(compound_path: str, recursive: bool, dry_run: bool) -> None:
         dry_run=dry_run,
         verb=lambda target: f"would lock {target}",
         transform=lambda current: current | Access.L,
+        wildcards=wildcards,
     )
 
 
@@ -2080,11 +2123,12 @@ def lock(compound_path: str, recursive: bool, dry_run: bool) -> None:
 @click.option(
     "--dry-run", is_flag=True, help="Print what would change without modifying the image."
 )
-def unlock(compound_path: str, recursive: bool, dry_run: bool) -> None:
+@_wildcards_option
+def unlock(compound_path: str, recursive: bool, dry_run: bool, wildcards: bool) -> None:
     """Unlock a file.
 
     Accepts a ``COMPOUND_PATH``.
-    PATH may be a wildcard; ``-r`` recurses.
+    PATH may be a wildcard (unless ``--no-wildcards``); ``-r`` recurses.
     """
     from oaknut.file import Access
 
@@ -2094,6 +2138,7 @@ def unlock(compound_path: str, recursive: bool, dry_run: bool) -> None:
         dry_run=dry_run,
         verb=lambda target: f"would unlock {target}",
         transform=lambda current: current & ~Access.L,
+        wildcards=wildcards,
     )
 
 
@@ -2104,11 +2149,13 @@ def unlock(compound_path: str, recursive: bool, dry_run: bool) -> None:
 @click.option(
     "--dry-run", is_flag=True, help="Print what would change without modifying the image."
 )
+@_wildcards_option
 def set_load(
     compound_path: str,
     addr: str,
     recursive: bool,
     dry_run: bool,
+    wildcards: bool,
 ) -> None:
     """Set a file's load address.
 
@@ -2120,9 +2167,10 @@ def set_load(
     ``1900`` is therefore decimal, *not* hex; write ``0x1900`` for
     the hex value. The Acorn ``&1900`` notation is not accepted.
 
-    PATH may contain Acorn wildcards; ``-r`` recurses into directory
-    matches (directories themselves are skipped — they have no load
-    address field).
+    PATH may contain the filesystem's wildcards (see ``disc
+    describe-filesystem``); ``-r`` recurses into directory matches
+    (directories themselves are skipped — they have no load address
+    field).
     """
     from oaknut.file import AcornMeta, parse_address
     from oaknut.filesystem import AcornMetadata
@@ -2139,7 +2187,9 @@ def set_load(
                 exit_code=ExitCode.OS_FILE,
             )
         target_pattern = resolved.path or mount.path_root()
-        for target in _iter_target_paths(mount, target_pattern, recursive=recursive):
+        for target in _iter_target_paths(
+            mount, target_pattern, recursive=recursive, wildcards=wildcards
+        ):
             if mount.stat(target).is_dir:
                 continue  # load address is meaningless for a directory
             if dry_run:
@@ -2163,11 +2213,13 @@ def set_load(
 @click.option(
     "--dry-run", is_flag=True, help="Print what would change without modifying the image."
 )
+@_wildcards_option
 def set_exec(
     compound_path: str,
     addr: str,
     recursive: bool,
     dry_run: bool,
+    wildcards: bool,
 ) -> None:
     """Set a file's exec address.
 
@@ -2179,9 +2231,10 @@ def set_exec(
     ``8023`` is therefore decimal, *not* hex; write ``0x8023`` for
     the hex value. The Acorn ``&8023`` notation is not accepted.
 
-    PATH may contain Acorn wildcards; ``-r`` recurses into directory
-    matches (directories themselves are skipped — they have no exec
-    address field).
+    PATH may contain the filesystem's wildcards (see ``disc
+    describe-filesystem``); ``-r`` recurses into directory matches
+    (directories themselves are skipped — they have no exec address
+    field).
     """
     from oaknut.file import AcornMeta, parse_address
     from oaknut.filesystem import AcornMetadata
@@ -2198,7 +2251,9 @@ def set_exec(
                 exit_code=ExitCode.OS_FILE,
             )
         target_pattern = resolved.path or mount.path_root()
-        for target in _iter_target_paths(mount, target_pattern, recursive=recursive):
+        for target in _iter_target_paths(
+            mount, target_pattern, recursive=recursive, wildcards=wildcards
+        ):
             if mount.stat(target).is_dir:
                 continue
             if dry_run:
