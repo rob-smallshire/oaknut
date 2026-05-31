@@ -113,7 +113,10 @@ DATA_OFFSET = 0x805D + len(version_str) + len(title) + len(copyright)
 ```
 
 `0x805D` is the size of the header plus service handler with empty title,
-version and copyright.
+version and copyright. (Images created by *this* package use a handler six
+bytes longer — see the socket-0 note in §2.10 — so their empty-header anchor
+is `0x8063`. The parser never relies on either: it scans for the first
+CRC-valid block.)
 
 > **Do not trust a fixed offset.** On the reference corpus the data start
 > *varies by ROM* — `&80BB` for most, `&829C` for Countdown To Doom —
@@ -363,6 +366,17 @@ data), driven by MOS service calls. A ROMFS ROM must answer at least:
   byte at `(&F6),Y=0`, increment the `&F6/&F7` pointer (carry into `&F7`),
   and claim. This is the byte-at-a-time spigot the loader in §2.7 pulls.
 
+> **The socket-0 scan-number wrap.** At each ROM's `&2B` end marker the MOS
+> increments `&F5` and re-issues `&0D` to chain into a continuation ROM in a
+> lower socket; the filing system ends only when no ROM claims. mkromfs's
+> handler tests the socket with `(&F5 EOR &FF) AND &0F`, masking the high
+> nibble — so a ROM in socket 0 (which sets `&F5 = &0F` on selection) sees
+> `&F5` step `&0F → &10` and the mask fold it back to `15 ≥ 0`, re-claiming
+> itself and looping `*CAT` forever. The genuine Acornsoft ROMs guard this
+> with `CMP #&10` / `BCS exit` before the socket compare; this package's
+> created handler does the same (the six extra bytes that move the empty
+> anchor from `&805D` to `&8063`). Sockets 1–15 are unaffected either way.
+
 A richer handler may also answer:
 
 - **`&09` — `*HELP`.** Print the ROM name and version; optionally compare
@@ -384,8 +398,10 @@ until a `&0D`/`&0E` handler is prepended. This is exactly the opaque
 preamble this package preserves (§1.2) and refuses to mutate (the
 plain-versus-composite split in `docs/architecture.md`). `disc create
 --filesystem romfs` therefore emits such a handler (`oaknut.romfs.handler`):
-the bare `&0D`/`&0E` handler is the canonical mkromfs/NAUG one (81 bytes,
-data at `&805D`), and by default a `&09` `*HELP` responder is added that
+the bare `&0D`/`&0E` handler is the canonical mkromfs/NAUG one with one
+fix — a `CMP #&10` / `BCS` guard on the scan number so the ROM works in
+socket 0 (87 bytes, data at `&8063` for an empty header; see §2.10) — and
+by default a `&09` `*HELP` responder is added that
 prints the ROM's title — so the created ROM answers `*HELP` with its
 title. The handler is assembled by a small two-pass 6502 assembler so its
 branch and jump targets are correct by construction, and a created ROM has

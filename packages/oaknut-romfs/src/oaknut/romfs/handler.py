@@ -8,10 +8,11 @@ next byte). See ``docs/romfs-format-spec.md`` §2.10.
 This module assembles that handler. The 6502 is the canonical handler from
 the *New Advanced User Guide* (as used by ``mkromfs``'s ``handlesvc.asm``):
 it answers ``&0D`` / ``&0E`` for its own ROM and passes every other call
-on. A small two-pass assembler resolves the branch and jump targets so the
-machine code is correct by construction rather than hand-counted; the
-result is exactly 81 bytes, matching mkromfs (which places the filing-system
-data at ``&805D`` for an empty header).
+on. One deliberate deviation from mkromfs: the ``&0D`` path guards the
+serial-ROM scan number against rising past the sixteen sockets, so a ROM in
+socket 0 does not loop ``*CAT`` (see :data:`_CORE_BODY`). A small two-pass
+assembler resolves the branch and jump targets so the machine code is
+correct by construction rather than hand-counted.
 
 The handler is hand-assembled and verified for layout and length here;
 its execution is confirmed in a 6502 emulator (a created ROM answers
@@ -47,6 +48,7 @@ _OPCODES: dict[tuple[str, str], tuple[int, int]] = {
     ("BEQ", "rel"): (0xF0, 2),
     ("BNE", "rel"): (0xD0, 2),
     ("BCC", "rel"): (0x90, 2),
+    ("BCS", "rel"): (0xB0, 2),
     ("BMI", "rel"): (0x30, 2),
     ("JMP", "abs"): (0x4C, 3),
     ("JSR", "abs"): (0x20, 3),
@@ -85,8 +87,17 @@ _PLAIN_DISPATCH = [
 ]
 
 # The &0D / &0E core (the mkromfs / NAUG handler body), shared by both.
+# The &0D path adds a guard absent from mkromfs: the MOS advances the
+# serial-ROM scan number (&F5) past each ROM's &2B end marker, looking for a
+# continuation ROM in a lower socket. mkromfs masks &F5 with AND #&0F (in
+# invsno), so once it wraps &0F->&10 a socket-0 ROM maps back to 15 and
+# re-claims itself, restarting *CAT forever. Testing &F5 >= &10 first — as the
+# genuine Acornsoft ROMs do — lets the continuation hunt terminate.
 _CORE_BODY = [
     ("initsp", "PHA", "imp", None),
+    (None, "LDA", "zp", _SER_ROM),  # the serial-ROM scan number
+    (None, "CMP", "imm", 0x10),  # advanced past the sixteen sockets?
+    (None, "BCS", "rel", "exit"),  # yes — the scan is exhausted, don't re-claim
     (None, "JSR", "abs", "invsno"),  # A = inverted *ROM number
     (None, "CMP", "zp", _ROM_ID),
     (None, "BCC", "rel", "exit"),  # scanned ROM below us — not yet our turn
@@ -174,7 +185,8 @@ def _layout(program: list) -> tuple[dict[str, int], int]:
     return labels, offset
 
 
-#: Length of the bare &0D/&0E handler — 81 bytes, matching mkromfs.
+#: Length of the bare &0D/&0E handler (87 bytes: the mkromfs body plus the
+#: socket-0 scan-number guard).
 HANDLER_LENGTH = _layout(_program(with_help=False))[1]
 
 

@@ -22,13 +22,14 @@ def test_created_rom_round_trips():
     assert rom.to_bytes() == image
 
 
-def test_data_offset_matches_the_mkromfs_anchor():
-    # With the bare &0D/&0E handler (no *HELP), data sits at 0x805D for an
-    # empty header — exactly mkromfs — growing by the title and copyright
-    # lengths (no version string).
+def test_data_offset_follows_the_handler_length():
+    # With the bare &0D/&0E handler (no *HELP), data sits just past the header
+    # and handler. That is mkromfs's 0x805D anchor plus the six bytes of the
+    # socket-0 scan-number guard (0x8063 for an empty header), then grows by
+    # the title and copyright lengths (no version string).
     image = build_rom_image(title="X", copyright="(C)", size=16384, help_handler=False)
     rom = ROMFS.from_bytes(image)
-    assert rom.data_offset == 0x5D + len("X") + len("(C)")
+    assert rom.data_offset == 0x63 + len("X") + len("(C)")
 
 
 def test_help_handler_is_present_by_default():

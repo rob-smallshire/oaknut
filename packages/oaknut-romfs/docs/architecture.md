@@ -90,12 +90,15 @@ the two real sizes are offered — **16 KiB** (default) and **8 KiB** (`--geomet
 
 The handler is assembled by a small two-pass 6502 assembler
 (`handler.py`) so branch/jump targets are correct by construction. The bare
-`&0D`/`&0E` handler is the canonical mkromfs/NAUG one — exactly 81 bytes,
-putting data at `&805D` for an empty header (the test anchor). By default a
-`&09` `*HELP` responder is also included, printing the title (so the title
-is the `*HELP` message). A created ROM has been confirmed in a 6502
-emulator: `*HELP` prints the title, and `*CAT` / `CHAIN` / `*TYPE` read
-files correctly.
+`&0D`/`&0E` handler is the canonical mkromfs/NAUG one plus a `CMP #&10` /
+`BCS` guard on the scan number — 87 bytes, putting data at `&8063` for an
+empty header (the test anchor). The guard stops a socket-0 ROM re-claiming
+itself when the MOS scans past it at the `&2B` end marker, which otherwise
+loops `*CAT` forever; the genuine Acornsoft ROMs carry the same guard. By
+default a `&09` `*HELP` responder is also included, printing the title (so
+the title is the `*HELP` message). A created ROM has been confirmed in a
+6502 emulator: `*HELP` prints the title, and `*CAT` / `CHAIN` / `*TYPE`
+read files correctly.
 
 Writing (`write_bytes`, `create`) is deferred. The medium is read-only
 ROM; identification and reading come first. If image creation is added
