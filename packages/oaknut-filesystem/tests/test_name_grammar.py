@@ -91,4 +91,10 @@ class TestSummary:
 
     def test_eight_bit_grammar_reads_as_eight_bit(self):
         text = NameGrammar(max_length=10, seven_bit=False, allow_control=True).summary()
-        assert "Bytes: eight-bit." in text
+        assert "Bytes: eight-bit" in text
+        assert "control characters allowed" in text
+
+    def test_control_forbidden_char_renders_by_name(self):
+        # A forbidden CR must not put a literal carriage return in the listing.
+        text = NameGrammar(max_length=10, forbidden=".\r").summary()
+        assert "Forbidden: . CR" in text

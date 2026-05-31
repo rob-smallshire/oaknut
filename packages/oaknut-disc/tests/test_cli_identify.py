@@ -101,6 +101,18 @@ class TestDescribeFilesystem:
         assert "Forbidden: : . space" in result.output
         assert "matched case-insensitively" in result.output
 
+    def test_reports_adfs_filename_rules(self, runner: CliRunner):
+        result = runner.invoke(cli, ["describe-filesystem", "adfs"])
+        assert result.exit_code == 0
+        assert "Filename rules:" in result.output
+        assert "up to 10 characters" in result.output
+        # The seven-bit field reserves bit 7 for the access flags.
+        assert "bit 7 holds the file's access flags" in result.output
+        # Liberal: parser-illegal but representable names are storable.
+        assert "stores and reads the parser-illegal names" in result.output
+        # CR must read as a word, never a literal control byte.
+        assert "Forbidden: . : CR" in result.output
+
     def test_reports_romfs_filename_rules(self, runner: CliRunner):
         result = runner.invoke(cli, ["describe-filesystem", "acorn-romfs"])
         assert result.exit_code == 0

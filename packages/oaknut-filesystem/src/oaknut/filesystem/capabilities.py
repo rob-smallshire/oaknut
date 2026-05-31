@@ -476,7 +476,7 @@ class NameGrammar:
         """A multi-line description of the rules, for ``describe-filesystem``."""
         lines = [f"Length: up to {self.max_length} characters."]
         if self.forbidden:
-            shown = " ".join("space" if char == " " else char for char in self.forbidden)
+            shown = " ".join(_render_forbidden(char) for char in self.forbidden)
             reason = f" ({self.forbidden_reason})" if self.forbidden_reason else ""
             lines.append(f"Forbidden: {shown}{reason}.")
         else:
@@ -487,8 +487,26 @@ class NameGrammar:
             "sensitive": "case-sensitive",
         }.get(self.case, "case-preserving")
         lines.append(f"Case: {case}.")
-        byte_range = "seven-bit (0x20–0x7E)" if self.seven_bit else "eight-bit"
-        control = "" if self.allow_control else ", no control characters"
-        lines.append(f"Bytes: {byte_range}{control}.")
+        width = "seven-bit" if self.seven_bit else "eight-bit"
+        top = "0x7F" if self.seven_bit else "0xFF"
+        if self.allow_control:
+            lines.append(f"Bytes: {width} (0x00–{top}), control characters allowed.")
+        else:
+            top = "0x7E" if self.seven_bit else "0xFF"
+            lines.append(f"Bytes: {width} (0x20–{top}), no control characters.")
         lines.extend(self.notes)
         return "\n".join(lines)
+
+
+#: Readable names for forbidden characters that would otherwise be
+#: invisible or confusing in a ``describe-filesystem`` listing.
+_FORBIDDEN_CHAR_NAMES = {" ": "space", "\r": "CR", "\n": "LF", "\t": "TAB", "\x7f": "DEL"}
+
+
+def _render_forbidden(char: str) -> str:
+    """A printable token for *char* in a forbidden-character listing."""
+    if char in _FORBIDDEN_CHAR_NAMES:
+        return _FORBIDDEN_CHAR_NAMES[char]
+    if ord(char) < 0x20:
+        return f"&{ord(char):02X}"
+    return char

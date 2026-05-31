@@ -30,10 +30,40 @@ from oaknut.filesystem import (
     GeometryGrammar,
     Identification,
     ImageReader,
+    NameGrammar,
     Partition,
     floppy_geometry,
 )
 from oaknut.filesystem.wildcards import ACORN_WILDCARDS, AcornWildcards
+
+#: What an ADFS directory entry's ten-byte name field can *hold and ADFS
+#: can read back*, not what its command parser would accept — oaknut
+#: manipulates discs that are legally representable, including the
+#: parser-illegal names byte-edited onto game discs. The hard limits come
+#: from the on-disc format (ADFS 1.30 disassembly): ten bytes maximum
+#: (over-length is a "Bad name" error, not a truncation); each name byte
+#: is seven-bit because bit 7 carries the file's access flags; and CR
+#: terminates the field. The ``.`` / ``:`` separators are representable
+#: but oaknut's dotted-path syntax cannot yet address them. Everything
+#: else — wildcards, directory specials, spaces, control bytes — is
+#: stored and read verbatim. See :class:`oaknut.filesystem.NameGrammar`.
+ADFS_NAME_GRAMMAR = NameGrammar(
+    max_length=10,
+    forbidden=".:\r",
+    forbidden_reason="oaknut's . and : path separators, and CR (the field terminator)",
+    seven_bit=True,
+    allow_control=True,
+    case="insensitive",
+    codec="ascii",
+    notes=(
+        "Each name byte is seven-bit: bit 7 holds the file's access flags "
+        "(R, W, L, D in bytes 0-3), so a name cannot carry an eighth bit.",
+        "The field otherwise holds any byte, so oaknut stores and reads the "
+        "parser-illegal names found on byte-edited discs — wildcards (* #), "
+        "the directory specials ($ & @ ^ %), spaces and quotes. Reading "
+        "never rejects a name.",
+    ),
+)
 
 # The old free-space map occupies sectors 0–1.
 _MAP_BYTES = 512
@@ -271,6 +301,7 @@ class ADFS(Filesystem):
     """
 
     wildcard_syntax = ACORN_WILDCARDS
+    name_grammar = ADFS_NAME_GRAMMAR
 
     extensions = frozenset({".adf", ".ads", ".adm", ".adl", ".dat"})
     #: ADFS is the default creator for all its extensions, including the
