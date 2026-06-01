@@ -24,7 +24,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "oaknut"
 version = "12.5.3"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 description = "Namespace placeholder for the oaknut-* family of Acorn computer tools. Install oaknut-dfs, oaknut-adfs, oaknut-disc, etc. — not this."
 readme = "README-pypi.md"
 license = "MIT"
@@ -36,7 +36,6 @@ classifiers = [
     "Programming Language :: Python",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3 :: Only",
-    "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Topic :: System :: Filesystems",
@@ -197,7 +196,7 @@ norecursedirs = ["tests/data"]
 
 [tool.ruff]
 line-length = 100
-target-version = "py311"
+target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I"]
