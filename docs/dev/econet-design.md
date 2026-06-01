@@ -487,7 +487,7 @@ A long-term goal (FR11): DSCP plays the role DHCP plays on IP — a station come
 ## 14. Open questions
 
 1. **Well-known ports & immediate control codes** — enumerate authoritatively from the NFS/ANFS disassembly before freezing the `Port` constants and immediate-op codes.
-2. **AUN UDP port scheme** — fixed base vs per-station vs fully map-driven; pick the most interoperable default.
+2. **AUN UDP port scheme** — *decided*: fully map-driven. `AunTransport` binds a configurable `(host, port)` (default `DEFAULT_AUN_PORT = 32768`) and resolves peers via an explicit peer map; no fixed per-station formula, which is the most interoperable choice.
 3. **`seq`/handle exposure** — confirm the file server never needs the AUN handle at the application layer (reply correlation is by reply-port, not handle). If it does, surface it deliberately rather than leaking it.
 4. **HAT immediate handling** — confirm `IMMSPOOF`/`RESILIENTACK` semantics before claiming `IMMEDIATE_REPLY`.
 5. **Configuration format** — how applications declare transports + maps at startup (TOML? reuse an existing oaknut config convention?). Bridges need this most.
@@ -500,6 +500,12 @@ A long-term goal (FR11): DSCP plays the role DHCP plays on IP — a station come
 ---
 
 ## 15. Roadmap (phased)
+
+**Implementation status (2026-06-02, `econet` branch, test-first):**
+- Phase 1 **(done)** — workspace at Python ≥3.12; namespace-init guard extended for `oaknut.econet`.
+- Phase 2 **(done)** — `oaknut-econet-core` complete: `Address`, `EconetPacket`/`PacketKind`, `TransmitResult`/`TransmitOutcome`, `TransportCapability`, the `EconetTransport` ABC, `TestTransport`, the error hierarchy, and the reusable conformance suite (56 tests).
+- Phase 3 **(in progress)** — `oaknut-econet-aun` has the AUN wire codec, the `EconetPacket`↔`AunPacket` mapping, and `AunTransport` over an asyncio UDP endpoint — registered on the `oaknut.econet.transport` axis and passing the conformance suite over real 127.0.0.1 loopback (49 tests). Remaining: `_aun._udp` mDNS.
+- Full workspace suite green (3366 tests); `master` untouched.
 
 1. **Workspace prep** — bump `requires-python` to `>=3.12` across the workspace; extend the namespace-init guard for `src/oaknut/econet/`.
 2. **`oaknut-econet-core`** — addressing, packet, outcome, capability types; the `EconetTransport` ABC; `TestTransport`; the conformance suite. Test-first. No transport deps. *(First vertical slice.)*
