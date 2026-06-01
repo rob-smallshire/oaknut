@@ -31,6 +31,7 @@ from oaknut.econet.core.addressing import (
     Address,
 )
 from oaknut.econet.core.capability import TransportCapability
+from oaknut.econet.core.conformance import EconetTransportConformance
 from oaknut.econet.core.errors import EconetError, TransportConfigurationError
 from oaknut.econet.core.outcome import TransmitOutcome, TransmitResult
 from oaknut.econet.core.packet import EconetPacket, PacketKind
@@ -46,6 +47,7 @@ __all__ = [
     "EconetError",
     "EconetPacket",
     "EconetTransport",
+    "EconetTransportConformance",
     "IMMEDIATE_PORT",
     "LOCAL_NET",
     "PacketKind",
