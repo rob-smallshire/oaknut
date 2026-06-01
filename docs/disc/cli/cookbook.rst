@@ -93,9 +93,7 @@ Writing them is unremarkable — quote the path so the shell leaves the
    :section: create
 
 The disc already held ``guard41`` and ``guard42``; now it carries
-``guard#1`` and ``guard#2`` too. (DFS folds names to upper case on
-write, so ``disc ls`` shows ``GUARD#1``; matching is
-case-insensitive.)
+``guard#1`` and ``guard#2`` too.
 
 **2. Copy the whole disc, wildcard names and all.**
 
@@ -109,8 +107,8 @@ lands on a fresh blank SSD:
 **3. The trap: retrieving one of them by name.**
 
 Now the ``#`` bites. As a pattern, ``guard#1`` means "``guard``, any
-one character, ``1``" — which matches both ``GUARD#1`` *and*
-``GUARD41``, so a plain copy quietly picks up the neighbour:
+one character, ``1``" — which matches both ``guard#1`` *and*
+``guard41``, so a plain copy quietly picks up the neighbour:
 
 .. cli-example:: wildcard_literal_names
    :section: decoy
