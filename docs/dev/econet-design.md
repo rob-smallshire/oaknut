@@ -79,6 +79,7 @@ A direct consequence, **validated against the Piconet firmware via its project a
 - **FR8** — Surface fine-grained delivery outcomes (acknowledged / not-listening / no-clock / line-jammed / timeout / handshake-failed …) rather than a bare success/failure.
 - **FR9 (future)** — Higher-level applications layered on the transport: a file server (`&99`), a print server (`&9F`), and bridge/router/switch services composing multiple transports.
 - **FR10 (future)** — A *true* Econet bridge: participates in the native bridge protocol (`&9C` — `WhatNet`/`IsNet`/`Reset`/`Update`), manages per-segment network numbers, and forwards four-way transactions, immediate operations, and broadcasts faithfully across segments — as distinct from AUN-level packet routing/NAT. Canonical topology: one host, two Piconet adapters, two Econet segments. The Acorn Econet Bridge disassembly is the spec. **Parked 2026-06-01:** model A (verbatim relay) is parked pending a dual-ADLC controller (host-mediated relay can't meet per-frame timing); model B (proxy store-and-forward) is feasible but deferred behind phases 1–3. See §12.3.
+- **FR11 (long-term)** — A Dynamic Station Configuration Protocol (DSCP): a DHCP-equivalent for automatic station-number (and peer-table) configuration, server and client, to make plug-and-play Econet feasible. A detailed speculative spec already exists at `beebium/docs/discussion/dynamic-station-config-protocol.md`; oaknut-econet is well placed to provide the dependency-light reference implementation and — uniquely — a *wire-side* DSCP station on real Econet via a Piconet/HAT transport. See §12.4.
 
 ### Non-functional
 
@@ -461,6 +462,16 @@ Upshot: model (B) over two Picos is a realistic build given these firmware chang
 
 **Decision (2026-06-01):** model (A) is **parked** — host-mediated verbatim relay over two USB Picos cannot meet per-frame handshake timing, and it needs a single dual-ADLC controller or a firmware-resident relay to be viable. Importantly, **model (B) is *not* latency-bound**: each segment's four-way completes locally in the proxying Pico's firmware, so host (USB + Python) latency only adds end-to-end store-and-forward delay, not per-frame timing pressure. Model (B) therefore remains a feasible future bridge — **deferred** behind the foundational phases (core + AUN + Piconet client/server), not abandoned. The analysis above is retained for that revisit.
 
+### 12.4 Plug-and-play: Dynamic Station Configuration Protocol (DSCP) — long-term
+
+A long-term goal (FR11): DSCP plays the role DHCP plays on IP — a station comes up with no pre-assigned number and is configured automatically. A detailed speculative spec already exists at **`beebium/docs/discussion/dynamic-station-config-protocol.md`**; that document is the design basis and is not restated here. The points salient to oaknut-econet:
+
+- **Two flavours.** (i) An *IP-native* UDP protocol that runs *alongside* AUN (never inside it, so AUN interop is never compromised) for soft-stations — fixed binary wire format (magic `0xD5`; Allocate / Release / Renew / List), a lease model, mDNS-discovered server, and a peer-table bootstrap carried in the Allocate response. (ii) A *wire-side* variant carried over Econet itself (an immediate op or a data frame on a reserved DSCP station/port) so real hardware can self-configure — the `*AUTOSETSTATION` idea, writing CMOS byte `0x0E` exactly as `*SETSTATION` does.
+- **Layering.** DSCP is a higher-level application, like the file server — it does not touch the core abstraction. The IP-native server is a small asyncio app (UDP + `zeroconf`), matching the spec's "zero exotic dependencies, any language can implement it" goal. The wire-side server/client maps directly onto `EconetTransport` (`immediate()` or a reserved port), with station-occupancy discovery via a `MachinePeek` (`&88`) sweep plus passive source-address observation.
+- **Where oaknut-econet adds something Beebium can't.** Beebium is an emulator, so its wire-side DSCP needs PiEconetBridge's PIPESERVER. An oaknut-econet process with a Piconet or HAT transport can *be* the wire-side DSCP station directly on real Econet — a natural fit for the cross-emulator/cross-hardware reference implementation the spec calls for.
+- **Naming.** The spec itself flags that the published protocol name and mDNS service type must be vendor-neutral (not `_beebium-dscp`); candidates include `_econet-dscp._udp` and the names "DSCP" or "ESAP". Open question (§14.10).
+- **Client support is the long pole.** DSCP needs station-side client software (a 6502 ROM/utility for real hardware; a startup step for soft-stations), which is what makes this a long arc rather than a near-term deliverable.
+
 ---
 
 ## 13. Testing strategy
@@ -484,6 +495,7 @@ Upshot: model (B) over two Picos is a realistic build given these firmware chang
 7. **True-bridge forwarding semantics** — *largely resolved* in §12.2: the Acorn bridge is a frame-by-frame store-and-forward HDLC relay reproducing the full `&9C` protocol, not a transaction terminator. Remaining: immediate-op fidelity through the relay (unverified in the appliance).
 8. **Piconet firmware changes** — *answered* in §12.3 (ranked): the favourable news is that the MC68B54 already receives all frames and the ACK builder is address-transparent, so a proxy (model B) bridge is a realistic firmware delta; verbatim relay (model A) over two USB Picos is not. The held-open flag-fill timing while proxying is the main real-time risk and needs bench testing.
 9. **Which definition of "true bridge" we commit to** (the central FR10 question) — verbatim frame relay (model A: transparent, frame-level; needs a single dual-ADLC controller or firmware-resident relay) vs native proxy store-and-forward (model B: two Picos + firmware changes + host `&9C` logic; native Econet both sides, addressing-preserving, but not byte-transparent). This drives where the relay lives and how much firmware work FR10 entails.
+10. **DSCP scope & name** — IP-native first (the Beebium draft's Option A) vs wire-side-first (leveraging our real-transport advantage as a wire-side DSCP station); and the vendor-neutral protocol / mDNS service name. Builds directly on `beebium/docs/discussion/dynamic-station-config-protocol.md`.
 
 ---
 
