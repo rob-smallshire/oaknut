@@ -71,6 +71,7 @@ oaknut-afs   = { workspace = true }
 oaknut-romfs = { workspace = true }
 oaknut-zip   = { workspace = true }
 oaknut-disc  = { workspace = true }
+oaknut-econet-core = { workspace = true }
 
 [tool.uv]
 default-groups = ["test", "lint", "dev", "workspace"]
@@ -95,6 +96,7 @@ workspace = [
     "oaknut-romfs",
     "oaknut-zip",
     "oaknut-disc",
+    "oaknut-econet-core",
 ]
 test = [
     "pytest>=8.3",
@@ -167,6 +169,9 @@ filename = "packages/oaknut-zip/src/oaknut/zip/__init__.py"
 [[tool.bumpversion.files]]
 filename = "packages/oaknut-disc/src/oaknut/disc/__init__.py"
 
+[[tool.bumpversion.files]]
+filename = "packages/oaknut-econet-core/src/oaknut/econet/core/__init__.py"
+
 [tool.pytest.ini_options]
 # importlib mode is required for PEP 420 namespace packages. The
 # default prepend mode collides with sibling packages that contribute
@@ -187,6 +192,7 @@ testpaths = [
     "packages/oaknut-romfs/tests",
     "packages/oaknut-zip/tests",
     "packages/oaknut-disc/tests",
+    "packages/oaknut-econet-core/tests",
 ]
 # The workspace-root tests/ directory holds shared test data and a
 # tiny tests/fixtures.py module consumed by every package's conftest.
