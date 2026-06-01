@@ -38,10 +38,10 @@ All local; **each carries its own `CLAUDE.md`**, so each can be consulted as its
 ## 2. Econet primer (terms used throughout)
 
 - **Station address** — an 8-bit **station number** (1–254; `255` = broadcast; `0` reserved) qualified by an 8-bit **network number** (`0` = "this network" / local segment; 1–127 conventional for remote nets). Throughout this doc and the code, an **`Address`** is the pair `(network, station)`.
-- **Port** — an 8-bit demultiplexing key chosen by the receiver. Well-known ports (to be confirmed against the NFS/ANFS disassembly, which is authoritative): `&00` immediate operations, `&99` file server, `&9F` print server, `&9C` bridge/`MachinePeek`-class control, `&9E`/`&D0`–`&D3` various. Port `&00` is special: it carries immediate operations, not normal data.
+- **Port** — an 8-bit demultiplexing key chosen by the receiver. Well-known ports, from the NFS/ANFS disassembly: `&00` immediate operations, `&90` FS reply, `&91` FS save/ack, `&92` FS load-data, `&93` remote, `&99` file-server command, `&D1` print server; plus `&9C` for the bridge protocol (from the Acorn bridge disassembly — NFS/ANFS itself does not use `&9C`). Port `&00` is special: it carries immediate operations, not normal data. These are the `Port` constants in `oaknut.econet.core`.
 - **Control byte** — an 8-bit per-packet code; the high bit (`&80`) is conventionally set on the wire and is **cleared in the AUN representation**. The lower bits select the operation within a protocol.
 - **Four-way handshake** — reliable unicast: sender emits a **scout** (dest+src addresses, control, port), receiver returns a **scout-ack**, sender sends the **data** frame(s), receiver returns a **final-ack**. CRC, flag-fill, and timing are ADLC concerns.
-- **Immediate operations** — control-port (`&00`) operations executed by the receiver's NMI handler without application involvement: `Peek`, `Poke`, `JSR`, user/OS procedure calls, `Halt`, `Continue`, **`MachinePeek`** (returns machine type/version). These are a **two-way** exchange (request → reply), not four-way.
+- **Immediate operations** — control-port (`&00`) operations executed by the receiver's NMI handler without application involvement: `Peek`, `Poke`, `JSR`, user/OS procedure calls, `Halt`, `Continue`, **`MachinePeek`** (returns machine type/version) — control bytes `&81`–`&88`, the `ImmediateOp` codes in `oaknut.econet.core`. These are a **two-way** exchange (request → reply), not four-way.
 - **Broadcast** — a single unacknowledged frame to `255.255`.
 - **AUN** — collapses the wire handshake into a two-packet UDP exchange (a typed datagram + an `Ack`/`Nack`), with a 4-byte handle/sequence for correlation and retransmission.
 
@@ -486,7 +486,7 @@ A long-term goal (FR11): DSCP plays the role DHCP plays on IP — a station come
 
 ## 14. Open questions
 
-1. **Well-known ports & immediate control codes** — enumerate authoritatively from the NFS/ANFS disassembly before freezing the `Port` constants and immediate-op codes.
+1. **Well-known ports & immediate control codes** — *resolved*: enumerated from the NFS/ANFS disassembly (and the bridge disassembly for `&9C`) and frozen as the `Port` and `ImmediateOp` enums in `oaknut.econet.core`. Notable corrections: the print server is `&D1` in NFS/ANFS (not `&9F`), and `&9C` is the bridge appliance's port, not referenced by NFS/ANFS.
 2. **AUN UDP port scheme** — *decided*: fully map-driven. `AunTransport` binds a configurable `(host, port)` (default `DEFAULT_AUN_PORT = 32768`) and resolves peers via an explicit peer map; no fixed per-station formula, which is the most interoperable choice.
 3. **`seq`/handle exposure** — confirm the file server never needs the AUN handle at the application layer (reply correlation is by reply-port, not handle). If it does, surface it deliberately rather than leaking it.
 4. **HAT immediate handling** — confirm `IMMSPOOF`/`RESILIENTACK` semantics before claiming `IMMEDIATE_REPLY`.

@@ -37,6 +37,7 @@ from oaknut.econet.core.outcome import TransmitOutcome, TransmitResult
 from oaknut.econet.core.packet import EconetPacket, PacketKind
 from oaknut.econet.core.testing import TestTransport
 from oaknut.econet.core.transport import EconetTransport
+from oaknut.econet.core.wellknown import ImmediateOp, Port
 
 __version__ = "12.5.3"
 
@@ -49,8 +50,10 @@ __all__ = [
     "EconetTransport",
     "EconetTransportConformance",
     "IMMEDIATE_PORT",
+    "ImmediateOp",
     "LOCAL_NET",
     "PacketKind",
+    "Port",
     "TestTransport",
     "TransmitOutcome",
     "TransmitResult",
