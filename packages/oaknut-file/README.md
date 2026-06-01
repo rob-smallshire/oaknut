@@ -1,15 +1,16 @@
 # oaknut-file
 
-[![PyPI version](https://img.shields.io/pypi/v/oaknut-file.svg)](https://pypi.org/project/oaknut-file/)
-[![CI](https://github.com/rob-smallshire/oaknut-file/actions/workflows/tests.yml/badge.svg)](https://github.com/rob-smallshire/oaknut-file/actions/workflows/tests.yml)
-[![Python versions](https://img.shields.io/pypi/pyversions/oaknut-file.svg)](https://pypi.org/project/oaknut-file/)
-[![License: MIT](https://img.shields.io/pypi/l/oaknut-file.svg)](https://github.com/rob-smallshire/oaknut-file/blob/master/LICENSE)
+[![PyPI version](https://img.shields.io/pypi/v/oaknut-file)](https://pypi.org/project/oaknut-file/)
+[![CI](https://github.com/rob-smallshire/oaknut/actions/workflows/ci.yml/badge.svg)](https://github.com/rob-smallshire/oaknut/actions/workflows/ci.yml)
+[![Python versions](https://img.shields.io/pypi/pyversions/oaknut-file)](https://pypi.org/project/oaknut-file/)
+[![License: MIT](https://img.shields.io/pypi/l/oaknut-file)](https://github.com/rob-smallshire/oaknut/blob/master/packages/oaknut-file/LICENSE)
 
 Acorn file metadata handling for the oaknut package family.
 
-`oaknut-file` is the shared metadata layer used by
-[`oaknut-zip`](https://github.com/rob-smallshire/oaknut-zip) and
-[`oaknut-dfs`](https://github.com/rob-smallshire/oaknut-dfs). It provides:
+`oaknut-file` is the shared metadata layer used across the
+[oaknut](https://github.com/rob-smallshire/oaknut) family — by
+`oaknut-dfs`, `oaknut-adfs`, `oaknut-afs`, `oaknut-zip`, and the `disc`
+CLI. It provides:
 
 - The `Access` IntFlag enum for Acorn file attribute bytes
 - The `AcornMeta` dataclass for load/exec addresses and attributes
@@ -45,8 +46,8 @@ from oaknut.file import Access
 
 # Compose flags with bitwise OR
 flags = Access.R | Access.W | Access.L
-print(repr(flags))   # <Access.R|W|L: 11>
-print(hex(flags))    # 0x0B
+print(repr(flags))   # <Access.LWR: 11>
+print(hex(flags))    # 0xb
 ```
 
 | Flag | Value | Meaning |
@@ -54,9 +55,16 @@ print(hex(flags))    # 0x0B
 | `Access.R`  | 0x01 | Owner read |
 | `Access.W`  | 0x02 | Owner write |
 | `Access.E`  | 0x04 | Execute only |
-| `Access.L`  | 0x08 | Locked |
+| `Access.L`  | 0x08 | Locked — prevents delete, overwrite, and rename on the disc filing systems |
 | `Access.PR` | 0x10 | Public read |
 | `Access.PW` | 0x20 | Public write |
+| `Access.X`  | 0x40 | `*RUN`-only — may be `*RUN` but not `*LOAD`ed (CFS/ROMFS copy protection) |
+
+`Access.X` (`*RUN`-only) is a **distinct axis** from `Access.L` (locked):
+`X` is the cassette/ROM copy-protection bit and does not map to or from
+the disc filing systems' delete-lock. `Access.WR` and `Access.LWR` are
+provided as convenience composites for the common owner-read+write and
+locked-owner-read+write cases.
 
 ### INF sidecar files
 
@@ -72,8 +80,8 @@ from oaknut.file import (
 # Traditional INF: filename load exec length [attr]
 trad = format_trad_inf_line(
     filename="HELLO",
-    load_addr=0x1900,
-    exec_addr=0x8023,
+    load_address=0x1900,
+    exec_address=0x8023,
     length=0x100,
     attr=int(Access.R | Access.W),
 )
@@ -82,21 +90,21 @@ print(trad)
 
 # PiEconetBridge INF: owner load exec perm
 pieb = format_pieb_inf_line(
-    load_addr=0xFFFFDD00,
-    exec_addr=0xFFFFDD00,
+    load_address=0xFFFFDD00,
+    exec_address=0xFFFFDD00,
     attr=int(Access.R | Access.W | Access.L | Access.PR),
 )
 print(pieb)
 # 0 ffffdd00 ffffdd00 1b
 
-# Auto-detect format on parse
+# Auto-detect format on parse (returns (source_label, AcornMeta))
 source, meta = parse_inf_line(trad)
-print(meta)
-# AcornMeta(load_addr=0x1900, exec_addr=0x8023, attr=0x03)
+print(meta.load_address, meta.exec_address, meta.access)
+# 6400 32803 3
 
 source, meta = parse_inf_line(pieb)
-print(meta)
-# AcornMeta(load_addr=0xFFFFDD00, exec_addr=0xFFFFDD00, attr=0x1B, filetype=0xFDD)
+print(hex(meta.load_address), hex(meta.access), hex(meta.infer_filetype()))
+# 0xffffdd00 0x1b 0xfdd
 ```
 
 ### Filename metadata encoding
@@ -114,8 +122,8 @@ print(clean, meta.infer_filetype())
 
 # MOS load-exec suffix (variable-width hex)
 clean, meta = parse_encoded_filename("PROG,1900-801f")
-print(clean, meta.load_addr, meta.exec_addr)
-# ('PROG', load_addr=0x1900, exec_addr=0x801F)
+print(clean, hex(meta.load_address), hex(meta.exec_address))
+# PROG 0x1900 0x801f
 ```
 
 ### Filetype-stamped load addresses
@@ -126,9 +134,9 @@ encode a RISC OS filetype.
 ```python
 from oaknut.file import AcornMeta
 
-meta = AcornMeta(load_addr=0xFFFF0E10)
+meta = AcornMeta(load_address=0xFFFF0E10)
 print(meta.is_filetype_stamped, hex(meta.infer_filetype()))
-# is_filetype_stamped=True, infer_filetype()=0xF0E
+# True 0xf0e
 ```
 
 ### Extended attributes
@@ -139,14 +147,14 @@ from oaknut.file import write_acorn_xattrs, read_acorn_xattrs
 # Write to user.acorn.* namespace
 write_acorn_xattrs(
     "myfile.bin",
-    load_addr=0x1900,
-    exec_addr=0x8023,
+    load_address=0x1900,
+    exec_address=0x8023,
     attr=0x03,
 )
 
 # Read back (falls through to user.econet_* if user.acorn.* is absent)
 meta = read_acorn_xattrs("myfile.bin")
-print(meta.load_addr, meta.exec_addr, meta.attr)
+print(meta.load_address, meta.exec_address, meta.access)
 ```
 
 ## Public API
