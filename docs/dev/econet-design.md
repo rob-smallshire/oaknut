@@ -14,7 +14,7 @@ This project adds a new family of `oaknut` packages providing **low-level Python
 - **Piconet** — a Raspberry Pi Pico (RP2040) driving a real ADLC, presenting a USB-CDC **serial-to-Econet** adapter to the host. Source: `/Users/rjs/Code/piconet`.
 - **PiEconetHAT** — a Raspberry Pi HAT carrying a real ADLC, driven by a Linux **kernel module** exposing a character device to user space. Source: `/Users/rjs/Code/PiEconetBridge`.
 
-An explicit goal is to **technically supersede PiEconetBridge** — the dominant modern Econet stack — which suffers from no automated tests, blocking/busy-wait I/O, coarse global locking, and tight kernel/user-space coupling. We aim for a clean, fully tested, `asyncio`-based stack with a sharp separation between dumb transports and the routing/server logic above them.
+An explicit goal is to **technically supersede PiEconetBridge** — the dominant modern Econet stack — which suffers from no automated tests, blocking/busy-wait I/O, coarse global locking, and tight kernel/user-space coupling. We aim for a clean, fully tested, `asyncio`-based stack with a sharp separation between dumb transports and the routing/server logic above them. A specific target is a **true Econet bridge** — one that participates in the native bridge protocol (`&9C`) and forwards transactions faithfully between segments, which we believe PiEconetBridge does not genuinely do (it routes/NATs AUN packets rather than bridging Econet). A canonical deployment is a single host with **two Piconet adapters** bridging two Econet segments, running `oaknut-econet`-based software (see §12, FR10).
 
 ### Relationship to the rest of oaknut
 
@@ -30,7 +30,8 @@ All local; **each carries its own `CLAUDE.md`**, so each can be consulted as its
 | Beebium | `/Users/rjs/Code/beebium` | Best architectural guide: `Mc6854` ADLC, `FourWayHandshake` decorator, `NetworkBackend` ABC with AUN + Piconet backends, and the `_aun._udp` mDNS station-advertisement standard. C++. |
 | Piconet | `/Users/rjs/Code/piconet` | Host↔Pico serial protocol; firmware that runs the four-way handshake on the wire. C firmware + TypeScript host driver. |
 | PiEconetBridge | `/Users/rjs/Code/PiEconetBridge` | Kernel char-device interface (`/dev/econet-gpio`, ioctl magic `0xa9`), AUN/trunk bridging, the design we mean to supersede. C. |
-| acorn-nfs | `/Users/rjs/Code/acornaeology/acorn-nfs` | Disassemblies of NFS/ANFS — `&99`/`&9F`/`&9C` protocols, immediate ops. The server's spec. |
+| acorn-nfs | `/Users/rjs/Code/acornaeology/acorn-nfs` | Disassemblies of NFS/ANFS — `&99` file-server / `&9F` print protocols, immediate ops. The server's spec. |
+| acorn-econet-bridge | `/Users/rjs/Code/acornaeology/acorn-econet-bridge` | Disassembly + analysis of the Acorn Econet Bridge appliance — the native bridge protocol (`&9C`) and true-bridge forwarding semantics. The bridge's spec. |
 
 ---
 
@@ -58,7 +59,7 @@ The natural fear when unifying these transports is an *abstraction-level mismatc
 
 The clincher: PiEconetBridge's *own internal IPC currency* is `struct __econet_packet_aun` — an AUN-shaped logical packet. Beebium needs its frame-level `Mc6854` + `FourWayHandshake` only because it emulates an ADLC for a real 6502 to poke registers on. **We never present an ADLC to anyone** — we write Python clients and servers — so we sit one layer up, at the **logical AUN packet**, and the abstraction stays clean across all three transports.
 
-**Decided:** the `EconetTransport` abstraction is at the logical-packet level. There is no ADLC model, no frame codec, no scout/ack state machine in this project.
+**Decided:** the `EconetTransport` abstraction is at the logical-packet level. There is no ADLC model, no frame codec, no scout/ack state machine in this project. (One exception surfaces later: a *true* Econet bridge is a frame relay and needs a frame-level facet — see §12.2. That is an additive, optional capability used only by the bridge application; it does not change the logical-packet core that clients, servers, and transaction-level routers use.)
 
 A direct consequence, **validated against the Piconet firmware via its project agent** (firmware completes the full four-way including the final data ack at `econet.c:586` *before* emitting `RX_TRANSMIT`): **an inbound packet delivered to the application is a completed transaction — already acknowledged on the wire.** An application *replies* by initiating a fresh outbound transaction. The sole two-way exception is immediate operations.
 
@@ -77,6 +78,7 @@ A direct consequence, **validated against the Piconet firmware via its project a
 - **FR7** — Each transport advertises a set of **capability flags**; applications branch on capabilities, not on transport identity.
 - **FR8** — Surface fine-grained delivery outcomes (acknowledged / not-listening / no-clock / line-jammed / timeout / handshake-failed …) rather than a bare success/failure.
 - **FR9 (future)** — Higher-level applications layered on the transport: a file server (`&99`), a print server (`&9F`), and bridge/router/switch services composing multiple transports.
+- **FR10 (future)** — A *true* Econet bridge: participates in the native bridge protocol (`&9C` — `WhatNet`/`IsNet`/`Reset`/`Update`), manages per-segment network numbers, and forwards four-way transactions, immediate operations, and broadcasts faithfully across segments — as distinct from AUN-level packet routing/NAT. Canonical topology: one host, two Piconet adapters, two Econet segments. The Acorn Econet Bridge disassembly is the spec. **Parked 2026-06-01:** model A (verbatim relay) is parked pending a dual-ADLC controller (host-mediated relay can't meet per-frame timing); model B (proxy store-and-forward) is feasible but deferred behind phases 1–3. See §12.3.
 
 ### Non-functional
 
@@ -409,6 +411,55 @@ Not built yet, but the core abstraction is shaped to enable them without rework:
 
 - **File server (`&99`)** — an application that listens on port `&99`, decodes the file-server protocol (per the NFS/ANFS disassembly), and serves data from an `oaknut-afs`/`oaknut-adfs`/`oaknut-dfs` backing store. Replies are fresh `transmit()`s to the client's reply port. Immediate ops handled via `immediate()`/inbound `IMMEDIATE`.
 - **Bridge / router / switch** — an application owning **several** transports and a routing table `network → transport`, plus optional NAT/pools/firewalling — all in the application, none in the transports. Forwarding is: `async for pkt in transport_a: await route(pkt)`. This is the concrete path to superseding PiEconetBridge: the routing logic that PiEconetBridge fuses with its device layer (one global `networks[]` under a single mutex) becomes a testable, transport-agnostic service over clean `EconetTransport` instances.
+- **True bridge** — a bridge goes further than routing packets: to be a *true* Econet bridge it implements the `&9C` bridge protocol so that other bridges and stations recognise it as a genuine Acorn bridge (answering `WhatNet`/`IsNet`, originating and honouring bridge `Reset`/`Update`), manages each segment's network number, and reproduces the appliance's forwarding behaviour for four-way data, immediate operations, and broadcasts — including the timing/flag-fill discipline the four-way relay demands. The Acorn Econet Bridge disassembly is the authority for these behaviours; the protocol breakdown is in §12.1 below.
+
+### 12.1 The native bridge protocol (`&9C`)
+
+From the Acorn Econet Bridge disassembly (consulted read-only via its project agent; cited there to `versions/econet-bridge-variant_1/output/…asm` and `docs/analysis/`):
+
+- **A bridge has no station number.** It advertises the **networks it can reach**, not a station identity. Each side's own net number is configured per port (the appliance jumpered `net_num_a` / `net_num_b`; 7-bit, 1–127) and never changes at runtime.
+- **`&9C` frames are full broadcasts only** (`dst = 255.255`, a fixed bridge source convention, `port = &9C`); the control byte selects the operation:
+
+  | ctrl | Name | Role |
+  |---|---|---|
+  | `&80` | BridgeReset | "I just came up — relearn"; payload = the announcer's net on the *opposite* side |
+  | `&81` | BridgeReply | re-announcement listing reachable nets; the list grows by one (the forwarder's own net) per hop |
+  | `&82` | WhatNet | "which nets do you reach?"; reply enumerates reachable nets |
+  | `&83` | IsNet | "can you reach net X?"; reachable → reply, otherwise dropped |
+
+- **Routing is distance-vector reachability, learned by flooding.** Two 256-byte tables (`reachable_via_a` / `reachable_via_b`) index reachability by net; seeded with the own net + broadcast, then populated from `&80`/`&81`. On learning, the bridge appends its own net and re-broadcasts out the *other* side.
+- **Reset/Update is event-driven, not timed.** Receiving a `&80` is the only trigger that wipes the tables and schedules a burst of staggered `&81` re-announcements; a `&81` only *learns* (it never re-triggers a burst — this is what stops an announce loop between two bridges). A lone bridge sends two frames at boot, then goes silent.
+- **Net 0 is rewritten at the boundary, never carried across.** Inbound `dst_net == 0` is rejected; `src_net == 0` is replaced with the arrival side's net before forwarding; a `dst_net` equal to the far side's own net is normalised back to `0` so it reads as "local" on the destination segment.
+
+### 12.2 The forwarding model — and a real design tension
+
+The crux: **the Acorn bridge is a transparent layer-2 HDLC frame relay.** It does *not* terminate a transaction on the near side and re-originate it on the far side. It **store-and-forwards each individual frame** — scout, scout-ack, data, final-ack — verbatim onto the other segment, so the *two real endpoints run the four-way handshake through it*. It holds no per-transaction state; any missing / invalid / unroutable frame aborts cleanly and the endpoints time out and retry. It does real CSMA + flag-fill and is bound by Econet's microsecond-scale inter-frame timing; each hop adds a full frame of store-and-forward latency, which the disassembly notes already tightens the endpoints' timing budget. Forwarding is port-agnostic and net-based (`dst_net` not local **and** reachable via the other side); immediate ops and broadcasts ride the same path (immediate-op fidelity through the appliance is unverified).
+
+**This collides with §3's decision** to sit at the logical-packet level. A faithful true bridge operates one layer *down*, at the frame level — exactly the layer that stock Piconet firmware, the HAT kernel module, and AUN all hide by completing (or obviating) the handshake below the host. Resolution:
+
+- The logical-packet abstraction stays correct and primary for **clients, servers, and transaction-level routers** — the bulk of the project.
+- A **true bridge in the verbatim sense (model A, §12.3) needs a frame-level facet**: an optional, lower-level capability (`FRAME_RELAY`) exposing raw frames with full 4-byte addressing, *no* auto-ack and *no* auto-handshake, offered only by transports that can provide it. This is additive — it does not change the core packet API. (The alternative *proxy* bridge, model B, does **not** need it — see §12.3.)
+- **AUN can never be a true-bridge segment** — it is already transaction-level; there are no frames to relay.
+- **Stock Piconet firmware cannot do this** (it auto-completes the handshake and surfaces only completed transactions). A frame-relay mode requires **firmware changes** — in scope, since the piconet repo is ours to modify. See §12.3 for the two bridge architectures and the concrete change list.
+
+**Feasibility concern to settle early.** A host-mediated, frame-by-frame relay across *two USB-serial Picos* inserts USB-CDC + OS + Python latency into every frame hop. Econet's handshake timing is tight enough that the 6502 appliance — with both ADLCs on one board — was already near the edge. Relaying each frame up to Python and back down to a second Pico may simply not meet the inter-frame deadlines. If so, a faithful frame-relay bridge needs the relay to live *below* the host — in Pico firmware, or on a single dual-ADLC controller — with the host configuring and coordinating rather than relaying each frame. The buildable-today alternative (transaction-level store-and-forward on the logical-packet abstraction) is exactly what PiEconetBridge does and what we've agreed is *not* a true bridge, so it is a documented fallback, not the goal. **Where the frame relay must physically live is the central open question for FR10 (§14.9).**
+
+### 12.3 Two bridge architectures, and the Piconet firmware delta
+
+The firmware consultation (Piconet agent, read-only) clarifies that "true bridge" splits into **two distinct architectures**, and the Piconet path naturally lands on the second:
+
+- **(A) Verbatim frame relay** — the Acorn appliance. Each scout/ack/data/ack frame is relayed across unchanged; the two endpoints handshake *through* the bridge. Frame-level, fully transparent, no proxying. Demands the relay sit where both ADLCs share microsecond-tight timing (a single dual-ADLC controller, or a firmware-resident relay). **A host-in-the-loop relay over two USB Picos is almost certainly too slow for this.**
+- **(B) Proxy store-and-forward** — the bridge *proxies* the remote station: it scout-ACKs locally on the originator's segment (holding the line with flag-fill), accepts the whole transaction, then re-originates it to the real destination on the far segment. Transaction-level. Structurally this is what PiEconetBridge does — but a Piconet-based version stays **native Econet on both sides**, preserves the original 4-byte addressing, and speaks the `&9C` protocol, so it is materially closer to a true bridge than PiEconetBridge's AUN/IP hop. Whether (B) counts as a "true bridge" is a definitional call (transparency vs native-Econet-both-sides + `&9C` + addressing fidelity) — **open question, see §14.9.**
+
+The Piconet firmware architecture is *favourable* for model (B): the MC68B54 already receives **all** frames (no hardware address filter to fight — filtering is a software check on the destination-station byte only), and the ACK builder is **already address-transparent** (it sources the ACK from the incoming frame's destination fields, not from the configured station). So relaxing the software filter automatically yields correctly-addressed proxy ACKs. The ranked firmware changes (from the consultation; the agent's full write-up with citations is in its plan file):
+
+- **Easy** — (1) add arbitrary **source** addressing to the `TX` command (it currently forces src = configured station, src-net = 0), so the host can relay preserving the original source; (2) gate the **MachinePeek auto-answer** behind "is this one of *my* real stations?" so it does not shadow every proxied station's identity.
+- **Medium** — (3) replace the 2-entry station filter with a configurable **proxy set/range** plus a host command to load it; (4) add a combined **active-promiscuous / bridge mode** (receive for the proxy set, complete the handshake, report the full transaction to the host) alongside STOP/LISTEN/MONITOR — today no mode both receives-all *and* can transmit/ack; (5) re-enable/finish the disabled **held-open REPLY path** and make `reply()` write a full 4-byte header.
+- **Harder (design, host-side)** — (6) the bridge state machine + `&9C` topology logic lives in host Python on top of these primitives; (7) **timing/flag-fill correctness while proxying** — the Pico must scout-ACK fast enough to hold the originator while the far-segment transaction is driven; today the four-way runs synchronously to completion, so the held-open flag-fill approach is required. **This is the main real-time risk and needs bench testing.**
+
+Upshot: model (B) over two Picos is a realistic build given these firmware changes; model (A) verbatim relay over two USB Picos is not.
+
+**Decision (2026-06-01):** model (A) is **parked** — host-mediated verbatim relay over two USB Picos cannot meet per-frame handshake timing, and it needs a single dual-ADLC controller or a firmware-resident relay to be viable. Importantly, **model (B) is *not* latency-bound**: each segment's four-way completes locally in the proxying Pico's firmware, so host (USB + Python) latency only adds end-to-end store-and-forward delay, not per-frame timing pressure. Model (B) therefore remains a feasible future bridge — **deferred** behind the foundational phases (core + AUN + Piconet client/server), not abandoned. The analysis above is retained for that revisit.
 
 ---
 
@@ -430,6 +481,9 @@ Not built yet, but the core abstraction is shaped to enable them without rework:
 4. **HAT immediate handling** — confirm `IMMSPOOF`/`RESILIENTACK` semantics before claiming `IMMEDIATE_REPLY`.
 5. **Configuration format** — how applications declare transports + maps at startup (TOML? reuse an existing oaknut config convention?). Bridges need this most.
 6. **Piconet `REPLY` upstream** — whether to fix the firmware `REPLY` path upstream so Piconet can gain `IMMEDIATE_REPLY`.
+7. **True-bridge forwarding semantics** — *largely resolved* in §12.2: the Acorn bridge is a frame-by-frame store-and-forward HDLC relay reproducing the full `&9C` protocol, not a transaction terminator. Remaining: immediate-op fidelity through the relay (unverified in the appliance).
+8. **Piconet firmware changes** — *answered* in §12.3 (ranked): the favourable news is that the MC68B54 already receives all frames and the ACK builder is address-transparent, so a proxy (model B) bridge is a realistic firmware delta; verbatim relay (model A) over two USB Picos is not. The held-open flag-fill timing while proxying is the main real-time risk and needs bench testing.
+9. **Which definition of "true bridge" we commit to** (the central FR10 question) — verbatim frame relay (model A: transparent, frame-level; needs a single dual-ADLC controller or firmware-resident relay) vs native proxy store-and-forward (model B: two Picos + firmware changes + host `&9C` logic; native Econet both sides, addressing-preserving, but not byte-transparent). This drives where the relay lives and how much firmware work FR10 entails.
 
 ---
 
@@ -440,4 +494,4 @@ Not built yet, but the core abstraction is shaped to enable them without rework:
 3. **`oaknut-econet-aun`** — AUN transport against the core contract (pure UDP, easiest real validation), then `_aun._udp` mDNS. Interop-tested against Beebium.
 4. **`oaknut-econet-piconet`** — serial transport; hardware-in-the-loop tests with a real Pico.
 5. **`oaknut-econet-hat`** — char-device client; hardware-in-the-loop tests with a real HAT.
-6. **Applications** — file server (`&99`) on the AFS/ADFS/DFS backing stores; then bridge/router. Separate design docs each.
+6. **Applications** — file server (`&99`) on the AFS/ADFS/DFS backing stores. *Deferred:* a native proxy bridge (model B, `&9C`) once the Piconet firmware delta is done; *parked:* a verbatim bridge (model A) pending dual-ADLC hardware. Separate design docs each.
