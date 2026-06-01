@@ -8,8 +8,7 @@
 A Python library for reading, writing, and creating
 [Acorn DFS](https://en.wikipedia.org/wiki/Disc_Filing_System) floppy disc
 images, as used by the
-[BBC Micro](https://en.wikipedia.org/wiki/BBC_Micro) and
-[Acorn Electron](https://en.wikipedia.org/wiki/Acorn_Electron).
+[BBC Micro](https://en.wikipedia.org/wiki/BBC_Micro).
 
 With oaknut-dfs you can open DFS floppy images (SSD/DSD) to browse the
 catalogue, read and write files, inspect metadata, and create new
