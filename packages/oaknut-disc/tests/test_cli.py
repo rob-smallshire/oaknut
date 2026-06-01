@@ -1713,6 +1713,77 @@ class TestCpStorageOrder:
         # than being reversed by following catalogue order.
         assert self._physical_order(dfs_empty_filepath) == ["BOOT", "LOADER", "GAME"]
 
+    @staticmethod
+    def _global_physical_order(filepath: Path) -> list[str]:
+        """Every file's path in ascending start-sector order, across all
+        directory letters — the disc's true storage order."""
+        from oaknut.dfs import DFS
+
+        with DFS.from_file(filepath) as dfs:
+            placed = [(f.start_sector, f.path) for f in dfs.files]
+        return [path for _, path in sorted(placed)]
+
+    def test_recursive_copy_preserves_order_across_directories(
+        self, runner: CliRunner, tmp_path: Path
+    ) -> None:
+        # Storage order is global across the whole disc, not per directory:
+        # a recursive copy of a multi-directory disc must lay the files down
+        # in their original sector order, not grouped (or reversed) by
+        # directory letter. Regression for the v12.5.2 report.
+        from oaknut.dfs import ACORN_DFS_80T_SINGLE_SIDED, DFS
+
+        source = tmp_path / "multi.ssd"
+        with DFS.create_file(source, ACORN_DFS_80T_SINGLE_SIDED, title="Multi") as dfs:
+            (dfs.root / "$.!BOOT").write_bytes(b"b" * 100)  # sector 2
+            (dfs.root / "$.README").write_bytes(b"r" * 100)  # sector 3
+            (dfs.root / "D.MOA").write_bytes(b"m" * 100)  # sector 4
+            (dfs.root / "E.MAX").write_bytes(b"x" * 100)  # sector 5
+            (dfs.root / "M.MUSIC1").write_bytes(b"u" * 100)  # sector 6
+        source_order = ["$.!BOOT", "$.README", "D.MOA", "E.MAX", "M.MUSIC1"]
+        assert self._global_physical_order(source) == source_order
+
+        dst = tmp_path / "out.ssd"
+        runner.invoke(cli, ["create", str(dst), "--title", "OUT"])
+        result = runner.invoke(cli, ["cp", "-r", f"{source}:*", str(dst)])
+        assert result.exit_code == 0, result.output
+
+        assert self._global_physical_order(dst) == source_order
+
+    @staticmethod
+    def _cli_storage_order(runner: CliRunner, spec: str) -> list[str]:
+        out = runner.invoke(cli, ["storage-order", spec]).output
+        return [
+            line.split("\t")[0].strip()
+            for line in out.splitlines()
+            if line.strip() and not line.startswith("#")
+        ]
+
+    def test_moxon_dsd_build_preserves_each_drive(
+        self, runner: CliRunner, tmp_path: Path
+    ) -> None:
+        """Mark Moxon's report (stardot p485425): assembling a DSD from two
+        SSDs must preserve each source's storage order on its drive — drive
+        0 as well as drive 2.
+        """
+        from tests.fixtures import REFERENCE_IMAGES_DIRPATH
+
+        corpus = REFERENCE_IMAGES_DIRPATH / "storage-order"
+        drive0 = corpus / "drive-0.ssd"
+        drive2 = corpus / "drive-2.ssd"
+
+        combined = tmp_path / "combined.dsd"
+        assert runner.invoke(cli, ["create", str(combined)]).exit_code == 0
+        assert runner.invoke(cli, ["cp", "-r", f"{drive0}:*", str(combined)]).exit_code == 0
+        assert runner.invoke(cli, ["cp", "-r", f"{drive2}:*", f"{combined}::2."]).exit_code == 0
+
+        # Each drive of the combined DSD matches its source SSD, file for file.
+        assert self._cli_storage_order(runner, str(combined)) == self._cli_storage_order(
+            runner, str(drive0)
+        )
+        assert self._cli_storage_order(runner, f"{combined}::2.") == self._cli_storage_order(
+            runner, str(drive2)
+        )
+
 
 class TestStorageOrderCommand:
     """``disc storage-order`` lists a partition's files in physical order,

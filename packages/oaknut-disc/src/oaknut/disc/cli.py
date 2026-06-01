@@ -1683,6 +1683,7 @@ def _cp_dispatch(
             recursive=recursive,
             wildcards=wildcards,
         )
+        items = _in_global_storage_order(src_mount, items)
 
         for item in items:
             if item["kind"] == "mkdir":
@@ -1784,22 +1785,29 @@ def _collect_copy_items(
     return items
 
 
-def _in_storage_order(src_mount, entries: list) -> list:
-    """Return *entries* in the source's physical lay-down order.
+def _in_global_storage_order(src_mount, items: list) -> list:
+    """Order a copy plan's file items by the source's whole-disc storage order.
 
-    When the source advertises ``StorageOrdered``, sort the siblings by
-    its opaque storage key so a multi-file copy reproduces the on-disc
-    order rather than catalogue-enumeration order — a flat DFS catalogue
-    lists files highest-sector-first, which a copy would otherwise lay
-    back lowest-sector-first and so reverse. Filesystems that do not
-    advertise the capability keep their natural enumeration order (which
-    for a sequential medium already is its storage order).
+    Storage order spans the *whole medium*, not one directory: a flat DFS
+    catalogue lists files highest-sector-first, and its files interleave
+    across directory letters by sector. So the file items are sorted by
+    the source's opaque storage key globally — not per directory, which
+    would group (and, since a directory letter has no sector of its own,
+    reverse) them. Directory-creation items keep their order and run
+    first, so every parent exists before a file lands. A source that does
+    not advertise ``StorageOrdered`` keeps the plan's natural order (which
+    on a sequential medium already is its storage order).
     """
     from oaknut.filesystem import StorageOrdered
 
     if not isinstance(src_mount, StorageOrdered):
-        return entries
-    return sorted(entries, key=lambda entry: src_mount.storage_key(entry.path))
+        return items
+    mkdirs = [item for item in items if item["kind"] == "mkdir"]
+    files = sorted(
+        (item for item in items if item["kind"] == "file"),
+        key=lambda item: item["_storage_key"],
+    )
+    return [*mkdirs, *files]
 
 
 def _expand_glob(src_mount, src_bare: str) -> list[str]:
@@ -1817,8 +1825,9 @@ def _expand_glob(src_mount, src_bare: str) -> list[str]:
     parent = parent or src_mount.path_root()
     if not src_mount.exists(parent) or not src_mount.stat(parent).is_dir:
         raise click.ClickException(f"parent directory of glob does not exist: {parent or '$'!r}")
-    matched = [e for e in src_mount.iter_entries(parent) if matcher.matches(leaf_pattern, e.name)]
-    return [e.path for e in _in_storage_order(src_mount, matched)]
+    return [
+        e.path for e in src_mount.iter_entries(parent) if matcher.matches(leaf_pattern, e.name)
+    ]
 
 
 def _map_dst_path_for_dfs(path: str) -> str:
@@ -1892,7 +1901,7 @@ def _walk_tree(
     destination root in a DFS → ADFS/AFS copy. DFS's other letters become
     subdirectories as usual.
     """
-    for child in _in_storage_order(src_mount, list(src_mount.iter_entries(dir_path))):
+    for child in src_mount.iter_entries(dir_path):
         if src_is_dfs and child.is_dir and child.name == "$":
             _walk_tree(src_mount, child.path, dst_prefix, items, src_is_dfs=src_is_dfs)
             continue
@@ -1906,7 +1915,7 @@ def _walk_tree(
 
 def _file_item(src_mount, src_path: str, rel_dst: str) -> dict:
     """Build a ``file`` copy item, reading data and metadata from the mount."""
-    from oaknut.filesystem import AcornMetadata
+    from oaknut.filesystem import AcornMetadata, StorageOrdered
 
     load = exec_addr = access = 0
     if isinstance(src_mount, AcornMetadata):
@@ -1914,7 +1923,7 @@ def _file_item(src_mount, src_path: str, rel_dst: str) -> dict:
         load = meta.load_address or 0
         exec_addr = meta.exec_address or 0
         access = int(meta.access) if meta.access is not None else 0
-    return {
+    item = {
         "kind": "file",
         "dst": rel_dst,
         "data": src_mount.read_bytes(src_path),
@@ -1922,6 +1931,11 @@ def _file_item(src_mount, src_path: str, rel_dst: str) -> dict:
         "exec": exec_addr,
         "access": access,
     }
+    # The source's whole-disc position, so the write phase can lay files
+    # down in storage order across directories (see _in_global_storage_order).
+    if isinstance(src_mount, StorageOrdered):
+        item["_storage_key"] = src_mount.storage_key(src_path)
+    return item
 
 
 def _uses_dfs_paths(mount) -> bool:
