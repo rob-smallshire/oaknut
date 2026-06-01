@@ -31,8 +31,11 @@ from oaknut.econet.core.addressing import (
     Address,
 )
 from oaknut.econet.core.capability import TransportCapability
+from oaknut.econet.core.errors import EconetError, TransportConfigurationError
 from oaknut.econet.core.outcome import TransmitOutcome, TransmitResult
 from oaknut.econet.core.packet import EconetPacket, PacketKind
+from oaknut.econet.core.testing import TestTransport
+from oaknut.econet.core.transport import EconetTransport
 
 __version__ = "12.5.3"
 
@@ -40,11 +43,15 @@ __all__ = [
     "Address",
     "BROADCAST_ADDRESS",
     "BROADCAST_STATION",
+    "EconetError",
     "EconetPacket",
+    "EconetTransport",
     "IMMEDIATE_PORT",
     "LOCAL_NET",
     "PacketKind",
+    "TestTransport",
     "TransmitOutcome",
     "TransmitResult",
     "TransportCapability",
+    "TransportConfigurationError",
 ]
