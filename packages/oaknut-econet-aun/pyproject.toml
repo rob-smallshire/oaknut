@@ -1,0 +1,51 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "oaknut-econet-aun"
+dynamic = ["version"]
+authors = [{ name = "Robert Smallshire", email = "robert@smallshire.org.uk" }]
+description = "AUN (Acorn Universal Networking) transport for oaknut-econet: logical Econet over UDP/IP, with optional mDNS station discovery."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.12"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: System :: Networking",
+]
+dependencies = [
+    "oaknut-econet-core>=10.0",
+]
+
+[project.optional-dependencies]
+mdns = ["zeroconf>=0.130"]
+
+[project.urls]
+Homepage = "https://github.com/rob-smallshire/oaknut/tree/master/packages/oaknut-econet-aun"
+Repository = "https://github.com/rob-smallshire/oaknut"
+Issues = "https://github.com/rob-smallshire/oaknut/issues"
+
+[dependency-groups]
+test = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.24",
+]
+dev = [
+    "bump-my-version>=0.28.0",
+    "pre-commit>=3.0",
+    {include-group = "test"},
+]
+
+[tool.setuptools.dynamic]
+version = { attr = "oaknut.econet.aun.__version__" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
