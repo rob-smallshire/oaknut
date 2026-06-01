@@ -13,10 +13,11 @@
 
 `disc` is a unified command-line tool for inspecting, extracting from, and
 modifying [Acorn computer](https://en.wikipedia.org/wiki/Acorn_Computers) disc
-images — Acorn DFS and Watford DFS floppies, ADFS floppies and hard discs, and
-Acorn Level 3 File Server (AFS) partitions — through one consistent interface.
+images — Acorn DFS and Watford DFS floppies, ADFS floppies and hard discs,
+Acorn Level 3 File Server (AFS) partitions, ROM Filing System (ROMFS) images,
+and ZIP archives of Acorn files — through one consistent interface.
 
-It speaks DFS, ADFS, and AFS transparently, with a filing-system prefix
+It recognises each format by content, with a filing-system prefix
 (`dfs:`, `adfs:`, `afs:`) to route commands on dual-partition images, and Acorn
 star-command aliases (`*CAT`, `*DELETE`, `*RENAME`, …) alongside their
 Unix-named equivalents.
@@ -54,14 +55,14 @@ pip install oaknut-disc
 
 ```sh
 # List the contents of a DFS floppy
-disc ls 'games.ssd.$'
+disc ls 'games.ssd:$'
 
 # Copy a file from a DFS floppy to an ADFS hard disc, mapping metadata across
 disc cp 'games.ssd:$.ELITE' 'scsi0.dat:$.Elite'
 
-# Create and initialise a Level 3 File Server disc
-disc create scsi0.dat --format adfs-hard --capacity 10MiB --title Server
-disc afs-init scsi0.dat --disc-name Server --user RJS:2MiB --emplace Library
+# Create and initialise a Level 3 File Server disc (ADFS host + AFS tail)
+disc create scsi0.dat --geometry capacity=10MB --title Server
+disc afs init scsi0.dat --disc-name Server --user RJS:2MiB --emplace Library
 
 # Walk both partitions of a dual ADFS + AFS hard disc
 disc tree scsi0.dat
