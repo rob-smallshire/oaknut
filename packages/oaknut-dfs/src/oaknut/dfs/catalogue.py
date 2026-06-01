@@ -30,7 +30,7 @@ DFS_NAME_GRAMMAR = NameGrammar(
     forbidden_reason="the drive (:) and directory (.) separators",
     seven_bit=True,
     allow_control=True,
-    case="fold-upper",
+    case="insensitive",
     codec="acorn",
     notes=(
         "The wildcard characters * and # are stored literally; address "

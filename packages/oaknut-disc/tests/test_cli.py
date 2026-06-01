@@ -71,8 +71,8 @@ class TestLs:
         """Drilling into ``$`` lists the files filed under it."""
         result = runner.invoke(cli, ["ls", "--as", "display", f"{dfs_image_filepath}:$"])
         assert result.exit_code == 0
-        assert "HELLO" in result.output
-        assert "DATA" in result.output
+        assert "Hello" in result.output
+        assert "Data" in result.output
 
     def test_ls_adfs_root(self, runner: CliRunner, adfs_image_filepath: Path) -> None:
         result = runner.invoke(cli, ["ls", "--as", "display", str(adfs_image_filepath)])
@@ -118,7 +118,7 @@ class TestLs:
         result = runner.invoke(cli, ["ls", "--as", "json", f"{dfs_image_filepath}:$"])
         assert result.exit_code == 0, result.output
         rows = _json.loads(result.output)["reports"]["entries"]["rows"]
-        hello = next(r for r in rows if r["name"] == "HELLO")
+        hello = next(r for r in rows if r["name"] == "Hello")
         assert hello["load"] == 0x1900
         assert hello["exec"] == 0x8023
         assert isinstance(hello["length"], int)
@@ -389,7 +389,7 @@ class TestTree:
     def test_tree_dfs(self, runner: CliRunner, dfs_image_filepath: Path) -> None:
         result = runner.invoke(cli, ["tree", str(dfs_image_filepath)])
         assert result.exit_code == 0
-        assert "HELLO" in result.output
+        assert "Hello" in result.output
 
     def test_tree_adfs(self, runner: CliRunner, adfs_image_filepath: Path) -> None:
         result = runner.invoke(cli, ["tree", str(adfs_image_filepath)])
@@ -515,8 +515,8 @@ class TestFind:
         """
         result = runner.invoke(cli, ["find", f"{dfs_image_filepath}:*"])
         assert result.exit_code == 0, result.output
-        assert "$.HELLO" in result.output
-        assert "$.DATA" in result.output
+        assert "$.Hello" in result.output
+        assert "$.Data" in result.output
         assert "afs:" not in result.output
         assert "adfs:" not in result.output
         assert "dfs:" not in result.output
@@ -631,8 +631,8 @@ class TestFindAsFormats:
         # TSV header is prefixed with "# " per asyoulikeit convention.
         assert lines[0].startswith("#"), f"header row missing: {lines[0]!r}"
         data_rows = [ln for ln in lines if not ln.startswith("#")]
-        assert "$.HELLO" in data_rows
-        assert "$.DATA" in data_rows
+        assert "$.Hello" in data_rows
+        assert "$.Data" in data_rows
 
     def test_find_json_parses(self, runner: CliRunner, dfs_image_filepath: Path) -> None:
         import json as _json
@@ -644,8 +644,8 @@ class TestFindAsFormats:
         assert "reports" in doc
         report_name, payload = next(iter(doc["reports"].items()))
         paths = [row["path"] for row in payload["rows"]]
-        assert "$.HELLO" in paths
-        assert "$.DATA" in paths
+        assert "$.Hello" in paths
+        assert "$.Data" in paths
 
     def test_find_display_is_rich_table(self, runner: CliRunner, dfs_image_filepath: Path) -> None:
         """display mode produces a bordered Rich table."""
@@ -654,7 +654,7 @@ class TestFindAsFormats:
         # Rich tables draw box-drawing chars.  Any presence of "│" or "┃"
         # confirms the display renderer ran.
         assert any(ch in result.output for ch in ("│", "┃"))
-        assert "$.HELLO" in result.output
+        assert "$.Hello" in result.output
 
     def test_find_multi_partition_tsv_prefix(
         self,
@@ -1541,7 +1541,7 @@ class TestCpGlob:
         assert result.exit_code == 0, result.output
         for name in ("Hello", "Help", "Data"):
             listed = runner.invoke(cli, ["ls", f"{dfs_empty_filepath}:$"])
-            assert name.upper() in listed.output, (
+            assert name in listed.output, (
                 f"{name} missing from destination:\n{listed.output}"
             )
 
@@ -1562,9 +1562,9 @@ class TestCpGlob:
         )
         assert result.exit_code == 0, result.output
         listed = runner.invoke(cli, ["ls", f"{dfs_empty_filepath}:$"])
-        assert "HELLO" in listed.output
-        assert "HELP" in listed.output
-        assert "DATA" not in listed.output
+        assert "Hello" in listed.output
+        assert "Help" in listed.output
+        assert "Data" not in listed.output
 
     def test_glob_hash_single_char(
         self,
@@ -1584,8 +1584,8 @@ class TestCpGlob:
         )
         assert result.exit_code == 0, result.output
         listed = runner.invoke(cli, ["ls", f"{dfs_empty_filepath}:$"])
-        assert "HELP" in listed.output
-        assert "HELLO" not in listed.output
+        assert "Help" in listed.output
+        assert "Hello" not in listed.output
 
     def test_glob_no_matches_errors(
         self,
@@ -2391,9 +2391,9 @@ class TestBulkMutation:
         result = runner.invoke(cli, ["rm", f"{dfs_image_many_files}:$.He*"])
         assert result.exit_code == 0, result.output
         listing = runner.invoke(cli, ["ls", f"{dfs_image_many_files}:$"])
-        assert "HELLO" not in listing.output
-        assert "HELP" not in listing.output
-        assert "DATA" in listing.output
+        assert "Hello" not in listing.output
+        assert "Help" not in listing.output
+        assert "Data" in listing.output
 
     def test_rm_recursive_glob(
         self,

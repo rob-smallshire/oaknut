@@ -220,7 +220,7 @@ class DFSPath(AcornPath):
         if not self._path:
             return True  # Root always exists
         if self._is_directory_path():
-            return any(f.directory == self._path.upper() for f in self._dfs.files)
+            return any(f.directory.upper() == self._path.upper() for f in self._dfs.files)
         return self._dfs._catalogued_surface.find_file(self._path) is not None
 
     @resolving_io
@@ -285,7 +285,7 @@ class DFSPath(AcornPath):
         elif self._is_directory_path():
             dir_letter = self._path.upper()
             for f in self._dfs.files:
-                if f.directory == dir_letter:
+                if f.directory.upper() == dir_letter:
                     yield DFSPath(self._dfs, f.path)
         else:
             raise ValueError(f"'{self._path}' is not a directory")
@@ -560,11 +560,11 @@ class DFSPath(AcornPath):
         """Check if *name* exists in this directory."""
         if not self._path:
             # Root: check if directory letter has files
-            return any(f.directory == name.upper() for f in self._dfs.files)
+            return any(f.directory.upper() == name.upper() for f in self._dfs.files)
         elif self._is_directory_path():
             dir_letter = self._path.upper()
             return any(
-                f.directory == dir_letter and f.filename.upper() == name.upper()
+                f.directory.upper() == dir_letter and f.filename.upper() == name.upper()
                 for f in self._dfs.files
             )
         return False
@@ -1047,7 +1047,8 @@ class DFS:
         """
         # Delegate validation to catalogue
         self._catalogued_surface.catalogue.validate_directory(directory)
-        self._current_directory = directory.upper()
+        # Preserve the case the caller gave; matching folds case below.
+        self._current_directory = directory
 
     def list_directory(self, directory: str = None) -> list[FileEntry]:
         """
@@ -1059,8 +1060,8 @@ class DFS:
         Returns:
             List of files in directory
         """
-        target_dir = directory.upper() if directory else self._current_directory
-        return [f for f in self.files if f.directory == target_dir]
+        target_dir = directory if directory else self._current_directory
+        return [f for f in self.files if f.directory.upper() == target_dir.upper()]
 
     @property
     def free_sectors(self) -> int:

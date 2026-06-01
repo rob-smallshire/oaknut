@@ -242,15 +242,16 @@ class AcornDFSCatalogue(Catalogue):
         return files
 
     def parse_filename(self, path: str) -> ParsedFilename:
-        """Parse and validate Acorn DFS filename."""
+        """Parse and validate an Acorn DFS filename, preserving its case.
+
+        DFS stores a name verbatim and folds case only when matching, so
+        the parsed components keep the caller's case; validation is
+        case-insensitive (a lower-case directory letter is accepted).
+        """
         # Parse using base class helper
         directory, filename = self._default_parse_filename(path, default_directory="$")
 
-        # Normalize to uppercase
-        directory = directory.upper()
-        filename = filename.upper()
-
-        # Validate components
+        # Validate components (case-insensitively); store them as given.
         self.validate_directory(directory)
         self.validate_filename(filename)
 
@@ -320,13 +321,10 @@ class AcornDFSCatalogue(Catalogue):
         locked: bool = False,
     ) -> None:
         """Add file entry to catalog, increment cycle number."""
-        # Validate inputs
+        # Validate inputs (case-insensitively); store names as given —
+        # DFS preserves case and folds only when matching.
         self.validate_filename(filename)
         self.validate_directory(directory)
-
-        # Normalize to uppercase
-        filename = filename.upper()
-        directory = directory.upper()
 
         # Read current state
         disc_info = self.get_disc_info()

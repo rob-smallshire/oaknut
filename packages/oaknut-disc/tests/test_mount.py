@@ -35,7 +35,7 @@ class TestResolveMount:
         letters = {e.name for e in resolved.mount.iter_entries(resolved.mount.path_root())}
         assert "$" in letters
         files = {e.name for e in resolved.mount.iter_entries("$")}
-        assert "HELLO" in files
+        assert "Hello" in files
 
     def test_in_partition_path_is_returned(self, dfs_image_filepath):
         resolved = resolve_mount(f"{dfs_image_filepath}:$.HELLO")
@@ -63,7 +63,7 @@ class TestResolveMount:
         mystery.write_bytes(dfs_image_filepath.read_bytes())
         resolved = resolve_mount(str(mystery), force_filesystem="acorn-dfs")
         assert resolved.filesystem == "acorn-dfs"
-        assert "HELLO" in {e.name for e in resolved.mount.iter_entries("$")}
+        assert "Hello" in {e.name for e in resolved.mount.iter_entries("$")}
 
     def test_unrecognised_image_errors(self, tmp_path):
         mystery = tmp_path / "mystery.bin"

@@ -346,13 +346,10 @@ class WatfordDFSCatalogue(Catalogue):
         Raises:
             CatalogFullError: If disk is full (62 files maximum)
         """
-        # Validate inputs
+        # Validate inputs (case-insensitively); store names as given —
+        # DFS preserves case and folds only when matching.
         self.validate_filename(filename)
         self.validate_directory(directory)
-
-        # Normalize to uppercase
-        filename = filename.upper()
-        directory = directory.upper()
 
         # Read current state
         disc_info = self.get_disc_info()
@@ -582,8 +579,13 @@ class WatfordDFSCatalogue(Catalogue):
         parsed = self.parse_filename(filename)
         all_files = self.list_files()
 
+        # DFS folds case only when matching, so compare case-insensitively
+        # (names are now stored with their original case).
         for entry in all_files:
-            if entry.filename == parsed.filename and entry.directory == parsed.directory:
+            if (
+                entry.filename.upper() == parsed.filename.upper()
+                and entry.directory.upper() == parsed.directory.upper()
+            ):
                 return entry
         return None
 
@@ -832,11 +834,8 @@ class WatfordDFSCatalogue(Catalogue):
         # Parse using base class helper
         directory, filename = self._default_parse_filename(path, default_directory="$")
 
-        # Normalize to uppercase
-        directory = directory.upper()
-        filename = filename.upper()
-
-        # Validate components
+        # Validate components (case-insensitively); store them as given —
+        # DFS preserves case and folds only when matching.
         self.validate_directory(directory)
         self.validate_filename(filename)
 

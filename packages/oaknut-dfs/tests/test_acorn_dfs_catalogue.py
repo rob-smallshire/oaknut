@@ -526,8 +526,9 @@ class TestAcornDFSCatalogueParseFilename:
         assert parsed.filename == "TEST"
         assert parsed.path == "$.TEST"
 
-    def test_parse_filename_normalizes_to_uppercase(self):
-        """Test parse_filename normalizes to uppercase."""
+    def test_parse_filename_preserves_case(self):
+        """parse_filename keeps the caller's case — DFS stores names
+        verbatim and folds case only when matching."""
         buffer = bytearray(102400)
         buffer[0:8] = b"DISK    "
         buffer[256:260] = b"    "
@@ -547,9 +548,11 @@ class TestAcornDFSCatalogueParseFilename:
         surface = disc.surface(0)
         catalogue = AcornDFSCatalogue(surface)
 
+        # A lower-case directory letter is accepted (validation is
+        # case-insensitive) and both components keep their case.
         parsed = catalogue.parse_filename("a.hello")
-        assert parsed.directory == "A"
-        assert parsed.filename == "HELLO"
+        assert parsed.directory == "a"
+        assert parsed.filename == "hello"
 
     def test_parse_filename_too_long_raises(self):
         """Test parse_filename raises for filename > 7 chars."""

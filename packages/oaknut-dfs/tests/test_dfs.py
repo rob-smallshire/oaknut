@@ -638,8 +638,9 @@ class TestDFSDirectoryNavigation:
         dfs.change_directory("Z")
         assert dfs.current_directory == "Z"
 
-    def test_change_directory_normalizes_case(self):
-        """Test change_directory normalizes to uppercase."""
+    def test_change_directory_preserves_case(self):
+        """change_directory keeps the caller's case — DFS preserves case
+        and folds only when matching."""
         buffer = bytearray(102400)
 
         buffer[0:8] = b"DISK    "
@@ -652,7 +653,7 @@ class TestDFSDirectoryNavigation:
         dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
         dfs.change_directory("a")
-        assert dfs.current_directory == "A"
+        assert dfs.current_directory == "a"
 
     def test_change_directory_invalid_raises(self):
         """Test change_directory raises error for invalid directory."""

@@ -157,8 +157,8 @@ class TestContentFirstRouting:
         misnamed.write_bytes(dfs_image_filepath.read_bytes())
         result = runner.invoke(cli, ["ls", f"{misnamed}:$"])
         assert result.exit_code == 0
-        # The DFS root lists the fixture's file (DFS upper-cases names).
-        assert "HELLO" in result.output
+        # The DFS root lists the fixture's file (case preserved).
+        assert "Hello" in result.output
 
 
 class TestExplicitDfsPrefix:
@@ -180,7 +180,7 @@ class TestExplicitDfsPrefix:
         # acorn-dfs:$ lists inside $ — the files themselves.
         result = runner.invoke(cli, ["ls", f"{dfs_image_filepath}:acorn-dfs:$"])
         assert result.exit_code == 0
-        assert "HELLO" in result.output
+        assert "Hello" in result.output
 
     def test_prefix_rejects_mismatched_content(self, runner: CliRunner, adfs_image_filepath):
         # An ADFS image has no acorn-dfs partition: a clean "no such
