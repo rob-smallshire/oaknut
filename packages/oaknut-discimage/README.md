@@ -3,8 +3,14 @@
 Sector-level disc-image abstractions shared by the oaknut filesystem
 packages. This is the **geometry layer**: it turns a flat image file into
 addressable sectors, and is deliberately blind to what those sectors
-*mean*. The filing systems (`oaknut-dfs`, `oaknut-adfs`, `oaknut-afs`,
-`oaknut-romfs`) build the sector→files layer on top of it.
+*mean*. The disc-based filing systems — `oaknut-dfs`, `oaknut-adfs`, and
+`oaknut-afs` — build the sector→files layer on top of it.
+
+(The sequential filing systems are a different shape. `oaknut-romfs`, a
+Cassette-Filing-System block stream on a paged ROM, has no real sectors:
+it scans its byte stream directly and uses only `SurfaceSpec` to hand the
+framework a single trivial linear surface — see
+[ROMFS, below](#romfs-a-sequential-exception).)
 
 Part of the [oaknut](https://github.com/rob-smallshire/oaknut) monorepo.
 
@@ -144,6 +150,18 @@ sector0 = surface.sector_range(0, 1)
 sector0[0:8] = b"MYDISC  "          # write the catalogue title into sector 0
 assert bytes(buffer[0:8]) == b"MYDISC  "   # it landed in the backing buffer
 ```
+
+## ROMFS: a sequential exception
+
+Not every Acorn filing system is sector-addressed. The ROM Filing System
+(`oaknut-romfs`) stores files as a Cassette-Filing-System block stream on
+a paged ROM — a flat, sequential byte run with no tracks or sectors. It
+reads that stream directly and never calls `sector_range`. It depends on
+this package only to borrow `SurfaceSpec` and `BYTES_PER_SECTOR` for a
+single, trivial linear surface (`num_tracks=1`, the whole ROM as one
+"track"), purely so it can present a `Geometry` to the `oaknut-filesystem`
+framework. So while ROMFS lists this package as a dependency, it is *not*
+a consumer of the sector abstractions described above.
 
 ## Relationship to the rest of oaknut
 
