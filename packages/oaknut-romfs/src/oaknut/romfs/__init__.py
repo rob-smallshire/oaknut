@@ -32,7 +32,7 @@ from oaknut.romfs.exceptions import (
 )
 from oaknut.romfs.romfs import ROMFS, ROMFSFile
 
-__version__ = "12.5.2"
+__version__ = "12.5.3"
 
 __all__ = [
     "ROMFS",

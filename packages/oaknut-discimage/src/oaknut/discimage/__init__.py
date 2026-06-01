@@ -9,7 +9,7 @@ generic ``DiscFormat`` dataclass. Filesystem-specific constants
 in its own package, not here.
 """
 
-__version__ = "12.5.2"
+__version__ = "12.5.3"
 
 from oaknut.discimage.formats import (
     BYTES_PER_SECTOR,
