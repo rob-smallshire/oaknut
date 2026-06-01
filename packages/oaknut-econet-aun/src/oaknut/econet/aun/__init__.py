@@ -16,11 +16,14 @@ It registers on the ``oaknut.econet.transport`` extension axis as ``aun``.
 
 from __future__ import annotations
 
+from oaknut.econet.aun.transport import DEFAULT_AUN_PORT, AunTransport
 from oaknut.econet.aun.wire import AunPacket, AunType
 
 __version__ = "12.5.3"
 
 __all__ = [
+    "DEFAULT_AUN_PORT",
     "AunPacket",
+    "AunTransport",
     "AunType",
 ]

@@ -28,6 +28,9 @@ dependencies = [
 [project.optional-dependencies]
 mdns = ["zeroconf>=0.130"]
 
+[project.entry-points."oaknut.econet.transport"]
+aun = "oaknut.econet.aun:AunTransport"
+
 [project.urls]
 Homepage = "https://github.com/rob-smallshire/oaknut/tree/master/packages/oaknut-econet-aun"
 Repository = "https://github.com/rob-smallshire/oaknut"
