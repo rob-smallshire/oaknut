@@ -21,6 +21,30 @@ Concrete transports (AUN, Piconet, PiEconetHAT) live in sibling distributions
 and register on the ``oaknut.econet.transport`` extension axis.
 """
 
+from __future__ import annotations
+
+from oaknut.econet.core.addressing import (
+    BROADCAST_ADDRESS,
+    BROADCAST_STATION,
+    IMMEDIATE_PORT,
+    LOCAL_NET,
+    Address,
+)
+from oaknut.econet.core.capability import TransportCapability
+from oaknut.econet.core.outcome import TransmitOutcome, TransmitResult
+from oaknut.econet.core.packet import EconetPacket, PacketKind
+
 __version__ = "12.5.3"
 
-__all__: list[str] = []
+__all__ = [
+    "Address",
+    "BROADCAST_ADDRESS",
+    "BROADCAST_STATION",
+    "EconetPacket",
+    "IMMEDIATE_PORT",
+    "LOCAL_NET",
+    "PacketKind",
+    "TransmitOutcome",
+    "TransmitResult",
+    "TransportCapability",
+]
