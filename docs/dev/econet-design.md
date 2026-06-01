@@ -1,0 +1,443 @@
+# oaknut Econet — Requirements & Design Document
+
+**Status:** draft for iteration, created 2026-06-01. Nothing here is decided beyond what the prose marks as *decided*; flag anything you want to change. Amend this file in place; commit history is the discussion log. A separate `econet-implementation-plan.md` will carry the phased build once this shape is agreed.
+
+---
+
+## 1. Context
+
+Econet was Acorn's proprietary LAN for the BBC Micro, Master, and Archimedes, built around the Motorola **MC68B54 ADLC** (Advanced Data Link Controller). Stations exchange HDLC-framed packets on a shared, clocked, two-pair bus using a **four-way handshake** for reliable unicast.
+
+This project adds a new family of `oaknut` packages providing **low-level Python tools for writing Econet clients and servers** ("Econet applications") on contemporary hardware, plus — later — higher-level applications built on them, the first being a **file server**. It targets three contemporary Econet transports:
+
+- **AUN** (Acorn Universal Networking) — logical Econet carried over UDP/IP. Acorn's own bridge from Econet to Ethernet; widely used by emulators (BeebEm, Beebium) and real RISC OS machines.
+- **Piconet** — a Raspberry Pi Pico (RP2040) driving a real ADLC, presenting a USB-CDC **serial-to-Econet** adapter to the host. Source: `/Users/rjs/Code/piconet`.
+- **PiEconetHAT** — a Raspberry Pi HAT carrying a real ADLC, driven by a Linux **kernel module** exposing a character device to user space. Source: `/Users/rjs/Code/PiEconetBridge`.
+
+An explicit goal is to **technically supersede PiEconetBridge** — the dominant modern Econet stack — which suffers from no automated tests, blocking/busy-wait I/O, coarse global locking, and tight kernel/user-space coupling. We aim for a clean, fully tested, `asyncio`-based stack with a sharp separation between dumb transports and the routing/server logic above them.
+
+### Relationship to the rest of oaknut
+
+- The eventual file server speaks the Acorn **file-server protocol** (port `&99`), the same protocol the existing `oaknut-afs` Level 3 file-server on-disc work serves data *from*. The two meet: `oaknut-afs` owns the on-disc `AFS0` format; the Econet file server owns the wire protocol. See `project_afs_implementation` memory and `docs/dev/afs-*.md`.
+- The **NFS/ANFS disassemblies** at `/Users/rjs/Code/acornaeology/acorn-nfs` are the ground-truth specification for the client side of the `&99` file-server, `&9F` print-server, and `&9C` bridge protocols, and for immediate-operation semantics. They are the spec the future server is judged against; they do **not** affect the transport design below.
+
+### Primary sources (reference codebases)
+
+All local; **each carries its own `CLAUDE.md`**, so each can be consulted as its own project agent (read-only) via `claude -p "…" --permission-mode plan` run with its directory as the cwd.
+
+| Codebase | Path | What it gives us |
+|---|---|---|
+| Beebium | `/Users/rjs/Code/beebium` | Best architectural guide: `Mc6854` ADLC, `FourWayHandshake` decorator, `NetworkBackend` ABC with AUN + Piconet backends, and the `_aun._udp` mDNS station-advertisement standard. C++. |
+| Piconet | `/Users/rjs/Code/piconet` | Host↔Pico serial protocol; firmware that runs the four-way handshake on the wire. C firmware + TypeScript host driver. |
+| PiEconetBridge | `/Users/rjs/Code/PiEconetBridge` | Kernel char-device interface (`/dev/econet-gpio`, ioctl magic `0xa9`), AUN/trunk bridging, the design we mean to supersede. C. |
+| acorn-nfs | `/Users/rjs/Code/acornaeology/acorn-nfs` | Disassemblies of NFS/ANFS — `&99`/`&9F`/`&9C` protocols, immediate ops. The server's spec. |
+
+---
+
+## 2. Econet primer (terms used throughout)
+
+- **Station address** — an 8-bit **station number** (1–254; `255` = broadcast; `0` reserved) qualified by an 8-bit **network number** (`0` = "this network" / local segment; 1–127 conventional for remote nets). Throughout this doc and the code, an **`Address`** is the pair `(network, station)`.
+- **Port** — an 8-bit demultiplexing key chosen by the receiver. Well-known ports (to be confirmed against the NFS/ANFS disassembly, which is authoritative): `&00` immediate operations, `&99` file server, `&9F` print server, `&9C` bridge/`MachinePeek`-class control, `&9E`/`&D0`–`&D3` various. Port `&00` is special: it carries immediate operations, not normal data.
+- **Control byte** — an 8-bit per-packet code; the high bit (`&80`) is conventionally set on the wire and is **cleared in the AUN representation**. The lower bits select the operation within a protocol.
+- **Four-way handshake** — reliable unicast: sender emits a **scout** (dest+src addresses, control, port), receiver returns a **scout-ack**, sender sends the **data** frame(s), receiver returns a **final-ack**. CRC, flag-fill, and timing are ADLC concerns.
+- **Immediate operations** — control-port (`&00`) operations executed by the receiver's NMI handler without application involvement: `Peek`, `Poke`, `JSR`, user/OS procedure calls, `Halt`, `Continue`, **`MachinePeek`** (returns machine type/version). These are a **two-way** exchange (request → reply), not four-way.
+- **Broadcast** — a single unacknowledged frame to `255.255`.
+- **AUN** — collapses the wire handshake into a two-packet UDP exchange (a typed datagram + an `Ack`/`Nack`), with a 4-byte handle/sequence for correlation and retransmission.
+
+---
+
+## 3. The central design insight
+
+The natural fear when unifying these transports is an *abstraction-level mismatch*: a real ADLC operates at the **frame** level (scout / scout-ack / data / final-ack), while AUN operates at the **logical packet** level (one request, one ack). In fact **all three transports already resolve the four-way handshake below the host boundary**:
+
+| Transport | Exposes to the host | Who runs the four-way handshake |
+|---|---|---|
+| AUN | typed UDP datagrams `(type, port, ctrl, seq, payload)` | nobody — AUN is two-packet by design |
+| Piconet | `TX …` → `TX_RESULT`; inbound `RX_TRANSMIT scout data` | the Pico **firmware**, on the wire |
+| PiEconetHAT | `read()`/`write()` of `struct __econet_packet_aun` | the **kernel module**, in the ADLC IRQ |
+
+The clincher: PiEconetBridge's *own internal IPC currency* is `struct __econet_packet_aun` — an AUN-shaped logical packet. Beebium needs its frame-level `Mc6854` + `FourWayHandshake` only because it emulates an ADLC for a real 6502 to poke registers on. **We never present an ADLC to anyone** — we write Python clients and servers — so we sit one layer up, at the **logical AUN packet**, and the abstraction stays clean across all three transports.
+
+**Decided:** the `EconetTransport` abstraction is at the logical-packet level. There is no ADLC model, no frame codec, no scout/ack state machine in this project.
+
+A direct consequence, **validated against the Piconet firmware via its project agent** (firmware completes the full four-way including the final data ack at `econet.c:586` *before* emitting `RX_TRANSMIT`): **an inbound packet delivered to the application is a completed transaction — already acknowledged on the wire.** An application *replies* by initiating a fresh outbound transaction. The sole two-way exception is immediate operations.
+
+---
+
+## 4. Requirements
+
+### Functional
+
+- **FR1** — An `asyncio`-native Python API to send and receive Econet packets over a pluggable transport.
+- **FR2** — Three concrete transports: AUN (UDP), Piconet (serial), PiEconetHAT (kernel char device), plus an in-process `TestTransport`.
+- **FR3** — Support unicast (reliable four-way, abstracted), broadcast (fire-and-forget), and immediate operations (two-way).
+- **FR4** — Address by `(network, station)`; treat network `0` as "this network".
+- **FR5** — Transports are pluggable via the existing `oaknut-extension` (stevedore) system and are configured at application startup. An application may instantiate **multiple transports of different kinds simultaneously** (the prerequisite for bridges, switches, routers, and media converters).
+- **FR6** — Advertise and discover AUN stations over mDNS using Beebium's `_aun._udp` convention, for zero-config interop.
+- **FR7** — Each transport advertises a set of **capability flags**; applications branch on capabilities, not on transport identity.
+- **FR8** — Surface fine-grained delivery outcomes (acknowledged / not-listening / no-clock / line-jammed / timeout / handshake-failed …) rather than a bare success/failure.
+- **FR9 (future)** — Higher-level applications layered on the transport: a file server (`&99`), a print server (`&9F`), and bridge/router/switch services composing multiple transports.
+
+### Non-functional
+
+- **NFR1** — Raw `asyncio`; Python ≥ 3.12 (**decided**: the *whole* workspace bumps from ≥ 3.11 to ≥ 3.12).
+- **NFR2** — Fully testable **without hardware or a network**; test-first (see `feedback_test_first`). The `TestTransport` and protocol-level unit tests carry the bulk of coverage; hardware-in-the-loop tests are opt-in.
+- **NFR3** — No blocking calls on the event loop; **no busy-wait** (the specific PiEconetBridge anti-pattern of spinning on a status ioctl). Blocking syscalls (e.g. HAT ioctls) run in a thread executor.
+- **NFR4** — Transports stay **dumb**: no routing, no address translation, no peer/NAT tables, no firewalling. Those are application-layer concerns, kept separate so transports remain composable.
+- **NFR5** — Conform to oaknut conventions: PEP 420 namespace packages, the `oaknut-exception` hierarchy, the capability idiom already used by filesystems, the `_filename`/`_filepath`/`_dirpath` naming suffixes, and small, frequent, semantically-meaningful commits.
+- **NFR6** — Interoperate on the wire with existing AUN implementations (BeebEm, PiEconetBridge, real Acorn AUN) and with Beebium's mDNS advertisement.
+
+---
+
+## 5. Guiding principles
+
+1. **Logical packets, not frames.** The lingua franca is one `EconetPacket` type modelled on the AUN packet. No ADLC, no HDLC framing in this project.
+2. **Pull, not push, at the public API.** Applications consume inbound traffic with `async for packet in transport:` and send with `await transport.transmit(packet)`. Internally we bridge `asyncio`'s push callbacks to this pull model with a bounded queue (see §8). Server and bridge logic reads as a loop, not a callback graph.
+3. **Dumb transports, smart applications.** A transport moves packets between this host and one Econet-or-AUN segment, nothing more. Routing, NAT, pools, and firewalling live above. This is the structural fix that lets us supersede PiEconetBridge cleanly.
+4. **Capabilities over type-checks.** Transports differ in real ways (monitor mode, host-generated immediate replies, multi-net awareness, discovery). Express the differences as flags; never write `if isinstance(t, AunTransport)`.
+5. **Inbound is already acknowledged.** A received packet is a completed transaction. Replies are fresh transmits. Immediate operations are the lone two-way exception.
+6. **Fail informatively.** Delivery returns a rich outcome; errors derive from the `oaknut-exception` hierarchy and render through the existing CLI boundary.
+7. **Test without hardware.** Every protocol decode/encode and the full transport contract are exercised against in-process doubles. Hardware tests are an opt-in extra.
+
+---
+
+## 6. Core abstractions (`oaknut.econet.core`)
+
+Sketches below establish *shape and intent*; exact signatures are settled in code, test-first.
+
+### Addressing
+
+```python
+@dataclass(frozen=True, slots=True)
+class Address:
+    network: int   # 0 == "this network"
+    station: int   # 1..254 ; 255 == broadcast
+
+    @property
+    def is_broadcast(self) -> bool: ...
+    @property
+    def is_local_net(self) -> bool: ...   # network == 0
+```
+
+Well-known constants live here: `BROADCAST_STATION = 255`, `LOCAL_NET = 0`, `IMMEDIATE_PORT = 0x00`, and a `Port` enum / constants for `&99`, `&9F`, `&9C`, etc. (named once the NFS/ANFS disassembly confirms them).
+
+### Packets
+
+```python
+class PacketKind(Enum):
+    BROADCAST = auto()
+    UNICAST = auto()          # reliable four-way (abstracted)
+    IMMEDIATE = auto()        # two-way request
+    IMMEDIATE_REPLY = auto()  # two-way reply
+
+@dataclass(frozen=True, slots=True)
+class EconetPacket:
+    kind: PacketKind
+    dst: Address
+    src: Address
+    control: int              # 0..255 (AUN representation: high bit clear)
+    port: int                 # 0..255
+    payload: bytes
+    seq: int | None = None    # transport owns AUN handle/sequence; usually None at the app layer
+```
+
+`ACK`/`NACK` are *not* packet kinds the application sees — they are wire-level outcomes folded into `TransmitOutcome` (below), because inbound packets are already acknowledged (principle 5).
+
+### Delivery outcome
+
+```python
+class TransmitOutcome(Enum):
+    ACKNOWLEDGED = auto()     # final-ack received / AUN Ack
+    NOT_LISTENING = auto()    # no scout-ack: destination not listening on that port
+    NO_CLOCK = auto()         # no network clock present
+    LINE_JAMMED = auto()
+    TIMEOUT = auto()
+    HANDSHAKE_FAILED = auto()
+    NETWORK_ERROR = auto()    # collision/underrun/misc
+
+@dataclass(frozen=True, slots=True)
+class TransmitResult:
+    outcome: TransmitOutcome
+    # immediate-reply payload when transmitting an IMMEDIATE that returns inline, else None
+    reply: EconetPacket | None = None
+```
+
+The enum is the union of the failure modes the three transports actually report (Piconet `TX_RESULT`, PiEconetHAT TX status codes, AUN ack/nack/timeout). Mapping tables in each transport translate native codes into this set.
+
+### The transport contract
+
+```python
+class EconetTransport(Extension, abc.ABC):
+    """A logical-packet conduit between this host and one Econet/AUN segment.
+
+    Analogous to `asyncio.Transport`, but one layer up: it carries whole Econet
+    packets rather than bytes, and presents a pull (async-iterator) interface
+    rather than `asyncio`'s push (Protocol-callback) interface.
+    """
+
+    def _kind(self) -> str:               # oaknut-extension axis
+        return "econet.transport"
+
+    @property
+    @abc.abstractmethod
+    def capabilities(self) -> frozenset["TransportCapability"]: ...
+
+    @property
+    @abc.abstractmethod
+    def local_station(self) -> Address | None: ...
+
+    @abc.abstractmethod
+    async def open(self) -> None: ...
+    @abc.abstractmethod
+    async def close(self) -> None: ...
+
+    async def __aenter__(self) -> "EconetTransport": ...
+    async def __aexit__(self, *exc) -> None: ...
+
+    @abc.abstractmethod
+    async def transmit(self, packet: EconetPacket) -> TransmitResult:
+        """Reliable four-way unicast. Returns when ack'd, refused, or timed out."""
+
+    @abc.abstractmethod
+    async def broadcast(self, payload: bytes, *, port: int, control: int) -> None:
+        """Fire-and-forget broadcast to 255.255."""
+
+    @abc.abstractmethod
+    async def immediate(self, packet: EconetPacket) -> TransmitResult:
+        """Two-way immediate op; reply (if any) is on the result."""
+
+    @abc.abstractmethod
+    def __aiter__(self) -> AsyncIterator[EconetPacket]:
+        """Yield inbound packets (already wire-acknowledged)."""
+```
+
+### Capabilities
+
+```python
+class TransportCapability(Enum):
+    MONITOR = auto()           # promiscuous receive of all traffic
+    IMMEDIATE_REPLY = auto()   # can send host-generated immediate replies
+    BROADCAST = auto()         # can originate broadcasts
+    MULTI_NET = auto()         # honours network numbers beyond the local net
+    DISCOVERY = auto()         # participates in mDNS advertise/discover
+```
+
+Worked example from the validated Piconet findings: a Piconet transport advertises `{BROADCAST, MONITOR}` but **not** `IMMEDIATE_REPLY` (the firmware `REPLY` path is currently non-functional), and it must **reclassify a received port-0 `RX_TRANSMIT` as `PacketKind.IMMEDIATE`** because the firmware never emits `RX_IMMEDIATE` and auto-answers only `MachinePeek`.
+
+### Errors
+
+A small hierarchy in `oaknut.econet.core`, fitting `oaknut-exception`:
+
+- `EconetError(DataError)` — base for wire/protocol data faults (malformed AUN datagram, bad serial frame).
+- `TransportConfigurationError(ConfigurationError)` — unknown transport name, missing/unopenable device, bad station number.
+- Transport unavailability (device unplugged, no clock) surfaces as a `TransmitResult` outcome where it is an expected runtime condition, and as an exception only where it prevents `open()`.
+
+---
+
+## 7. Pluggability (`oaknut-extension`)
+
+Transports plug in on a **new extension axis**: `kind = "econet.transport"`, giving the entry-point group `oaknut.econet.transport` (via `namespace_for`). Each transport distribution registers its class:
+
+```toml
+# packages/oaknut-econet-aun/pyproject.toml
+[project.entry-points."oaknut.econet.transport"]
+aun = "oaknut.econet.aun:AunTransport"
+```
+
+```toml
+# packages/oaknut-econet-piconet/pyproject.toml
+[project.entry-points."oaknut.econet.transport"]
+piconet = "oaknut.econet.piconet:PiconetTransport"
+```
+
+An application resolves transports by name at startup, exactly as the `disc` CLI resolves filesystems today:
+
+```python
+aun = create_extension("econet.transport", "oaknut.econet.transport", "aun", **aun_config)
+```
+
+This makes a multi-transport application (a bridge) a matter of instantiating several named transports from a config file — no code change to add a transport kind to the ecosystem.
+
+---
+
+## 8. Async model and the relationship to `asyncio` Transports/Protocols
+
+**Decided:** raw `asyncio`, not `anyio`. Rationale: Python ≥ 3.12 provides `asyncio.TaskGroup`, `asyncio.timeout()`, and `eager_task_factory` natively (the bulk of `anyio`'s value), every transport library we use is `asyncio`-native, and `anyio`'s remaining edge (trio portability) is not wanted. `anyio` on its default backend *is* `asyncio` anyway — same loop — so nothing is lost.
+
+Our `EconetTransport` is deliberately **one layer above** the stdlib `asyncio.Transport`/`Protocol` pair, and uses it internally:
+
+```
+  Application  (file server, bridge/router)
+       │   async for pkt in transport  /  await transport.transmit(pkt)        ← PULL, packet-level (ours)
+  ─────┼────────────────────────────────────────────────────────────────────
+  EconetTransport   (oaknut.econet.core ABC)
+       │   each concrete transport bridges push → pull via asyncio.Queue
+  ─────┼────────────────────────────────────────────────────────────────────
+  asyncio.Transport + Protocol   (or loop.add_reader for the char device)     ← stdlib PLUMBING, push (callbacks)
+       │   bytes / datagrams
+  ─────┴────────────────────────────────────────────────────────────────────
+  OS socket  /  serial port  /  /dev/econet-gpio
+```
+
+`asyncio`'s `Protocol` is **push**: the loop calls `data_received(bytes)` / `datagram_received(data, addr)`. Our public API is **pull**. Each concrete transport's `Protocol` callback parses bytes into an `EconetPacket` and `put_nowait`s it onto a bounded `asyncio.Queue`; the transport's `__aiter__` does `await queue.get()`. The bounded queue gives natural backpressure. Outbound, `transmit()` writes via the underlying transport and awaits a per-request future that the inbound path (or a timeout) resolves with a `TransmitResult`.
+
+Concretely:
+
+- **AUN** → `loop.create_datagram_endpoint(DatagramProtocol, …)`; `datagram_received` decodes the AUN header → queue.
+- **Piconet** → `serial_asyncio.create_serial_connection(Protocol, …)`; `data_received` buffers CR/LF-delimited lines, parses the event keyword, base64-decodes the payload → queue.
+- **PiEconetHAT** → no clean stdlib `Transport` exists for an arbitrary character device. Use `loop.add_reader(fd, callback)` for readiness and a `loop.run_in_executor` thread for the **blocking ioctls** (replacing PiEconetBridge's busy-wait on `ECONETGPIO_IOC_TXERR`). This is the one transport that does not fit the `Protocol` mould.
+- **TestTransport** → no `asyncio` I/O at all; a pair of in-process queues (optionally cross-wired to a peer `TestTransport`) so tests run with no sockets and no hardware.
+
+Concurrency/ownership: a transport owns its endpoint and a single background consume path. Applications drive it from their own tasks; an `asyncio.TaskGroup` in the application supervises one task per transport for a bridge.
+
+---
+
+## 9. Package topology
+
+**Decided:** nested namespace. Both `oaknut` and `oaknut.econet` are PEP 420 namespace packages (**no `__init__.py` at `src/oaknut/` *or* `src/oaknut/econet/` in any distribution**); core code lives one level deeper at `oaknut.econet.core`.
+
+| Distribution | Import path | Depends on | Scope |
+|---|---|---|---|
+| `oaknut-econet-core` | `oaknut.econet.core` | `oaknut-exception`, `oaknut-extension` | `Address`, `EconetPacket`, `PacketKind`, `TransmitResult`, `EconetTransport` ABC, `TransportCapability`, errors, `TestTransport`. **No transport/runtime deps.** |
+| `oaknut-econet-aun` | `oaknut.econet.aun` | `oaknut-econet-core`, `zeroconf` | AUN/UDP transport + `_aun._udp` mDNS advertise/discover |
+| `oaknut-econet-piconet` | `oaknut.econet.piconet` | `oaknut-econet-core`, `pyserial-asyncio` | Serial transport |
+| `oaknut-econet-hat` | `oaknut.econet.hat` | `oaknut-econet-core` | `/dev/econet-gpio` char-device client (Linux + HAT only) |
+| *future* `oaknut-econet-fileserver` | `oaknut.econet.fileserver` | `oaknut-econet-core`, `oaknut-afs`, … | `&99` file server |
+| *future* `oaknut-econet-bridge` | `oaknut.econet.bridge` | `oaknut-econet-core` | bridge/router/switch composing transports |
+
+The `TestTransport` ships **in** `oaknut-econet-core` (not a test-only helper) so downstream packages and applications can depend on it for their own tests.
+
+**Workspace wiring to touch when adding each package:**
+1. New `packages/oaknut-econet-*/pyproject.toml` (templated from `packages/oaknut-dfs/pyproject.toml`).
+2. Root `pyproject.toml`: add to `[tool.uv.sources]`, the `workspace` dependency-group, `[tool.bumpversion.files]` (each new `src/oaknut/econet/<name>/__init__.py`), and `[tool.pytest.ini_options] testpaths`.
+3. **Extend `scripts/check_no_namespace_init.sh`** (and its CI step) to also fail on `src/oaknut/econet/__init__.py`, mirroring the existing `src/oaknut/__init__.py` guard — a stray one there shadows the econet sub-namespace identically.
+4. **Bump the whole workspace `requires-python` to `>=3.12`** and the matching `ruff`/classifier metadata.
+
+---
+
+## 10. Transport designs
+
+> Wire-level details below are transcribed from the reference codebases at the fidelity reached during exploration and the Piconet agent consultation. Byte-exact layouts are to be re-confirmed against source during implementation (the per-codebase agents are the fastest way to do so).
+
+### 10.1 AUN (`oaknut.econet.aun`)
+
+The easiest to validate the whole abstraction against — pure UDP, no hardware.
+
+**Wire format** — 8-byte header + payload:
+
+| Offset | Field | Notes |
+|---|---|---|
+| 0 | type | 1 Broadcast, 2 Unicast, 3 Ack, 4 Nack, 5 Immediate, 6 ImmReply |
+| 1 | port | |
+| 2 | control | Econet high bit cleared |
+| 3 | pad | `0` |
+| 4–7 | handle/sequence | little-endian `uint32`, echoed in Ack/ImmReply for correlation |
+| 8+ | payload | Econet data after control+port |
+
+**Addressing/peer map** — `(net, stn) ↔ (ip, udp_port)`. UDP port is conventionally a `32768`-based scheme but is per-map configurable. Network `0` is local-relative and translated to/from the configured local net on the boundary. The peer map is **transport configuration**, not routing — a static operator map plus mDNS-discovered entries (operator entries win).
+
+**Reliability** — the transport owns handle/sequence generation and retransmission/timeout; `transmit()` resolves on `Ack` (→ `ACKNOWLEDGED`), `Nack` (→ `NOT_LISTENING`), or timeout (→ `TIMEOUT`).
+
+**Capabilities** — `{BROADCAST, IMMEDIATE_REPLY, MULTI_NET, DISCOVERY}` (no `MONITOR` — UDP unicast has no promiscuous mode).
+
+**mDNS** — see §11.
+
+### 10.2 Piconet (`oaknut.econet.piconet`)
+
+**Link** — USB-CDC serial, 115200 baud, VID `0x2e8a` / PID `0x000a`; line-based, CR/LF-delimited; binary payloads base64-encoded.
+
+**Commands (host → Pico):** `STATUS`, `SET_MODE STOP|LISTEN|MONITOR`, `SET_STATION <n>`, `TX <stn> <net> <ctrl> <port> <data_b64> [<scout_extra_b64>]`, `BCAST <data_b64>`, `REPLY <id> <data_b64>`, `RESTART`, `TEST`.
+
+**Events (Pico → host):** `STATUS <ver> <stn> <sr1> <mode>`, `TX_RESULT <code>`, `RX_BROADCAST <frame_b64>`, `RX_TRANSMIT <scout_b64> <data_b64>`, `RX_IMMEDIATE …` (defined but never emitted), `MONITOR <frame_b64>`, `ERROR <text>`, `REPLY_RESULT <code>`.
+
+**TX_RESULT codes** map to `TransmitOutcome`: `OK`→ACKNOWLEDGED, `NO_SCOUT_ACK`→NOT_LISTENING, `NO_DATA_ACK`/`HANDSHAKEFAIL`→HANDSHAKE_FAILED, `LINE_JAMMED`→LINE_JAMMED, `TIMEOUT`→TIMEOUT, `OVERFLOW`/`UNDERRUN`/`MISC`/`UNEXPECTED`→NETWORK_ERROR, `UNINITIALISED`→(raise `TransportConfigurationError`).
+
+**Validated firmware semantics (via the piconet project agent):**
+- The firmware completes the full four-way handshake, **including the final data ack**, before emitting `RX_TRANSMIT` (`econet.c:586`, returns `:593`). Inbound packets are already acknowledged.
+- Host-side `REPLY` is currently **non-functional** (`_pending_reply.valid` never set on the RX path; always fails `INVALID_RECEIVE_ID`). → no `IMMEDIATE_REPLY` capability today.
+- `RX_IMMEDIATE` is never emitted; `MachinePeek` (control `0x88`) is auto-answered in firmware. Other inbound immediates arrive as `RX_TRANSMIT` with a **port-0 scout** and must be reclassified to `PacketKind.IMMEDIATE`.
+
+**Capabilities** — `{BROADCAST, MONITOR}` (revisit `IMMEDIATE_REPLY` if/when firmware `REPLY` is fixed; that may be a chance to feed improvements back upstream to piconet).
+
+**Init** — open port, `STATUS` to read/verify firmware semver, `SET_STATION`, `SET_MODE LISTEN` (or `MONITOR`).
+
+### 10.3 PiEconetHAT (`oaknut.econet.hat`)
+
+A clean user-space client of the existing kernel module — Linux + HAT only.
+
+**Interface** — character device `/dev/econet-gpio`; `read()` returns a `struct __econet_packet_aun` (≈12-byte header: dst net/stn, src net/stn, control, port, sequence + up to ~32 KB data); `write()` submits one. **ioctl** magic `0xa9`, including: `PACKETSIZE`, `AVAIL`, `TXERR` (last TX status), `GETAUNSTATE`, `RESET`, `READMODE`, `AUNMODE`, `FLAGFILL`, `SET_STATIONS` (8192-byte interest bitmap of 256 nets × 256 stations), `IMMSPOOF`, `RESILIENTACK`, `NETCLOCK`. Exact numbers/struct: `include/econet-gpio-consumer.h`.
+
+**TX status codes** (`ECONET_TX_*`: SUCCESS/BUSY/NOCLOCK/NOTLISTENING/JAMMED/UNDERRUN/COLLISION/HANDSHAKEFAIL) map to `TransmitOutcome` analogously to Piconet.
+
+**Async strategy** — `loop.add_reader(fd, …)` for inbound readiness; **blocking ioctls in a thread executor**. Explicitly **do not** replicate PiEconetBridge's tight `TXERR` busy-wait (NFR3): submit, then await completion via readiness/executor rather than spinning.
+
+**Capabilities** — `{BROADCAST, MONITOR, MULTI_NET, IMMEDIATE_REPLY}` (subject to confirmation of `IMMSPOOF`/immediate handling).
+
+**Note** — this transport's interface is also a logical AUN packet, so much of its decode/encode is shared with AUN's payload handling (different envelope, same packet body).
+
+### 10.4 TestTransport (`oaknut.econet.core`)
+
+In-process loopback double, shipped in core. Two modes: (a) standalone, where transmits resolve against a programmable script of outcomes/inbound packets for unit tests; (b) paired, where two `TestTransport`s are cross-wired so one's `transmit()` appears on the other's `__aiter__`, for testing application logic (a toy file server against a toy client) entirely in memory. Advertises a configurable capability set so capability-branching code can be exercised both ways.
+
+---
+
+## 11. mDNS / Bonjour station advertisement
+
+**Decided:** adopt Beebium's vendor-neutral standard so we interoperate with it (and invite BeebEm/PiEconetBridge to adopt it too).
+
+- **Service type:** `_aun._udp`
+- **Instance name:** `<impl>-<station>._aun._udp.local.` (e.g. `oaknut-32._aun._udp.local.`)
+- **TXT records:**
+
+| Key | Required | Meaning |
+|---|---|---|
+| `version` | yes | TXT schema version (`1`) |
+| `station` | yes | Econet station (1–254) |
+| `port` | yes | UDP port |
+| `net` | yes | Econet net number (0–127) — **must not** be defaulted; net 0 is local-relative and ambiguous across segments |
+| `impl` | no | implementation id (diagnostic only) |
+| `impl-version` | no | implementation version (diagnostic) |
+| `impl-identity` | no | opaque per-instance id (diagnostic) |
+
+Implemented with `zeroconf.asyncio.AsyncZeroconf` (advertise) and `AsyncServiceBrowser` (discover). Discovered peers populate the AUN transport's peer map as evictable entries; operator-configured entries take precedence and never expire. `impl*` fields are never used for behavioural decisions.
+
+---
+
+## 12. Higher-level applications (forward-looking)
+
+Not built yet, but the core abstraction is shaped to enable them without rework:
+
+- **File server (`&99`)** — an application that listens on port `&99`, decodes the file-server protocol (per the NFS/ANFS disassembly), and serves data from an `oaknut-afs`/`oaknut-adfs`/`oaknut-dfs` backing store. Replies are fresh `transmit()`s to the client's reply port. Immediate ops handled via `immediate()`/inbound `IMMEDIATE`.
+- **Bridge / router / switch** — an application owning **several** transports and a routing table `network → transport`, plus optional NAT/pools/firewalling — all in the application, none in the transports. Forwarding is: `async for pkt in transport_a: await route(pkt)`. This is the concrete path to superseding PiEconetBridge: the routing logic that PiEconetBridge fuses with its device layer (one global `networks[]` under a single mutex) becomes a testable, transport-agnostic service over clean `EconetTransport` instances.
+
+---
+
+## 13. Testing strategy
+
+- **Unit** — packet/header encode-decode for each transport (AUN header, Piconet line grammar + base64, HAT struct), outcome-code mapping tables, capability advertisement. Pure functions, no I/O.
+- **Contract** — a shared `EconetTransport` conformance suite parametrised over `TestTransport` (and, when hardware is present, the real transports) to pin the abstraction's behaviour.
+- **Integration** — paired `TestTransport` exercising application logic (toy client ↔ toy server) end-to-end in memory.
+- **Hardware-in-the-loop** — opt-in, marker-gated tests for Piconet (a connected Pico) and HAT (a connected HAT), skipped by default.
+- **Tooling** — add `pytest-asyncio` to the econet packages' `test` dependency group; respect the workspace's `--import-mode=importlib` and the dual `sys.path` injection in each package's `tests/conftest.py` (see root `CLAUDE.md`). Per `feedback_test_data_in_git`, any captured packet corpora are committed, not synthesised at runtime.
+
+---
+
+## 14. Open questions
+
+1. **Well-known ports & immediate control codes** — enumerate authoritatively from the NFS/ANFS disassembly before freezing the `Port` constants and immediate-op codes.
+2. **AUN UDP port scheme** — fixed base vs per-station vs fully map-driven; pick the most interoperable default.
+3. **`seq`/handle exposure** — confirm the file server never needs the AUN handle at the application layer (reply correlation is by reply-port, not handle). If it does, surface it deliberately rather than leaking it.
+4. **HAT immediate handling** — confirm `IMMSPOOF`/`RESILIENTACK` semantics before claiming `IMMEDIATE_REPLY`.
+5. **Configuration format** — how applications declare transports + maps at startup (TOML? reuse an existing oaknut config convention?). Bridges need this most.
+6. **Piconet `REPLY` upstream** — whether to fix the firmware `REPLY` path upstream so Piconet can gain `IMMEDIATE_REPLY`.
+
+---
+
+## 15. Roadmap (phased)
+
+1. **Workspace prep** — bump `requires-python` to `>=3.12` across the workspace; extend the namespace-init guard for `src/oaknut/econet/`.
+2. **`oaknut-econet-core`** — addressing, packet, outcome, capability types; the `EconetTransport` ABC; `TestTransport`; the conformance suite. Test-first. No transport deps. *(First vertical slice.)*
+3. **`oaknut-econet-aun`** — AUN transport against the core contract (pure UDP, easiest real validation), then `_aun._udp` mDNS. Interop-tested against Beebium.
+4. **`oaknut-econet-piconet`** — serial transport; hardware-in-the-loop tests with a real Pico.
+5. **`oaknut-econet-hat`** — char-device client; hardware-in-the-loop tests with a real HAT.
+6. **Applications** — file server (`&99`) on the AFS/ADFS/DFS backing stores; then bridge/router. Separate design docs each.
