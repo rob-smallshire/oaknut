@@ -81,3 +81,20 @@ class TestNavigationStaysLiberal:
     def test_exists_on_forbidden_name_is_false_not_an_error(self):
         adfs = ADFS.create(ADFS_S)
         assert (adfs.root / "A:B").exists() is False
+
+
+class TestCaseIsPreserved:
+    """ADFS stores a name verbatim and folds case only when matching."""
+
+    def test_mixed_case_name_stored_verbatim(self):
+        adfs = ADFS.create(ADFS_S)
+        (adfs.root / "MixedCase").write_bytes(b"x")
+        names = [e.name for e in adfs.root]
+        assert "MixedCase" in names
+        assert "MIXEDCASE" not in names
+
+    def test_lookup_is_case_insensitive(self):
+        adfs = ADFS.create(ADFS_S)
+        (adfs.root / "MixedCase").write_bytes(b"data")
+        assert (adfs.root / "MIXEDCASE").read_bytes() == b"data"
+        assert (adfs.root / "mixedcase").read_bytes() == b"data"
