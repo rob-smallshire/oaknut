@@ -75,7 +75,7 @@ from oaknut.filesystem.identification import (
 )
 from oaknut.filesystem.reader import ImageReader, ImageSource, reader_for
 
-__version__ = "12.5.0"
+__version__ = "12.5.1"
 
 __all__ = [
     # contract
