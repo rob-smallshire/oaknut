@@ -12,6 +12,12 @@ See ``docs/dev/econet-design.md`` §13.
 
 from __future__ import annotations
 
+from oaknut.econet.station.host import Station
+from oaknut.econet.station.service import Service
+
 __version__ = "12.5.3"
 
-__all__: list[str] = []
+__all__ = [
+    "Service",
+    "Station",
+]

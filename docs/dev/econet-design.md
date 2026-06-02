@@ -483,8 +483,8 @@ Legacy Acorn networks ran roughly one service per station — `254` the file ser
 **The model.** A **`Station`** is one network identity — an `Address` plus an `EconetTransport` — that hosts one or more **`Service`s**. It owns the inbound loop and dispatches each received packet to the service registered for its **port**:
 
 ```python
-class Service(abc.ABC):
-    """A handler for one Econet protocol, bound to one or more ports."""
+class Service(Extension):                            # axis: "oaknut.econet.service"
+    """A plug-in handler for one Econet protocol, bound to the ports it claims."""
 
     @property
     @abc.abstractmethod
@@ -499,7 +499,8 @@ class Station:
 
     def __init__(self, transport: EconetTransport, *, address: Address) -> None: ...
 
-    def register(self, service: Service) -> None: ...     # claims service.ports
+    def register(self, service: Service) -> None: ...           # claims service.ports
+    def register_extension(self, name: str, **kwargs) -> Service: ...   # load a plug-in by name
 
     async def serve(self) -> None:
         async with self._transport:
@@ -511,6 +512,8 @@ class Station:
     async def reply(self, to: Address, *, port: int, control: int, payload: bytes): ...
         # a fresh transmit back to the client's nominated reply port
 ```
+
+**Services are plug-ins.** `Service` is an oaknut `Extension` on the `oaknut.econet.service` axis (entry-point group `oaknut.econet.service`), the third axis alongside `oaknut.econet.transport` and the filesystem/command axes. So a generic **station-host program** can load services by name from configuration — `station.register_extension("kvstore")`, `register_extension("fileserver")` — making a deployment purely declarative: which transport(s), which services, by name. Each service declares the ports it claims and the host registers them (clashes are an error). Services can equally be registered directly in-process (`station.register(KvServer())`) for embedding.
 
 **Several services, one station, concurrently.** A file server (`&99` plus its data ports), a print server, a DSCP server, and bespoke services can all run on the same `Station`, dispatched by port, each handling requests as independent `asyncio` tasks — so a slow operation (a large `*LOAD`) never blocks the others. This is precisely what single-tasking 6502 hardware could not do, and it is the main way oaknut transcends the legacy model.
 
