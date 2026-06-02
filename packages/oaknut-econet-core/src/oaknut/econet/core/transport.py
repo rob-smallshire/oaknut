@@ -31,6 +31,18 @@ class EconetTransport(Extension):
     def _kind(cls) -> str:
         return "econet.transport"
 
+    @classmethod
+    def from_config(cls, *, name: str, address: Address | None, config: dict) -> EconetTransport:
+        """Build a transport from a host config table.
+
+        The default treats *config* as flat constructor keyword arguments (with
+        hyphenated keys mapped to underscores) and supplies *address* as the
+        ``local_station``. Transports with structured config (an AUN peer map,
+        a serial port) override this.
+        """
+        kwargs = {key.replace("-", "_"): value for key, value in config.items()}
+        return cls(name=name, local_station=address, **kwargs)
+
     @property
     @abstractmethod
     def capabilities(self) -> frozenset[TransportCapability]:

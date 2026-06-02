@@ -32,6 +32,17 @@ class Service(Extension):
     def _kind(cls) -> str:
         return "econet.service"
 
+    @classmethod
+    def from_config(cls, *, name: str, config: dict) -> Service:
+        """Build a service from a host config table.
+
+        The default treats *config* as flat constructor keyword arguments (with
+        hyphenated keys mapped to underscores). Services with structured config
+        override this.
+        """
+        kwargs = {key.replace("-", "_"): value for key, value in config.items()}
+        return cls(name=name, **kwargs)
+
     @property
     @abstractmethod
     def ports(self) -> frozenset[int]:
