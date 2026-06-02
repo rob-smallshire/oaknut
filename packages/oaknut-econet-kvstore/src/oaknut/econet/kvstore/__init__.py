@@ -8,6 +8,12 @@ application author copies. See ``docs/dev/econet-design.md`` §13.
 
 from __future__ import annotations
 
+from oaknut.econet.kvstore.client import KvClient
+from oaknut.econet.kvstore.server import KvServer
+
 __version__ = "12.5.3"
 
-__all__: list[str] = []
+__all__ = [
+    "KvClient",
+    "KvServer",
+]

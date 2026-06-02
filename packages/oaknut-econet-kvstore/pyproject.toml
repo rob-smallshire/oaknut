@@ -26,6 +26,9 @@ dependencies = [
     "oaknut-econet-station>=10.0",
 ]
 
+[project.entry-points."oaknut.econet.service"]
+kvstore = "oaknut.econet.kvstore:KvServer"
+
 [project.urls]
 Homepage = "https://github.com/rob-smallshire/oaknut/tree/master/packages/oaknut-econet-kvstore"
 Repository = "https://github.com/rob-smallshire/oaknut"
