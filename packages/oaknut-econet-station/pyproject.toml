@@ -23,6 +23,7 @@ classifiers = [
 ]
 dependencies = [
     "oaknut-econet-core>=10.0",
+    "oaknut-exception>=10.0",
     "oaknut-extension>=10.0",
 ]
 

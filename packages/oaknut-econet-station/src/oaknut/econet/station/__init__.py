@@ -12,6 +12,14 @@ See ``docs/dev/econet-design.md`` §13.
 
 from __future__ import annotations
 
+from oaknut.econet.station.config import (
+    ServiceConfig,
+    StationConfig,
+    build_station,
+    config_from_flags,
+    load_config,
+    parse_config,
+)
 from oaknut.econet.station.host import Station
 from oaknut.econet.station.service import Service
 
@@ -19,5 +27,11 @@ __version__ = "12.5.3"
 
 __all__ = [
     "Service",
+    "ServiceConfig",
     "Station",
+    "StationConfig",
+    "build_station",
+    "config_from_flags",
+    "load_config",
+    "parse_config",
 ]
