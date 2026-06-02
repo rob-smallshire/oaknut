@@ -74,6 +74,7 @@ oaknut-disc  = { workspace = true }
 oaknut-econet-core = { workspace = true }
 oaknut-econet-aun = { workspace = true }
 oaknut-econet-piconet = { workspace = true }
+oaknut-econet-hat = { workspace = true }
 
 [tool.uv]
 default-groups = ["test", "lint", "dev", "workspace"]
@@ -101,6 +102,7 @@ workspace = [
     "oaknut-econet-core",
     "oaknut-econet-aun",
     "oaknut-econet-piconet",
+    "oaknut-econet-hat",
 ]
 test = [
     "pytest>=8.3",
@@ -183,6 +185,9 @@ filename = "packages/oaknut-econet-aun/src/oaknut/econet/aun/__init__.py"
 [[tool.bumpversion.files]]
 filename = "packages/oaknut-econet-piconet/src/oaknut/econet/piconet/__init__.py"
 
+[[tool.bumpversion.files]]
+filename = "packages/oaknut-econet-hat/src/oaknut/econet/hat/__init__.py"
+
 [tool.pytest.ini_options]
 # importlib mode is required for PEP 420 namespace packages. The
 # default prepend mode collides with sibling packages that contribute
@@ -211,6 +216,7 @@ testpaths = [
     "packages/oaknut-econet-core/tests",
     "packages/oaknut-econet-aun/tests",
     "packages/oaknut-econet-piconet/tests",
+    "packages/oaknut-econet-hat/tests",
 ]
 # The workspace-root tests/ directory holds shared test data and a
 # tiny tests/fixtures.py module consumed by every package's conftest.
