@@ -443,14 +443,14 @@ The crux: **the Acorn bridge is a transparent layer-2 HDLC frame relay.** It doe
 - **AUN can never be a true-bridge segment** — it is already transaction-level; there are no frames to relay.
 - **Stock Piconet firmware cannot do this** (it auto-completes the handshake and surfaces only completed transactions). A frame-relay mode requires **firmware changes** — in scope, since the piconet repo is ours to modify. See §12.3 for the two bridge architectures and the concrete change list.
 
-**Feasibility concern to settle early.** A host-mediated, frame-by-frame relay across *two USB-serial Picos* inserts USB-CDC + OS + Python latency into every frame hop. Econet's handshake timing is tight enough that the 6502 appliance — with both ADLCs on one board — was already near the edge. Relaying each frame up to Python and back down to a second Pico may simply not meet the inter-frame deadlines. If so, a faithful frame-relay bridge needs the relay to live *below* the host — in Pico firmware, or on a single dual-ADLC controller — with the host configuring and coordinating rather than relaying each frame. The buildable-today alternative (transaction-level store-and-forward on the logical-packet abstraction) is exactly what PiEconetBridge does and what we've agreed is *not* a true bridge, so it is a documented fallback, not the goal. **Where the frame relay must physically live is the central open question for FR10 (§14.9).**
+**Feasibility concern to settle early.** A host-mediated, frame-by-frame relay across *two USB-serial Picos* inserts USB-CDC + OS + Python latency into every frame hop. Econet's handshake timing is tight enough that the 6502 appliance — with both ADLCs on one board — was already near the edge. Relaying each frame up to Python and back down to a second Pico may simply not meet the inter-frame deadlines. If so, a faithful frame-relay bridge needs the relay to live *below* the host — in Pico firmware, or on a single dual-ADLC controller — with the host configuring and coordinating rather than relaying each frame. The buildable-today alternative (transaction-level store-and-forward on the logical-packet abstraction) is exactly what PiEconetBridge does and what we've agreed is *not* a true bridge, so it is a documented fallback, not the goal. **Where the frame relay must physically live is the central open question for FR10 (§15.9).**
 
 ### 12.3 Two bridge architectures, and the Piconet firmware delta
 
 The firmware consultation (Piconet agent, read-only) clarifies that "true bridge" splits into **two distinct architectures**, and the Piconet path naturally lands on the second:
 
 - **(A) Verbatim frame relay** — the Acorn appliance. Each scout/ack/data/ack frame is relayed across unchanged; the two endpoints handshake *through* the bridge. Frame-level, fully transparent, no proxying. Demands the relay sit where both ADLCs share microsecond-tight timing (a single dual-ADLC controller, or a firmware-resident relay). **A host-in-the-loop relay over two USB Picos is almost certainly too slow for this.**
-- **(B) Proxy store-and-forward** — the bridge *proxies* the remote station: it scout-ACKs locally on the originator's segment (holding the line with flag-fill), accepts the whole transaction, then re-originates it to the real destination on the far segment. Transaction-level. Structurally this is what PiEconetBridge does — but a Piconet-based version stays **native Econet on both sides**, preserves the original 4-byte addressing, and speaks the `&9C` protocol, so it is materially closer to a true bridge than PiEconetBridge's AUN/IP hop. Whether (B) counts as a "true bridge" is a definitional call (transparency vs native-Econet-both-sides + `&9C` + addressing fidelity) — **open question, see §14.9.**
+- **(B) Proxy store-and-forward** — the bridge *proxies* the remote station: it scout-ACKs locally on the originator's segment (holding the line with flag-fill), accepts the whole transaction, then re-originates it to the real destination on the far segment. Transaction-level. Structurally this is what PiEconetBridge does — but a Piconet-based version stays **native Econet on both sides**, preserves the original 4-byte addressing, and speaks the `&9C` protocol, so it is materially closer to a true bridge than PiEconetBridge's AUN/IP hop. Whether (B) counts as a "true bridge" is a definitional call (transparency vs native-Econet-both-sides + `&9C` + addressing fidelity) — **open question, see §15.9.**
 
 The Piconet firmware architecture is *favourable* for model (B): the MC68B54 already receives **all** frames (no hardware address filter to fight — filtering is a software check on the destination-station byte only), and the ACK builder is **already address-transparent** (it sources the ACK from the incoming frame's destination fields, not from the configured station). So relaxing the software filter automatically yields correctly-addressed proxy ACKs. The ranked firmware changes (from the consultation; the agent's full write-up with citations is in its plan file):
 
@@ -469,12 +469,60 @@ A long-term goal (FR11): DSCP plays the role DHCP plays on IP — a station come
 - **Two flavours.** (i) An *IP-native* UDP protocol that runs *alongside* AUN (never inside it, so AUN interop is never compromised) for soft-stations — fixed binary wire format (magic `0xD5`; Allocate / Release / Renew / List), a lease model, mDNS-discovered server, and a peer-table bootstrap carried in the Allocate response. (ii) A *wire-side* variant carried over Econet itself (an immediate op or a data frame on a reserved DSCP station/port) so real hardware can self-configure — the `*AUTOSETSTATION` idea, writing CMOS byte `0x0E` exactly as `*SETSTATION` does.
 - **Layering.** DSCP is a higher-level application, like the file server — it does not touch the core abstraction. The IP-native server is a small asyncio app (UDP + `zeroconf`), matching the spec's "zero exotic dependencies, any language can implement it" goal. The wire-side server/client maps directly onto `EconetTransport` (`immediate()` or a reserved port), with station-occupancy discovery via a `MachinePeek` (`&88`) sweep plus passive source-address observation.
 - **Where oaknut-econet adds something Beebium can't.** Beebium is an emulator, so its wire-side DSCP needs PiEconetBridge's PIPESERVER. An oaknut-econet process with a Piconet or HAT transport can *be* the wire-side DSCP station directly on real Econet — a natural fit for the cross-emulator/cross-hardware reference implementation the spec calls for.
-- **Naming.** The spec itself flags that the published protocol name and mDNS service type must be vendor-neutral (not `_beebium-dscp`); candidates include `_econet-dscp._udp` and the names "DSCP" or "ESAP". Open question (§14.10).
+- **Naming.** The spec itself flags that the published protocol name and mDNS service type must be vendor-neutral (not `_beebium-dscp`); candidates include `_econet-dscp._udp` and the names "DSCP" or "ESAP". Open question (§15.10).
 - **Client support is the long pole.** DSCP needs station-side client software (a 6502 ROM/utility for real hardware; a startup step for soft-stations), which is what makes this a long arc rather than a near-term deliverable.
 
 ---
 
-## 13. Testing strategy
+## 13. The application layer: the service host and port dispatch
+
+Legacy Acorn networks ran roughly one service per station — `254` the file server, a print server on its own station, and so on. That was a *deployment* constraint (one machine per station, no multitasking OS), **not** a protocol one: the Econet **port** — the receiver-chosen demultiplexing byte carried in every scout — has always let a single station offer many services at once. oaknut is not bound by the one-service-per-station tradition, and this is a key thing for Econet application authors to internalise.
+
+**The model.** A **`Station`** is one network identity — an `Address` plus an `EconetTransport` — that hosts one or more **`Service`s**. It owns the inbound loop and dispatches each received packet to the service registered for its **port**:
+
+```python
+class Service(abc.ABC):
+    """A handler for one Econet protocol, bound to one or more ports."""
+
+    @property
+    @abc.abstractmethod
+    def ports(self) -> frozenset[int]: ...          # e.g. {Port.FS_COMMAND}
+
+    @abc.abstractmethod
+    async def handle(self, request: EconetPacket, station: "Station") -> None: ...
+
+
+class Station:
+    """A logical Econet station hosting services over one transport."""
+
+    def __init__(self, transport: EconetTransport, *, address: Address) -> None: ...
+
+    def register(self, service: Service) -> None: ...     # claims service.ports
+
+    async def serve(self) -> None:
+        async with self._transport:
+            async for request in self._transport:
+                service = self._services_by_port.get(request.port)
+                if service is not None:
+                    self._spawn(service.handle(request, self))   # concurrent task
+
+    async def reply(self, to: Address, *, port: int, control: int, payload: bytes): ...
+        # a fresh transmit back to the client's nominated reply port
+```
+
+**Several services, one station, concurrently.** A file server (`&99` plus its data ports), a print server, a DSCP server, and bespoke services can all run on the same `Station`, dispatched by port, each handling requests as independent `asyncio` tasks — so a slow operation (a large `*LOAD`) never blocks the others. This is precisely what single-tasking 6502 hardware could not do, and it is the main way oaknut transcends the legacy model.
+
+**Two levels of selection.** The **port** routes a packet to a *service*; the **control byte** (and, within the file-server protocol, the request's function code) selects the *operation* within that service. Services receive whole `EconetPacket`s (already wire-acknowledged below the transport) and respond by initiating *fresh* transmits to the **reply port** the client nominated in its request — never by "returning" on the inbound path.
+
+**Immediate operations (port 0)** are dispatched on their own path: a station may answer `MachinePeek` itself (advertising its machine type/version) and route other immediates to an immediate handler, subject to the transport's `IMMEDIATE_REPLY` capability.
+
+**Composition.** The common case is one `Station`, many services. A host process may equally run **several `Station`s** — distinct identities, each over its own transport — which is how media-converters and the (model-B) bridge are built: those *forward* between transports rather than *terminating* services, but share the same "own a transport, consume its inbound loop" footing.
+
+This service-host layer is the foundation the `&99` file server, the print server, and the DSCP server all plug into; it will land as its own package (working name `oaknut.econet.station`). Its exact API — the `Station`/`Service` naming, static vs dynamic port claims, and the immediate-op dispatch hook — is the first thing to settle when we start the application layer (see the open questions in §15).
+
+---
+
+## 14. Testing strategy
 
 - **Unit** — packet/header encode-decode for each transport (AUN header, Piconet line grammar + base64, HAT struct), outcome-code mapping tables, capability advertisement. Pure functions, no I/O.
 - **Contract** — a shared `EconetTransport` conformance suite parametrised over `TestTransport` (and, when hardware is present, the real transports) to pin the abstraction's behaviour.
@@ -484,7 +532,7 @@ A long-term goal (FR11): DSCP plays the role DHCP plays on IP — a station come
 
 ---
 
-## 14. Open questions
+## 15. Open questions
 
 1. **Well-known ports & immediate control codes** — *resolved*: enumerated from the NFS/ANFS disassembly (and the bridge disassembly for `&9C`) and frozen as the `Port` and `ImmediateOp` enums in `oaknut.econet.core`. Notable corrections: the print server is `&D1` in NFS/ANFS (not `&9F`), and `&9C` is the bridge appliance's port, not referenced by NFS/ANFS.
 2. **AUN UDP port scheme** — *decided*: fully map-driven. `AunTransport` binds a configurable `(host, port)` (default `DEFAULT_AUN_PORT = 32768`) and resolves peers via an explicit peer map; no fixed per-station formula, which is the most interoperable choice.
@@ -496,10 +544,11 @@ A long-term goal (FR11): DSCP plays the role DHCP plays on IP — a station come
 8. **Piconet firmware changes** — *answered* in §12.3 (ranked): the favourable news is that the MC68B54 already receives all frames and the ACK builder is address-transparent, so a proxy (model B) bridge is a realistic firmware delta; verbatim relay (model A) over two USB Picos is not. The held-open flag-fill timing while proxying is the main real-time risk and needs bench testing.
 9. **Which definition of "true bridge" we commit to** (the central FR10 question) — verbatim frame relay (model A: transparent, frame-level; needs a single dual-ADLC controller or firmware-resident relay) vs native proxy store-and-forward (model B: two Picos + firmware changes + host `&9C` logic; native Econet both sides, addressing-preserving, but not byte-transparent). This drives where the relay lives and how much firmware work FR10 entails.
 10. **DSCP scope & name** — IP-native first (the Beebium draft's Option A) vs wire-side-first (leveraging our real-transport advantage as a wire-side DSCP station); and the vendor-neutral protocol / mDNS service name. Builds directly on `beebium/docs/discussion/dynamic-station-config-protocol.md`.
+11. **Service-host API** (§13) — the `Station`/`Service` naming, how a service claims ports (a static `ports` set vs dynamic registration), and the reply-port and immediate-op dispatch hooks. The first thing to settle when the application layer starts.
 
 ---
 
-## 15. Roadmap (phased)
+## 16. Roadmap (phased)
 
 **Implementation status (2026-06-02, `econet` branch, test-first; `master` untouched):**
 - Phase 1 **(done)** — workspace at Python ≥3.12; namespace-init guard extended for `oaknut.econet`; ruff config consolidated into `pyproject.toml` (was split with a stale `ruff.toml`).
