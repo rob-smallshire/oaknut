@@ -11,6 +11,16 @@ simulation so the transport is testable in CI with no hardware.
 It registers on the ``oaknut.econet.transport`` extension axis as ``hat``.
 """
 
+from __future__ import annotations
+
+from oaknut.econet.hat.device import KernelDevice
+from oaknut.econet.hat.fake import FakeKernelDevice
+from oaknut.econet.hat.transport import HatTransport
+
 __version__ = "12.5.3"
 
-__all__: list[str] = []
+__all__ = [
+    "FakeKernelDevice",
+    "HatTransport",
+    "KernelDevice",
+]
