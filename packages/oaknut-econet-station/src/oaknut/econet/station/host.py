@@ -55,6 +55,11 @@ class Station:
         self.register(service)
         return service
 
+    @property
+    def port_map(self) -> dict[int, str]:
+        """Each claimed port mapped to the name of the service handling it."""
+        return {port: service.name for port, service in self._services_by_port.items()}
+
     async def serve(self) -> None:
         """Dispatch inbound packets by port until the transport closes."""
         try:
