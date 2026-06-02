@@ -520,6 +520,8 @@ class Station:
 
 **Composition.** The common case is one `Station`, many services. A host process may equally run **several `Station`s** — distinct identities, each over its own transport — which is how media-converters and the (model-B) bridge are built: those *forward* between transports rather than *terminating* services, but share the same "own a transport, consume its inbound loop" footing.
 
+**Process granularity.** A station's traffic all arrives at a *single transport endpoint* — one UDP socket, serial port, or char device, owned by one OS process — so the default is that services sharing a station live in **one program** (with `asyncio` giving concurrency, not processes). They need not, though: a **station broker** can own the endpoint and route by port to separate **service processes** over local IPC. Crucially, *a broker is just another Econet application* — it owns a real `EconetTransport` and re-exports its station, so it needs **no special support** in the core or this layer; the only genuinely new piece it adds is a local-IPC `EconetTransport` that remote service processes drive with this *same* `Station`/`Service` API. It can therefore come later without changing anything here. (A broker routes by port to local processes much as a bridge routes by net to other transports — the same "own transport(s), route packets" family.)
+
 This service-host layer is the foundation the `&99` file server, the print server, and the DSCP server all plug into; it will land as its own package (working name `oaknut.econet.station`). Its exact API — the `Station`/`Service` naming, static vs dynamic port claims, and the immediate-op dispatch hook — is the first thing to settle when we start the application layer (see the open questions in §15).
 
 ---
