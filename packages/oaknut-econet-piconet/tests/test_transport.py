@@ -90,3 +90,11 @@ async def test_immediate_is_acknowledged_with_no_reply():
         result = await transport.immediate(immediate)
         assert result.acknowledged
         assert result.reply is None
+
+
+async def test_status_queries_the_board():
+    fake = FakePiconet(version="2.0.20", station=7)
+    async with PiconetTransport(link=fake, local_station=Address(0, 1)) as transport:
+        status = await transport.status()
+        assert status.version == "2.0.20"
+        assert status.station == 1  # open() set the board to the local station

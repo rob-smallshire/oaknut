@@ -14,6 +14,7 @@ from oaknut.econet.core import (
     TransmitOutcome,
     TransmitResult,
     TransportCapability,
+    TransportConfigurationError,
 )
 from oaknut.econet.piconet.link import PicoLink
 from oaknut.econet.piconet.mapping import (
@@ -24,10 +25,12 @@ from oaknut.econet.piconet.mapping import (
 )
 from oaknut.econet.piconet.protocol import (
     PiconetMode,
+    StatusEvent,
     TxResultEvent,
     parse_event,
     set_mode_command,
     set_station_command,
+    status_command,
 )
 
 #: The Pico runs the four-way handshake itself, which (with ADLC timing) can
@@ -70,6 +73,7 @@ class PiconetTransport(EconetTransport):
         self._inbound: asyncio.Queue = asyncio.Queue()
         self._tx_lock = asyncio.Lock()
         self._pending_tx: asyncio.Future[TxResultEvent] | None = None
+        self._pending_status: asyncio.Future[StatusEvent] | None = None
         self._reader_task: asyncio.Task | None = None
         self._opened = False
         self._closed = False
@@ -116,6 +120,17 @@ class PiconetTransport(EconetTransport):
             broadcast_command_for(payload, port=port, control=control)
         )
 
+    async def status(self) -> StatusEvent:
+        """Query the board: firmware version, station, SR1 (clock state), mode."""
+        self._pending_status = asyncio.get_running_loop().create_future()
+        try:
+            await self._link.send_line(status_command())
+            return await asyncio.wait_for(self._pending_status, self._tx_timeout)
+        except TimeoutError as exc:
+            raise TransportConfigurationError("no STATUS response from the Piconet board") from exc
+        finally:
+            self._pending_status = None
+
     async def _send_awaiting_result(self, command: str) -> TransmitOutcome:
         async with self._tx_lock:
             self._pending_tx = asyncio.get_running_loop().create_future()
@@ -134,6 +149,10 @@ class PiconetTransport(EconetTransport):
                 event = parse_event(line)
             except EconetError:
                 continue  # ignore malformed lines; keep the link alive
+            if isinstance(event, StatusEvent):
+                if self._pending_status is not None and not self._pending_status.done():
+                    self._pending_status.set_result(event)
+                continue
             if isinstance(event, TxResultEvent):
                 if self._pending_tx is not None and not self._pending_tx.done():
                     self._pending_tx.set_result(event)

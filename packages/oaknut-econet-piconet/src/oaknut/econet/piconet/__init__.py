@@ -15,6 +15,7 @@ from __future__ import annotations
 from oaknut.econet.piconet.fake import FakePiconet
 from oaknut.econet.piconet.link import PicoLink
 from oaknut.econet.piconet.protocol import PiconetMode, TxResult
+from oaknut.econet.piconet.serial_link import SerialPicoLink
 from oaknut.econet.piconet.transport import PiconetTransport
 
 __version__ = "12.5.3"
@@ -24,5 +25,6 @@ __all__ = [
     "PicoLink",
     "PiconetMode",
     "PiconetTransport",
+    "SerialPicoLink",
     "TxResult",
 ]

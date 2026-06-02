@@ -28,6 +28,9 @@ dependencies = [
 [project.optional-dependencies]
 serial = ["pyserial-asyncio>=0.6"]
 
+[project.entry-points."oaknut.econet.transport"]
+piconet = "oaknut.econet.piconet:PiconetTransport"
+
 [project.urls]
 Homepage = "https://github.com/rob-smallshire/oaknut/tree/master/packages/oaknut-econet-piconet"
 Repository = "https://github.com/rob-smallshire/oaknut"
