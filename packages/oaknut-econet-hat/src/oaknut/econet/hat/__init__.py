@@ -15,11 +15,13 @@ from __future__ import annotations
 
 from oaknut.econet.hat.device import KernelDevice
 from oaknut.econet.hat.fake import FakeKernelDevice
+from oaknut.econet.hat.gpio import EconetGpioDevice
 from oaknut.econet.hat.transport import HatTransport
 
 __version__ = "12.5.3"
 
 __all__ = [
+    "EconetGpioDevice",
     "FakeKernelDevice",
     "HatTransport",
     "KernelDevice",

@@ -25,6 +25,9 @@ dependencies = [
     "oaknut-econet-core>=10.0",
 ]
 
+[project.entry-points."oaknut.econet.transport"]
+hat = "oaknut.econet.hat:HatTransport"
+
 [project.urls]
 Homepage = "https://github.com/rob-smallshire/oaknut/tree/master/packages/oaknut-econet-hat"
 Repository = "https://github.com/rob-smallshire/oaknut"
