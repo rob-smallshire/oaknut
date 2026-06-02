@@ -1,0 +1,55 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "oaknut-econet-host"
+dynamic = ["version"]
+authors = [{ name = "Robert Smallshire", email = "robert@smallshire.org.uk" }]
+description = "The econet-station host program: a CLI that configures Econet transports and service plug-ins and runs a station."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.12"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: System Administrators",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: System :: Networking",
+]
+dependencies = [
+    "oaknut-econet-station>=10.0",
+    "oaknut-exception>=10.0",
+    "oaknut-extension>=10.0",
+    "oaknut-cli>=10.0",
+    "click>=8.1.7",
+]
+
+[project.scripts]
+econet-station = "oaknut.econet.host.cli:cli"
+
+[project.urls]
+Homepage = "https://github.com/rob-smallshire/oaknut/tree/master/packages/oaknut-econet-host"
+Repository = "https://github.com/rob-smallshire/oaknut"
+Issues = "https://github.com/rob-smallshire/oaknut/issues"
+
+[dependency-groups]
+test = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.24",
+]
+dev = [
+    "bump-my-version>=0.28.0",
+    "pre-commit>=3.0",
+    {include-group = "test"},
+]
+
+[tool.setuptools.dynamic]
+version = { attr = "oaknut.econet.host.__version__" }
+
+[tool.setuptools.packages.find]
+where = ["src"]

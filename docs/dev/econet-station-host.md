@@ -89,7 +89,7 @@ The CLI boundary uses `oaknut-exception`'s `handled_errors`, so a bad config / u
 
 ## Packaging
 
-A `econet-station` console script shipped from `oaknut-econet-station`, with Click behind a `[cli]` extra so the *library* still imports without Click. The host does not depend on any transport/service distribution — those are discovered at runtime from installed entry points.
+The host is its own distribution, **`oaknut-econet-host`**, providing the `econet-station` console script with **Click as a hard dependency** (a CLI program needs its CLI framework) plus `oaknut-cli` for the shared help/error conventions. The `oaknut-econet-station` library stays Click-free, usable for embedding and programmatic station building. (The `[cli]` *extras* elsewhere in oaknut are for packages that *extend* an existing CLI such as `disc` by contributing subcommands — a different thing from being a CLI.) The host depends on no transport/service distribution — those are discovered at runtime from installed entry points.
 
 ## Recommended deployment: a uv project
 
