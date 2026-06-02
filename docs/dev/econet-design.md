@@ -501,11 +501,12 @@ A long-term goal (FR11): DSCP plays the role DHCP plays on IP — a station come
 
 ## 15. Roadmap (phased)
 
-**Implementation status (2026-06-02, `econet` branch, test-first):**
-- Phase 1 **(done)** — workspace at Python ≥3.12; namespace-init guard extended for `oaknut.econet`.
-- Phase 2 **(done)** — `oaknut-econet-core` complete: `Address`, `EconetPacket`/`PacketKind`, `TransmitResult`/`TransmitOutcome`, `TransportCapability`, the `EconetTransport` ABC, `TestTransport`, the error hierarchy, and the reusable conformance suite (56 tests).
-- Phase 3 **(in progress)** — `oaknut-econet-aun` has the AUN wire codec, the `EconetPacket`↔`AunPacket` mapping, and `AunTransport` over an asyncio UDP endpoint — registered on the `oaknut.econet.transport` axis and passing the conformance suite over real 127.0.0.1 loopback (49 tests). Remaining: `_aun._udp` mDNS.
-- Full workspace suite green (3366 tests); `master` untouched.
+**Implementation status (2026-06-02, `econet` branch, test-first; `master` untouched):**
+- Phase 1 **(done)** — workspace at Python ≥3.12; namespace-init guard extended for `oaknut.econet`; ruff config consolidated into `pyproject.toml` (was split with a stale `ruff.toml`).
+- Phase 2 **(done)** — `oaknut-econet-core`: value types, the `EconetTransport` ABC, `TestTransport`, the error hierarchy, the reusable conformance suite, and the well-known `Port`/`ImmediateOp` constants.
+- Phase 3 **(done, bar live mDNS)** — `oaknut-econet-aun`: AUN wire codec, the `EconetPacket`↔`AunPacket` mapping, `AunTransport` over asyncio UDP (validated over 127.0.0.1 loopback + conformance), and the `_aun._udp` mDNS TXT codec. Live AsyncZeroconf advertiser/browser deferred.
+- Phase 4 **(done, Stage A)** — `oaknut-econet-piconet`: serial protocol codec, Econet frame mapping, `PiconetTransport` driven over a `PicoLink`, the shipped `FakePiconet` firmware simulation (CI-testable with no hardware), `status()`, and `SerialPicoLink` (real board, `[serial]` extra). On-Econet hardware tests are gated/opt-in (Stage B; the two-Piconet + HAT/PiEconetBridge rig supplies the clock and peers).
+- Full workspace suite green (3442 tests, 2 hardware-gated skips).
 
 1. **Workspace prep** — bump `requires-python` to `>=3.12` across the workspace; extend the namespace-init guard for `src/oaknut/econet/`.
 2. **`oaknut-econet-core`** — addressing, packet, outcome, capability types; the `EconetTransport` ABC; `TestTransport`; the conformance suite. Test-first. No transport deps. *(First vertical slice.)*
