@@ -1,6 +1,6 @@
-"""The econet-station host program.
+"""The econet-host host program.
 
-A CLI (the ``econet-station`` console script) that configures Econet transports
+A CLI (the ``econet-host`` console script) that configures Econet transports
 and service plug-ins from TOML and runs a :class:`~oaknut.econet.station.Station`.
 The CLI itself lives in :mod:`oaknut.econet.host.cli`.
 """

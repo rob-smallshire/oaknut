@@ -1,7 +1,7 @@
-"""Configuration loading and station building for the econet-station host.
+"""Configuration loading and station building for the econet-host host.
 
 Parses a TOML station config (from a standalone file, a deployment project's
-``[tool.econet-station]`` table, or constructed from flags) and builds a
+``[tool.econet-host]`` table, or constructed from flags) and builds a
 :class:`Station` by loading the named transport and service plug-ins via their
 ``from_config`` classmethods. No Click here — this is importable without the
 ``cli`` extra.
@@ -20,8 +20,8 @@ from oaknut.extension import extension, namespace_for
 
 _TRANSPORT_KIND = "econet.transport"
 _SERVICE_KIND = "econet.service"
-_STANDALONE_NAME = "econet-station.toml"
-_PYPROJECT_SECTION = "econet-station"
+_STANDALONE_NAME = "econet-host.toml"
+_PYPROJECT_SECTION = "econet-host"
 
 
 @dataclass(frozen=True, slots=True)
@@ -44,7 +44,7 @@ class StationConfig:
 
 def parse_config(data: dict) -> StationConfig:
     """Parse a config mapping (the standalone top level, or the
-    ``[tool.econet-station]`` table) into a :class:`StationConfig`."""
+    ``[tool.econet-host]`` table) into a :class:`StationConfig`."""
     try:
         station_table = data["station"]
     except KeyError as exc:
@@ -91,9 +91,9 @@ def config_from_flags(*, transport: str, station: str, services: tuple[str, ...]
 def load_config(path: Path | None = None) -> tuple[StationConfig, str]:
     """Load a station config, returning it and a description of its source.
 
-    Discovery order: an explicit *path*; else ``[tool.econet-station]`` in a
+    Discovery order: an explicit *path*; else ``[tool.econet-host]`` in a
     ``pyproject.toml`` found in the cwd or an ancestor; else a conventional
-    ``econet-station.toml`` in the cwd. Raises if none is found.
+    ``econet-host.toml`` in the cwd. Raises if none is found.
     """
     if path is not None:
         return parse_config(_read_toml(path)), f"file {path}"
@@ -108,7 +108,7 @@ def load_config(path: Path | None = None) -> tuple[StationConfig, str]:
         return parse_config(_read_toml(standalone)), f"file {standalone}"
 
     raise ConfigurationError(
-        "no econet-station config found; pass --config, add a config file, "
+        "no econet-host config found; pass --config, add a config file, "
         "or use the --transport/--station flags"
     )
 

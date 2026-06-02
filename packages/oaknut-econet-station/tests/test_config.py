@@ -75,7 +75,7 @@ def test_config_from_flags():
 
 
 def test_load_from_explicit_file(tmp_path):
-    path = tmp_path / "econet-station.toml"
+    path = tmp_path / "econet-host.toml"
     path.write_text(_SAMPLE)
     config, source = load_config(path)
     assert config.address == Address(0, 254)
@@ -83,21 +83,21 @@ def test_load_from_explicit_file(tmp_path):
 
 
 def test_load_discovers_a_standalone_file(tmp_path, monkeypatch):
-    (tmp_path / "econet-station.toml").write_text(_SAMPLE)
+    (tmp_path / "econet-host.toml").write_text(_SAMPLE)
     monkeypatch.chdir(tmp_path)
     config, source = load_config()
     assert config.transport == "aun"
-    assert "econet-station.toml" in source
+    assert "econet-host.toml" in source
 
 
 def test_load_discovers_pyproject_section(tmp_path, monkeypatch):
     (tmp_path / "pyproject.toml").write_text(
-        '[tool.econet-station.station]\naddress = "0.254"\ntransport = "aun"\n'
+        '[tool.econet-host.station]\naddress = "0.254"\ntransport = "aun"\n'
     )
     monkeypatch.chdir(tmp_path)
     config, source = load_config()
     assert config.address == Address(0, 254)
-    assert "tool.econet-station" in source
+    assert "tool.econet-host" in source
 
 
 def test_load_none_found_raises(tmp_path, monkeypatch):

@@ -1,4 +1,4 @@
-"""Tests for the econet-station host CLI and the serve lifecycle."""
+"""Tests for the econet-host host CLI and the serve lifecycle."""
 
 import asyncio
 

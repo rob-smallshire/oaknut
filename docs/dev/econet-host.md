@@ -1,27 +1,29 @@
-# oaknut `econet-station` — host program design
+# oaknut `econet-host` — host program design
 
 **Status:** draft for iteration, created 2026-06-03. Agreed shape; amend in place. Builds on the service-host model in `econet-design.md` §13 and the CLI conventions in `cli-design.md`.
 
 ## Purpose
 
-`econet-station` is the **single-station service host**: it attaches one transport, creates a `Station`, loads the configured service plug-ins (each claiming its ports), and runs `Station.serve()` until interrupted. It is *not* a bridge/router (that composes multiple transports — a different program).
+`econet-host` is the **single-station service host**: it attaches one transport, creates a `Station`, loads the configured service plug-ins (each claiming its ports), and runs `Station.serve()` until interrupted. It is *not* a bridge/router (that composes multiple transports — a different program).
 
-The host depends only on `oaknut-econet-station` + core + the CLI layer; it depends on **no specific transport or service**. It discovers whatever plug-ins are installed via the `oaknut.econet.transport` and `oaknut.econet.service` extension axes. Provisioning a deployment is therefore "install the packages you want, then point the host at a config".
+The program is the `oaknut-econet-host` distribution; it depends on the `oaknut-econet-station` library and on Click, and depends on **no specific transport or service**. It discovers whatever plug-ins are installed via the `oaknut.econet.transport` and `oaknut.econet.service` extension axes. Provisioning a deployment is therefore "install the packages you want, then point the host at a config".
+
+(The command is `econet-host`, matching its package `oaknut-econet-host`; the `Station`/`Service` classes live in the separate `oaknut-econet-station` library — the home of `Station`.)
 
 ## Configuration
 
 A station deployment *is* configuration — an address, a transport endpoint (AUN peer map / serial port / device path), and a list of services with their settings. It lives in **TOML** (parsed with stdlib `tomllib`; no dependency), in one of two interchangeable locations with the **same schema**:
 
-- a standalone file (`econet-station.toml`, `/etc/oaknut/...`, or any `--config PATH`), with the schema at the top level; or
-- a `[tool.econet-station]` table inside a **deployment project's** `pyproject.toml` (the ruff/pytest convention), with the schema nested under that table.
+- a standalone file (`econet-host.toml`, `/etc/oaknut/...`, or any `--config PATH`), with the schema at the top level; or
+- a `[tool.econet-host]` table inside a **deployment project's** `pyproject.toml` (the ruff/pytest convention), with the schema nested under that table.
 
-**Rule:** `[tool.econet-station]` belongs only in a *deployer's* project `pyproject.toml` — **never** in oaknut's own library package manifests. Runtime config (station numbers, peer IPs, file-server roots, any future secret) is not packaging metadata and must not ship inside a published package.
+**Rule:** `[tool.econet-host]` belongs only in a *deployer's* project `pyproject.toml` — **never** in oaknut's own library package manifests. Runtime config (station numbers, peer IPs, file-server roots, any future secret) is not packaging metadata and must not ship inside a published package.
 
 **Discovery order** (first match wins; no merging — we learned from the stale `ruff.toml`):
 
 1. an explicit `--config PATH`;
-2. `[tool.econet-station]` in a `pyproject.toml` found in the cwd or an ancestor;
-3. a conventional `econet-station.toml` in the cwd;
+2. `[tool.econet-host]` in a `pyproject.toml` found in the cwd or an ancestor;
+3. a conventional `econet-host.toml` in the cwd;
 4. the flag-only quick path (no file).
 
 `validate` (and `run` at startup) reports **which source** was used, so there is never ambiguity about which file won.
@@ -49,7 +51,7 @@ root = "/srv/econet/disc0.ssd"
 read-only = true
 ```
 
-Ports are **not** in the config: a service declares its own ports (`KvServer` → `&B0`, a file server → `&99`…). The host registers them and **fails fast** on a clash, printing the resulting port map. (Under `pyproject.toml` the tables are prefixed, e.g. `[tool.econet-station.station]`, `[[tool.econet-station.service]]`.)
+Ports are **not** in the config: a service declares its own ports (`KvServer` → `&B0`, a file server → `&99`…). The host registers them and **fails fast** on a clash, printing the resulting port map. (Under `pyproject.toml` the tables are prefixed, e.g. `[tool.econet-host.station]`, `[[tool.econet-host.service]]`.)
 
 ## Plug-in configuration: the `from_config` convention
 
@@ -68,20 +70,20 @@ Plug-ins with structured config override it: `AunTransport` parses `listen`/`pee
 ## CLI surface (Click, consistent with `disc`)
 
 ```
-econet-station run        [--config PATH]   # the daemon; graceful shutdown on SIGINT/SIGTERM
-econet-station validate   [--config PATH]   # parse + build + print the plan and config source; exit
-econet-station list-transports              # discover installed transport plug-ins
-econet-station list-services                # discover installed service plug-ins
-econet-station describe   <name>            # a plug-in's description (Extension.describe())
+econet-host run        [--config PATH]   # the daemon; graceful shutdown on SIGINT/SIGTERM
+econet-host validate   [--config PATH]   # parse + build + print the plan and config source; exit
+econet-host list-transports              # discover installed transport plug-ins
+econet-host list-services                # discover installed service plug-ins
+econet-host describe   <name>            # a plug-in's description (Extension.describe())
 ```
 
 Flag-only quick path for the trivial, config-less case (demos, the KV walking skeleton):
 
 ```
-econet-station run --transport aun --station 0.254 --service kvstore
+econet-host run --transport aun --station 0.254 --service kvstore
 ```
 
-The CLI boundary uses `oaknut-exception`'s `handled_errors`, so a bad config / unknown plug-in / port clash is a clean `ConfigurationError` with the right exit code, not a traceback.
+The CLI boundary uses `oaknut-exception`'s `handled_errors` (with a `--debug` flag) and `oaknut.cli.use_plain_help`, so it matches `disc`: a bad config / unknown plug-in / port clash is a clean `ConfigurationError` with the right exit code, not a traceback.
 
 ## Lifecycle
 
@@ -89,7 +91,7 @@ The CLI boundary uses `oaknut-exception`'s `handled_errors`, so a bad config / u
 
 ## Packaging
 
-The host is its own distribution, **`oaknut-econet-host`**, providing the `econet-station` console script with **Click as a hard dependency** (a CLI program needs its CLI framework) plus `oaknut-cli` for the shared help/error conventions. The `oaknut-econet-station` library stays Click-free, usable for embedding and programmatic station building. (The `[cli]` *extras* elsewhere in oaknut are for packages that *extend* an existing CLI such as `disc` by contributing subcommands — a different thing from being a CLI.) The host depends on no transport/service distribution — those are discovered at runtime from installed entry points.
+The host is its own distribution, **`oaknut-econet-host`**, providing the `econet-host` console script with **Click as a hard dependency** (a CLI program needs its CLI framework) plus `oaknut-cli` for the shared help/error conventions. The `oaknut-econet-station` library stays Click-free, usable for embedding and programmatic station building. (The `[cli]` *extras* elsewhere in oaknut are for packages that *extend* an existing CLI such as `disc` by contributing subcommands — a different thing from being a CLI.) The host depends on no transport/service distribution — those are discovered at runtime from installed entry points.
 
 ## Recommended deployment: a uv project
 
@@ -98,15 +100,15 @@ The neat path is to treat a deployment as a uv project — one `pyproject.toml` 
 ```toml
 [project]
 name = "my-econet-fileserver"
-dependencies = ["oaknut-econet-station", "oaknut-econet-aun", "oaknut-econet-kvstore"]
+dependencies = ["oaknut-econet-host", "oaknut-econet-aun", "oaknut-econet-kvstore"]
 
-[tool.econet-station.station]
+[tool.econet-host.station]
 address = "0.254"
 transport = "aun"
 # ... transport + service tables ...
 ```
 
-Then `uv sync && econet-station run` provisions *and* runs from a single, reproducible source of truth.
+Then `uv sync && econet-host run` provisions *and* runs from a single, reproducible source of truth.
 
 ## Testability
 

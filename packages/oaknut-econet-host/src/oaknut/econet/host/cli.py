@@ -1,4 +1,4 @@
-"""The ``econet-station`` host CLI: configure transports + services and run."""
+"""The ``econet-host`` host CLI: configure transports + services and run."""
 
 from __future__ import annotations
 
@@ -44,7 +44,7 @@ def _resolve_config(config_path, transport, station, services):
 
 @click.group(cls=_BoundaryGroup)
 @click.option("--debug", is_flag=True, help="Show full tracebacks for internal errors.")
-@click.version_option(__version__, prog_name="econet-station")
+@click.version_option(__version__, prog_name="econet-host")
 def cli(debug: bool) -> None:
     """Host Econet services on a single station."""
 
@@ -70,7 +70,7 @@ def run(config_path, transport, station, services) -> None:
     """Run the station host until interrupted (SIGINT/SIGTERM)."""
     config, source = _resolve_config(config_path, transport, station, services)
     host = build_station(config)
-    click.echo(f"econet-station {host.address} on '{config.transport}' (config: {source})")
+    click.echo(f"econet-host {host.address} on '{config.transport}' (config: {source})")
     _echo_port_map(host)
     _run_blocking(host)
 

@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "oaknut-econet-host"
 dynamic = ["version"]
 authors = [{ name = "Robert Smallshire", email = "robert@smallshire.org.uk" }]
-description = "The econet-station host program: a CLI that configures Econet transports and service plug-ins and runs a station."
+description = "The econet-host program: a CLI that configures Econet transports and service plug-ins and runs a station."
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
@@ -30,7 +30,7 @@ dependencies = [
 ]
 
 [project.scripts]
-econet-station = "oaknut.econet.host.cli:cli"
+econet-host = "oaknut.econet.host.cli:cli"
 
 [project.urls]
 Homepage = "https://github.com/rob-smallshire/oaknut/tree/master/packages/oaknut-econet-host"
