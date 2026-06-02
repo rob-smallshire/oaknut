@@ -224,3 +224,8 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I"]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests routinely re-import symbols for readability and occasionally
+# have unused imports for fixtures.
+"**/tests/**/*.py" = ["F401", "E501"]
