@@ -46,6 +46,17 @@ class Address:
         """True if the network is the local segment (network 0)."""
         return self.network == LOCAL_NET
 
+    @classmethod
+    def parse(cls, text: str) -> Address:
+        """Parse a ``"net.station"`` string (e.g. ``"0.254"``), the inverse of str()."""
+        network, separator, station = text.partition(".")
+        if separator != "." or not network or not station:
+            raise ValueError(f"address must be 'net.station', got {text!r}")
+        try:
+            return cls(int(network), int(station))
+        except ValueError as exc:
+            raise ValueError(f"invalid address {text!r}: {exc}") from exc
+
     def __str__(self) -> str:
         return f"{self.network}.{self.station}"
 

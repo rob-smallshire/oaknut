@@ -24,6 +24,16 @@ DEFAULT_AUN_PORT = 32768
 _HANDLE_MODULUS = 0x1_0000_0000
 
 
+def _split_endpoint(endpoint: str) -> tuple[str, int]:
+    host, separator, port = endpoint.rpartition(":")
+    if separator != ":" or not host or not port:
+        raise TransportConfigurationError(f"endpoint must be 'host:port', got {endpoint!r}")
+    try:
+        return host, int(port)
+    except ValueError as exc:
+        raise TransportConfigurationError(f"invalid endpoint port in {endpoint!r}") from exc
+
+
 class _Closed:
     """Sentinel queued by close() to terminate inbound iteration."""
 
@@ -63,6 +73,17 @@ class AunTransport(EconetTransport):
             TransportCapability.DISCOVERY,
         }
     )
+
+    @classmethod
+    def from_config(cls, *, name: str, address: Address | None, config: dict) -> AunTransport:
+        """Build from config: ``listen = "host:port"`` and a ``peers`` list of
+        ``{address = "net.stn", endpoint = "host:port"}`` entries."""
+        options = {key.replace("-", "_"): value for key, value in config.items()}
+        host, port = _split_endpoint(options.pop("listen", f"0.0.0.0:{DEFAULT_AUN_PORT}"))
+        peers: dict[Address, tuple[str, int]] = {}
+        for peer in options.pop("peers", []):
+            peers[Address.parse(peer["address"])] = _split_endpoint(peer["endpoint"])
+        return cls(name=name, local_station=address, host=host, port=port, peers=peers, **options)
 
     def __init__(
         self,

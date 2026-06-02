@@ -58,6 +58,20 @@ class PiconetTransport(EconetTransport):
         {TransportCapability.BROADCAST, TransportCapability.MONITOR}
     )
 
+    @classmethod
+    def from_config(cls, *, name: str, address: Address | None, config: dict) -> PiconetTransport:
+        """Build from config: a serial ``port`` (and optional ``baudrate``)
+        become a :class:`SerialPicoLink`."""
+        from oaknut.econet.piconet.serial_link import SerialPicoLink
+
+        options = {key.replace("-", "_"): value for key, value in config.items()}
+        link_options = {}
+        for key in ("port", "baudrate"):
+            if key in options:
+                link_options[key] = options.pop(key)
+        link = SerialPicoLink(**link_options)
+        return cls(name=name, link=link, local_station=address, **options)
+
     def __init__(
         self,
         name: str = "piconet",

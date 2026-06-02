@@ -56,6 +56,17 @@ def test_str_is_net_dot_station():
     assert str(Address(0, 254)) == "0.254"
 
 
+def test_parse_is_the_inverse_of_str():
+    assert Address.parse("0.254") == Address(0, 254)
+    assert str(Address.parse("2.1")) == "2.1"
+
+
+@pytest.mark.parametrize("text", ["", "254", "0.", ".254", "x.1", "0.999"])
+def test_parse_rejects_malformed_addresses(text):
+    with pytest.raises(ValueError):
+        Address.parse(text)
+
+
 def test_wellknown_constants():
     assert BROADCAST_STATION == 255
     assert LOCAL_NET == 0

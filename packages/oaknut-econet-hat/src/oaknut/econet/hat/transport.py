@@ -53,6 +53,22 @@ class HatTransport(EconetTransport):
         }
     )
 
+    @classmethod
+    def from_config(cls, *, name: str, address: Address | None, config: dict) -> HatTransport:
+        """Build from config: a ``device`` path becomes an
+        :class:`EconetGpioDevice`."""
+        from oaknut.econet.hat.gpio import EconetGpioDevice
+
+        options = {key.replace("-", "_"): value for key, value in config.items()}
+        device_options = {}
+        if "device" in options:
+            device_options["path"] = options.pop("device")
+        for key in ("poll_interval", "tx_timeout"):
+            if key in options:
+                device_options[key] = options.pop(key)
+        device = EconetGpioDevice(**device_options)
+        return cls(name=name, device=device, local_station=address, **options)
+
     def __init__(
         self,
         name: str = "hat",
