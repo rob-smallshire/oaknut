@@ -404,6 +404,8 @@ In-process loopback double, shipped in core. Two modes: (a) standalone, where tr
 
 Implemented with `zeroconf.asyncio.AsyncZeroconf` (advertise) and `AsyncServiceBrowser` (discover). Discovered peers populate the AUN transport's peer map as evictable entries; operator-configured entries take precedence and never expire. `impl*` fields are never used for behavioural decisions.
 
+This advertises *station presence*. Advertising the *services* a station offers (per `_econet-<service>._udp` DNS-SD types), and whether discovery can extend to the true Econet wire, are separate forward-looking topics — see `docs/dev/econet-service-discovery.md`.
+
 ---
 
 ## 12. Higher-level applications (forward-looking)
