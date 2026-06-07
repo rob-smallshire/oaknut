@@ -33,6 +33,7 @@ from oaknut.adfs.directory import (
     _ADFSRawAttributes,
 )
 from oaknut.adfs.exceptions import (
+    ADFSDirectoryError,
     ADFSDirectoryFullError,
     ADFSDirectoryNotEmptyError,
     ADFSEntryExistsError,
@@ -133,6 +134,35 @@ def _interleaved_double_sided_specs(num_tracks: int) -> list[SurfaceSpec]:
     ]
 
 
+def _sequential_double_sided_specs(num_tracks: int) -> list[SurfaceSpec]:
+    """Surface specs for a 640K image laid out in linear logical-sector order.
+
+    Some 640K ADFS images are stored sequentially — logical sector N at
+    byte N x 256, with no per-track side interleave — rather than in the
+    interleaved ``.adl`` layout. Modelled as two sides laid end-to-end,
+    which (because each side is exactly 1280 sectors) is byte-identical to
+    a flat linear image while still reporting a double-sided geometry.
+    """
+    track_size = _ADFS_SECTORS_PER_TRACK * _ADFS_BYTES_PER_SECTOR
+    side_size = num_tracks * track_size
+    return [
+        SurfaceSpec(
+            num_tracks=num_tracks,
+            sectors_per_track=_ADFS_SECTORS_PER_TRACK,
+            bytes_per_sector=_ADFS_BYTES_PER_SECTOR,
+            track_zero_offset_bytes=0,
+            track_stride_bytes=track_size,
+        ),
+        SurfaceSpec(
+            num_tracks=num_tracks,
+            sectors_per_track=_ADFS_SECTORS_PER_TRACK,
+            bytes_per_sector=_ADFS_BYTES_PER_SECTOR,
+            track_zero_offset_bytes=side_size,
+            track_stride_bytes=track_size,
+        ),
+    ]
+
+
 ADFS_S = ADFSFormat(
     surface_specs=[_single_sided_spec(40)],
     total_sectors=640,
@@ -149,6 +179,15 @@ ADFS_M = ADFSFormat(
 
 ADFS_L = ADFSFormat(
     surface_specs=_interleaved_double_sided_specs(80),
+    total_sectors=2560,
+    total_bytes=655360,
+    label="L",
+)
+
+#: The same 640K capacity as :data:`ADFS_L`, but imaged in linear
+#: logical-sector order instead of the interleaved ``.adl`` layout.
+ADFS_L_SEQUENTIAL = ADFSFormat(
+    surface_specs=_sequential_double_sided_specs(80),
     total_sectors=2560,
     total_bytes=655360,
     label="L",
@@ -1038,6 +1077,45 @@ def _detect_format(buffer_size: int) -> ADFSFormat:
     return fmt
 
 
+def _directory_tree_traverses(buffer: memoryview, fmt: ADFSFormat) -> bool:
+    """Whether the whole directory tree parses under a candidate layout.
+
+    The two 640K layouts (interleaved ``.adl`` and linear) differ only
+    once a directory's sectors cross a track boundary, so the cheapest
+    reliable discriminator is to walk every directory and see which layout
+    keeps producing valid 'Hugo'/'Nick' signatures and matching tails.
+    """
+    geom = _FLOPPY_GEOMETRY.get(len(buffer))
+    try:
+        adfs = ADFS._from_buffer_with_format(buffer, fmt, geom)
+    except ADFSDirectoryError:
+        return False
+    return not adfs._directory_tree_errors()
+
+
+def _disambiguate_640k_layout(
+    buffer: memoryview, *, prefer_sequential: bool = False
+) -> ADFSFormat:
+    """Choose the interleaved or linear 640K layout by content.
+
+    Both candidates are tried; the one whose directory tree traverses
+    cleanly wins. When both traverse (a disc whose every directory lives
+    in track 0 side 0, where the layouts coincide and so reads are
+    byte-identical) the choice is cosmetic, and *prefer_sequential* — set
+    from the image's extension as a tiebreak — decides. The interleaved
+    ``.adl`` layout remains the default.
+    """
+    ordered = (
+        (ADFS_L_SEQUENTIAL, ADFS_L) if prefer_sequential else (ADFS_L, ADFS_L_SEQUENTIAL)
+    )
+    for fmt in ordered:
+        if _directory_tree_traverses(buffer, fmt):
+            return fmt
+    # Neither traverses — keep the historical default and let the normal
+    # parse path surface a precise error.
+    return ordered[0]
+
+
 def _initialise_old_free_space_map(
     unified: UnifiedDisc,
     total_sectors: int,
@@ -1375,23 +1453,35 @@ class ADFS:
                 finally:
                     adfs.close()
         else:
+            # The 640K layout is ambiguous; content decides, but where it
+            # cannot, the extension breaks the tie — ``.adl`` is the
+            # interleaved convention, so any other suffix leans linear.
+            prefer_sequential = ext != ".adl"
             with open_image_mmap(p) as (mm, _writable):
-                adfs = ADFS.from_buffer(memoryview(mm))
+                adfs = ADFS.from_buffer(memoryview(mm), prefer_sequential=prefer_sequential)
                 try:
                     yield adfs
                 finally:
                     adfs.close()
 
     @classmethod
-    def from_buffer(cls, buffer: memoryview) -> ADFS:
+    def from_buffer(cls, buffer: memoryview, *, prefer_sequential: bool = False) -> ADFS:
         """Create ADFS from a buffer, auto-detecting format.
 
         For known floppy sizes (160KB, 320KB, 640KB), uses the
         corresponding ADFS S/M/L format.  For other sizes, treats
         the buffer as a flat hard disc image (single surface).
 
+        At 640K the layout is ambiguous — interleaved ``.adl`` images and
+        linearly-imaged ones share the same size — so the directory tree
+        is walked under both to pick the one that traverses. When content
+        cannot decide, *prefer_sequential* (set by the caller from the
+        image's extension) breaks the tie.
+
         Args:
             buffer: Disc image data.
+            prefer_sequential: Tiebreak toward the linear 640K layout when
+                content alone cannot distinguish it from interleaved.
 
         Returns:
             ADFS instance.
@@ -1400,8 +1490,11 @@ class ADFS:
             ADFSError: If the image is not a valid ADFS disc.
         """
         buf_size = len(buffer)
-        fmt = _ADFS_FORMATS_BY_SIZE.get(buf_size)
         geom = _FLOPPY_GEOMETRY.get(buf_size)
+        if buf_size == ADFS_L.total_bytes:
+            fmt = _disambiguate_640k_layout(buffer, prefer_sequential=prefer_sequential)
+            return cls._from_buffer_with_format(buffer, fmt, geom)
+        fmt = _ADFS_FORMATS_BY_SIZE.get(buf_size)
         if fmt is None:
             # Not a known floppy size — treat as flat hard disc image
             if buf_size % _ADFS_BYTES_PER_SECTOR != 0:
@@ -1737,12 +1830,49 @@ class ADFS:
         """
         errors: list[ADFSValidationError] = []
         errors.extend(self._fsm.validate())
+        errors.extend(self._directory_tree_errors())
+        return errors
 
+    def _directory_tree_errors(self) -> list["ADFSValidationError"]:
+        """Walk the whole directory tree, collecting one error per defect.
+
+        A disc with a valid root and free-space map can still be
+        untraversable if a *subdirectory* is corrupt, so the tree is
+        descended in full rather than stopping at the root. Each
+        unreadable directory yields an error and is not recursed into;
+        a repeated disc address is reported as a cycle.
+        """
+        errors: list[ADFSValidationError] = []
         try:
-            self._read_root_directory()
+            root = self._read_root_directory()
         except ADFSError as exc:
             errors.append(ADFSValidationError(f"Root directory: {exc}"))
+            return errors
 
+        seen: set[int] = {_OLD_MAP_ROOT_SECTOR}
+
+        def walk(directory: _ADFSDirectory, path: str) -> None:
+            for entry in directory.entries:
+                if not entry.is_directory:
+                    continue
+                child_path = f"{path}.{entry.name}"
+                address = entry.indirect_disc_address
+                if address in seen:
+                    errors.append(
+                        ADFSValidationError(
+                            f"{child_path}: directory cycle to sector {address}"
+                        )
+                    )
+                    continue
+                seen.add(address)
+                try:
+                    subdir = self._read_directory_at(address)
+                except ADFSError as exc:
+                    errors.append(ADFSValidationError(f"{child_path}: {exc}"))
+                    continue
+                walk(subdir, child_path)
+
+        walk(root, "$")
         return errors
 
     def compact(self) -> int:

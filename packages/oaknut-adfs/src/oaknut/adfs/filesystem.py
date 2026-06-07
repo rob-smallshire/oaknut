@@ -17,6 +17,7 @@ from collections.abc import Iterable
 
 from oaknut.adfs.adfs import ADFS as _ADFSDisc
 from oaknut.adfs.directory import ADFS_NAME_GRAMMAR
+from oaknut.adfs.exceptions import ADFSError
 from oaknut.adfs.free_space_map import _calculate_old_map_checksum
 from oaknut.discimage import BYTES_PER_SECTOR
 from oaknut.file import AcornMeta
@@ -58,6 +59,20 @@ def _propose_geometry(size: int) -> Geometry | None:
         if size == geometry.image_size:
             return geometry
     return None
+
+
+def _directory_tree_traverses(reader: ImageReader) -> bool:
+    """Whether the whole directory tree parses, not just the root.
+
+    Used to keep :meth:`ADFS.probe` from claiming STRONG confidence for
+    an image whose root and free-space map are intact but which fails the
+    moment a command descends into a corrupt subdirectory.
+    """
+    try:
+        adfs = _ADFSDisc.from_buffer(reader.buffer())
+    except ADFSError:
+        return False
+    return not adfs._directory_tree_errors()
 
 
 # The old map records a reserved-tail info-sector pointer at &F6 of
@@ -301,9 +316,17 @@ class ADFS(Filesystem):
         if map_valid:
             evidence.append("old-map free-space-map checksums valid")
 
+        confidence = Confidence.STRONG if map_valid else Confidence.PROBABLE
+        if not _directory_tree_traverses(reader):
+            # A valid root and map do not guarantee the disc can be walked:
+            # a corrupt subdirectory only surfaces on descent. Don't claim
+            # STRONG for an image a single `ls` would fail to traverse.
+            evidence.append("directory tree is not fully traversable")
+            confidence = Confidence.PROBABLE
+
         return Identification(
             filesystem=self.name,
-            confidence=Confidence.STRONG if map_valid else Confidence.PROBABLE,
+            confidence=confidence,
             evidence=tuple(evidence),
             geometry=_propose_geometry(reader.size),
             reserved_regions=_reserved_regions(reader),
