@@ -2290,10 +2290,13 @@ class ADFS:
         )
 
         if src_disc_address == dst_disc_address:
-            # Same directory — replace in place
-            new_entries = tuple(
-                renamed if e.name.upper() == old_name.upper() else e for e in src_dir.entries
+            # Same directory — drop the old entry and re-insert under the
+            # new name so the directory stays sorted (the new name may sort
+            # to a different position than the old one).
+            remaining = tuple(
+                e for e in src_dir.entries if e.name.upper() != old_name.upper()
             )
+            new_entries = _insert_sorted(remaining, renamed)
             new_seq = (src_dir.sequence_number + 1) & 0xFF
             updated = _ADFSDirectory(
                 name=src_dir.name,
@@ -2324,9 +2327,10 @@ class ADFS:
             )
             self._write_directory_at(updated_src, src_disc_address)
 
-            # Add to destination (re-read since it may have changed if nested)
+            # Add to destination (re-read since it may have changed if
+            # nested), keeping the directory sorted.
             dst_dir = self._read_directory_at(dst_disc_address)
-            dst_entries = dst_dir.entries + (renamed,)
+            dst_entries = _insert_sorted(dst_dir.entries, renamed)
             dst_seq = (dst_dir.sequence_number + 1) & 0xFF
             updated_dst = _ADFSDirectory(
                 name=dst_dir.name,
