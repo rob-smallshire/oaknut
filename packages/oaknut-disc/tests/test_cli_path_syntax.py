@@ -192,6 +192,28 @@ class TestMvPathSyntax:
         assert "Greeting" in listing.output
         assert "Hello" not in listing.output
 
+    def test_existing_destination_rejected_without_force(
+        self, runner: CliRunner, adfs_image_filepath: Path
+    ):
+        runner.invoke(cli, ["put", f"{adfs_image_filepath}:$.Target", "-"], input=b"OLD")
+        result = runner.invoke(cli, ["mv", f"{adfs_image_filepath}:$.Hello", "$.Target"])
+        assert result.exit_code != 0
+        # The destination keeps its original content.
+        assert runner.invoke(cli, ["cat", f"{adfs_image_filepath}:$.Target"]).output == "OLD"
+
+    def test_force_overwrites_existing_destination(
+        self, runner: CliRunner, adfs_image_filepath: Path
+    ):
+        runner.invoke(cli, ["put", f"{adfs_image_filepath}:$.Target", "-"], input=b"OLD")
+        result = runner.invoke(
+            cli, ["mv", "-f", f"{adfs_image_filepath}:$.Hello", "$.Target"]
+        )
+        assert result.exit_code == 0, result.output
+        assert runner.invoke(cli, ["cat", f"{adfs_image_filepath}:$.Target"]).output == "Hello ADFS"
+        assert not (
+            "Hello" in runner.invoke(cli, ["ls", f"{adfs_image_filepath}:$"]).output
+        )
+
 
 class TestMvPartitionScoping:
     """A partition selector on the destination must not contradict the

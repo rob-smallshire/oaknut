@@ -1441,6 +1441,9 @@ def mv(src: str, dst: str, force: bool) -> None:
     image and partition. A partition selector on the destination is
     accepted only when it matches the source's; mv never moves across
     partitions.
+
+    Renaming onto an existing destination fails unless ``-f``/``--force``
+    is given, which removes the destination first and overwrites it.
     """
     from .cli_paths import resolve_destination_path
     from .mount import split_selector
@@ -1469,6 +1472,16 @@ def mv(src: str, dst: str, force: bool) -> None:
         # the user's original input rather than a library-internal leaf.
         if not mount.exists(bare_src):
             raise FSError(f"path not found: {bare_src}", exit_code=ExitCode.OS_FILE)
+        # --force overwrites an existing destination: remove it first
+        # (freeing its storage) so the rename has a clear target. Skip
+        # when the destination *is* the source — there is nothing to
+        # overwrite and removing it would delete the file being renamed.
+        if (
+            force
+            and mount.exists(bare_dst)
+            and mount.stat(bare_dst).path != mount.stat(bare_src).path
+        ):
+            mount.remove(bare_dst, force=True)
         mount.rename(bare_src, bare_dst)
 
 
