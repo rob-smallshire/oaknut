@@ -208,7 +208,7 @@ cli.add_command(describe_filesystem_command(), name="describe-filesystem")
 
 
 @cli.command()
-@click.argument("compound_path", metavar="OUTER:INNER")
+@click.argument("compound_path", metavar="OUTER_PATH:INNER_PATH")
 @click.option(
     "-H",
     "--access-byte",
@@ -305,7 +305,7 @@ _alias("*CAT", "ls")
 
 
 @cli.command()
-@click.argument("compound_path", metavar="OUTER:INNER")
+@click.argument("compound_path", metavar="OUTER_PATH:INNER_PATH")
 @report_output(reports={"tree": "Hierarchical directory listing."})
 def tree(compound_path: str):
     """Display recursive directory tree.
@@ -371,7 +371,7 @@ def _attach_children_mount(mount, path: str, parent_tree_node) -> None:
 
 
 @cli.command()
-@click.argument("compound_path", metavar="OUTER:INNER")
+@click.argument("compound_path", metavar="OUTER_PATH:INNER_PATH")
 @report_output(
     reports={
         "disc": (
@@ -588,7 +588,7 @@ def _partition_block(mount, title: str, *, geometry: bool = False, range_text: s
 
 
 @cli.command()
-@click.argument("compound_path", metavar="OUTER:INNER")
+@click.argument("compound_path", metavar="OUTER_PATH:INNER_PATH")
 def cat(compound_path: str) -> None:
     """Dump file contents to stdout as raw bytes.
 
@@ -640,7 +640,7 @@ def _translate_line_endings(data: bytes, mode: str) -> bytes:
 
 
 @cli.command(name="type")
-@click.argument("compound_path", metavar="OUTER:INNER")
+@click.argument("compound_path", metavar="OUTER_PATH:INNER_PATH")
 @click.option(
     "--line-endings",
     "-l",
@@ -683,7 +683,7 @@ _alias("*TYPE", "type")
 
 
 @cli.command()
-@click.argument("compound_path", metavar="OUTER:INNER")
+@click.argument("compound_path", metavar="OUTER_PATH:INNER_PATH")
 @report_output(reports={"matches": "Paths matching the wildcard pattern."})
 def find(compound_path: str):
     """Find files matching a wildcard pattern.
@@ -755,7 +755,7 @@ _FOR_EACH_MODES = ("content", "inner-path", "compound-path", "materialise")
 
 
 @cli.command(name="for-each")
-@click.argument("compound_path", metavar="OUTER:INNER")
+@click.argument("compound_path", metavar="OUTER_PATH:INNER_PATH")
 @click.argument("command_argv", nargs=-1, required=True, metavar="-- COMMAND...")
 @click.option(
     "--mode",
@@ -790,7 +790,7 @@ def for_each(compound_path: str, command_argv: tuple[str, ...], mode: str):
       filesystem's syntax. For tools that want a path for logging,
       templating, or filtering by name.
 
-    - ``--mode compound-path`` passes the full ``OUTER:INNER``, so the
+    - ``--mode compound-path`` passes the full ``OUTER_PATH:INNER_PATH``, so the
       rest of the ``disc`` CLI itself can act per file — ``disc cat``,
       ``disc lock``, ``disc set-load`` and so on.
 
@@ -930,7 +930,7 @@ def _materialise(content: bytes, tmp_dir: Path, source_path: str, ordinal: int) 
 
 
 @cli.command(name="materialise")
-@click.argument("compound_path", metavar="OUTER:INNER")
+@click.argument("compound_path", metavar="OUTER_PATH:INNER_PATH")
 @click.argument("command_argv", nargs=-1, required=True, metavar="-- COMMAND...")
 def materialise(compound_path: str, command_argv: tuple[str, ...]) -> None:
     """Materialise one file to a host temp file, run a command on it, clean up.
@@ -978,7 +978,7 @@ def materialise(compound_path: str, command_argv: tuple[str, ...]) -> None:
 
 
 @cli.command()
-@click.argument("compound_path", metavar="OUTER:INNER")
+@click.argument("compound_path", metavar="OUTER_PATH:INNER_PATH")
 def freemap(compound_path: str) -> None:
     """Show the free-space map as a sector matrix.
 
@@ -1015,7 +1015,7 @@ def freemap(compound_path: str) -> None:
 
 
 @cli.command(name="storage-order")
-@click.argument("compound_path", metavar="OUTER:INNER")
+@click.argument("compound_path", metavar="OUTER_PATH:INNER_PATH")
 @report_output(reports={"paths": "File paths in physical (storage) order."})
 def storage_order(compound_path: str):
     """List a partition's files in physical storage order.
@@ -1133,7 +1133,7 @@ def validate(image: Path) -> None:
 
 
 @cli.command()
-@click.argument("compound_path", metavar="OUTER:INNER")
+@click.argument("compound_path", metavar="OUTER_PATH:INNER_PATH")
 @click.argument("host_path", required=False, default=None)
 @click.option(
     "--meta-format",
@@ -1227,7 +1227,7 @@ def get(
 
 
 @cli.command()
-@click.argument("compound_path", metavar="OUTER:INNER")
+@click.argument("compound_path", metavar="OUTER_PATH:INNER_PATH")
 @click.argument("host_path", required=False, default=None)
 @click.option(
     "--load",
@@ -1363,7 +1363,7 @@ _wildcards_option = click.option(
 
 
 @cli.command()
-@click.argument("compound_path", metavar="OUTER:INNER")
+@click.argument("compound_path", metavar="OUTER_PATH:INNER_PATH")
 @click.argument("paths", nargs=-1)
 @click.option("-f", "--force", is_flag=True, help="Ignore missing, override locks.")
 @click.option("-r", "--recursive", is_flag=True, help="Remove directories recursively.")
@@ -2049,7 +2049,7 @@ _alias("*COPY", "cp")
 
 
 @cli.command()
-@click.argument("compound_path", metavar="OUTER:INNER")
+@click.argument("compound_path", metavar="OUTER_PATH:INNER_PATH")
 @click.option(
     "-p",
     is_flag=True,
@@ -2087,7 +2087,7 @@ _alias("*CDIR", "mkdir")
 
 
 @cli.command()
-@click.argument("compound_path", metavar="OUTER:INNER")
+@click.argument("compound_path", metavar="OUTER_PATH:INNER_PATH")
 @click.argument("access")
 @click.option("-r", "--recursive", is_flag=True, help="Recurse into directory matches.")
 @click.option(
@@ -2132,7 +2132,7 @@ _alias("*ACCESS", "chmod")
 
 
 @cli.command()
-@click.argument("compound_path", metavar="OUTER:INNER")
+@click.argument("compound_path", metavar="OUTER_PATH:INNER_PATH")
 @click.option("-r", "--recursive", is_flag=True, help="Recurse into directory matches.")
 @click.option(
     "--dry-run", is_flag=True, help="Print what would change without modifying the image."
@@ -2157,7 +2157,7 @@ def lock(compound_path: str, recursive: bool, dry_run: bool, wildcards: bool) ->
 
 
 @cli.command()
-@click.argument("compound_path", metavar="OUTER:INNER")
+@click.argument("compound_path", metavar="OUTER_PATH:INNER_PATH")
 @click.option("-r", "--recursive", is_flag=True, help="Recurse into directory matches.")
 @click.option(
     "--dry-run", is_flag=True, help="Print what would change without modifying the image."
@@ -2182,7 +2182,7 @@ def unlock(compound_path: str, recursive: bool, dry_run: bool, wildcards: bool) 
 
 
 @cli.command(name="set-load")
-@click.argument("compound_path", metavar="OUTER:INNER")
+@click.argument("compound_path", metavar="OUTER_PATH:INNER_PATH")
 @click.argument("addr")
 @click.option("-r", "--recursive", is_flag=True, help="Recurse into directory matches.")
 @click.option(
@@ -2246,7 +2246,7 @@ def set_load(
 
 
 @cli.command(name="set-exec")
-@click.argument("compound_path", metavar="OUTER:INNER")
+@click.argument("compound_path", metavar="OUTER_PATH:INNER_PATH")
 @click.argument("addr")
 @click.option("-r", "--recursive", is_flag=True, help="Recurse into directory matches.")
 @click.option(
@@ -2335,7 +2335,7 @@ def _require_acorn_meta(compound_path: str):
 
 
 @cli.command(name="get-load")
-@click.argument("compound_path", metavar="OUTER:INNER")
+@click.argument("compound_path", metavar="OUTER_PATH:INNER_PATH")
 @report_output(
     reports={
         "load": (
@@ -2361,7 +2361,7 @@ def get_load(compound_path: str):
 
 
 @cli.command(name="get-exec")
-@click.argument("compound_path", metavar="OUTER:INNER")
+@click.argument("compound_path", metavar="OUTER_PATH:INNER_PATH")
 @report_output(
     reports={
         "exec": (
@@ -2387,7 +2387,7 @@ def get_exec(compound_path: str):
 
 
 @cli.command()
-@click.argument("compound_path", metavar="OUTER:INNER")
+@click.argument("compound_path", metavar="OUTER_PATH:INNER_PATH")
 @click.argument("new_title", required=False, default=None)
 @report_output(reports={"title": "Current title (when no new title is supplied)."})
 def title(compound_path: str, new_title: str | None):

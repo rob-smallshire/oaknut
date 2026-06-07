@@ -53,7 +53,7 @@ Inspection
    .. cli-example:: cmd_for_each
       :section: inner-path
 
-   ``--mode compound-path`` — the full ``OUTER:INNER`` is substituted,
+   ``--mode compound-path`` — the full ``OUTER_PATH:INNER_PATH`` is substituted,
    so ``disc`` itself becomes the per-file action. The rest of the CLI
    composes without bespoke wrappers — ``disc cat``, ``disc lock``,
    ``disc set-load`` and any other addressable disc command:

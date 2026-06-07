@@ -67,7 +67,7 @@ The CLI lives in a new `oaknut-disc` package inside the monorepo. The monorepo m
 | `oaknut-zip` | ZIP archives containing Acorn files |
 | `oaknut-disc` | **Unified CLI** — depends on all library packages; `oaknut-zip` optional |
 
-The standalone `oaknut-afs-disc` entry point that `oaknut-afs` shipped during the AFS build-out has been retired now that the unified `disc` tool is a strict functional superset (its `info` maps to `disc stat IMAGE afs:` + `disc afs-users`; the rest map one-for-one onto `disc ls`/`cat`/`put`/`afs-init`).
+The standalone `oaknut-afs-disc` entry point that `oaknut-afs` shipped during the AFS build-out has been retired now that the unified `disc` tool is a strict functional superset (its `info` maps to `disc stat OUTER_PATH:afs:` + `disc afs-users`; the rest map one-for-one onto `disc ls`/`cat`/`put`/`afs-init`).
 
 ---
 
@@ -111,9 +111,9 @@ This is a minor but real usability tax on the Acorn aliases, and is the reason t
 | `opt`        | `*opt4`     | `*OPT4,n`                                         |
 | `stat`       | `*info`     | `*INFO FILENAME`.                                 |
 
-The `stat` command is polymorphic: `stat IMAGE PATH` is the BBC `*INFO` equivalent; `stat IMAGE` with no path summarises the whole disc. `*info` accepts both forms.
+The `stat` command is polymorphic: `stat COMPOUND_PATH` with an INNER_PATH is the BBC `*INFO` equivalent; with the INNER_PATH omitted it summarises the whole disc. `*info` accepts both forms.
 
-Commands with no alias: `tree`, `find`, `validate`, `freemap`, `compact`, `create`, `export`, `import`, `setload`, `setexec`.
+Commands with no alias: `tree`, `find`, `validate`, `freemap`, `compact`, `create`, `export`, `import`, `set-load`, `set-exec`.
 
 ---
 
@@ -121,47 +121,49 @@ Commands with no alias: `tree`, `find`, `validate`, `freemap`, `compact`, `creat
 
 Grouped by category here for readability; actual `--help` output is a single flat list.
 
+Each command's first positional is a **`COMPOUND_PATH`** — an `OUTER_PATH:INNER_PATH` pair naming an image and an optional in-image path (see *Image and in-image path* below). `--help` shows it as `OUTER_PATH:INNER_PATH`; the tables below use `COMPOUND_PATH` for brevity. Where a command ignores the in-image part (`freemap`, `validate`, `compact`, …) the `OUTER_PATH` alone is the whole `COMPOUND_PATH`.
+
 ### Inspection
 
 | Command | Purpose | Notes |
 |---|---|---|
-| `ls IMAGE [PATH]` (alias `*cat`) | List a directory catalogue as a Rich table | Default PATH is root |
-| `tree IMAGE [PATH]` | Recursive Unicode box-drawing tree | Uses the same technique as `oaknut-zip`'s `_tree_display_names` |
-| `stat IMAGE [PATH]` (alias `*info`) | Whole-disc summary when PATH is omitted (title, boot option, sector count, free space, file count, format detected — Rich panel). With `afs:` prefix and no path, shows AFS disc name, geometry, start cylinder, free sectors, and user list. Single-file metadata when PATH is given (load, exec, length, attr, filetype — plain text, scriptable). | The two output styles are dispatched by the presence of PATH. |
-| `freemap IMAGE` | Free-space map with ASCII fragmentation visualisation | ADFS: real regions; DFS: single trailing block; `freemap IMAGE --afs` or `freemap IMAGE afs:` shows per-cylinder AFS bitmap occupancy. |
-| `validate IMAGE` | Run `DFS.validate()` / `ADFS.validate()`, report errors, exit 0 or 1 | |
-| `find IMAGE PATTERN` | Glob files in-image by Acorn-style wildcard (`*` and `?`) | |
-| `cat IMAGE PATH` (alias `*type`) | Dump file contents to stdout (Unix `cat`, MOS `*TYPE`) | Equivalent to `get IMAGE PATH -` |
+| `ls COMPOUND_PATH` (alias `*cat`) | List a directory catalogue as a Rich table | Default INNER_PATH is root |
+| `tree COMPOUND_PATH` | Recursive Unicode box-drawing tree | Uses the same technique as `oaknut-zip`'s `_tree_display_names` |
+| `stat COMPOUND_PATH` (alias `*info`) | Whole-disc summary when INNER_PATH is omitted (title, boot option, sector count, free space, file count, format detected — Rich panel). With an `afs:` selector and no path, shows AFS disc name, geometry, start cylinder, free sectors, and user list. Single-file metadata when INNER_PATH is given (load, exec, length, attr, filetype — plain text, scriptable). | The two output styles are dispatched by the presence of INNER_PATH. |
+| `freemap COMPOUND_PATH` | Free-space map with ASCII fragmentation visualisation | ADFS: real regions; DFS: single trailing block; `--afs` or an `afs:` selector in the COMPOUND_PATH shows per-cylinder AFS bitmap occupancy. |
+| `validate COMPOUND_PATH` | Run `DFS.validate()` / `ADFS.validate()`, report errors, exit 0 or 1 | |
+| `find COMPOUND_PATH PATTERN` | Glob files in-image by Acorn-style wildcard (`*` and `?`) | |
+| `cat COMPOUND_PATH` (alias `*type`) | Dump file contents to stdout (Unix `cat`, MOS `*TYPE`) | Equivalent to `get COMPOUND_PATH -` |
 
 ### Moving file data
 
 | Command | Purpose |
 |---|---|
-| `get IMAGE PATH [HOST_PATH]` (alias `*load`) | Export one file out, with metadata sidecar control. HOST_PATH defaults to the basename of PATH in CWD; `-` writes raw bytes to stdout (no sidecar). |
-| `put IMAGE PATH [HOST_PATH]` (alias `*save`) | Import one file in. HOST_PATH `-` reads raw bytes from stdin (no sidecar lookup). |
-| `export IMAGE HOST_DIR` | Bulk-export the whole image or a sub-tree into a host directory, with sidecars. |
-| `import IMAGE HOST_DIR` | Bulk-import a host directory into the image (ADFS: recursive with mkdir; DFS: flat). |
+| `get COMPOUND_PATH [HOST_PATH]` (alias `*load`) | Export one file out, with metadata sidecar control. HOST_PATH defaults to the basename of INNER_PATH in CWD; `-` writes raw bytes to stdout (no sidecar). |
+| `put COMPOUND_PATH [HOST_PATH]` (alias `*save`) | Import one file in. HOST_PATH `-` reads raw bytes from stdin (no sidecar lookup). |
+| `export COMPOUND_PATH HOST_DIR` | Bulk-export the whole image or a sub-tree into a host directory, with sidecars. |
+| `import COMPOUND_PATH HOST_DIR` | Bulk-import a host directory into the image (ADFS: recursive with mkdir; DFS: flat). |
 
 ### Modification
 
 | Command | Purpose |
 |---|---|
-| `rm IMAGE PATH [PATH…]` (alias `*delete`) | Delete file(s). `-r` recursive directory delete (ADFS). `-f` force: ignore missing paths, override locked files. `--dry-run` print what would be removed and exit. |
-| `mv SRC DST` (alias `*rename`) | Rename / move within an image. `SRC` is a compound `IMAGE:PATH`; `DST` may repeat the same image (`IMAGE:PATH`) or be a bare in-image path that inherits `SRC`'s image and partition. `-f` overwrite an existing destination. |
-| `cp SRC:PATH DST:PATH` (alias `*copy`) | Copy a file or tree. Naming the same image on both sides copies within it; naming different images copies across them. `-r` recurse, `-f` overwrite an existing destination. |
-| `mkdir IMAGE PATH` (alias `*cdir`) | Create a directory (ADFS only). `-p` no error if the directory already exists. |
-| `chmod IMAGE PATH ACCESS` (alias `*access`) | Set access (e.g. `LWR/R` or hex `0x1B`). |
-| `lock IMAGE PATH`, `unlock IMAGE PATH` | Convenience wrappers over `chmod`. |
-| `setload IMAGE PATH ADDR`, `setexec IMAGE PATH ADDR` | Edit load / exec addresses in place. |
-| `title IMAGE [NEW_TITLE]` (alias `*title`) | Read or set disc title. With `PATH` positional, reads/sets an ADFS directory title. |
-| `opt IMAGE [0\|1\|2\|3]` (alias `*opt4`) | Read or set boot option (`*OPT4,x`). |
+| `rm COMPOUND_PATH [INNER_PATH…]` (alias `*delete`) | Delete file(s). The COMPOUND_PATH's INNER_PATH is the first to delete; extra positionals are additional bare INNER_PATHs in the same image and partition. `-r` recursive directory delete (ADFS). `-f` force: ignore missing paths, override locked files. `--dry-run` print what would be removed and exit. |
+| `mv SRC DST` (alias `*rename`) | Rename / move within an image. `SRC` is a `COMPOUND_PATH`; `DST` is either a full `COMPOUND_PATH` naming the same OUTER_PATH or a bare `INNER_PATH` that inherits `SRC`'s image and partition. `-f` overwrite an existing destination. |
+| `cp SRC DST` (alias `*copy`) | Copy a file or tree. `SRC` and `DST` are `COMPOUND_PATH`s: the same OUTER_PATH on both sides copies within an image, different OUTER_PATHs copy across them. `-r` recurse, `-f` overwrite an existing destination. |
+| `mkdir COMPOUND_PATH` (alias `*cdir`) | Create a directory (ADFS only). `-p` no error if the directory already exists. |
+| `chmod COMPOUND_PATH ACCESS` (alias `*access`) | Set access (e.g. `LWR/R` or hex `0x1B`). |
+| `lock COMPOUND_PATH`, `unlock COMPOUND_PATH` | Convenience wrappers over `chmod`. |
+| `set-load COMPOUND_PATH ADDR`, `set-exec COMPOUND_PATH ADDR` | Edit load / exec addresses in place. |
+| `title COMPOUND_PATH [NEW_TITLE]` (alias `*title`) | Read or set disc title. With an INNER_PATH, reads/sets an ADFS directory title. |
+| `opt COMPOUND_PATH [0\|1\|2\|3]` (alias `*opt4`) | Read or set boot option (`*OPT4,x`). |
 
 ### Whole-image operations
 
 | Command | Purpose |
 |---|---|
 | `create HOST_PATH --format ...` | Create a new empty disc image. Options: `--format ssd/dsd/adfs-s/adfs-m/adfs-l/adfs-hard --capacity N`. For hard-disc images that will carry AFS, follow `create` with `afs-init`. |
-| `compact IMAGE` | Defragment (ADFS). AFS regions do not have a separate compaction step; `ADFS.compact()` moves ADFS data forward to free tail space for AFS. |
+| `compact COMPOUND_PATH` | Defragment (ADFS). AFS regions do not have a separate compaction step; `ADFS.compact()` moves ADFS data forward to free tail space for AFS. |
 
 ---
 
@@ -191,7 +193,7 @@ The filing-system prefix (`adfs:` / `afs:` / `dfs:`, see *Dual-partition address
 disc ls hd.dat:afs:$.Library    # image hd.dat, AFS partition, path $.Library
 ```
 
-Commands with a positional *after* the path keep the compound path as their first argument and take the extra value as a trailing positional: `chmod IMAGE:PATH ACCESS`, `set-load IMAGE:PATH ADDR`, `get IMAGE:PATH [HOST_PATH]`, `put IMAGE:PATH [HOST_PATH]`.
+Commands with a positional *after* the path keep the compound path as their first argument and take the extra value as a trailing positional: `chmod COMPOUND_PATH ACCESS`, `set-load COMPOUND_PATH ADDR`, `get COMPOUND_PATH [HOST_PATH]`, `put COMPOUND_PATH [HOST_PATH]`.
 
 Two commands take a second compound path:
 
@@ -201,7 +203,7 @@ Two commands take a second compound path:
   - Fused, image repeated: `mv image.dat:$.A image.dat:$.B` — both tokens must name the same image; the CLI checks resolved paths and rejects the cross-image case.
   - Fused source, bare destination: `mv image.dat:$.A $.B` — `DST`'s image is redundant, so a bare in-image path inherits `SRC`'s image. A `DST` is treated as compound only when the text left of its outer colon names an existing file, so `adfs:$.B` stays a bare (selector-prefixed) in-image path. A destination partition selector must match the source's; mv never moves across partitions.
 
-`rm` is multi-path: `rm IMAGE:PATH [PATH...]` — the compound path's in-image part is the first to delete and any extra positionals are additional bare in-image paths in the same image and partition.
+`rm` is multi-path: `rm COMPOUND_PATH [INNER_PATH...]` — the COMPOUND_PATH's in-image part is the first to delete and any extra positionals are additional bare INNER_PATHs in the same image and partition.
 
 ### Acorn path syntax
 
@@ -282,9 +284,9 @@ Acorn convention: `*` matches any sequence within one name component, `?` matche
 
 ### Stdin / stdout via `-`
 
-- `get IMAGE PATH -` → raw bytes of the in-image file on stdout (no sidecar, no metadata)
-- `put IMAGE PATH -` → raw bytes from stdin written to the in-image file at PATH
-- `cat IMAGE PATH` is equivalent to `get IMAGE PATH -`
+- `get COMPOUND_PATH -` → raw bytes of the in-image file on stdout (no sidecar, no metadata)
+- `put COMPOUND_PATH -` → raw bytes from stdin written to the in-image file at INNER_PATH
+- `cat COMPOUND_PATH` is equivalent to `get COMPOUND_PATH -`
 - `get` / `put` with a dash always drop metadata (there's nowhere to put it). To round-trip metadata through a pipe, users can `export` to a tempdir and tar the result.
 
 ### TTY detection & `--plain`
@@ -360,8 +362,8 @@ The following additions are needed. Status updated 2026-04-12.
 | L1 | Acorn wildcard matcher (`?` / `*`) as a small utility module | S | TODO | `find`, `rm PATTERN`, `ls PATTERN` |
 | L2 | `DFSPath.glob(pattern)` / `ADFSPath.glob(pattern)` returning iterators | S | TODO | `find` |
 | L3 | `DFSPath.copy(target)` / `ADFSPath.copy(target)` (within-image) | S | TODO | `cp` |
-| L4 | `DFSPath.set_load_address(addr)` / `set_exec_address(addr)` — catalogue update without data rewrite | M | TODO | `setload`, `setexec` |
-| L5 | `ADFSPath.set_load_address` / `set_exec_address` (same) | M | TODO | `setload`, `setexec` |
+| L4 | `DFSPath.set_load_address(addr)` / `set_exec_address(addr)` — catalogue update without data rewrite | M | TODO | `set-load`, `set-exec` |
+| L5 | `ADFSPath.set_load_address` / `set_exec_address` (same) | M | TODO | `set-load`, `set-exec` |
 | L6 | `DFS.import_directory(host_dir)` / `ADFS.import_directory(host_dir)` — bulk importer mirroring `export_all` | M | TODO | `import` |
 | L7 | Cross-format copy helper in `host_bridge` (or new module) that reads from one image and writes to another, mapping attributes best-effort | M | TODO | `cp` cross-image |
 | L8 | Public `free_space_regions()` on both DFS and ADFS, returning `[(start_sector, length_sectors), …]`. DFS returns a single region; ADFS exposes the real map. | S | TODO | `freemap` |
