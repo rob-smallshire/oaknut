@@ -59,3 +59,28 @@ class TestRenameGuard:
         (dfs.root / "$" / "AAA").rename(dfs.root / "$" / "CCC")
         assert (dfs.root / "$" / "CCC").read_bytes() == b"aaa"
         assert not (dfs.root / "$" / "AAA").exists()
+
+
+class TestWatfordCatalogueSharesTheGuard:
+    """The guard and post-condition live on the base Catalogue, so the
+    Watford catalogue inherits them too (template-method)."""
+
+    def _watford(self, tmp_path):
+        from oaknut.dfs.formats import WATFORD_DFS_80T_SINGLE_SIDED
+
+        image_filepath = tmp_path / "w.ssd"
+        return DFS.create_file(image_filepath, WATFORD_DFS_80T_SINGLE_SIDED, title="W")
+
+    def test_rewriting_a_file_overwrites_not_duplicates(self, tmp_path):
+        with self._watford(tmp_path) as dfs:
+            (dfs.root / "$" / "AAA").write_bytes(b"first")
+            (dfs.root / "$" / "AAA").write_bytes(b"second")
+            assert [e.name for e in (dfs.root / "$")] == ["AAA"]
+            assert (dfs.root / "$" / "AAA").read_bytes() == b"second"
+
+    def test_rename_onto_existing_name_is_refused(self, tmp_path):
+        with self._watford(tmp_path) as dfs:
+            (dfs.root / "$" / "AAA").write_bytes(b"a")
+            (dfs.root / "$" / "BBB").write_bytes(b"b")
+            with pytest.raises(DFSFileExistsError):
+                (dfs.root / "$" / "AAA").rename(dfs.root / "$" / "BBB")

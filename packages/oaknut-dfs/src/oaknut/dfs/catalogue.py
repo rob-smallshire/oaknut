@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Optional
 
 from oaknut.discimage.surface import Surface
+from oaknut.file.integrity import assert_no_duplicate_names
 from oaknut.filesystem import NameGrammar
 
 if TYPE_CHECKING:
@@ -204,9 +205,9 @@ class Catalogue(ABC):
         operation so a defect surfaces here, at its source, rather than as
         silent corruption (or a mysterious "not found") on real hardware.
         """
-        paths = [entry.path.upper() for entry in self.list_files()]
-        duplicates = sorted({path for path in paths if paths.count(path) > 1})
-        assert not duplicates, f"DFS catalogue has duplicate entries: {duplicates}"
+        assert_no_duplicate_names(
+            [entry.path for entry in self.list_files()], where="DFS catalogue"
+        )
 
     def _ordered_files(self, files: list[FileEntry], order: Sequence[str]) -> list[FileEntry]:
         """Return *files* with the *order* paths first, the rest unchanged.
