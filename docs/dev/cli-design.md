@@ -148,7 +148,7 @@ Grouped by category here for readability; actual `--help` output is a single fla
 |---|---|
 | `rm IMAGE PATH [PATH…]` (alias `*delete`) | Delete file(s). `-r` recursive directory delete (ADFS). `-f` force: ignore missing paths, override locked files. `--dry-run` print what would be removed and exit. |
 | `mv SRC DST` (alias `*rename`) | Rename / move within an image. `SRC` is a compound `IMAGE:PATH`; `DST` may repeat the same image (`IMAGE:PATH`) or be a bare in-image path that inherits `SRC`'s image and partition. `-f` overwrite an existing destination. |
-| `cp IMAGE SRC DST` (alias `*copy`) | Copy within one image. `cp SRC_IMAGE SRC_PATH DST_IMAGE DST_PATH` for cross-image. `-f` overwrite an existing destination. |
+| `cp SRC:PATH DST:PATH` (alias `*copy`) | Copy a file or tree. Naming the same image on both sides copies within it; naming different images copies across them. `-r` recurse, `-f` overwrite an existing destination. |
 | `mkdir IMAGE PATH` (alias `*cdir`) | Create a directory (ADFS only). `-p` no error if the directory already exists. |
 | `chmod IMAGE PATH ACCESS` (alias `*access`) | Set access (e.g. `LWR/R` or hex `0x1B`). |
 | `lock IMAGE PATH`, `unlock IMAGE PATH` | Convenience wrappers over `chmod`. |
@@ -169,44 +169,39 @@ Grouped by category here for readability; actual `--help` output is a single fla
 
 ### Argument ordering
 
-Every command takes the image as its first positional argument. In-image paths follow. Host paths, where present, are explicit positional tails or `-o`/`-i` options depending on the command.
+Every command that addresses something inside an image takes a single fused `OUTER:INNER` **compound path** as its first positional. Host paths, where present, are explicit positional tails or `-o`/`-i` options depending on the command.
 
-### Image and in-image path: two equivalent shapes
+### Image and in-image path: the compound path
 
-Most commands accept the image and an in-image path as either two separate positionals or a single fused token:
-
-```sh
-disc ls hd.dat $.Games          # split form
-disc ls hd.dat:$.Games          # fused form -- equivalent
-```
-
-Both shapes route through `parse_image_arg` in `cli_paths.py`. The rule is uniform:
-
-- If the first positional contains a colon (Windows drive letters `X:\…` are skipped), the colon splits image from in-image path. If the portion to the left of that colon does not exist on disk, the error message quotes only that portion — so the user sees what was looked up without the noise of the in-image part.
-- If the first positional does not contain a colon, it is the bare image and the optional second positional is the in-image path.
-- Mixing the two shapes (`disc ls hd.dat:$.X $.Y`) is a UsageError. Silently dropping one of the inputs would be worse.
-
-The filing-system prefix (`adfs:` / `afs:` / `dfs:`, see *Dual-partition addressing* below) sits on the in-image side of the outer image-colon. Because the outer split happens at the *first* non-Windows-drive colon, any subsequent colon — including the fs-prefix delimiter — stays in the in-image string. Both shapes therefore route through `resolve_path` the same way:
+The image and the in-image path are joined by a colon:
 
 ```sh
-disc ls hd.dat afs:$.Library    # split form, AFS prefix
-disc ls hd.dat:afs:$.Library    # fused form, AFS prefix -- equivalent
+disc ls hd.dat:$.Games          # image hd.dat, in-image path $.Games
+disc ls hd.dat                  # whole image, no in-image path
 ```
 
-Commands with a positional *after* the path (`chmod IMAGE PATH ACCESS`, `set-load IMAGE PATH ADDR`, `get IMAGE PATH [HOST_PATH]`, `put IMAGE PATH [HOST_PATH]`) collapse to one fewer positional in fused form (`chmod IMAGE:PATH ACCESS`). The dispatch lives in `parse_image_arg_with_trailing`.
+Parsing lives in `parse_compound_path` in `cli_paths.py`. The rule is uniform:
 
-Two commands have richer shape grammars:
+- The split is at the *first* non-Windows-drive colon (`X:\…` drive letters are skipped). The portion to the left is the image and must exist as a file; if it does not, the error message quotes only that portion — so the user sees what was looked up without the noise of the in-image part.
+- With no colon, the whole token is the bare image and the in-image path is empty; commands that require an in-image path report that themselves.
 
-- **`cp`** accepts three shapes:
-  - 2 args, both fused: `cp src.dat:$.A dst.dat:$.B` — cross-image OK.
-  - 3 args same-image split: `cp image.dat $.A $.B`.
-  - 4 args cross-image split: `cp src.dat $.A dst.dat $.B`.
+The filing-system prefix (`adfs:` / `afs:` / `dfs:`, see *Dual-partition addressing* below) sits on the in-image side of the outer image-colon. Because the outer split happens at the *first* non-Windows-drive colon, any subsequent colon — including the fs-prefix delimiter — stays in the in-image string, where `split_selector` (in `mount.py`) peels it off; `resolve_mount` then resolves the whole compound path to a mounted partition.
+
+```sh
+disc ls hd.dat:afs:$.Library    # image hd.dat, AFS partition, path $.Library
+```
+
+Commands with a positional *after* the path keep the compound path as their first argument and take the extra value as a trailing positional: `chmod IMAGE:PATH ACCESS`, `set-load IMAGE:PATH ADDR`, `get IMAGE:PATH [HOST_PATH]`, `put IMAGE:PATH [HOST_PATH]`.
+
+Two commands take a second compound path:
+
+- **`cp`** takes a source and a destination compound path: `cp src.dat:$.A dst.dat:$.B`. Naming different images copies across them; naming the same image on both sides copies within it.
 
 - **`mv`** is single-image (at the library level) and takes a compound `SRC` plus a `DST`:
   - Fused, image repeated: `mv image.dat:$.A image.dat:$.B` — both tokens must name the same image; the CLI checks resolved paths and rejects the cross-image case.
   - Fused source, bare destination: `mv image.dat:$.A $.B` — `DST`'s image is redundant, so a bare in-image path inherits `SRC`'s image. A `DST` is treated as compound only when the text left of its outer colon names an existing file, so `adfs:$.B` stays a bare (selector-prefixed) in-image path. A destination partition selector must match the source's; mv never moves across partitions.
 
-`rm` is multi-path: `rm IMAGE PATH...` (split) or `rm IMAGE:PATH [PATH...]` (fused, where the spec's path is the first to delete and any extra positionals are additional paths in the same image).
+`rm` is multi-path: `rm IMAGE:PATH [PATH...]` — the compound path's in-image part is the first to delete and any extra positionals are additional bare in-image paths in the same image and partition.
 
 ### Acorn path syntax
 
