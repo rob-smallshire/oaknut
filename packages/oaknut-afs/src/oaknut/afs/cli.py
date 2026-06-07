@@ -498,14 +498,15 @@ def _apply_user_passwords(user_specs: list, raw_passwords: tuple[str, ...]) -> l
 
     import dataclasses
 
+    from oaknut.afs.passwords import normalise_username
     from oaknut.afs.wfsinit import (
         BUILTIN_ACCOUNT_NAMES,
         UserSpec,
         builtin_account_system_flag,
     )
 
-    builtin_by_upper = {n.upper(): n for n in BUILTIN_ACCOUNT_NAMES}
-    spec_index_by_upper = {spec.name.upper(): i for i, spec in enumerate(user_specs)}
+    builtin_by_key = {normalise_username(n): n for n in BUILTIN_ACCOUNT_NAMES}
+    spec_index_by_key = {normalise_username(spec.name): i for i, spec in enumerate(user_specs)}
     specs = list(user_specs)
     seen: set[str] = set()
 
@@ -515,16 +516,16 @@ def _apply_user_passwords(user_specs: list, raw_passwords: tuple[str, ...]) -> l
             raise click.ClickException(f"--user-password must be NAME=VALUE, got {raw!r}")
         if not name:
             raise click.ClickException(f"--user-password has an empty user name: {raw!r}")
-        upper = name.upper()
-        if upper in seen:
+        key = normalise_username(name)
+        if key in seen:
             raise click.ClickException(f"duplicate --user-password for {name!r}")
-        seen.add(upper)
+        seen.add(key)
 
-        if upper in spec_index_by_upper:
-            index = spec_index_by_upper[upper]
+        if key in spec_index_by_key:
+            index = spec_index_by_key[key]
             specs[index] = dataclasses.replace(specs[index], password=password)
-        elif upper in builtin_by_upper:
-            canonical = builtin_by_upper[upper]
+        elif key in builtin_by_key:
+            canonical = builtin_by_key[key]
             specs.append(
                 UserSpec(
                     name=canonical,
@@ -532,7 +533,7 @@ def _apply_user_passwords(user_specs: list, raw_passwords: tuple[str, ...]) -> l
                     system=builtin_account_system_flag(canonical),
                 )
             )
-            spec_index_by_upper[upper] = len(specs) - 1
+            spec_index_by_key[key] = len(specs) - 1
         else:
             raise click.ClickException(
                 f"--user-password names {name!r}, which is neither a --user "

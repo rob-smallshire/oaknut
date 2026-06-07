@@ -19,6 +19,7 @@ from oaknut.afs.exceptions import (
     AFSUserNameError,
 )
 from oaknut.afs.info_sector import _encode_disc_name
+from oaknut.afs.passwords import normalise_username
 from oaknut.afs.wfsinit.partition import AFSSizeSpec
 from oaknut.file import BootOption
 
@@ -48,7 +49,7 @@ def builtin_account_system_flag(name: str) -> bool:
     not one of :data:`BUILTIN_ACCOUNT_NAMES`.
     """
     try:
-        return _BUILTIN_IS_SYSTEM[name.upper()]
+        return _BUILTIN_IS_SYSTEM[normalise_username(name)]
     except KeyError:
         raise AFSUserNameError(
             f"{name!r} is not a built-in account; "
@@ -159,27 +160,27 @@ class InitSpec:
         if not (0 <= self.default_quota <= _MAX_QUOTA):
             raise AFSQuotaError(f"default_quota {self.default_quota} outside 0..{_MAX_QUOTA:#x}")
         # Validate omit_builtins against the known set.
-        builtin_upper = {n.upper(): n for n in BUILTIN_ACCOUNT_NAMES}
+        builtin_by_key = {normalise_username(n): n for n in BUILTIN_ACCOUNT_NAMES}
         for name in self.omit_builtins:
-            if name.upper() not in builtin_upper:
+            if normalise_username(name) not in builtin_by_key:
                 raise AFSInitSpecError(
                     f"omit_builtins name {name!r} is not a built-in account; "
                     f"valid names are {', '.join(sorted(BUILTIN_ACCOUNT_NAMES))}"
                 )
-        omitted_upper = {n.upper() for n in self.omit_builtins}
+        omitted_keys = {normalise_username(n) for n in self.omit_builtins}
         # A user spec whose name matches a non-omitted built-in
         # overrides that built-in's default quota / password / boot
         # option (issue #4).  The system flag must match, though —
         # silently switching Syst to non-system (or Boot/Welcome to
         # system) would be a trap.
-        active_builtin_upper = set(builtin_upper) - omitted_upper
+        active_builtin_keys = set(builtin_by_key) - omitted_keys
         names_seen: set[str] = set()
         for user in self.users:
-            upper = user.name.upper()
-            if upper in active_builtin_upper:
-                expected_system = _BUILTIN_IS_SYSTEM[upper]
+            key = normalise_username(user.name)
+            if key in active_builtin_keys:
+                expected_system = _BUILTIN_IS_SYSTEM[key]
                 if user.system != expected_system:
-                    canonical = builtin_upper[upper]
+                    canonical = builtin_by_key[key]
                     if expected_system:
                         raise AFSUserNameError(
                             f"built-in {canonical!r} is a system account; "
@@ -189,6 +190,6 @@ class InitSpec:
                         f"built-in {canonical!r} is not a system account; "
                         f"override must not set system=True"
                     )
-            if upper in names_seen:
+            if key in names_seen:
                 raise AFSUserNameError(f"duplicate user name: {user.name!r}")
-            names_seen.add(upper)
+            names_seen.add(key)

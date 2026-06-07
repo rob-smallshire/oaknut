@@ -126,3 +126,22 @@ class TestPasswordsFileParse:
 
     def test_boot_mask_is_two_bits(self) -> None:
         assert BOOT_MASK == 0b11
+
+
+class TestNormaliseUsername:
+    """The one comparator AFS folds user IDs through (case-insensitive)."""
+
+    def test_folds_case(self):
+        from oaknut.afs.passwords import normalise_username
+
+        assert normalise_username("AliCe") == normalise_username("alice")
+
+    def test_distinct_names_stay_distinct(self):
+        from oaknut.afs.passwords import normalise_username
+
+        assert normalise_username("alice") != normalise_username("bob")
+
+    def test_group_user_id_folds_whole(self):
+        from oaknut.afs.passwords import normalise_username
+
+        assert normalise_username("Dept.Bob") == normalise_username("dept.bob")

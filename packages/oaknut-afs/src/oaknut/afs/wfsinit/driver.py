@@ -43,7 +43,7 @@ from oaknut.afs.directory import build_directory_bytes
 from oaknut.afs.exceptions import AFSInitSpecError
 from oaknut.afs.info_sector import InfoSector
 from oaknut.afs.map_sector import Extent, MapSector
-from oaknut.afs.passwords import PASSWORDS_FILENAME, PasswordsFile
+from oaknut.afs.passwords import PASSWORDS_FILENAME, PasswordsFile, normalise_username
 from oaknut.afs.types import AfsDate, SystemInternalName
 from oaknut.afs.wfsinit import partition as _partition
 from oaknut.afs.wfsinit.layout import BUILTIN_ACCOUNT_NAMES, InitSpec, UserSpec
@@ -216,14 +216,14 @@ def initialise(adfs: "ADFS", *, spec: InitSpec) -> None:
     # a URD — built-ins never do.  If a built-in has been explicitly
     # omitted, its name is free and a matching spec.users entry
     # behaves as a regular user (with a URD).  Issue #4.
-    omitted_upper = {n.upper() for n in spec.omit_builtins}
-    active_builtin_upper = {n.upper() for n in BUILTIN_ACCOUNT_NAMES} - omitted_upper
+    omitted_keys = {normalise_username(n) for n in spec.omit_builtins}
+    active_builtin_keys = {normalise_username(n) for n in BUILTIN_ACCOUNT_NAMES} - omitted_keys
     builtin_overrides: dict[str, UserSpec] = {}
     regular_users: list[UserSpec] = []
     for user in spec.users:
-        upper = user.name.upper()
-        if upper in active_builtin_upper:
-            builtin_overrides[upper] = user
+        key = normalise_username(user.name)
+        if key in active_builtin_keys:
+            builtin_overrides[key] = user
         else:
             regular_users.append(user)
 
@@ -306,7 +306,7 @@ def initialise(adfs: "ADFS", *, spec: InitSpec) -> None:
     default_quota = spec.default_quota
 
     def _add_builtin(canonical: str, *, system: bool) -> "PasswordsFile":
-        override = builtin_overrides.get(canonical.upper())
+        override = builtin_overrides.get(normalise_username(canonical))
         if override is None:
             return passwords.with_added(
                 canonical,
@@ -324,11 +324,11 @@ def initialise(adfs: "ADFS", *, spec: InitSpec) -> None:
 
     # Built-in accounts (skipping any in omit_builtins, applying
     # any caller overrides).
-    if "SYST" not in omitted_upper:
+    if "SYST" not in omitted_keys:
         passwords = _add_builtin("Syst", system=True)
-    if "BOOT" not in omitted_upper:
+    if "BOOT" not in omitted_keys:
         passwords = _add_builtin("Boot", system=False)
-    if "WELCOME" not in omitted_upper:
+    if "WELCOME" not in omitted_keys:
         passwords = _add_builtin("Welcome", system=False)
 
     # Regular user accounts (anything in spec.users that didn't

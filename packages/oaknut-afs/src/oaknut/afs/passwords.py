@@ -80,6 +80,19 @@ PASSWORDS_FILENAME = "Passwords"
 # ---------------------------------------------------------------------------
 
 
+def normalise_username(name: str) -> str:
+    """The canonical key for comparing AFS user IDs.
+
+    The file server compares user IDs case-insensitively (``Uade06``), so
+    two IDs — a bare ``user`` or a ``group.user`` ``full_id``, or a
+    built-in account name — denote the same account iff their normalised
+    forms are equal. This is the one place AFS folds a user name; every
+    lookup, built-in match and duplicate check across the package routes
+    through it rather than calling ``.upper()`` directly.
+    """
+    return name.upper()
+
+
 def _decode_cr_terminated(raw: bytes) -> str:
     """Decode a CR-terminated, zero-padded ASCII field."""
     end = raw.find(bytes((_CR,)))
@@ -228,11 +241,14 @@ class PasswordsFile(Sequence[UserRecord]):
         case-insensitively per ``Uade06``). Raises :class:`KeyError`
         if no active entry matches.
         """
-        target = name.upper()
+        target = normalise_username(name)
         for record in self._records:
             if not record.is_in_use:
                 continue
-            if record.full_id.upper() == target or record.name.upper() == target:
+            if (
+                normalise_username(record.full_id) == target
+                or normalise_username(record.name) == target
+            ):
                 return record
         raise AFSUserNotFoundError(f"no user named {name!r} in passwords file")
 
