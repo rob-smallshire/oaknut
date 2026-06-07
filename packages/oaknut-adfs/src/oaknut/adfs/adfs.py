@@ -51,6 +51,7 @@ from oaknut.file.host_bridge import (
     export_with_metadata,
     import_with_metadata,
 )
+from oaknut.file.integrity import assert_no_duplicate_names
 from oaknut.filesystem import NameGrammar
 
 if TYPE_CHECKING:
@@ -2507,13 +2508,15 @@ class ADFS:
 
 
 def _assert_entries_sorted(entries: tuple[_ADFSDirectoryEntry, ...]) -> None:
-    """Assert that directory entries are in case-insensitive ascending order.
+    """Assert directory entries are case-insensitively sorted and unique.
 
-    ADFS uses a linear scan with early termination for file lookup.
-    Out-of-order entries are silently unreachable. This assertion
-    catches sort-order violations at write time rather than letting
-    them surface as mysterious "Not found" errors on real hardware.
+    ADFS uses a linear scan with early termination for file lookup, so an
+    out-of-order *or* duplicated entry is silently unreachable. Both are
+    caught at write time rather than surfacing as mysterious "Not found"
+    errors on real hardware. (Sorting alone permits equal — i.e.
+    duplicate — names, so uniqueness is asserted separately.)
     """
+    assert_no_duplicate_names([entry.name for entry in entries], where="ADFS directory")
     for i in range(1, len(entries)):
         prev = entries[i - 1].name.upper()
         curr = entries[i].name.upper()
