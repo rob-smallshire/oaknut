@@ -22,6 +22,7 @@ from dataclasses import replace
 
 from oaknut.discimage import BYTES_PER_SECTOR, SurfaceSpec
 from oaknut.file import Access, AcornMeta
+from oaknut.file.integrity import assert_no_duplicate_names
 from oaknut.filesystem import (
     Confidence,
     Entry,
@@ -141,6 +142,10 @@ class _ROMFSMount(AcornWildcards):
 
     def _commit(self, files: tuple[ROMFSFile, ...]) -> None:
         self._require_writable()
+        # Post-condition backstop: every mutation funnels through here, so a
+        # duplicate name in the rebuilt file list is corruption caught at
+        # source rather than written to the ROM.
+        assert_no_duplicate_names([f.name for f in files], where="ROMFS")
         rebuilt = self._romfs.with_files(files)
         image = rebuilt.to_bytes()  # may raise ROMFullError before any write
         self._reader.write(0, image)
@@ -203,6 +208,9 @@ class _ROMFSMount(AcornWildcards):
         if file is None:
             raise ROMFSError(f"no file named {old_path!r}")
         _validate_romfs_name(new_path)
+        clash = self._find(new_path)
+        if clash is not None and clash is not file:
+            raise ROMFSError(f"a file named {new_path!r} already exists")
         # Only the name changes; keep every other field (including the
         # preserved flag bits) so an otherwise-untouched file stays byte-exact.
         renamed = replace(file, name=new_path)
