@@ -556,7 +556,7 @@ class AcornDFSCatalogue(Catalogue):
         disc_info = self.get_disc_info()
         sector1[4] = (disc_info.cycle_number + 1) & 0xFF
 
-    def rename_file(self, old_name: str, new_name: str) -> None:
+    def _rename_file_impl(self, old_name: str, new_name: str) -> None:
         """Rename file preserving all metadata and location."""
         # Find the file
         entry = self.find_file(old_name)

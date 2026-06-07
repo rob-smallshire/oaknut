@@ -707,7 +707,7 @@ class WatfordDFSCatalogue(Catalogue):
         # Increment cycle number
         sector1[4] = (sector1[4] + 1) & 0xFF
 
-    def rename_file(self, old_name: str, new_name: str) -> None:
+    def _rename_file_impl(self, old_name: str, new_name: str) -> None:
         """
         Rename file.
 

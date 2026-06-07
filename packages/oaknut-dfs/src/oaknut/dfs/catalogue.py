@@ -196,6 +196,18 @@ class Catalogue(ABC):
                 return entry
         return None
 
+    def _assert_no_duplicate_entries(self) -> None:
+        """Post-condition: no two catalogue entries share a path.
+
+        DFS looks files up by name, so a duplicate makes one copy
+        unreachable and corrupts the catalogue. Asserted after a mutating
+        operation so a defect surfaces here, at its source, rather than as
+        silent corruption (or a mysterious "not found") on real hardware.
+        """
+        paths = [entry.path.upper() for entry in self.list_files()]
+        duplicates = sorted({path for path in paths if paths.count(path) > 1})
+        assert not duplicates, f"DFS catalogue has duplicate entries: {duplicates}"
+
     def _ordered_files(self, files: list[FileEntry], order: Sequence[str]) -> list[FileEntry]:
         """Return *files* with the *order* paths first, the rest unchanged.
 
@@ -261,9 +273,35 @@ class Catalogue(ABC):
         """Unlock file."""
         pass
 
-    @abstractmethod
     def rename_file(self, old_name: str, new_name: str) -> None:
-        """Rename file preserving all metadata and location."""
+        """Rename a file, preserving all metadata and location.
+
+        Template method: the format-specific catalogue write lives in
+        :meth:`_rename_file_impl`. This wrapper guards it with a friendly
+        precondition — the source must exist and the destination must not
+        — so a clash is reported rather than silently producing a
+        duplicate, and asserts the no-duplicates post-condition afterwards
+        as a backstop.
+
+        Raises:
+            FileNotFoundError: If *old_name* does not exist.
+            FileExistsError: If *new_name* already names a different file.
+        """
+        from oaknut.dfs.exceptions import FileExistsError as DFSFileExistsError
+
+        if self.find_file(old_name) is None:
+            raise FileNotFoundError(f"File not found: {old_name}")
+        old_key = self.parse_filename(old_name).path.upper()
+        new_key = self.parse_filename(new_name).path.upper()
+        if new_key != old_key and self.find_file(new_key) is not None:
+            raise DFSFileExistsError(f"'{new_name}' already exists")
+
+        self._rename_file_impl(old_name, new_name)
+        self._assert_no_duplicate_entries()
+
+    @abstractmethod
+    def _rename_file_impl(self, old_name: str, new_name: str) -> None:
+        """Format-specific catalogue write for :meth:`rename_file`."""
         pass
 
     @abstractmethod
