@@ -710,7 +710,6 @@ class AFSPath(AcornPath):
             DirectoryEntry,
             delete_entry,
             insert_entry,
-            rename_entry,
         )
 
         afs = self._require_afs()
@@ -730,10 +729,24 @@ class AFSPath(AcornPath):
         src_parent_sin, src_name = afs._resolve_parent_and_name(self)
         dst_parent_sin, dst_name = afs._resolve_parent_and_name(target_bound)
 
+        _, src_entry = afs._resolve(self)
+        renamed_entry = DirectoryEntry(
+            name=dst_name,
+            load_address=src_entry.load_address,
+            exec_address=src_entry.exec_address,
+            access=src_entry.access,
+            date=src_entry.date,
+            sin=src_entry.sin,
+        )
+
         if src_parent_sin == dst_parent_sin:
-            # Same-directory rename: a single in-place slot update.
+            # Same-directory rename: delete then re-insert so the in-use
+            # list stays alphabetical. An in-place slot rewrite would leave
+            # it un-ordered when the new name sorts to a different position,
+            # making entries past that point unreachable to the server's
+            # early-terminating name walk.
             parent_raw = afs._read_object_bytes(src_parent_sin)
-            new_parent = rename_entry(parent_raw, src_name, dst_name)
+            new_parent = insert_entry(delete_entry(parent_raw, src_name), renamed_entry)
             afs._write_object_bytes(src_parent_sin, new_parent)
             return target_bound
 
@@ -744,15 +757,6 @@ class AFSPath(AcornPath):
         # from both parents — but we have no transactional backend
         # to guard against that.
         src_parent_raw = afs._read_object_bytes(src_parent_sin)
-        _, src_entry = afs._resolve(self)
-        renamed_entry = DirectoryEntry(
-            name=dst_name,
-            load_address=src_entry.load_address,
-            exec_address=src_entry.exec_address,
-            access=src_entry.access,
-            date=src_entry.date,
-            sin=src_entry.sin,
-        )
         dst_parent_raw = afs._read_object_bytes(dst_parent_sin)
         new_dst_parent = insert_entry(dst_parent_raw, renamed_entry)
         afs._write_object_bytes(dst_parent_sin, new_dst_parent)

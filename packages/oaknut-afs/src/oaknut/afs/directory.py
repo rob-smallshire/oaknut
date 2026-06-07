@@ -708,6 +708,24 @@ def _assert_no_duplicate_entries(raw: bytes) -> None:
     )
 
 
+def _assert_entries_sorted(raw: bytes) -> None:
+    """Post-condition: the in-use list is in case-insensitive order.
+
+    The server walks the in-use list to resolve names, terminating early
+    once it passes where a name would sort, so an out-of-order list leaves
+    later entries unreachable. Asserted after an insert (which threads the
+    new entry into sorted position); the in-place :func:`rename_entry`
+    primitive is exempt — it is ROM-faithful and may leave the list
+    un-ordered, so callers that need order delete and re-insert instead.
+    """
+    directory = AfsDirectory.from_bytes(raw)
+    names = [entry.name for entry in directory.entries]
+    folded = [name.upper() for name in names]
+    assert folded == sorted(folded), (
+        f"AFS directory {directory.name!r} in-use list out of order: {names}"
+    )
+
+
 def insert_entry(raw: bytes, entry: DirectoryEntry) -> bytes:
     """Return new directory bytes with ``entry`` inserted.
 
@@ -758,6 +776,7 @@ def insert_entry(raw: bytes, entry: DirectoryEntry) -> bytes:
     _bump_sequence(buf)
     result = bytes(buf)
     _assert_no_duplicate_entries(result)
+    _assert_entries_sorted(result)
     return result
 
 
