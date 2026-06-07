@@ -70,6 +70,7 @@ from oaknut.afs.exceptions import (
     AFSDirectoryFullError,
 )
 from oaknut.afs.types import AfsDate, SystemInternalName
+from oaknut.file.integrity import assert_no_duplicate_names
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -693,6 +694,20 @@ def _find_in_use_entry(
 # ---------------------------------------------------------------------------
 
 
+def _assert_no_duplicate_entries(raw: bytes) -> None:
+    """Post-condition: the directory holds no two entries of one name.
+
+    AFS resolves names by walking the in-use list, so a duplicate leaves
+    one entry unreachable. Asserted after a directory mutation as a
+    backstop behind the insert/rename guards.
+    """
+    directory = AfsDirectory.from_bytes(raw)
+    assert_no_duplicate_names(
+        [entry.name for entry in directory.entries],
+        where=f"AFS directory {directory.name!r}",
+    )
+
+
 def insert_entry(raw: bytes, entry: DirectoryEntry) -> bytes:
     """Return new directory bytes with ``entry`` inserted.
 
@@ -741,7 +756,9 @@ def insert_entry(raw: bytes, entry: DirectoryEntry) -> bytes:
     # Step 4: count and sequence.
     _set_num_entries(buf, _header_num_entries(buf) + 1)
     _bump_sequence(buf)
-    return bytes(buf)
+    result = bytes(buf)
+    _assert_no_duplicate_entries(result)
+    return result
 
 
 def delete_entry(raw: bytes, name: str) -> bytes:
@@ -836,7 +853,9 @@ def rename_entry(raw: bytes, old_name: str, new_name: str) -> bytes:
         new_name
     )
     _bump_sequence(buf)
-    return bytes(buf)
+    result = bytes(buf)
+    _assert_no_duplicate_entries(result)
+    return result
 
 
 def update_entry_fields(

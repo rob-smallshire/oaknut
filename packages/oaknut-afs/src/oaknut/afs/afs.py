@@ -932,6 +932,8 @@ class AFS:
         parent_dir = AfsDirectory.from_bytes(parent_raw)
         if parent_dir.contains(name):
             existing = parent_dir[name]
+            if existing.is_directory:
+                raise AFSPathError(f"cannot overwrite directory {name!r} with a file")
             self._delete_object(existing.sin)
             updated_parent = _delete_entry_bytes(parent_raw, name)
             self._write_object_bytes(parent_dir_sin, updated_parent)
