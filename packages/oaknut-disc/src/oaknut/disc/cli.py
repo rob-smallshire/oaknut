@@ -1434,21 +1434,33 @@ _alias("*DELETE", "rm")
 def mv(src: str, dst: str, force: bool) -> None:
     """Rename or move a file within the image (Acorn alias: *RENAME).
 
-    Accepts two ``COMPOUND_PATH`` arguments — source and destination, both
-    of which must name the same image. mv is single-image: the library
-    renames a directory entry in place and cannot move across
-    filesystems.
+    Takes a source ``COMPOUND_PATH`` and a destination. mv is
+    single-image, so the destination's image is redundant: give either a
+    full ``IMAGE:INNER`` destination naming the same image, or — like
+    rm's trailing paths — a bare in-image path that inherits the source's
+    image and partition. A partition selector on the destination is
+    accepted only when it matches the source's; mv never moves across
+    partitions.
     """
+    from .cli_paths import resolve_destination_path
     from .mount import split_selector
 
-    src_outer_filepath, _ = parse_compound_path(src)
-    dst_outer_filepath, dst_inner_path = parse_compound_path(dst)
+    src_outer_filepath, src_inner_path = parse_compound_path(src)
+    dst_outer_filepath, dst_inner_path = resolve_destination_path(dst, src_outer_filepath)
     if src_outer_filepath.resolve() != dst_outer_filepath.resolve():
         raise click.UsageError(
             f"mv source and destination must name the same image; "
             f"got {src_outer_filepath} and {dst_outer_filepath}"
         )
-    _, bare_dst = split_selector(dst_inner_path)
+
+    src_selector, _ = split_selector(src_inner_path)
+    dst_selector, bare_dst = split_selector(dst_inner_path)
+    if dst_selector is not None and dst_selector != src_selector:
+        source_partition = f"{src_selector!r}" if src_selector else "the default partition"
+        raise click.UsageError(
+            f"mv does not move across partitions: destination partition "
+            f"{dst_selector!r} does not match {source_partition}"
+        )
 
     with resolve_mount(src, writable=True) as resolved:
         mount = resolved.mount

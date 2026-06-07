@@ -178,6 +178,59 @@ class TestMvPathSyntax:
         assert result.exit_code != 0
         assert "same image" in result.output
 
+    def test_bare_inner_destination(self, runner: CliRunner, adfs_image_filepath: Path):
+        # The destination's image is redundant (mv is single-image), so a
+        # bare in-image path is accepted and inherits the source's image,
+        # mirroring rm's trailing-path form.
+        result = runner.invoke(
+            cli,
+            ["mv", f"{adfs_image_filepath}:$.Hello", "$.Greeting"],
+        )
+        assert result.exit_code == 0, result.output
+
+        listing = runner.invoke(cli, ["ls", f"{adfs_image_filepath}:$"])
+        assert "Greeting" in listing.output
+        assert "Hello" not in listing.output
+
+
+class TestMvPartitionScoping:
+    """A partition selector on the destination must not contradict the
+    source; mv never moves across partitions."""
+
+    def test_bare_inner_inherits_source_partition(
+        self, runner: CliRunner, partitioned_image_with_files: Path
+    ):
+        # Rename the last entry so the directory stays sorted (ADFS
+        # rename does not re-sort).
+        result = runner.invoke(
+            cli,
+            ["mv", f"{partitioned_image_with_files}:adfs:adfsB", "adfsZ"],
+        )
+        assert result.exit_code == 0, result.output
+
+        listing = runner.invoke(cli, ["ls", f"{partitioned_image_with_files}:adfs:$"])
+        assert "adfsZ" in listing.output
+        assert "adfsB" not in listing.output
+
+    def test_matching_destination_selector_allowed(
+        self, runner: CliRunner, partitioned_image_with_files: Path
+    ):
+        result = runner.invoke(
+            cli,
+            ["mv", f"{partitioned_image_with_files}:adfs:adfsB", "adfs:adfsZ"],
+        )
+        assert result.exit_code == 0, result.output
+
+    def test_conflicting_destination_selector_rejected(
+        self, runner: CliRunner, partitioned_image_with_files: Path
+    ):
+        result = runner.invoke(
+            cli,
+            ["mv", f"{partitioned_image_with_files}:adfs:adfsA", "afs:moved"],
+        )
+        assert result.exit_code != 0
+        assert "partition" in result.output
+
 
 # ---------------------------------------------------------------------------
 # Filing-system prefix passes through the fused form

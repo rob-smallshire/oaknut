@@ -147,7 +147,7 @@ Grouped by category here for readability; actual `--help` output is a single fla
 | Command | Purpose |
 |---|---|
 | `rm IMAGE PATH [PATH…]` (alias `*delete`) | Delete file(s). `-r` recursive directory delete (ADFS). `-f` force: ignore missing paths, override locked files. `--dry-run` print what would be removed and exit. |
-| `mv IMAGE SRC DST` (alias `*rename`) | Rename / move within an image. `-f` overwrite an existing destination. |
+| `mv SRC DST` (alias `*rename`) | Rename / move within an image. `SRC` is a compound `IMAGE:PATH`; `DST` may repeat the same image (`IMAGE:PATH`) or be a bare in-image path that inherits `SRC`'s image and partition. `-f` overwrite an existing destination. |
 | `cp IMAGE SRC DST` (alias `*copy`) | Copy within one image. `cp SRC_IMAGE SRC_PATH DST_IMAGE DST_PATH` for cross-image. `-f` overwrite an existing destination. |
 | `mkdir IMAGE PATH` (alias `*cdir`) | Create a directory (ADFS only). `-p` no error if the directory already exists. |
 | `chmod IMAGE PATH ACCESS` (alias `*access`) | Set access (e.g. `LWR/R` or hex `0x1B`). |
@@ -202,9 +202,9 @@ Two commands have richer shape grammars:
   - 3 args same-image split: `cp image.dat $.A $.B`.
   - 4 args cross-image split: `cp src.dat $.A dst.dat $.B`.
 
-- **`mv`** accepts two shapes (single-image at the library level):
-  - 3 args split: `mv image.dat $.A $.B`.
-  - 2 args fused: `mv image.dat:$.A image.dat:$.B` — both fused tokens must name the same image; the CLI checks resolved paths and rejects the cross-image case.
+- **`mv`** is single-image (at the library level) and takes a compound `SRC` plus a `DST`:
+  - Fused, image repeated: `mv image.dat:$.A image.dat:$.B` — both tokens must name the same image; the CLI checks resolved paths and rejects the cross-image case.
+  - Fused source, bare destination: `mv image.dat:$.A $.B` — `DST`'s image is redundant, so a bare in-image path inherits `SRC`'s image. A `DST` is treated as compound only when the text left of its outer colon names an existing file, so `adfs:$.B` stays a bare (selector-prefixed) in-image path. A destination partition selector must match the source's; mv never moves across partitions.
 
 `rm` is multi-path: `rm IMAGE PATH...` (split) or `rm IMAGE:PATH [PATH...]` (fused, where the spec's path is the first to delete and any extra positionals are additional paths in the same image).
 

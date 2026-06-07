@@ -92,3 +92,26 @@ def parse_compound_path(compound_path: str) -> tuple[Path, str]:
     if not outer_filepath.is_file():
         raise click.UsageError(f"image not found: {compound_path}")
     return outer_filepath, ""
+
+
+def resolve_destination_path(spec: str, source_filepath: Path) -> tuple[Path, str]:
+    """Parse a destination ``COMPOUND_PATH`` that may omit the image.
+
+    The single-image two-argument commands (``mv``) carry a redundant
+    destination image, so the destination is accepted either as the full
+    ``IMAGE:INNER`` form or as a bare ``INNER`` path that inherits
+    *source_filepath*.
+
+    A spec is treated as compound only when the text left of the outer
+    colon names an existing file; otherwise the whole spec is the inner
+    path. Thus ``other.adl:$.Memo`` is compound, while both ``$.Memo`` and
+    a selector-prefixed ``adfs:$.Memo`` are bare inner paths (the
+    ``adfs:``/``afs:``/``dfs:`` prefix is left in place for
+    :func:`oaknut.disc.mount.split_selector` to interpret).
+
+    Returns ``(outer_filepath, inner_path)``.
+    """
+    split = _split_at_outer_colon(spec)
+    if split is not None and Path(split[0]).is_file():
+        return Path(split[0]), split[1]
+    return source_filepath, spec
