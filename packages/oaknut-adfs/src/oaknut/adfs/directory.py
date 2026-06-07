@@ -12,8 +12,44 @@ from dataclasses import dataclass
 from oaknut.adfs.exceptions import ADFSDirectoryError
 from oaknut.discimage.sectors_view import SectorsView
 from oaknut.file import Access  # re-exported for backward compatibility
+from oaknut.filesystem import NameGrammar
 
 __all__ = ["Access"]
+
+
+#: What an ADFS directory entry's ten-byte name field can *hold and ADFS
+#: can read back*, not what its command parser would accept — oaknut
+#: manipulates discs that are legally representable, including the
+#: parser-illegal names byte-edited onto game discs. The hard limits come
+#: from the on-disc format (ADFS 1.30 disassembly): ten bytes maximum
+#: (over-length is a "Bad name" error, not a truncation); each name byte
+#: is seven-bit because bit 7 carries the file's access flags; and CR
+#: terminates the field. The ``.`` / ``:`` separators are representable
+#: but oaknut's dotted-path syntax cannot yet address them. Everything
+#: else — wildcards, directory specials, spaces, control bytes — is
+#: stored and read verbatim. Lives at the directory layer because that is
+#: where names are stored and compared; ``adfs.py`` and ``filesystem.py``
+#: import it from here. See :class:`oaknut.filesystem.NameGrammar`.
+ADFS_NAME_GRAMMAR = NameGrammar(
+    max_length=10,
+    forbidden=".:\r",
+    forbidden_reason="oaknut's . and : path separators, and CR (the field terminator)",
+    seven_bit=True,
+    allow_control=True,
+    case="insensitive",
+    codec="ascii",
+    notes=(
+        "Each name byte is seven-bit: bit 7 holds the file's access flags "
+        "(R, W, L, D in bytes 0-3), so a name cannot carry an eighth bit.",
+        "The field otherwise holds any byte, so oaknut stores and reads the "
+        "parser-illegal names found on byte-edited discs — wildcards (* #), "
+        "the directory specials ($ & @ ^ %), spaces and quotes. Reading "
+        "never rejects a name.",
+    ),
+)
+
+#: The name comparator for ADFS — see :data:`ADFS_NAME_GRAMMAR`.
+_name_key = ADFS_NAME_GRAMMAR.name_key
 
 
 # --- Internal data types ---
@@ -73,10 +109,10 @@ class _ADFSDirectory:
     sequence_number: int
 
     def find(self, name: str) -> _ADFSDirectoryEntry | None:
-        """Find entry by name (case-insensitive)."""
-        name_upper = name.upper()
+        """Find entry by name (per the grammar's case policy)."""
+        target = _name_key(name)
         for entry in self.entries:
-            if entry.name.upper() == name_upper:
+            if _name_key(entry.name) == target:
                 return entry
         return None
 

@@ -16,7 +16,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 
 from oaknut.adfs.adfs import ADFS as _ADFSDisc
-from oaknut.adfs.adfs import ADFS_NAME_GRAMMAR
+from oaknut.adfs.directory import ADFS_NAME_GRAMMAR
 from oaknut.adfs.free_space_map import _calculate_old_map_checksum
 from oaknut.discimage import BYTES_PER_SECTOR
 from oaknut.file import AcornMeta

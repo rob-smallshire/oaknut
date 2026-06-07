@@ -131,6 +131,11 @@ AFS_NAME_GRAMMAR = NameGrammar(
     ),
 )
 
+#: The name comparator for this filesystem — every name equality, lookup
+#: and collation in this module routes through it rather than hard-coding
+#: a fold, so the case policy lives only in the grammar.
+_name_key = AFS_NAME_GRAMMAR.name_key
+
 
 # ---------------------------------------------------------------------------
 # Name helpers
@@ -254,9 +259,9 @@ class AfsDirectory:
 
         Raises :class:`KeyError` if not found.
         """
-        name_upper = name.upper()
+        target = _name_key(name)
         for entry in self.entries:
-            if entry.name.upper() == name_upper:
+            if _name_key(entry.name) == target:
                 return entry
         raise KeyError(f"no entry named {name!r} in directory {self.name!r}")
 
@@ -434,7 +439,7 @@ def build_directory_bytes(
 
     Populates the slot array from the end backwards (matching the
     server's behaviour), threads the in-use list in alphabetical
-    order (by ``name.upper()``), and chains the free list through
+    order (by the grammar's name key), and chains the free list through
     the unused slots from the beginning forward.
 
     Phase 5 uses this only to build test fixtures. The real write
@@ -455,7 +460,7 @@ def build_directory_bytes(
             f"cannot fit {len(entries)} entries in a directory with capacity {capacity}"
         )
 
-    sorted_entries = sorted(entries, key=lambda e: e.name.upper())
+    sorted_entries = sorted(entries, key=lambda e: _name_key(e.name))
 
     buf = bytearray(size_in_bytes)
     buf[_OFF_MASTER_SEQ] = master_sequence_number
@@ -666,18 +671,18 @@ def _find_in_use_insertion_point(
     :func:`update_entry_fields` if you want the ROM's overwrite
     semantics.
     """
-    new_name_upper = new_name.upper()
+    new_name_key = _name_key(new_name)
     pred_link_offset = _OFF_FIRST_POINTER  # header's DRFRST is the "predecessor link"
     current_slot = _header_first_pointer(buf)
 
     while current_slot != 0:
         current_name = _slot_name(buf, current_slot)
-        current_upper = current_name.upper()
-        if current_upper == new_name_upper:
+        current_key = _name_key(current_name)
+        if current_key == new_name_key:
             raise AFSDirectoryEntryExistsError(
                 f"directory already contains an entry named {current_name!r}"
             )
-        if new_name_upper < current_upper:
+        if new_name_key < current_key:
             return pred_link_offset, current_slot
         pred_link_offset = current_slot + _ENT_OFF_LINK
         current_slot = _slot_link(buf, current_slot)
@@ -701,13 +706,13 @@ def _find_in_use_entry(
     Raises :class:`AFSDirectoryEntryNotFoundError` if the walk hits
     the end of the list without finding a match.
     """
-    target_upper = name.upper()
+    target_key = _name_key(name)
     pred_link_offset = _OFF_FIRST_POINTER
     current_slot = _header_first_pointer(buf)
 
     while current_slot != 0:
         current_name = _slot_name(buf, current_slot)
-        if current_name.upper() == target_upper:
+        if _name_key(current_name) == target_key:
             return pred_link_offset, current_slot
         pred_link_offset = current_slot + _ENT_OFF_LINK
         current_slot = _slot_link(buf, current_slot)

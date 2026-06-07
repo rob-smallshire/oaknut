@@ -13,6 +13,8 @@ from oaknut.dfs.catalogue import (
 from oaknut.dfs.exceptions import CatalogFullError, DFSValidationError
 from oaknut.discimage.surface import Surface
 
+_name_key = DFS_NAME_GRAMMAR.name_key
+
 
 class WatfordDFSCatalogue(Catalogue):
     """Watford DFS catalog - 62 files using dual catalog sections."""
@@ -483,7 +485,8 @@ class WatfordDFSCatalogue(Catalogue):
             raise PermissionError(f"File is locked: {filename}")
 
         # Get all files except the one to remove
-        files = [f for f in self.list_files() if f.path.upper() != filename.upper()]
+        target = _name_key(filename)
+        files = [f for f in self.list_files() if _name_key(f.path) != target]
 
         # Rebuild catalog from scratch
         self._rebuild_catalog(files)
@@ -583,8 +586,8 @@ class WatfordDFSCatalogue(Catalogue):
         # (names are now stored with their original case).
         for entry in all_files:
             if (
-                entry.filename.upper() == parsed.filename.upper()
-                and entry.directory.upper() == parsed.directory.upper()
+                _name_key(entry.filename) == _name_key(parsed.filename)
+                and _name_key(entry.directory) == _name_key(parsed.directory)
             ):
                 return entry
         return None
@@ -675,8 +678,9 @@ class WatfordDFSCatalogue(Catalogue):
         # Find file index in combined list
         files = self.list_files()
         file_index = None
+        target = _name_key(filename)
         for i, f in enumerate(files):
-            if f.path.upper() == filename.upper():
+            if _name_key(f.path) == target:
                 file_index = i
                 break
 
@@ -732,8 +736,9 @@ class WatfordDFSCatalogue(Catalogue):
         # Find file index in combined list
         files = self.list_files()
         file_index = None
+        target = _name_key(old_name)
         for i, f in enumerate(files):
-            if f.path.upper() == old_name.upper():
+            if _name_key(f.path) == target:
                 file_index = i
                 break
 
@@ -769,8 +774,9 @@ class WatfordDFSCatalogue(Catalogue):
     def _find_file_index(self, filename: str) -> int:
         """Return the catalogue index for *filename*, or raise."""
         files = self.list_files()
+        target = _name_key(filename)
         for i, f in enumerate(files):
-            if f.path.upper() == filename.upper():
+            if _name_key(f.path) == target:
                 return i
         raise FileNotFoundError(f"File not found: {filename}")
 
@@ -946,7 +952,7 @@ class WatfordDFSCatalogue(Catalogue):
                     )
                 )
 
-        names = [f.path.upper() for f in files]
+        names = [_name_key(f.path) for f in files]
         duplicates = [name for name in set(names) if names.count(name) > 1]
         if duplicates:
             errors.append(DFSValidationError(f"Duplicate filenames: {', '.join(duplicates)}"))

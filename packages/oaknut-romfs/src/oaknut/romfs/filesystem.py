@@ -62,6 +62,11 @@ ROMFS_NAME_GRAMMAR = NameGrammar(
     ),
 )
 
+#: The name comparator for this filesystem — ROMFS matches byte-for-byte
+#: (its grammar is case-sensitive), so this is identity, but lookups route
+#: through it rather than ``==`` so the policy lives in one place.
+_name_key = ROMFS_NAME_GRAMMAR.name_key
+
 
 def _validate_romfs_name(name: str) -> None:
     """Validate *name* against :data:`ROMFS_NAME_GRAMMAR`.
@@ -117,8 +122,9 @@ class _ROMFSMount(AcornWildcards):
         return self._romfs.data_files
 
     def _find(self, path: str) -> ROMFSFile | None:
+        target = _name_key(path)
         for f in self._data_files():
-            if f.name == path:
+            if _name_key(f.name) == target:
                 return f
         return None
 
@@ -224,8 +230,9 @@ class _ROMFSMount(AcornWildcards):
         # stream), so a file's position in that stream is its storage
         # order — also the order *LOAD/*RUN reads them, there being no
         # seeks on a ROM.
+        target = _name_key(path)
         for index, file in enumerate(self._data_files()):
-            if file.name == path:
+            if _name_key(file.name) == target:
                 return index
         raise ROMFSError(f"no file named {path!r}")
 

@@ -41,6 +41,11 @@ DFS_NAME_GRAMMAR = NameGrammar(
     ),
 )
 
+#: The name comparator for the flat-catalogue DFS filesystems. Every name
+#: equality, lookup and ordering routes through it (both catalogue
+#: variants share this grammar), so the case policy lives only here.
+_name_key = DFS_NAME_GRAMMAR.name_key
+
 
 @dataclass(frozen=True)
 class FileEntry:
@@ -191,9 +196,10 @@ class Catalogue(ABC):
         pass
 
     def find_file(self, filename: str) -> Optional[FileEntry]:
-        """Find file by name (case-insensitive)."""
+        """Find file by name (per the grammar's case policy)."""
+        target = _name_key(filename)
         for entry in self.list_files():
-            if entry.path.upper() == filename.upper():
+            if _name_key(entry.path) == target:
                 return entry
         return None
 
@@ -208,7 +214,7 @@ class Catalogue(ABC):
         assert_no_duplicate_names(
             [entry.path for entry in self.list_files()],
             where="DFS catalogue",
-            key=DFS_NAME_GRAMMAR.name_key,
+            key=_name_key,
         )
 
     def _ordered_files(self, files: list[FileEntry], order: Sequence[str]) -> list[FileEntry]:
@@ -223,18 +229,18 @@ class Catalogue(ABC):
         Raises:
             FileNotFoundError: If *order* names a file not in *files*.
         """
-        by_path = {f.path.upper(): f for f in files}
+        by_path = {_name_key(f.path): f for f in files}
         head: list[FileEntry] = []
         positioned: set[str] = set()
         for spec in order:
-            key = self.parse_filename(spec).path.upper()
+            key = _name_key(self.parse_filename(spec).path)
             if key not in by_path:
                 raise FileNotFoundError(f"File not found: {spec}")
             if key in positioned:
                 continue
             positioned.add(key)
             head.append(by_path[key])
-        tail = [f for f in files if f.path.upper() not in positioned]
+        tail = [f for f in files if _name_key(f.path) not in positioned]
         return head + tail
 
     def add_file_entry(
@@ -321,8 +327,8 @@ class Catalogue(ABC):
 
         if self.find_file(old_name) is None:
             raise FileNotFoundError(f"File not found: {old_name}")
-        old_key = self.parse_filename(old_name).path.upper()
-        new_key = self.parse_filename(new_name).path.upper()
+        old_key = _name_key(self.parse_filename(old_name).path)
+        new_key = _name_key(self.parse_filename(new_name).path)
         if new_key != old_key and self.find_file(new_key) is not None:
             raise DFSFileExistsError(f"'{new_name}' already exists")
 

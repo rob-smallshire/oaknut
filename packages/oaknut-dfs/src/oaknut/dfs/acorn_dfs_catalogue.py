@@ -12,6 +12,8 @@ from oaknut.dfs.catalogue import (
 from oaknut.dfs.exceptions import CatalogFullError, DFSValidationError
 from oaknut.discimage.surface import Surface
 
+_name_key = DFS_NAME_GRAMMAR.name_key
+
 
 class AcornDFSCatalogue(Catalogue):
     """Acorn DFS catalog implementation (sectors 0-1, max 31 files)."""
@@ -357,7 +359,8 @@ class AcornDFSCatalogue(Catalogue):
             raise PermissionError(f"File is locked: {filename}")
 
         # Get all files except the one to remove
-        files = [f for f in self.list_files() if f.path.upper() != filename.upper()]
+        target = _name_key(filename)
+        files = [f for f in self.list_files() if _name_key(f.path) != target]
 
         # Rebuild catalog from scratch
         self._rebuild_catalog(files)
@@ -480,8 +483,9 @@ class AcornDFSCatalogue(Catalogue):
         # Find file index in catalog
         files = self.list_files()
         file_index = None
+        target = _name_key(filename)
         for i, f in enumerate(files):
-            if f.path.upper() == filename.upper():
+            if _name_key(f.path) == target:
                 file_index = i
                 break
 
@@ -509,8 +513,9 @@ class AcornDFSCatalogue(Catalogue):
     def _find_file_index(self, filename: str) -> int:
         """Return the catalogue index for *filename*, or raise."""
         files = self.list_files()
+        target = _name_key(filename)
         for i, f in enumerate(files):
-            if f.path.upper() == filename.upper():
+            if _name_key(f.path) == target:
                 return i
         raise FileNotFoundError(f"File not found: {filename}")
 
@@ -571,8 +576,9 @@ class AcornDFSCatalogue(Catalogue):
         # Find file index in catalog
         files = self.list_files()
         file_index = None
+        target = _name_key(old_name)
         for i, f in enumerate(files):
-            if f.path.upper() == old_name.upper():
+            if _name_key(f.path) == target:
                 file_index = i
                 break
 
@@ -638,7 +644,7 @@ class AcornDFSCatalogue(Catalogue):
                     )
                 )
 
-        names = [f.path.upper() for f in files]
+        names = [_name_key(f.path) for f in files]
         duplicates = [name for name in set(names) if names.count(name) > 1]
         if duplicates:
             errors.append(DFSValidationError(f"Duplicate filenames: {', '.join(duplicates)}"))

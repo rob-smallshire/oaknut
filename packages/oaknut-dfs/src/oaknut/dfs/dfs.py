@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Iterator, Union
 
 import oaknut.basic as basic
-from oaknut.dfs.catalogue import FileEntry
+from oaknut.dfs.catalogue import DFS_NAME_GRAMMAR, FileEntry
 from oaknut.dfs.catalogued_surface import CataloguedSurface
 from oaknut.dfs.formats import BYTES_PER_SECTOR, DiscFormat
 from oaknut.discimage.surface import DiscImage
@@ -29,6 +29,7 @@ if TYPE_CHECKING:
 
 # Valid DFS directory characters
 _DFS_DIRECTORY_CHARS = frozenset("$ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+_name_key = DFS_NAME_GRAMMAR.name_key
 
 
 def detect_dfs_format(filepath: Union[str, PathLike]) -> DiscFormat:
@@ -220,7 +221,7 @@ class DFSPath(AcornPath):
         if not self._path:
             return True  # Root always exists
         if self._is_directory_path():
-            return any(f.directory.upper() == self._path.upper() for f in self._dfs.files)
+            return any(_name_key(f.directory) == _name_key(self._path) for f in self._dfs.files)
         return self._dfs._catalogued_surface.find_file(self._path) is not None
 
     @resolving_io
@@ -283,9 +284,9 @@ class DFSPath(AcornPath):
                     seen.add(f.directory)
                     yield DFSPath(self._dfs, f.directory)
         elif self._is_directory_path():
-            dir_letter = self._path.upper()
+            dir_letter = _name_key(self._path)
             for f in self._dfs.files:
-                if f.directory.upper() == dir_letter:
+                if _name_key(f.directory) == dir_letter:
                     yield DFSPath(self._dfs, f.path)
         else:
             raise ValueError(f"'{self._path}' is not a directory")
@@ -550,21 +551,21 @@ class DFSPath(AcornPath):
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, DFSPath):
             return NotImplemented
-        return self._dfs is other._dfs and self._path.upper() == other._path.upper()
+        return self._dfs is other._dfs and _name_key(self._path) == _name_key(other._path)
 
     def __hash__(self) -> int:
-        return hash(self._path.upper())
+        return hash(_name_key(self._path))
 
     @resolving_io
     def __contains__(self, name: str) -> bool:
         """Check if *name* exists in this directory."""
         if not self._path:
             # Root: check if directory letter has files
-            return any(f.directory.upper() == name.upper() for f in self._dfs.files)
+            return any(_name_key(f.directory) == _name_key(name) for f in self._dfs.files)
         elif self._is_directory_path():
-            dir_letter = self._path.upper()
+            dir_letter = _name_key(self._path)
             return any(
-                f.directory.upper() == dir_letter and f.filename.upper() == name.upper()
+                _name_key(f.directory) == dir_letter and _name_key(f.filename) == _name_key(name)
                 for f in self._dfs.files
             )
         return False
@@ -1061,7 +1062,7 @@ class DFS:
             List of files in directory
         """
         target_dir = directory if directory else self._current_directory
-        return [f for f in self.files if f.directory.upper() == target_dir.upper()]
+        return [f for f in self.files if _name_key(f.directory) == _name_key(target_dir)]
 
     @property
     def free_sectors(self) -> int:

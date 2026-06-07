@@ -24,6 +24,7 @@ from typing import TYPE_CHECKING, Iterator, Union
 
 import oaknut.basic as basic
 from oaknut.adfs.directory import (
+    ADFS_NAME_GRAMMAR,
     Access,
     ADFSDirectoryFormat,
     OldDirectoryFormat,
@@ -52,39 +53,13 @@ from oaknut.file.host_bridge import (
     import_with_metadata,
 )
 from oaknut.file.integrity import assert_no_duplicate_names
-from oaknut.filesystem import NameGrammar
 
 if TYPE_CHECKING:
     from oaknut.file import BootOption
 
-#: What an ADFS directory entry's ten-byte name field can *hold and ADFS
-#: can read back*, not what its command parser would accept — oaknut
-#: manipulates discs that are legally representable, including the
-#: parser-illegal names byte-edited onto game discs. The hard limits come
-#: from the on-disc format (ADFS 1.30 disassembly): ten bytes maximum
-#: (over-length is a "Bad name" error, not a truncation); each name byte
-#: is seven-bit because bit 7 carries the file's access flags; and CR
-#: terminates the field. The ``.`` / ``:`` separators are representable
-#: but oaknut's dotted-path syntax cannot yet address them. Everything
-#: else — wildcards, directory specials, spaces, control bytes — is
-#: stored and read verbatim. See :class:`oaknut.filesystem.NameGrammar`.
-ADFS_NAME_GRAMMAR = NameGrammar(
-    max_length=10,
-    forbidden=".:\r",
-    forbidden_reason="oaknut's . and : path separators, and CR (the field terminator)",
-    seven_bit=True,
-    allow_control=True,
-    case="insensitive",
-    codec="ascii",
-    notes=(
-        "Each name byte is seven-bit: bit 7 holds the file's access flags "
-        "(R, W, L, D in bytes 0-3), so a name cannot carry an eighth bit.",
-        "The field otherwise holds any byte, so oaknut stores and reads the "
-        "parser-illegal names found on byte-edited discs — wildcards (* #), "
-        "the directory specials ($ & @ ^ %), spaces and quotes. Reading "
-        "never rejects a name.",
-    ),
-)
+#: The name comparator for ADFS — every name equality, lookup and ordering
+#: in this module routes through it. See :data:`ADFS_NAME_GRAMMAR`.
+_name_key = ADFS_NAME_GRAMMAR.name_key
 
 
 def _validate_adfs_leaf(name: str) -> None:
@@ -986,10 +961,10 @@ class ADFSPath(AcornPath):
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, ADFSPath):
             return NotImplemented
-        return self._adfs is other._adfs and self._path.upper() == other._path.upper()
+        return self._adfs is other._adfs and _name_key(self._path) == _name_key(other._path)
 
     def __hash__(self) -> int:
-        return hash(self._path.upper())
+        return hash(_name_key(self._path))
 
     @resolving_io
     def __contains__(self, name: str) -> bool:
@@ -1919,10 +1894,10 @@ class ADFS:
         """
         directory = self._read_directory_at(disc_address)
         entries = list(directory.entries)
-        insert_key = entry.name.upper()
+        insert_key = _name_key(entry.name)
         insert_pos = len(entries)
         for i, existing in enumerate(entries):
-            if existing.name.upper() > insert_key:
+            if _name_key(existing.name) > insert_key:
                 insert_pos = i
                 break
         entries.insert(insert_pos, entry)
@@ -2070,7 +2045,8 @@ class ADFS:
         if existing is not None:
             # Replace the existing entry
             new_entries = tuple(
-                new_entry if e.name.upper() == filename.upper() else e for e in parent_dir.entries
+                new_entry if _name_key(e.name) == _name_key(filename) else e
+                for e in parent_dir.entries
             )
         else:
             # Add a new entry
@@ -2144,7 +2120,9 @@ class ADFS:
             self._fsm.free(existing.start_sector, num_sectors)
 
         # Remove entry from directory
-        new_entries = tuple(e for e in parent_dir.entries if e.name.upper() != filename.upper())
+        new_entries = tuple(
+            e for e in parent_dir.entries if _name_key(e.name) != _name_key(filename)
+        )
         new_seq = (parent_dir.sequence_number + 1) & 0xFF
 
         updated_dir = _ADFSDirectory(
@@ -2246,7 +2224,9 @@ class ADFS:
         self._fsm.free(existing.indirect_disc_address, dir_sectors)
 
         # Remove entry from parent
-        new_entries = tuple(e for e in parent_dir.entries if e.name.upper() != dirname.upper())
+        new_entries = tuple(
+            e for e in parent_dir.entries if _name_key(e.name) != _name_key(dirname)
+        )
         new_seq = (parent_dir.sequence_number + 1) & 0xFF
 
         updated_dir = _ADFSDirectory(
@@ -2295,7 +2275,7 @@ class ADFS:
             # new name so the directory stays sorted (the new name may sort
             # to a different position than the old one).
             remaining = tuple(
-                e for e in src_dir.entries if e.name.upper() != old_name.upper()
+                e for e in src_dir.entries if _name_key(e.name) != _name_key(old_name)
             )
             new_entries = _insert_sorted(remaining, renamed)
             new_seq = (src_dir.sequence_number + 1) & 0xFF
@@ -2316,7 +2296,9 @@ class ADFS:
                 )
 
             # Remove from source
-            src_entries = tuple(e for e in src_dir.entries if e.name.upper() != old_name.upper())
+            src_entries = tuple(
+                e for e in src_dir.entries if _name_key(e.name) != _name_key(old_name)
+            )
             src_seq = (src_dir.sequence_number + 1) & 0xFF
             updated_src = _ADFSDirectory(
                 name=src_dir.name,
@@ -2376,7 +2358,8 @@ class ADFS:
         )
 
         new_entries = tuple(
-            updated_entry if e.name.upper() == filename.upper() else e for e in parent_dir.entries
+            updated_entry if _name_key(e.name) == _name_key(filename) else e
+            for e in parent_dir.entries
         )
         new_seq = (parent_dir.sequence_number + 1) & 0xFF
 
@@ -2424,7 +2407,8 @@ class ADFS:
         )
 
         new_entries = tuple(
-            updated_entry if e.name.upper() == filename.upper() else e for e in parent_dir.entries
+            updated_entry if _name_key(e.name) == _name_key(filename) else e
+            for e in parent_dir.entries
         )
         new_seq = (parent_dir.sequence_number + 1) & 0xFF
 
@@ -2458,7 +2442,8 @@ class ADFS:
         )
 
         new_entries = tuple(
-            updated_entry if e.name.upper() == filename.upper() else e for e in parent_dir.entries
+            updated_entry if _name_key(e.name) == _name_key(filename) else e
+            for e in parent_dir.entries
         )
         new_seq = (parent_dir.sequence_number + 1) & 0xFF
 
@@ -2492,7 +2477,8 @@ class ADFS:
         )
 
         new_entries = tuple(
-            updated_entry if e.name.upper() == filename.upper() else e for e in parent_dir.entries
+            updated_entry if _name_key(e.name) == _name_key(filename) else e
+            for e in parent_dir.entries
         )
         new_seq = (parent_dir.sequence_number + 1) & 0xFF
 
@@ -2516,7 +2502,7 @@ def _assert_entries_sorted(entries: tuple[_ADFSDirectoryEntry, ...]) -> None:
     errors on real hardware. (Sorting alone permits equal — i.e.
     duplicate — names, so uniqueness is asserted separately.)
     """
-    key = ADFS_NAME_GRAMMAR.name_key
+    key = _name_key
     assert_no_duplicate_names([entry.name for entry in entries], where="ADFS directory", key=key)
     for i in range(1, len(entries)):
         prev = key(entries[i - 1].name)
@@ -2537,11 +2523,11 @@ def _insert_sorted(
     ROM uses a linear scan with early termination for file lookup.
     Inserting out of order makes files unreachable.
     """
-    key = new_entry.name.upper()
+    key = _name_key(new_entry.name)
     items = list(entries)
     pos = len(items)
     for i, existing in enumerate(items):
-        if existing.name.upper() > key:
+        if _name_key(existing.name) > key:
             pos = i
             break
     items.insert(pos, new_entry)
