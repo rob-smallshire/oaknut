@@ -3,7 +3,6 @@
 import pytest
 from oaknut.file.integrity import assert_no_duplicate_names, find_duplicate_names
 
-
 _FOLD_UPPER = str.upper
 
 

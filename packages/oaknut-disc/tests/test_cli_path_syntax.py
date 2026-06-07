@@ -210,9 +210,7 @@ class TestMvPathSyntax:
         )
         assert result.exit_code == 0, result.output
         assert runner.invoke(cli, ["cat", f"{adfs_image_filepath}:$.Target"]).output == "Hello ADFS"
-        assert not (
-            "Hello" in runner.invoke(cli, ["ls", f"{adfs_image_filepath}:$"]).output
-        )
+        assert "Hello" not in runner.invoke(cli, ["ls", f"{adfs_image_filepath}:$"]).output
 
 
 class TestMvPartitionScoping:
