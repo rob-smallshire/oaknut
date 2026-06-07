@@ -321,7 +321,7 @@ class WatfordDFSCatalogue(Catalogue):
 
         return entries
 
-    def add_file_entry(
+    def _add_file_entry_impl(
         self,
         filename: str,
         directory: str,

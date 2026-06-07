@@ -310,7 +310,7 @@ class AcornDFSCatalogue(Catalogue):
         except (UnicodeEncodeError, LookupError) as e:
             raise ValueError(f"Title contains invalid characters: {e}")
 
-    def add_file_entry(
+    def _add_file_entry_impl(
         self,
         filename: str,
         directory: str,

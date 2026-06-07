@@ -234,7 +234,6 @@ class Catalogue(ABC):
         tail = [f for f in files if f.path.upper() not in positioned]
         return head + tail
 
-    @abstractmethod
     def add_file_entry(
         self,
         filename: str,
@@ -245,7 +244,35 @@ class Catalogue(ABC):
         start_sector: int,
         locked: bool = False,
     ) -> None:
-        """Add a new file entry to catalog."""
+        """Add a new file entry to the catalogue.
+
+        Template method: the format-specific write lives in
+        :meth:`_add_file_entry_impl`; this wrapper asserts the
+        no-duplicate-entries post-condition afterwards as a backstop.
+        """
+        self._add_file_entry_impl(
+            filename=filename,
+            directory=directory,
+            load_address=load_address,
+            exec_address=exec_address,
+            length=length,
+            start_sector=start_sector,
+            locked=locked,
+        )
+        self._assert_no_duplicate_entries()
+
+    @abstractmethod
+    def _add_file_entry_impl(
+        self,
+        filename: str,
+        directory: str,
+        load_address: int,
+        exec_address: int,
+        length: int,
+        start_sector: int,
+        locked: bool = False,
+    ) -> None:
+        """Format-specific catalogue write for :meth:`add_file_entry`."""
         pass
 
     @abstractmethod

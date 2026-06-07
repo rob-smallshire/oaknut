@@ -65,7 +65,14 @@ class CataloguedSurface:
         exec_address: int,
         locked: bool = False,
     ) -> None:
-        """Write a new file."""
+        """Write a file, overwriting any existing file of the same name."""
+        # *SAVE onto an existing name replaces it. Remove the old entry
+        # first (freeing its sectors for reuse) so the write overwrites
+        # rather than leaving a second, unreachable catalogue entry.
+        full_path = f"{directory}.{filename}"
+        if self._catalogue.find_file(full_path) is not None:
+            self._catalogue.remove_file_entry(full_path)
+
         start_sector = self._first_fit(len(data))
 
         if len(data) > 0:
