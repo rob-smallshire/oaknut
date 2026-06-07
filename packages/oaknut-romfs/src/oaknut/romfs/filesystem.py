@@ -145,7 +145,9 @@ class _ROMFSMount(AcornWildcards):
         # Post-condition backstop: every mutation funnels through here, so a
         # duplicate name in the rebuilt file list is corruption caught at
         # source rather than written to the ROM.
-        assert_no_duplicate_names([f.name for f in files], where="ROMFS")
+        assert_no_duplicate_names(
+            [f.name for f in files], where="ROMFS", key=ROMFS_NAME_GRAMMAR.name_key
+        )
         rebuilt = self._romfs.with_files(files)
         image = rebuilt.to_bytes()  # may raise ROMFullError before any write
         self._reader.write(0, image)

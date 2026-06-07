@@ -17,9 +17,9 @@ from __future__ import annotations
 from collections.abc import Iterable
 
 from oaknut.afs.afs import AFS as _AFSRegion
+from oaknut.afs.directory import AFS_NAME_GRAMMAR
 from oaknut.afs.exceptions import AFSInfoSectorError
 from oaknut.afs.info_sector import INFO_SECTOR_SIZE, MAGIC, InfoSector
-from oaknut.afs.path import AFS_NAME_GRAMMAR
 from oaknut.discimage import BYTES_PER_SECTOR, DiscImage, SurfaceSpec, UnifiedDisc
 from oaknut.file import AcornMeta
 from oaknut.filesystem import (

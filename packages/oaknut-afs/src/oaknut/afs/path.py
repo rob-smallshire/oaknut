@@ -27,14 +27,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Iterator, Sequence, Union
 
-from oaknut.afs.directory import MAX_NAME_LENGTH
+from oaknut.afs.directory import AFS_NAME_GRAMMAR
 from oaknut.afs.exceptions import AFSDirectoryEntryExistsError, AFSPathError
 from oaknut.file import Access, AcornPath, resolving_io
 from oaknut.file.host_bridge import (
     DEFAULT_EXPORT_META_FORMAT,
     DEFAULT_IMPORT_META_FORMATS,
 )
-from oaknut.filesystem import NameGrammar
 
 if TYPE_CHECKING:
     from os import PathLike
@@ -48,28 +47,6 @@ if TYPE_CHECKING:
 
 ROOT = "$"
 SEPARATOR = "."
-
-#: The storable-name grammar for an AFS leaf, per ``Uade02`` and
-#: Beebmaster's PDF: up to ten ASCII characters, with the ``.`` / ``:``
-#: separators and the space pad byte forbidden. Liberal otherwise — the
-#: wildcard metacharacters ``*`` and ``#`` are valid name bytes. The
-#: single source of truth for :func:`_validate_part` and the grammar
-#: ``disc describe-filesystem`` reports. See
-#: :class:`oaknut.filesystem.NameGrammar`.
-AFS_NAME_GRAMMAR = NameGrammar(
-    max_length=MAX_NAME_LENGTH,
-    forbidden=":. ",
-    forbidden_reason="the directory (.) and disc (:) separators and the space pad byte",
-    seven_bit=True,
-    allow_control=True,
-    case="insensitive",
-    codec="ascii",
-    notes=(
-        "Wildcards (* #) and control characters are valid name bytes — the "
-        "field is space-padded, not terminated, so AFS reads them back. The "
-        "command parser refuses more than the field's hard limits do.",
-    ),
-)
 
 
 @dataclass(frozen=True)

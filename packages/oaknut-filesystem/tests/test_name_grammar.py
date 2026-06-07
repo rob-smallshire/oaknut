@@ -98,3 +98,20 @@ class TestSummary:
         # A forbidden CR must not put a literal carriage return in the listing.
         text = NameGrammar(max_length=10, forbidden=".\r").summary()
         assert "Forbidden: . CR" in text
+
+
+class TestNameKey:
+    """name_key is the comparator: equal keys mean the same object."""
+
+    def test_fold_upper_collapses_case(self):
+        grammar = NameGrammar(max_length=10, case="fold-upper")
+        assert grammar.name_key("Hello") == grammar.name_key("HELLO")
+
+    def test_insensitive_collapses_case(self):
+        grammar = NameGrammar(max_length=10, case="insensitive")
+        assert grammar.name_key("Hello") == grammar.name_key("hello")
+
+    def test_sensitive_distinguishes_case(self):
+        grammar = NameGrammar(max_length=10, case="sensitive")
+        assert grammar.name_key("Hello") != grammar.name_key("HELLO")
+        assert grammar.name_key("Hello") == "Hello"

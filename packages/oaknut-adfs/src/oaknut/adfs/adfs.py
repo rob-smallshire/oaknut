@@ -2516,10 +2516,11 @@ def _assert_entries_sorted(entries: tuple[_ADFSDirectoryEntry, ...]) -> None:
     errors on real hardware. (Sorting alone permits equal — i.e.
     duplicate — names, so uniqueness is asserted separately.)
     """
-    assert_no_duplicate_names([entry.name for entry in entries], where="ADFS directory")
+    key = ADFS_NAME_GRAMMAR.name_key
+    assert_no_duplicate_names([entry.name for entry in entries], where="ADFS directory", key=key)
     for i in range(1, len(entries)):
-        prev = entries[i - 1].name.upper()
-        curr = entries[i].name.upper()
+        prev = key(entries[i - 1].name)
+        curr = key(entries[i].name)
         assert prev <= curr, (
             f"ADFS directory entries out of order: "
             f"{entries[i - 1].name!r} (#{i - 1}) > {entries[i].name!r} (#{i})"

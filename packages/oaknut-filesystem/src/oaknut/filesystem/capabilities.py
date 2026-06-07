@@ -446,6 +446,20 @@ class NameGrammar:
     #: reader should know (which metacharacters are storable, and so on).
     notes: tuple[str, ...] = ()
 
+    def name_key(self, name: str) -> str:
+        """The canonical key for comparing two names for *equality*.
+
+        Two names denote the same object on this filesystem iff their keys
+        are equal — so this is the one comparator a filesystem's lookup,
+        duplicate-detection and collation should route through rather than
+        hard-coding a fold. Case is folded for the case-insensitive
+        policies (``fold-upper`` / ``insensitive``) and preserved for
+        ``sensitive``.
+        """
+        if self.case in ("fold-upper", "insensitive"):
+            return name.upper()
+        return name
+
     def validate(self, name: str) -> None:
         """Raise :class:`ValueError` if *name* cannot be stored.
 

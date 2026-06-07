@@ -71,6 +71,7 @@ from oaknut.afs.exceptions import (
 )
 from oaknut.afs.types import AfsDate, SystemInternalName
 from oaknut.file.integrity import assert_no_duplicate_names
+from oaknut.filesystem import NameGrammar
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -104,6 +105,31 @@ _ENT_OFF_EXEC = 16
 _ENT_OFF_ACCESS = 20
 _ENT_OFF_DATE = 21
 _ENT_OFF_SIN = 23
+
+
+#: The storable-name grammar for an AFS leaf, per ``Uade02`` and
+#: Beebmaster's PDF: up to ten ASCII characters, with the ``.`` / ``:``
+#: separators and the space pad byte forbidden. Liberal otherwise — the
+#: wildcard metacharacters ``*`` and ``#`` are valid name bytes. The
+#: single source of truth for path validation, for the grammar
+#: ``disc describe-filesystem`` reports, and — via
+#: :meth:`~oaknut.filesystem.NameGrammar.name_key` — for how this layer
+#: compares names for equality and order. See
+#: :class:`oaknut.filesystem.NameGrammar`.
+AFS_NAME_GRAMMAR = NameGrammar(
+    max_length=MAX_NAME_LENGTH,
+    forbidden=":. ",
+    forbidden_reason="the directory (.) and disc (:) separators and the space pad byte",
+    seven_bit=True,
+    allow_control=True,
+    case="insensitive",
+    codec="ascii",
+    notes=(
+        "Wildcards (* #) and control characters are valid name bytes — the "
+        "field is space-padded, not terminated, so AFS reads them back. The "
+        "command parser refuses more than the field's hard limits do.",
+    ),
+)
 
 
 # ---------------------------------------------------------------------------
@@ -705,6 +731,7 @@ def _assert_no_duplicate_entries(raw: bytes) -> None:
     assert_no_duplicate_names(
         [entry.name for entry in directory.entries],
         where=f"AFS directory {directory.name!r}",
+        key=AFS_NAME_GRAMMAR.name_key,
     )
 
 
@@ -720,7 +747,7 @@ def _assert_entries_sorted(raw: bytes) -> None:
     """
     directory = AfsDirectory.from_bytes(raw)
     names = [entry.name for entry in directory.entries]
-    folded = [name.upper() for name in names]
+    folded = [AFS_NAME_GRAMMAR.name_key(name) for name in names]
     assert folded == sorted(folded), (
         f"AFS directory {directory.name!r} in-use list out of order: {names}"
     )

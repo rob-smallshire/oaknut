@@ -206,7 +206,9 @@ class Catalogue(ABC):
         silent corruption (or a mysterious "not found") on real hardware.
         """
         assert_no_duplicate_names(
-            [entry.path for entry in self.list_files()], where="DFS catalogue"
+            [entry.path for entry in self.list_files()],
+            where="DFS catalogue",
+            key=DFS_NAME_GRAMMAR.name_key,
         )
 
     def _ordered_files(self, files: list[FileEntry], order: Sequence[str]) -> list[FileEntry]:
