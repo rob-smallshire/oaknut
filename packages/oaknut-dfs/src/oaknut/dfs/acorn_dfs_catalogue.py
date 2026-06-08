@@ -10,6 +10,7 @@ from oaknut.dfs.catalogue import (
     ParsedFilename,
 )
 from oaknut.dfs.exceptions import CatalogFullError, DFSValidationError
+from oaknut.discimage import BYTES_PER_SECTOR
 from oaknut.discimage.surface import Surface
 
 _name_key = DFS_NAME_GRAMMAR.name_key
@@ -97,26 +98,30 @@ class AcornDFSCatalogue(Catalogue):
         if boot_sectors_byte & 0xCC:  # Bits 2,3,6,7 set
             return None
 
-        # Check 5: Total sectors calculation and divisibility by 10
+        # Check 5: Total sectors plausibility. The declared count is a
+        # 10-bit field across the boot/sectors byte and sector1[7]; a
+        # conventional disc reports a positive multiple of ten (ten
+        # sectors per track). Some writers, however, stamp a bogus total
+        # while laying out an otherwise well-formed catalogue: Owlet
+        # (bbcmicrobot.com) writes 3 here. A self-declared total is not
+        # trustworthy enough to disqualify on its own, so an implausible
+        # value falls back to corroborating the catalogue against the real
+        # surface (Check 5b) rather than rejecting outright.
         total_sectors = ((boot_sectors_byte & 0x03) << 8) | sector1[7]
-        if total_sectors < 4:  # Minimum sectors
-            return None
-        if total_sectors % 10 != 0:
-            return None
-
-        # Check 6 (optional): Tracks should be reasonable
-        # PDF notes: "not all double-sided discs have the same number of tracks"
-        # and "there are valid DFS discs that have other numbers of tracks"
-        # So we keep this check very lenient - just ensure it's positive
-        tracks = total_sectors // 10
-        if tracks < 1:
-            return None
+        if total_sectors < 10 or total_sectors % 10 != 0:
+            # Check 5b: the file table must be internally consistent with
+            # the actual surface — at least one file, every entry living
+            # in the data area (sector >= 2) and ending within the
+            # surface. Random data almost never satisfies this on top of
+            # the title/count/flag checks already passed.
+            if not cls._file_table_fits_surface(surface, sector1, num_files):
+                return None
 
         # A truncated image declares its full (untruncated) sector count
         # while the file holds only the used sectors; the filing system
         # reads it transparently (issue #1), so a declared total that
-        # exceeds the surface is *accepted*, not rejected — checks 1–6
-        # already establish a well-formed catalogue.
+        # exceeds the surface is *accepted*, not rejected — the checks
+        # above already establish a well-formed catalogue.
 
         # EXCLUSION CHECK: Must NOT be Watford DFS
         # Watford DFS has specific markers in sectors 2-3
@@ -160,6 +165,35 @@ class AcornDFSCatalogue(Catalogue):
             return True
         if byte <= 31:  # Control characters not ok
             return False
+        return True
+
+    @staticmethod
+    def _file_table_fits_surface(surface: Surface, sector1: Sequence[int], num_files: int) -> bool:
+        """Whether every catalogue entry lives within the actual surface.
+
+        Used to corroborate a catalogue whose self-declared total-sector
+        count is implausible: each of *num_files* entries must start in
+        the data area (sector >= 2, after the catalogue) and end at or
+        before the surface's true sector count. With no files there is
+        nothing to corroborate, so an empty table does not vouch for the
+        catalogue.
+        """
+        if num_files == 0:
+            return False
+        for i in range(num_files):
+            entry_offset = 8 + (i * 8)
+            extra_byte = sector1[entry_offset + 6]
+            length = (
+                sector1[entry_offset + 4]
+                | (sector1[entry_offset + 5] << 8)
+                | ((extra_byte & 0x30) << 12)
+            )
+            start_sector = sector1[entry_offset + 7] | ((extra_byte & 0x03) << 8)
+            length_sectors = (length + BYTES_PER_SECTOR - 1) // BYTES_PER_SECTOR
+            if start_sector < 2:
+                return False
+            if start_sector + length_sectors > surface.num_sectors:
+                return False
         return True
 
     @property

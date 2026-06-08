@@ -16,6 +16,8 @@ from oaknut.filesystem import (
     reader_for,
 )
 
+from tests.fixtures import REFERENCE_IMAGES_DIRPATH
+
 
 def _make_dfs_image(tmp_path):
     image_filepath = tmp_path / "test.ssd"
@@ -73,6 +75,19 @@ class TestProbe:
         # Watford image.
         families = {r.filesystem for r in identify(_watford_image_bytes())}
         assert families == {"watford-dfs"}
+
+    def test_identifies_owlet_disc_with_bogus_declared_total(self):
+        # Owlet (bbcmicrobot.com) writes a well-formed DFS catalogue but
+        # stamps a bogus total-sector count: boot/sectors byte 0x30 and
+        # low byte 0x03 decode to 3 sectors, which is neither >= 4 nor a
+        # multiple of 10. The self-declared total is unreliable; the
+        # catalogue itself (title "BBCMICROBOT", 4 files incl. !BOOT, all
+        # entries fitting the real 800-sector surface) is valid DFS, so
+        # identify must still recognise it.
+        image_filepath = REFERENCE_IMAGES_DIRPATH / "owlet" / "owlet-dla.ssd"
+        results = identify(image_filepath)
+        acorn = [r for r in results if r.filesystem == "acorn-dfs"]
+        assert acorn, f"acorn-dfs not identified; got {[r.filesystem for r in results]}"
 
 
 class TestMount:
