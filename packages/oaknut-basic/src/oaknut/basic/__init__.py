@@ -21,12 +21,28 @@ dependencies on any other oaknut package.
 
 from __future__ import annotations
 
+from oaknut.basic.numbering import (
+    DEFAULT_LINE_NUMBER,
+    DEFAULT_LINE_STEP,
+    number_lines,
+)
+
 __version__ = "12.6.2"
 
 # Canonical load addresses for BBC BASIC programs on each host.
 # Programs saved by *SAVE on a real machine use these by default.
 BBC_BASIC_LOAD_ADDRESS = 0x1900
 ELECTRON_BASIC_LOAD_ADDRESS = 0x0E00
+
+__all__ = [
+    "BBC_BASIC_LOAD_ADDRESS",
+    "DEFAULT_LINE_NUMBER",
+    "DEFAULT_LINE_STEP",
+    "ELECTRON_BASIC_LOAD_ADDRESS",
+    "detokenise",
+    "number_lines",
+    "tokenise",
+]
 
 
 def tokenise(source: str) -> bytes:

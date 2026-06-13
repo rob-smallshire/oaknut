@@ -21,6 +21,16 @@ classifiers = [
 ]
 dependencies = []
 
+# The `cli` extra pulls the shared CLI toolkit (Click, asyoulikeit, the
+# Acorn text codec and the categorised-error boundary) so this package
+# can offer the standalone `oaknut-basic` command; the library core never
+# imports it and stays dependency-free.
+[project.optional-dependencies]
+cli = ["oaknut-cli>=10.0"]
+
+[project.scripts]
+oaknut-basic = "oaknut.basic.cli:cli"
+
 [project.urls]
 Homepage = "https://github.com/rob-smallshire/oaknut/tree/master/packages/oaknut-basic"
 Repository = "https://github.com/rob-smallshire/oaknut"
