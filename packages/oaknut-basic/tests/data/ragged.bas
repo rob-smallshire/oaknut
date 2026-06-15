@@ -35,9 +35,9 @@ REM Repeat until at least limit centiseconds have elapsed
 num_runs% = 0
 start% = TIME
 REPEAT
-  PROCdp
-  elapsed% = TIME - start%
-  num_runs% = num_runs% + 1
+PROCdp
+elapsed% = TIME - start%
+num_runs% = num_runs% + 1
 UNTIL elapsed% >= at_least_centiseconds%
 
 REM ---- Reconstruct output ----
@@ -67,18 +67,18 @@ READ A$
 IF A$ = "" THEN done% = TRUE : GOTO 740
 
 FOR i% = 1 TO LEN(A$)
-?(text% + p%) = ASC(MID$(A$, i%, 1))
+text%?p% = ASC(MID$(A$, i%, 1))
 p% = p% + 1
 NEXT i%
 
 REM space between lines
-?(text% + p%) = 32
+text%?p% = 32
 p% = p% + 1
 
 UNTIL done%
 
 REM terminate
-?(text% + p%) = 13
+text%?p% = 13
 ENDPROC
 
 
@@ -91,30 +91,31 @@ LOCAL p%, l%
 p% = 0
 words_count% = 0
 
+done% = FALSE
 REPEAT
 
 REM skip spaces
-IF ?(text% + p%) <> spc% THEN GOTO 1020
+IF text%?p% <> spc% THEN GOTO 1030
 REPEAT
 p% = p% + 1
-UNTIL ?(text% + p%) <> spc%
+UNTIL text%?p% <> spc%
 
-IF ?(text% + p%) = 13 THEN ENDPROC
+IF text%?p% = 13 THEN done%=TRUE: GOTO 1180
 
 wordstart%(words_count%) = p%
 l% = 0
 
-IF ?(text% + p% + l%) <= spc% GOTO 1120
+IF text%?(p% + l%) <= spc% GOTO 1130
 REPEAT
 l% = l% + 1
-UNTIL ?(text% + p% + l%) <= 32
+UNTIL text%?(p% + l%) <= 32
 
 wordlen%(words_count%) = l%
 
 words_count% = words_count% + 1
 p% = p% + l%
 
-UNTIL FALSE
+UNTIL done%
 ENDPROC
 
 
@@ -126,8 +127,8 @@ LOCAL i%, j%, k%, width%, best%, cost%
 
 REM Reinitialise to allow multiple runs
 FOR i% = 0 TO max_num_words% - 1
-  cost%(i%) = 0
-  next%(i%) = 0
+cost%(i%) = 0
+next%(i%) = 0
 NEXT
 
 FOR i% = words_count% - 1 TO 0 STEP -1
@@ -141,7 +142,7 @@ REM add word length
 IF j% > i% width% = width% + 1
 width% = width% + wordlen%(j%)
 
-IF width% > maxwidth% THEN GOTO 1540
+IF width% > maxwidth% THEN GOTO 1550
 
 REM cost = raggedness + future cost
 spare% = maxwidth% - width%
@@ -175,7 +176,7 @@ FOR k% = i% TO j% - 1
 IF k% > i% THEN VDU spc%
 
 FOR c% = 0 TO wordlen%(k%) - 1
-VDU ?(text% + wordstart%(k%) + c%)
+VDU text%?(wordstart%(k%) + c%)
 NEXT c%
 
 NEXT k%

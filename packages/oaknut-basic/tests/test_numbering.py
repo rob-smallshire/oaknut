@@ -81,9 +81,10 @@ class TestRealProgram:
         by_number = {int(line.split(" ", 1)[0]): line for line in numbered.splitlines()}
         # Each jump in the source assumes these post-numbering targets.
         assert by_number[740] == "740 REM space between lines"
-        assert by_number[1020] == "1020 IF ?(text% + p%) = 13 THEN ENDPROC"
-        assert by_number[1120] == "1120 wordlen%(words_count%) = l%"
-        assert by_number[1540] == "1540 cost%(i%) = best%"
+        assert by_number[1030] == "1030 IF text%?p% = 13 THEN done%=TRUE: GOTO 1180"
+        assert by_number[1130] == "1130 wordlen%(words_count%) = l%"
+        assert by_number[1180] == "1180 UNTIL done%"
+        assert by_number[1550] == "1550 cost%(i%) = best%"
 
 
 class TestNumberLinesValidation:
