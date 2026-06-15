@@ -18,16 +18,6 @@ class TestConstants:
         assert basic.ELECTRON_BASIC_LOAD_ADDRESS == 0x0E00
 
 
-class TestTokeniseStub:
-    def test_tokenise_raises_not_implemented(self):
-        with pytest.raises(NotImplementedError):
-            basic.tokenise('10 PRINT "Hello"')
-
-    def test_tokenise_raises_on_empty_input(self):
-        with pytest.raises(NotImplementedError):
-            basic.tokenise("")
-
-
 class TestModuleIsolation:
     """The basic module is destined for a standalone oaknut-basic
     package, so it must not import anything from the rest of

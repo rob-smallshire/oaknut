@@ -58,10 +58,10 @@ class TestReadText:
 
 
 class TestWriteBasic:
-    def test_write_basic_propagates_not_implemented(self):
+    def test_write_basic_tokenises_real_source(self):
         dfs = _make_empty_dfs()
-        with pytest.raises(NotImplementedError):
-            (dfs.root / "$" / "PROG").write_basic("10 PRINT")
+        (dfs.root / "$" / "PROG").write_basic("10 PRINT")
+        assert (dfs.root / "$" / "PROG").read_bytes() == basic.tokenise("10 PRINT")
 
     def test_write_basic_composes_tokenise_then_write_bytes(self, monkeypatch):
         monkeypatch.setattr(basic, "tokenise", lambda src: b"\x0d\xff\x0d")
@@ -110,11 +110,10 @@ class TestWriteBasic:
 
 
 class TestReadBasic:
-    def test_read_basic_propagates_not_implemented(self):
+    def test_read_basic_detokenises_real_program(self):
         dfs = _make_empty_dfs()
-        (dfs.root / "$" / "PROG").write_bytes(b"\x0d\xff")
-        with pytest.raises(NotImplementedError):
-            (dfs.root / "$" / "PROG").read_basic()
+        (dfs.root / "$" / "PROG").write_basic("10 PRINT\n20 END")
+        assert (dfs.root / "$" / "PROG").read_basic().rstrip("\n") == "10 PRINT\n20 END"
 
     def test_read_basic_composes_read_bytes_then_detokenise(self, monkeypatch):
         monkeypatch.setattr(basic, "detokenise", lambda data: "10 PRINT")

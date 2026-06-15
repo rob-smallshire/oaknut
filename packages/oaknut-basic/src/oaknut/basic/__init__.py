@@ -41,6 +41,7 @@ from oaknut.basic.numbering import (
     DEFAULT_LINE_STEP,
     number_lines,
 )
+from oaknut.basic.tokeniser import tokenise
 
 __version__ = "12.6.2"
 
@@ -69,19 +70,3 @@ __all__ = [
     "number_lines",
     "tokenise",
 ]
-
-
-def tokenise(source: str) -> bytes:
-    """Tokenise BBC BASIC source text into its on-disc byte form.
-
-    Args:
-        source: BBC BASIC source as a Unicode string.
-
-    Returns:
-        Tokenised BASIC program bytes, ready to be written to a disc
-        image via ``DFSPath.write_bytes`` or ``ADFSPath.write_bytes``.
-
-    Raises:
-        NotImplementedError: The tokeniser has not yet been implemented.
-    """
-    raise NotImplementedError("BBC BASIC tokenisation is not yet implemented")

@@ -353,7 +353,8 @@ class DFSPath(AcornPath):
         Raises:
             ValueError: If this path is a directory.
             FileNotFoundError: If the file does not exist.
-            NotImplementedError: Until the detokeniser is implemented.
+            DetokeniseError: If the stored program is not valid tokenised
+                BBC BASIC.
         """
         return basic.detokenise(self.read_bytes())
 
@@ -381,7 +382,7 @@ class DFSPath(AcornPath):
 
         Raises:
             ValueError: If this path is a directory or filename is invalid.
-            NotImplementedError: Until the tokeniser is implemented.
+            TokeniseError: If the source is not valid BBC BASIC.
         """
         self.write_bytes(
             basic.tokenise(source),
