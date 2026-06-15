@@ -124,6 +124,17 @@ class TestSuppressionContexts:
     def test_mid_statement_star_is_multiply(self):
         assert _body("X=3*4") == b"X=3*4"
 
+    def test_control_codes_in_strings_are_not_line_breaks(self):
+        # A BBC line ends only at CR; control bytes such as &0C (form feed)
+        # and &1D occur legitimately inside string literals (mode-7 / VDU
+        # codes). Python's str.splitlines() would wrongly break on them, so
+        # the line must split strictly on \\r / \\n.
+        assert _body('PRINT "A\x0cB\x1dC"') == b'\xf1 "A\x0cB\x1dC"'
+
+    def test_program_with_a_control_code_in_a_string_round_trips(self):
+        program = tokenise('10 PRINT "A\x0cB"')
+        assert tokenise(detokenise(program)) == program
+
 
 class TestErrors:
     def test_unnumbered_line(self):

@@ -27,6 +27,8 @@ the CLI does it at its I/O boundary.
 
 from __future__ import annotations
 
+import re
+
 from oaknut.basic.exceptions import (
     AlreadyNumberedError,
     LineNumberOrderError,
@@ -53,6 +55,16 @@ from oaknut.basic.tokens import (
 
 _CR = 0x0D
 _END_MARKER = 0xFF
+
+# A BBC BASIC line ends only at a carriage return (or a host newline);
+# Python's str.splitlines() additionally breaks on &0B, &0C, &1C-&1E and
+# others, which occur legitimately inside string literals (mode-7 / VDU
+# control codes), so split strictly on the real terminators only.
+_LINE_SEPARATOR_RE = re.compile(r"\r\n|\r|\n")
+
+
+def _split_source_lines(source: str) -> list[str]:
+    return _LINE_SEPARATOR_RE.split(source)
 
 # Keyword entries grouped by first character, preserving ROM order within
 # each group, so the crunch only scans the relevant group.
@@ -84,7 +96,7 @@ def tokenise(source: str, *, start: int | None = None, step: int | None = None) 
             the maximum storable length.
     """
     auto_number = start is not None or step is not None
-    lines = source.splitlines()
+    lines = _split_source_lines(source)
     if auto_number:
         _reject_existing_numbers(lines)
         renumbered = number_lines(
@@ -92,7 +104,7 @@ def tokenise(source: str, *, start: int | None = None, step: int | None = None) 
             start=DEFAULT_LINE_NUMBER if start is None else start,
             step=DEFAULT_LINE_STEP if step is None else step,
         )
-        lines = renumbered.splitlines()
+        lines = _split_source_lines(renumbered)
 
     out = bytearray()
     previous_number: int | None = None
