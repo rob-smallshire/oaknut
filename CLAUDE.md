@@ -17,7 +17,7 @@ Seven packages, layered strictly bottom-up:
 | `oaknut-exception` | `oaknut.exception` | — | Categorised exception hierarchy (`OaknutException`, `DataError`, `ConfigurationError`, `InternalError`) with class-attached `ExitCode` values, plus the `handled_errors` CLI boundary helper |
 | `oaknut-file` | `oaknut.file` | `exception` | INF sidecars, xattr namespaces, filename encoding, `Access`, `AcornMeta`, `MetaFormat`, `BootOption`, `FSError` base (a `DataError`), `acorn` text codec, `host_bridge` |
 | `oaknut-discimage` | `oaknut.discimage` | `file` | `Surface`, `SectorsView`, `UnifiedDisc`, generic `DiskFormat` + surface-spec helpers |
-| `oaknut-basic` | `oaknut.basic` | — | BBC BASIC tokeniser/detokeniser, language constants |
+| `oaknut-basic` | `oaknut.basic` | `exception` | BBC BASIC tokeniser/detokeniser (BASIC II), line numbering, language constants |
 | `oaknut-dfs` | `oaknut.dfs` | `file`, `discimage`, `basic` | Acorn DFS / Watford DFS / Opus DDOS — flat-catalogue BBC floppies |
 | `oaknut-adfs` | `oaknut.adfs` | `file`, `discimage`, `basic` | ADFS hierarchical directories, free space maps, hard-disc images |
 | `oaknut-afs` | `oaknut.afs` | `file`, `discimage`, `adfs` | Acorn Level 3 File Server private on-disc format (`AFS0` magic). Read/write, `wfsinit` partitioning + initialisation, merge, host-tree import, shipped library images |
