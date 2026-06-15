@@ -29,15 +29,17 @@ from oaknut.basic import detokenise, tokenise  # noqa: E402
 
 _WORKSPACE_ROOT = Path(__file__).resolve().parents[3]
 
-# Programs that do not round-trip byte-exactly yet, with the cause. None
-# is an oaknut.basic defect in the de-tokeniser; they are properties of
-# how these particular programs were tokenised, or open questions about
-# the ROM crunch awaiting confirmation against the BASIC II disassembly:
+# Programs that do not round-trip byte-exactly. None is an oaknut.basic
+# defect: each is a property of how the particular program was tokenised,
+# not of our BASIC II codec (whose crunch is verified vector-for-vector
+# against the ROM in oaknut-basic's test_crunch_rules.py). The causes:
 #
-#   * conditional/embedded keyword — a keyword tokenised where it adjoins
-#     another token or identifier (e.g. THEN=TRUEELSE, GDIV40); the exact
-#     crunch rule for keywords inside/abutting names is still being pinned
-#     down, so re-tokenising can differ.
+#   * foreign tokeniser — the program contains keyword tokens *interior*
+#     to a name run (e.g. G[DIV]40, =[TRUE][ELSE]=), which BASIC II never
+#     produces (a keyword matches only at a run start). These were
+#     tokenised by a different BASIC — note most are on MasterWelcome.adl,
+#     a BBC Master disc (BASIC IV) — so re-crunching under BASIC II rules
+#     correctly yields the literal form.
 #   * non-canonical line-number encoding — the &8D codec is many-to-one;
 #     these were written (by RENUMBER or a tool) with a non-canonical
 #     encoding that decodes correctly but re-encodes to the canonical form.
