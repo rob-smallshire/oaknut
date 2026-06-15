@@ -225,7 +225,12 @@ def _tokenise_body(text: str, *, line_index: int, line_text: str) -> bytearray:
     i = 0
     n = len(text)
     mid = False  # &3B: start-of-statement
-    armed = False  # &3C: next decimal literal is a line-number reference
+    # &3C: next decimal literal is a line-number reference. The body starts
+    # *armed*: on the real machine the leading line number is crunched with
+    # this flag pre-set, and encoding a number does not clear it, so the arm
+    # carries into the body until a name, operator, ':' or disarming keyword
+    # clears it (e.g. `TO1` -> TO, &8D-encoded 1).
+    armed = True
 
     while i < n:
         c = text[i]
@@ -239,7 +244,9 @@ def _tokenise_body(text: str, *, line_index: int, line_text: str) -> bytearray:
             if i < n:
                 out.append(ord('"'))
                 i += 1
-            mid, armed = True, False
+            # A string literal leaves both state flags untouched: it does
+            # not start a fresh statement (so `"s" *` is still OSCLI) and
+            # does not disarm (so `"s" 1` still encodes the 1).
             continue
 
         if c == "&":  # hex constant — copy & and the hex-digit run verbatim
@@ -248,7 +255,7 @@ def _tokenise_body(text: str, *, line_index: int, line_text: str) -> bytearray:
             while i < n and _is_hex_digit(text[i]):
                 out.append(ord(text[i]))
                 i += 1
-            mid, armed = True, False
+            mid = True  # a value, but does not disarm (`&FF 1` encodes the 1)
             continue
 
         if c == " ":  # space — emitted, but leaves the state (incl. armed) alone
@@ -308,17 +315,26 @@ def _tokenise_body(text: str, *, line_index: int, line_text: str) -> bytearray:
                     emit = token + PSEUDO_VAR_ASSIGN_OFFSET
                 out.append(emit)
                 i += consumed
-                if flags & FLAG_MIDDLE:
-                    mid, armed = True, False
+                # Statement state. A START keyword (THEN/ELSE) resets to
+                # start-of-statement and disarms; a MIDDLE keyword (most
+                # commands) goes mid-statement and disarms. A value/function
+                # keyword (TO, DIV, GET$, RND, ...) changes neither — it does
+                # not disarm (so AND0 -> AND, &8D 0) and does not flip to
+                # mid-statement (so a following pseudo-variable stays in its
+                # assignment form). FN/PROC state follows the name below.
                 if flags & FLAG_START:
                     mid, armed = False, False
+                elif flags & FLAG_MIDDLE:
+                    mid, armed = True, False
                 if flags & FLAG_LINE_NUMBER:
                     armed = True
                 if flags & FLAG_FN_PROC:
+                    name_start = i
                     while i < n and _is_name_char(text[i]):
                         out.append(ord(text[i]))
                         i += 1
-                    mid, armed = True, False
+                    if i > name_start:  # consumed an identifier -> read a name
+                        mid, armed = True, False
                 if flags & FLAG_STOP_LINE:
                     while i < n:
                         out.append(ord(text[i]))
@@ -334,9 +350,12 @@ def _tokenise_body(text: str, *, line_index: int, line_text: str) -> bytearray:
             mid, armed = True, False
             continue
 
-        out.append(ord(c))  # operator or any other character
+        # An operator or any other character: goes mid-statement (so a
+        # following pseudo-variable is its function form, and a later '*'
+        # is multiply rather than OSCLI) and disarms.
+        out.append(ord(c))
         i += 1
-        armed = False
+        mid, armed = True, False
 
     return out
 

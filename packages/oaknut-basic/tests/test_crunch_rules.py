@@ -32,12 +32,18 @@ _VECTORS = [
     ("STORE", b" STORE"),
     ("SANDY", b" SANDY"),
     ("XPRINT", b" XPRINT"),
-    # Run-start match, bit 0 clear — keyword emitted, rest of run literal.
+    # Run-start match — keyword emitted, rest of the run literal.
     ("TOTAL", b" \xb8TAL"),
     ("PRINTX", b" \xf1X"),
     ("FORM", b" \xe3M"),
     ("INPUTS", b" \xe8S"),
-    ("AND0", b" \x800"),
+    # Arm carry-over: the leading line number leaves the line-number flag
+    # set, and a value keyword (flag &00) does not clear it, so a following
+    # digit is &8D-encoded (AND0 -> AND, [0]; TO1 -> TO, [1]). A bit-1
+    # keyword (PRINT) disarms, so PRINT1 stays literal.
+    ("AND0", b" \x80\x8dT@@"),
+    ("TO1", b" \xb8\x8dTA@"),
+    ("PRINT1", b" \xf11"),
     # A token ends a run, so the next character starts a fresh run.
     ("DIVMOD", b" \x81\x83"),
     ("TOPRINT", b" \xb8\xf1"),
