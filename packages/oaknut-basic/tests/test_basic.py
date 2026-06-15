@@ -28,16 +28,6 @@ class TestTokeniseStub:
             basic.tokenise("")
 
 
-class TestDetokeniseStub:
-    def test_detokenise_raises_not_implemented(self):
-        with pytest.raises(NotImplementedError):
-            basic.detokenise(b"\x0d\xff")
-
-    def test_detokenise_raises_on_empty_input(self):
-        with pytest.raises(NotImplementedError):
-            basic.detokenise(b"")
-
-
 class TestModuleIsolation:
     """The basic module is destined for a standalone oaknut-basic
     package, so it must not import anything from the rest of

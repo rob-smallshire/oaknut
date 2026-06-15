@@ -30,6 +30,13 @@ from __future__ import annotations
 # de-tokeniser special-cases it (see :mod:`oaknut.basic.linenumber`).
 LINE_NUMBER_TOKEN = 0x8D
 
+# Program-line storage limits. Each line record begins ``&0D <hi> <lo>
+# <length>``; the single length byte counts that 4-byte header plus the
+# body, so a line body is at most 251 bytes.
+HEADER_LENGTH = 4
+MAX_LINE_RECORD_LENGTH = 0xFF
+MAX_BODY_LENGTH = MAX_LINE_RECORD_LENGTH - HEADER_LENGTH
+
 # Flag-byte bits, read straight from the crunch's bit-by-bit dispatch.
 FLAG_CONDITIONAL = 0x01  # suppress token if followed by a name character
 FLAG_MIDDLE = 0x02  # enter middle-of-statement state (and disarm line number)

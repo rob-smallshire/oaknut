@@ -15,12 +15,27 @@ the bytecode). The canonical way to move a BASIC program through a
 disc image is ``DFSPath.read_basic`` / ``write_basic``, which wrap
 these functions with the correct load-address default.
 
-This module is deliberately self-contained and has no runtime
+Beyond ``oaknut-exception`` — the base layer, whose categorised errors
+the tokeniser and de-tokeniser raise — this module has no runtime
 dependencies on any other oaknut package.
 """
 
 from __future__ import annotations
 
+from oaknut.basic.detokeniser import detokenise
+from oaknut.basic.exceptions import (
+    AlreadyNumberedError,
+    BASICError,
+    DetokeniseError,
+    InvalidLineLengthError,
+    LineNumberOrderError,
+    LineNumberRangeError,
+    LineTooLongError,
+    MissingLineMarkerError,
+    TokeniseError,
+    TruncatedProgramError,
+    UnnumberedLineError,
+)
 from oaknut.basic.numbering import (
     DEFAULT_LINE_NUMBER,
     DEFAULT_LINE_STEP,
@@ -39,6 +54,17 @@ __all__ = [
     "DEFAULT_LINE_NUMBER",
     "DEFAULT_LINE_STEP",
     "ELECTRON_BASIC_LOAD_ADDRESS",
+    "AlreadyNumberedError",
+    "BASICError",
+    "DetokeniseError",
+    "InvalidLineLengthError",
+    "LineNumberOrderError",
+    "LineNumberRangeError",
+    "LineTooLongError",
+    "MissingLineMarkerError",
+    "TokeniseError",
+    "TruncatedProgramError",
+    "UnnumberedLineError",
     "detokenise",
     "number_lines",
     "tokenise",
@@ -59,18 +85,3 @@ def tokenise(source: str) -> bytes:
         NotImplementedError: The tokeniser has not yet been implemented.
     """
     raise NotImplementedError("BBC BASIC tokenisation is not yet implemented")
-
-
-def detokenise(data: bytes) -> str:
-    """Detokenise a BBC BASIC program into source text.
-
-    Args:
-        data: Tokenised BASIC program bytes, as read from a disc image.
-
-    Returns:
-        BBC BASIC source as a Unicode string.
-
-    Raises:
-        NotImplementedError: The detokeniser has not yet been implemented.
-    """
-    raise NotImplementedError("BBC BASIC detokenisation is not yet implemented")

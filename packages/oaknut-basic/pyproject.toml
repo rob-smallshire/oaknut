@@ -10,21 +10,24 @@ description = "BBC BASIC tokeniser and detokeniser for Acorn 8-bit and 32-bit BA
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
-requires-python = ">=3.10"
+# oaknut-exception uses except* (PEP 654), so requiring it raises this
+# package's Python floor to 3.11.
+requires-python = ">=3.11"
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
 ]
-dependencies = []
+# The tokeniser and de-tokeniser raise categorised errors from the shared
+# oaknut-exception hierarchy, so the CLI boundary can render them without a
+# traceback. That is the package's only runtime dependency.
+dependencies = ["oaknut-exception>=10.0"]
 
 # The `cli` extra pulls the shared CLI toolkit (Click, asyoulikeit, the
 # Acorn text codec and the categorised-error boundary) so this package
-# can offer the standalone `oaknut-basic` command; the library core never
-# imports it and stays dependency-free.
+# can offer the standalone `oaknut-basic` command.
 [project.optional-dependencies]
 cli = ["oaknut-cli>=10.0"]
 
