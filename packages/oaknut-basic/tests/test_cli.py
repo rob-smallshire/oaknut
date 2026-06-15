@@ -1,14 +1,14 @@
 """Tests for the ``oaknut-basic`` command-line interface.
 
-The CLI is a thin wrapper around the :func:`oaknut.basic.number_lines`
-facade. These tests cover the stream plumbing it adds — stdin/stdout
-pipe usage, file-to-file usage, the option parsing, and the
-byte/text (Acorn-encoding) boundary — rather than re-testing the
-numbering logic itself.
+The CLI is a thin wrapper around the library facades. These tests cover
+the stream plumbing it adds — stdin/stdout pipe usage, file-to-file
+usage, the option parsing, and the byte/text (Acorn-encoding) boundary —
+rather than re-testing the numbering or tokenising logic itself.
 """
 
 from pathlib import Path
 
+import oaknut.basic as basic
 from click.testing import CliRunner
 from oaknut.basic.cli import cli
 
@@ -138,3 +138,65 @@ class TestTopLevel:
         result = runner.invoke(cli, ["--help"])
         assert result.exit_code == 0
         assert "number" in result.output
+
+
+class TestTokeniseCommand:
+    def test_pipe_tokenises_to_stdout(self):
+        runner = CliRunner()
+        result = runner.invoke(cli, ["tokenise"], input=b"10 PRINT\n")
+        assert result.exit_code == 0
+        assert result.stdout_bytes == basic.tokenise("10 PRINT\n")
+
+    def test_file_to_file(self, tmp_path: Path):
+        source_filepath = tmp_path / "prog.bas"
+        output_filepath = tmp_path / "PROG"
+        source_filepath.write_bytes(b"10 PRINT\n20 END\n")
+        runner = CliRunner()
+        result = runner.invoke(cli, ["tokenise", str(source_filepath), str(output_filepath)])
+        assert result.exit_code == 0
+        assert output_filepath.read_bytes() == basic.tokenise("10 PRINT\n20 END\n")
+
+    def test_auto_number(self):
+        runner = CliRunner()
+        result = runner.invoke(cli, ["tokenise", "--start", "10"], input=b"PRINT\nEND\n")
+        assert result.exit_code == 0
+        assert result.stdout_bytes == basic.tokenise("PRINT\nEND\n", start=10)
+
+    def test_already_numbered_under_auto_errors_with_a_note(self):
+        runner = CliRunner()
+        result = runner.invoke(cli, ["tokenise", "--start", "10"], input=b"10 PRINT\n")
+        assert result.exit_code != 0
+        assert "already numbered" in result.output
+        assert "Drop --start/--step" in result.output  # the actionable note
+
+    def test_unnumbered_without_auto_errors(self):
+        runner = CliRunner()
+        result = runner.invoke(cli, ["tokenise"], input=b"PRINT\n")
+        assert result.exit_code != 0
+        assert "no line number" in result.output
+
+
+class TestDetokeniseCommand:
+    def test_pipe_detokenises_to_stdout(self):
+        program = basic.tokenise("10 PRINT")
+        runner = CliRunner()
+        result = runner.invoke(cli, ["detokenise"], input=program)
+        assert result.exit_code == 0
+        # Acorn output: CR line ending.
+        assert result.stdout_bytes == b"10 PRINT\r"
+
+    def test_malformed_program_reports_the_offset(self):
+        runner = CliRunner()
+        result = runner.invoke(cli, ["detokenise"], input=b"\x99")
+        assert result.exit_code != 0
+        assert "offset 0" in result.output
+
+
+class TestTokeniseDetokeniseRoundTrip:
+    def test_cli_round_trip(self):
+        runner = CliRunner()
+        tokenised = runner.invoke(cli, ["tokenise"], input=b"10 PRINT\n20 GOTO 10\n")
+        assert tokenised.exit_code == 0
+        listing = runner.invoke(cli, ["detokenise"], input=tokenised.stdout_bytes)
+        assert listing.exit_code == 0
+        assert listing.stdout_bytes == b"10 PRINT\r20 GOTO 10\r"
