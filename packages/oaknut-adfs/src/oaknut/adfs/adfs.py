@@ -663,7 +663,8 @@ class ADFSPath(AcornPath):
 
         Raises:
             ADFSPathError: If the path doesn't exist or is a directory.
-            NotImplementedError: Until the detokeniser is implemented.
+            DetokeniseError: If the stored program is not valid tokenised
+                BBC BASIC.
         """
         return basic.detokenise(self.read_bytes())
 
@@ -745,7 +746,7 @@ class ADFSPath(AcornPath):
             ADFSPathError: If this path is the root directory.
             ADFSDiscFullError: If the disc has insufficient free space.
             ADFSDirectoryFullError: If the parent directory is full.
-            NotImplementedError: Until the tokeniser is implemented.
+            TokeniseError: If the source is not valid BBC BASIC.
         """
         self.write_bytes(
             basic.tokenise(source),

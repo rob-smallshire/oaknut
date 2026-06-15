@@ -179,12 +179,12 @@ class TestReadText:
 
 
 class TestWriteBasic:
-    def test_write_basic_propagates_not_implemented(self):
-        import oaknut.basic as basic  # noqa: F401 (module reference for docs)
+    def test_write_basic_tokenises_real_source(self):
+        import oaknut.basic as basic
 
         adfs = ADFS.create(ADFS_S)
-        with pytest.raises(NotImplementedError):
-            (adfs.root / "Prog").write_basic("10 PRINT")
+        (adfs.root / "Prog").write_basic("10 PRINT")
+        assert (adfs.root / "Prog").read_bytes() == basic.tokenise("10 PRINT")
 
     def test_write_basic_composes_tokenise_then_write_bytes(self, monkeypatch):
         import oaknut.basic as basic
@@ -229,11 +229,10 @@ class TestWriteBasic:
 
 
 class TestReadBasic:
-    def test_read_basic_propagates_not_implemented(self):
+    def test_read_basic_detokenises_real_program(self):
         adfs = ADFS.create(ADFS_S)
-        (adfs.root / "Prog").write_bytes(b"\x0d\xff")
-        with pytest.raises(NotImplementedError):
-            (adfs.root / "Prog").read_basic()
+        (adfs.root / "Prog").write_basic("10 PRINT\n20 END")
+        assert (adfs.root / "Prog").read_basic().rstrip("\n") == "10 PRINT\n20 END"
 
     def test_read_basic_composes_read_bytes_then_detokenise(self, monkeypatch):
         import oaknut.basic as basic
