@@ -19,6 +19,7 @@ You almost certainly want one of:
 | [`oaknut-extension`](https://pypi.org/project/oaknut-extension/) | Entry-point plug-in framework shared by every extensible axis of the oaknut package family |
 | [`oaknut-file`](https://pypi.org/project/oaknut-file/) | Acorn file metadata handling: INF sidecars, filename encoding, xattrs, and access flags |
 | [`oaknut-filesystem`](https://pypi.org/project/oaknut-filesystem/) | The pluggable filesystem contract for the oaknut family: detection, capabilities, geometry, partitions, and the identification coordinator |
+| [`oaknut-romfs`](https://pypi.org/project/oaknut-romfs/) | Python library for Acorn ROM Filing System (ROMFS) paged-ROM images |
 | [`oaknut-zip`](https://pypi.org/project/oaknut-zip/) | Work with ZIP files containing Acorn computer metadata |
 
 Source: https://github.com/rob-smallshire/oaknut

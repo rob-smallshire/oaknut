@@ -29,6 +29,7 @@ from oaknut.zip import extract_archive
 | [`oaknut-exception`](packages/oaknut-exception/) | `oaknut.exception` | Categorised exceptions and CLI error-reporting boundary for the oaknut package family |
 | [`oaknut-extension`](packages/oaknut-extension/) | `oaknut.extension` | Entry-point plug-in framework shared by every extensible axis of the oaknut package family |
 | [`oaknut-filesystem`](packages/oaknut-filesystem/) | `oaknut.filesystem` | The pluggable filesystem contract for the oaknut family: detection, capabilities, geometry, partitions, and the identification coordinator |
+| [`oaknut-romfs`](packages/oaknut-romfs/) | `oaknut.romfs` | Python library for Acorn ROM Filing System (ROMFS) paged-ROM images |
 
 The dependency arrows run strictly bottom-up: `file → discimage → {dfs, adfs} → afs`, with `basic` feeding into `dfs` and `adfs`, and `zip` depending only on `file`. The `disc` CLI package depends on all library packages.
 
