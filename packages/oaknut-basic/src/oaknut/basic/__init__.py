@@ -59,7 +59,7 @@ from oaknut.basic.numbering import (
 )
 from oaknut.basic.tokeniser import tokenise
 
-__version__ = "12.7.1"
+__version__ = "12.7.2"
 
 # Canonical load addresses for BBC BASIC programs on each host.
 # Programs saved by *SAVE on a real machine use these by default.
