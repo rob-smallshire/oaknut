@@ -27,7 +27,7 @@ dependencies = [
     "oaknut-extension>=10.0",
     "oaknut-file>=10.0",
     "click>=8.1.7",
-    "asyoulikeit>=1.2.0",
+    "asyoulikeit>=1.2.1",
 ]
 
 [project.urls]

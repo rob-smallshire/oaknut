@@ -36,7 +36,7 @@ dependencies = [
     "oaknut-afs[cli]>=10.0",
     "click>=8.1.7",
     "rich>=13.0",
-    "asyoulikeit>=1.2.0",
+    "asyoulikeit>=1.2.1",
     "exit-codes>=1.3",
     "natsort>=8.0",
 ]
