@@ -103,6 +103,17 @@ class TestProbe:
         acorn = [r for r in results if r.filesystem == "acorn-dfs"]
         assert acorn, f"acorn-dfs not identified; got {[r.filesystem for r in results]}"
 
+    def test_identifies_oxford_pascal_40_track(self):
+        # The 40-track Oxford Pascal disc has a conventional catalogue (16
+        # files) and identifies cleanly; kept in the corpus alongside its
+        # 80-track sibling to guard the standard path against regressions.
+        image_filepath = (
+            REFERENCE_IMAGES_DIRPATH / "oxford-pascal" / "OXFORD PASCAL V2.1c (40 TRACK).SSD"
+        )
+        results = identify(image_filepath)
+        acorn = [r for r in results if r.filesystem == "acorn-dfs"]
+        assert acorn, f"acorn-dfs not identified; got {[r.filesystem for r in results]}"
+
     def test_top_bit_set_title_still_disqualifies(self, tmp_path):
         # The 7-bit-cleanliness of the title remains a hard signal: a
         # high-bit byte in the title field is not DFS, so even an
