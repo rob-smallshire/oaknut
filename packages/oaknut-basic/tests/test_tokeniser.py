@@ -118,6 +118,14 @@ class TestSuppressionContexts:
     def test_tokens_inside_a_string_are_literal(self):
         assert _body('PRINT "GOTO"') == b'\xf1 "GOTO"'
 
+    def test_unterminated_string_copies_rest_of_line_verbatim(self):
+        # No closing quote: the ROM copies the rest of the line literally —
+        # keyword matching never resumes, so the GOTO stays text. Verified
+        # byte-for-byte against the BASIC II ROM.
+        assert _body('PRINT "abGOTO') == b'\xf1 "abGOTO'
+        program = tokenise('10 PRINT "abGOTO')
+        assert tokenise(detokenise(program)) == program
+
     def test_statement_leading_star_is_literal(self):
         assert _body("*CAT") == b"*CAT"
 

@@ -72,6 +72,7 @@ _GOLDEN = [
     ('PRINT "GOTO 10"', b' \xf1 "GOTO 10"'),
     ('X=&FF+&1A2B', b' X=&FF+&1A2B'),
     ('Y=1.5E3+.25', b' Y=1.5E3+.25'),
+    ('PRINT "unterminated GOTO', b' \xf1 "unterminated GOTO'),
     ('REM this has PRINT GOTO 10', b' \xf4 this has PRINT GOTO 10'),
     ('DATA 1,2,PRINT,3:X=4', b' \xdc 1,2,PRINT,3:X=4'),
     ('*CAT', b' *CAT'),

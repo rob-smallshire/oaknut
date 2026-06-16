@@ -34,8 +34,9 @@ INPUTS = [
     "X=PTR#3", "HIMEM=&7C00", "LOMEM=PAGE", "? ERR PAGE", "GET$;,PTR",
     # Value keywords do not flip to mid-statement.
     "INSTR(A$,B$) PTR", "OPENOUT LOMEM", "SQR RAD PTR", "RND * SQR ENDPROC",
-    # Strings preserve state; hex too.
+    # Strings preserve state; hex too. A never-closed quote copies to EOL.
     'A$="he""llo"', 'PRINT "GOTO 10"', "X=&FF+&1A2B", "Y=1.5E3+.25",
+    'PRINT "unterminated GOTO',
     # Suppression contexts.
     "REM this has PRINT GOTO 10", "DATA 1,2,PRINT,3:X=4", "*CAT", "*FX 21,0",
     "X=3*4", "PRINT~&FF", "VDU 26,12;0;",

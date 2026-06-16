@@ -42,6 +42,7 @@ _GOLDEN = [
     (b'\r\x00\n\x12 \xfb 129:\xe6 0,1:\xdb\r\xff', '10 COLOUR 129:GCOL 0,1:CLS\n'),
     (b"\r\x00\n\x10 \xeb 7:\xf1'\x8a10)'\r\xff", "10 MODE 7:PRINT'TAB(10)'\n"),
     (b'\r\x00\n\x17 ?(addr%+1)=base%?2\r\xff', '10 ?(addr%+1)=base%?2\n'),
+    (b'\r\x00\n\x19 \xf1 "unterminated GOTO\r\xff', '10 PRINT "unterminated GOTO\n'),
 ]
 
 

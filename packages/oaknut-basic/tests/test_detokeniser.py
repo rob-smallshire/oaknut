@@ -7,6 +7,7 @@ malformed-input guards.
 """
 
 import pytest
+from oaknut.basic import tokenise
 from oaknut.basic.detokeniser import detokenise
 from oaknut.basic.exceptions import (
     DetokeniseError,
@@ -67,6 +68,25 @@ class TestBodyExpansion:
         # "a""b" is the BASIC source for the string  a"b .
         body = b"\x22\x61\x22\x22\x62\x22"
         assert detokenise(_program((10, body))) == '10"a""b"\n'
+
+    def test_unterminated_string_keeps_token_bytes_raw(self):
+        # An opening quote that never closes: every byte to end of line
+        # prints raw, so &E5/&80 (GOTO/AND) stay characters rather than
+        # expanding. Matches the BASIC II ROM's LIST byte-for-byte.
+        body = b"\x20\xf1\x20\x22\xe5\x80"  # space PRINT space " <GOTO> <AND>
+        result = detokenise(_program((10, body)))
+        assert result == "10 PRINT " + '"' + chr(0xE5) + chr(0x80) + "\n"
+        assert "GOTO" not in result and "AND" not in result
+
+    def test_unused_gap_token_is_preserved_as_a_raw_byte(self):
+        # &CE is the unused gap in the token table; no valid program
+        # contains it. We render it as its raw byte so a hand-crafted
+        # stream still round-trips — a deliberate divergence from the ROM,
+        # whose LIST drops &CE entirely (a lossy display of an impossible
+        # token).
+        program = _program((10, b"\x20\xf1\x20\xce"))  # space PRINT space <CE>
+        assert detokenise(program) == "10 PRINT " + chr(0xCE) + "\n"
+        assert tokenise(detokenise(program)) == program
 
 
 class TestMalformed:
