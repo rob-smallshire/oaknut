@@ -90,9 +90,16 @@ def _propose_geometry(size: int) -> tuple[Geometry | None, tuple[Geometry, ...]]
         return _GEOMETRY_PRESETS["80t-ss"], (_GEOMETRY_PRESETS["40t-ds"],)
     if size == _GEOMETRY_PRESETS["80t-ds"].image_size:
         return _GEOMETRY_PRESETS["80t-ds"], ()
-    if size > 0 and size % BYTES_PER_SECTOR == 0:
-        sectors = size // BYTES_PER_SECTOR
-        spec = SurfaceSpec(1, sectors, BYTES_PER_SECTOR, 0, size)
+    # Any other length: floor to whole sectors, matching how
+    # ``_flat_surface`` reads the image for catalogue matching. Some
+    # images carry a trailing fragment (the Oxford Pascal 40-track disc
+    # is 400 whole sectors plus a 128-byte trailer); the filing system
+    # only addresses whole sectors, so the remainder is ignored rather
+    # than left to crash a geometry-less open.
+    sectors = size // BYTES_PER_SECTOR
+    if sectors >= _MIN_SECTORS:
+        usable = sectors * BYTES_PER_SECTOR
+        spec = SurfaceSpec(1, sectors, BYTES_PER_SECTOR, 0, usable)
         return Geometry((spec,), label=f"{sectors} sectors, single-sided"), ()
     return None, ()
 

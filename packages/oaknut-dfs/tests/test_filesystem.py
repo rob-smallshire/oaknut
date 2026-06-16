@@ -103,16 +103,26 @@ class TestProbe:
         acorn = [r for r in results if r.filesystem == "acorn-dfs"]
         assert acorn, f"acorn-dfs not identified; got {[r.filesystem for r in results]}"
 
-    def test_identifies_oxford_pascal_40_track(self):
-        # The 40-track Oxford Pascal disc has a conventional catalogue (16
-        # files) and identifies cleanly; kept in the corpus alongside its
-        # 80-track sibling to guard the standard path against regressions.
+    def test_opens_oxford_pascal_40_track(self):
+        # The 40-track Oxford Pascal disc is 102528 bytes — 400 whole
+        # sectors plus a 128-byte trailer, so its length is not a clean
+        # multiple of the sector size. Identification matched on the
+        # floored sector count, but geometry proposal returned None for
+        # the odd length, so opening (what `disc ls` does) crashed. A
+        # disc that identifies must also propose a geometry and open.
         image_filepath = (
             REFERENCE_IMAGES_DIRPATH / "oxford-pascal" / "OXFORD PASCAL V2.1c (40 TRACK).SSD"
         )
         results = identify(image_filepath)
         acorn = [r for r in results if r.filesystem == "acorn-dfs"]
         assert acorn, f"acorn-dfs not identified; got {[r.filesystem for r in results]}"
+        assert acorn[0].geometry is not None, "no geometry proposed for an odd-length image"
+
+        filesystem = create_filesystem("acorn-dfs")
+        with reader_for(image_filepath) as reader:
+            mount = filesystem.open(reader, filesystem.probe(reader).geometry)
+            names = {entry.name for entry in mount.iter_entries(mount.path_root())}
+        assert names, "expected catalogue entries"
 
     def test_top_bit_set_title_still_disqualifies(self, tmp_path):
         # The 7-bit-cleanliness of the title remains a hard signal: a

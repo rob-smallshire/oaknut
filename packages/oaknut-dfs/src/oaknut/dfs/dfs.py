@@ -791,11 +791,15 @@ class DFS:
 
         Accepts buffers that are shorter than the format requires, provided
         the size is a whole number of sectors (a multiple of 256 bytes).
-        Full-size buffers are returned unchanged.
+        Full-size buffers are returned unchanged, and an oversized buffer
+        is clamped to the format's region — the surface addresses only
+        whole sectors up to ``image_size``, so a trailing fragment (some
+        images carry a trailer beyond the last whole sector) is ignored.
 
         Raises:
-            ValueError: If the buffer size is not a multiple of the sector
-                size, or if the buffer is empty.
+            ValueError: If the buffer is empty, or is shorter than the
+                format yet not a whole number of sectors (so it cannot be
+                padded cleanly).
         """
         buffer_size = len(buffer)
         expected_size = disc_format.image_size
@@ -806,14 +810,16 @@ class DFS:
         if buffer_size == 0:
             raise ValueError("Buffer is empty")
 
+        if buffer_size > expected_size:
+            # Clamp to the format's whole-sector region; a ragged trailing
+            # fragment (a 128-byte trailer, say) is not part of the disc.
+            return buffer[:expected_size]
+
         if buffer_size % BYTES_PER_SECTOR != 0:
             raise ValueError(
                 f"Buffer size {buffer_size} is not a multiple of "
                 f"the sector size ({BYTES_PER_SECTOR} bytes)"
             )
-
-        if buffer_size > expected_size:
-            return buffer
 
         padded = bytearray(expected_size)
         padded[:buffer_size] = buffer
