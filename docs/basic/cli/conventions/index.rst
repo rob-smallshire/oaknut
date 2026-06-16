@@ -9,4 +9,5 @@ command's reference entry links here rather than restating them.
 
    encoding
    auto-numbering
+   output-formats
    exit-codes

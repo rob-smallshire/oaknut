@@ -16,6 +16,42 @@ Conversion functions
 .. autofunction:: oaknut.basic.number_lines
 
 
+Data files
+----------
+
+The channel-based files BBC BASIC creates with ``OPENOUT`` and writes
+with ``PRINT#`` / ``BPUT#``. The module-level :func:`~oaknut.basic.datafile.open`
+mirrors the built-in ``open``: a ``mode`` string selects a reader, a
+writer, or a combined read/write object, and accepts a path or an
+already-open binary stream.
+
+.. autofunction:: oaknut.basic.datafile.open
+
+The three classes form a diamond: a shared base carries positioning and
+lifecycle, the reader and writer add their record vocabularies, and the
+combined class inherits both for the update modes.
+
+.. autoclass:: oaknut.basic.BbcBasicDataReader
+   :members:
+
+.. autoclass:: oaknut.basic.BbcBasicDataWriter
+   :members:
+
+.. autoclass:: oaknut.basic.BbcBasicDataFile
+   :members:
+
+.. autoclass:: oaknut.basic.BbcBasicDataFileBase
+   :members:
+
+A real number is stored in the BBC's packed 5-byte format. These two
+functions convert between that format and a Python ``float`` in the
+natural exponent-first byte order, for reuse beyond data files:
+
+.. autofunction:: oaknut.basic.pack_float5
+
+.. autofunction:: oaknut.basic.unpack_float5
+
+
 Constants
 ---------
 
@@ -57,3 +93,13 @@ De-tokenising — token stream in:
 .. autoexception:: oaknut.basic.MissingLineMarkerError
 .. autoexception:: oaknut.basic.TruncatedProgramError
 .. autoexception:: oaknut.basic.InvalidLineLengthError
+
+Data files — reading and writing records:
+
+.. autoexception:: oaknut.basic.DataFileError
+.. autoexception:: oaknut.basic.UnknownTagError
+.. autoexception:: oaknut.basic.DataFileTypeMismatchError
+.. autoexception:: oaknut.basic.TruncatedRecordError
+.. autoexception:: oaknut.basic.IntegerRangeError
+.. autoexception:: oaknut.basic.StringTooLongError
+.. autoexception:: oaknut.basic.Float5RangeError
