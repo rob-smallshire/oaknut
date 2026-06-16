@@ -75,15 +75,27 @@ class AcornDFSCatalogue(Catalogue):
         sector0 = surface.sector_range(0, 1)
         sector1 = surface.sector_range(1, 1)
 
-        # Check 1: Offset 0x001 - 9 bytes of title without top bit set and >31 or =0
+        # Checks 1 & 2: the 12-byte title (nine bytes from sector 0,
+        # offset 0x001, plus four from sector 1, offset 0x100). The title
+        # is 7-bit ASCII, so a top-bit-set byte is not DFS and disqualifies
+        # outright. A control character (byte <= 31) is unconventional but
+        # real — a commercial disc such as Oxford Pascal embeds a
+        # decorative form-feed, CR and LF — so it does not disqualify on
+        # its own; instead it falls back to corroborating the catalogue
+        # against the real surface (Check 5b), like an implausible total.
+        needs_corroboration = False
         for i in range(1, 10):
-            if not cls._is_valid_title_char(sector0[i]):
+            kind = cls._title_char_kind(sector0[i])
+            if kind == "reject":
                 return None
-
-        # Check 2: Offset 0x100 - 4 bytes of title without top bit set and >31 or =0
+            if kind == "control":
+                needs_corroboration = True
         for i in range(4):
-            if not cls._is_valid_title_char(sector1[i]):
+            kind = cls._title_char_kind(sector1[i])
+            if kind == "reject":
                 return None
+            if kind == "control":
+                needs_corroboration = True
 
         # Check 3: Offset 0x105 - bits 0,1,2 should be clear (multiple of 8)
         num_files_byte = sector1[5]
@@ -109,13 +121,18 @@ class AcornDFSCatalogue(Catalogue):
         # surface (Check 5b) rather than rejecting outright.
         total_sectors = ((boot_sectors_byte & 0x03) << 8) | sector1[7]
         if total_sectors < 10 or total_sectors % 10 != 0:
-            # Check 5b: the file table must be internally consistent with
-            # the actual surface — at least one file, every entry living
-            # in the data area (sector >= 2) and ending within the
-            # surface. Random data almost never satisfies this on top of
-            # the title/count/flag checks already passed.
-            if not cls._file_table_fits_surface(surface, sector1, num_files):
-                return None
+            needs_corroboration = True
+
+        # Check 5b: when a soft signal is off — an implausible declared
+        # total or a control character in the title — the file table must
+        # be internally consistent with the actual surface: at least one
+        # file, every entry living in the data area (sector >= 2) and
+        # ending within the surface. Random data almost never satisfies
+        # this on top of the count/flag/7-bit checks already passed.
+        if needs_corroboration and not cls._file_table_fits_surface(
+            surface, sector1, num_files
+        ):
+            return None
 
         # A truncated image declares its full (untruncated) sector count
         # while the file holds only the used sectors; the filing system
@@ -147,25 +164,21 @@ class AcornDFSCatalogue(Catalogue):
         return [f"well-formed Acorn DFS catalogue ({num_files} file{plural} in sectors 0–1)"]
 
     @staticmethod
-    def _is_valid_title_char(byte: int) -> bool:
+    def _title_char_kind(byte: int) -> str:
+        """Classify a title byte as ``"clean"``, ``"control"`` or ``"reject"``.
+
+        The title is 7-bit ASCII. A top-bit-set byte is not DFS and
+        ``"reject"``\\ s the catalogue. ``0`` (NUL padding) and printable
+        bytes (>= 32) are ``"clean"``. A control character (1–31) is
+        ``"control"``: tolerated, but only with file-table corroboration,
+        since a decorative control character in a real title is rare and
+        also resembles garbage.
         """
-        Check if byte is valid for title character.
-
-        Per PDF: no top bit set, and either =0 (padding) or >31 (printable).
-
-        Args:
-            byte: Byte value to check
-
-        Returns:
-            True if valid title character
-        """
-        if byte & 0x80:  # Top bit set
-            return False
-        if byte == 0:  # Null padding is ok
-            return True
-        if byte <= 31:  # Control characters not ok
-            return False
-        return True
+        if byte & 0x80:  # Top bit set — not 7-bit ASCII, not DFS.
+            return "reject"
+        if byte == 0 or byte > 31:  # NUL padding or printable.
+            return "clean"
+        return "control"
 
     @staticmethod
     def _file_table_fits_surface(surface: Surface, sector1: Sequence[int], num_files: int) -> bool:

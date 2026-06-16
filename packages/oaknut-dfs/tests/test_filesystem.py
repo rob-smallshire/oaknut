@@ -89,6 +89,32 @@ class TestProbe:
         acorn = [r for r in results if r.filesystem == "acorn-dfs"]
         assert acorn, f"acorn-dfs not identified; got {[r.filesystem for r in results]}"
 
+    def test_identifies_disc_with_control_characters_in_title(self):
+        # The Oxford Pascal 80-track disc carries decorative control
+        # characters in its 12-byte title (a form-feed, CR and LF around
+        # "Pascal"). These are 7-bit-clean, so the catalogue is valid DFS
+        # — 22 files, 800 sectors matching the surface — but the title
+        # heuristic used to reject any byte <= 31. A control-character
+        # title must not disqualify a well-formed catalogue.
+        image_filepath = (
+            REFERENCE_IMAGES_DIRPATH / "oxford-pascal" / "OXFORD PASCAL (80 TRACK).SSD"
+        )
+        results = identify(image_filepath)
+        acorn = [r for r in results if r.filesystem == "acorn-dfs"]
+        assert acorn, f"acorn-dfs not identified; got {[r.filesystem for r in results]}"
+
+    def test_top_bit_set_title_still_disqualifies(self, tmp_path):
+        # The 7-bit-cleanliness of the title remains a hard signal: a
+        # high-bit byte in the title field is not DFS, so even an
+        # otherwise well-formed catalogue must be rejected. (A control
+        # character is tolerated; a top-bit-set byte is not.)
+        image_filepath = _make_dfs_image(tmp_path)
+        assert any(r.filesystem == "acorn-dfs" for r in identify(image_filepath))
+        raw = bytearray(image_filepath.read_bytes())
+        raw[1] = 0xC1  # top-bit-set byte in the title field
+        image_filepath.write_bytes(raw)
+        assert not any(r.filesystem == "acorn-dfs" for r in identify(image_filepath))
+
 
 class TestMount:
     def test_open_lists_and_reads(self, tmp_path):
