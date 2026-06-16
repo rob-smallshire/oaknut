@@ -1,6 +1,9 @@
-# Proposal: deterministic mmap teardown via context-managed buffer ownership
+# Deterministic mmap teardown via context-managed buffer ownership
 
-Status: draft for review (branch `mmap-close-on-exit`). No production code changed yet.
+Status: **DFS done and merged.** ADFS/AFS remain — tracked as
+[issue #38](https://github.com/rob-smallshire/oaknut/issues/38). See the
+"Implementation note" at the end for what is complete and what the
+remaining ADFS/AFS work requires.
 
 ## Symptom
 
@@ -170,7 +173,8 @@ deterministically needs a real **release cascade**:
   `mm.close()`.
 
 This is sizeable and touches the ADFS/AFS internals broadly, with real
-regression risk. The DFS fix (the original Windows symptom) ships first;
-ADFS/AFS is tracked as the follow-up above. `open_image_mmap`'s
-`mm.close()` and step 5 (`ImageReader` un-suppress) wait until ADFS/AFS
-release cleanly, since both share that path.
+regression risk. The DFS fix (the original Windows symptom) is merged;
+ADFS/AFS is tracked in
+[issue #38](https://github.com/rob-smallshire/oaknut/issues/38).
+`open_image_mmap`'s `mm.close()` and step 5 (`ImageReader` un-suppress)
+wait until ADFS/AFS release cleanly, since both share that path.
