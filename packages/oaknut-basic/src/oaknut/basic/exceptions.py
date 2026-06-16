@@ -195,6 +195,26 @@ class TruncatedProgramError(DetokeniseError):
         self.detail = detail
 
 
+class Float5RangeError(BASICError):
+    """A Python float is too large for the 5-byte BBC REAL format.
+
+    The packed format carries an excess-128 exponent, so the largest
+    representable magnitude is just under ``2**127``. Underflow is *not*
+    an error — the format has no denormals, so tiny magnitudes flush to
+    zero — but overflow (and any non-finite value) cannot be stored.
+
+    Attributes:
+        value: The offending Python float.
+    """
+
+    def __init__(self, value: float) -> None:
+        super().__init__(
+            f"{value!r} cannot be represented as a 5-byte BBC REAL "
+            f"(magnitude must be finite and below 2**127)"
+        )
+        self.value = value
+
+
 class InvalidLineLengthError(DetokeniseError):
     """A line's length byte is impossible.
 
