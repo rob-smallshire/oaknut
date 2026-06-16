@@ -260,6 +260,30 @@ class TestControlCharacterRendering:
         assert len(title_lines) == 1, result.output
         assert "Pascal" in title_lines[0], repr(result.output)
 
+    def test_ls_display_heading_uses_control_pictures(
+        self, runner: CliRunner, tmp_path: Path
+    ) -> None:
+        # The disc title appears in the ls heading (the table title, not a
+        # cell). Humans must see control pictures there too, never raw
+        # cursor-driving controls.
+        image_filepath = self._control_titled_image(tmp_path)
+        result = runner.invoke(cli, ["ls", "--as", "display", str(image_filepath)])
+        assert result.exit_code == 0, result.output
+        assert "␌Pascal␊␍" in result.output
+        for raw_control in ("\x0c", "\x0a", "\x0d"):
+            assert raw_control not in result.output.replace("\n", "")
+
+    def test_ls_json_heading_preserves_raw_bytes(
+        self, runner: CliRunner, tmp_path: Path
+    ) -> None:
+        import json as _json
+
+        image_filepath = self._control_titled_image(tmp_path)
+        result = runner.invoke(cli, ["ls", "--as", "json", str(image_filepath)])
+        assert result.exit_code == 0, result.output
+        title = _json.loads(result.output)["reports"]["entries"]["metadata"]["title"]
+        assert "\x0cPascal\n\r" in title
+
 
 # ---------------------------------------------------------------------------
 # Issue #12 — disc ls and disc stat must format AFS access bytes using the

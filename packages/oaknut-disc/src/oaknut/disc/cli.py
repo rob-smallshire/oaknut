@@ -292,6 +292,10 @@ def ls(
     # Parentheses, not brackets: the report title is rendered through
     # Rich, which would silently consume ``[name]`` as console markup.
     table_title += f" ({resolved.filesystem})"
+    # The disc title may carry control characters; render them as control
+    # pictures for humans while machine formatters keep the raw heading
+    # (asyoulikeit collapses a ByAudience title per audience).
+    table_title = text_cell(table_title)
 
     description = f"Free: {mount.free_bytes():,} bytes" if isinstance(mount, FreeSpace) else None
 
@@ -380,7 +384,7 @@ def tree(compound_path: str, force_filesystem: str | None, force_geometry: str |
         if not mount.exists(target):
             raise click.ClickException(f"path not found: {target or '$'}")
         entry = mount.stat(target)
-        root = tc.add_root(name=entry.name or resolved.image.name)
+        root = tc.add_root(name=text_cell(entry.name or resolved.image.name))
         if entry.is_dir:
             _attach_children_mount(mount, target, root)
     else:
@@ -486,7 +490,7 @@ def stat(compound_path: str, force_filesystem: str | None, force_geometry: str |
         raise click.ClickException(f"path not found: {bare}")
     entry = mount.stat(bare)
 
-    tc = TableContent(title=entry.name, present_transposed=True)
+    tc = TableContent(title=text_cell(entry.name), present_transposed=True)
     tc.add_column("name", "Name", header=True)
     row: dict = {"name": text_cell(entry.name)}
     if isinstance(mount, AcornMetadata) and not entry.is_dir:
