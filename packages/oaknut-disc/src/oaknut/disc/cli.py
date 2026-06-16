@@ -202,6 +202,43 @@ cli.add_command(list_filesystems_command(), name="list-filesystems")
 cli.add_command(describe_filesystem_command(), name="describe-filesystem")
 
 
+def force_options(func):
+    """Add the ``--filesystem`` / ``--geometry`` interpretation overrides.
+
+    Content-based identification is the default, but a read command may
+    be handed an image that no installed filesystem recognises (a
+    non-standard catalogue, a raw dump). These options bypass detection:
+    ``--filesystem`` names the filesystem to open the image as, and
+    ``--geometry`` pins the physical layout when the extension cannot
+    imply one. Both feed :func:`resolve_mount`'s forcing path; a command
+    receives them as ``force_filesystem`` / ``force_geometry`` keywords.
+    """
+    func = click.option(
+        "--filesystem",
+        "force_filesystem",
+        default=None,
+        metavar="NAME",
+        help=(
+            "Open the image as this filesystem instead of identifying it "
+            "by content (e.g. acorn-dfs, adfs). Run `disc list-filesystems` "
+            "to see the installed names."
+        ),
+    )(func)
+    func = click.option(
+        "--geometry",
+        "force_geometry",
+        default=None,
+        metavar="SPEC",
+        help=(
+            "Pin the physical geometry when forcing a filesystem on an "
+            "extension that implies none (a preset like 80t-ds, or a "
+            "parameterised form). Run `disc describe-filesystem NAME` for a "
+            "filesystem's geometries."
+        ),
+    )(func)
+    return func
+
+
 # ---------------------------------------------------------------------------
 # Inspection commands
 # ---------------------------------------------------------------------------
@@ -216,8 +253,14 @@ cli.add_command(describe_filesystem_command(), name="describe-filesystem")
     is_flag=True,
     help="Show the raw access byte as two hex digits alongside the symbolic form.",
 )
+@force_options
 @report_output(reports={"entries": "Directory entries with load/exec/length/attributes."})
-def ls(compound_path: str, show_access_byte: bool):
+def ls(
+    compound_path: str,
+    show_access_byte: bool,
+    force_filesystem: str | None,
+    force_geometry: str | None,
+):
     """List directory contents (Acorn alias: *CAT).
 
     Accepts a ``COMPOUND_PATH`` (the in-image ``INNER_PATH`` is optional and defaults to the root).
@@ -226,7 +269,9 @@ def ls(compound_path: str, show_access_byte: bool):
     from oaknut.file import Access
     from oaknut.filesystem import AcornMetadata, FreeSpace, Titled
 
-    resolved = resolve_mount(compound_path)
+    resolved = resolve_mount(
+        compound_path, force_filesystem=force_filesystem, force_geometry=force_geometry
+    )
     mount = resolved.mount
     target = resolved.path or mount.path_root()
 
@@ -306,8 +351,9 @@ _alias("*CAT", "ls")
 
 @cli.command()
 @click.argument("compound_path", metavar="OUTER_PATH:INNER_PATH")
+@force_options
 @report_output(reports={"tree": "Hierarchical directory listing."})
-def tree(compound_path: str):
+def tree(compound_path: str, force_filesystem: str | None, force_geometry: str | None):
     """Display recursive directory tree.
 
     Accepts a ``COMPOUND_PATH`` (the in-image ``INNER_PATH`` is optional and defaults to the root).
@@ -325,7 +371,9 @@ def tree(compound_path: str):
 
     if path:
         # Explicit path (possibly with a partition prefix) — that subtree only.
-        resolved = resolve_mount(compound_path)
+        resolved = resolve_mount(
+            compound_path, force_filesystem=force_filesystem, force_geometry=force_geometry
+        )
         mount = resolved.mount
         target = resolved.path or mount.path_root()
         if not mount.exists(target):
@@ -335,22 +383,31 @@ def tree(compound_path: str):
         if entry.is_dir:
             _attach_children_mount(mount, target, root)
     else:
-        _build_tree_whole_image(compound_path, tc)
+        _build_tree_whole_image(compound_path, tc, force_filesystem, force_geometry)
 
     return Reports(tree=Report(data=tc))
 
 
-def _build_tree_whole_image(compound_path: str, tc) -> None:
+def _build_tree_whole_image(
+    compound_path: str, tc, force_filesystem: str | None, force_geometry: str | None
+) -> None:
     """Populate *tc* with one root per image, labelled partitions beneath.
 
     Each identified partition is mounted through the coordinator and its
     root contents attached; the partition label is its selector (``adfs``,
     ``afs``, …). A single-partition image folds its contents straight
-    under the image root with no partition label.
+    under the image root with no partition label. A forced filesystem
+    bypasses partition discovery — the whole image is the one mount.
     """
     outer_filepath, _ = parse_compound_path(compound_path)
-    selectors = partition_selectors(outer_filepath)
     image_root = tc.add_root(name=outer_filepath.name)
+    if force_filesystem is not None:
+        resolved = resolve_mount(
+            compound_path, force_filesystem=force_filesystem, force_geometry=force_geometry
+        )
+        _attach_children_mount(resolved.mount, resolved.mount.path_root(), image_root)
+        return
+    selectors = partition_selectors(outer_filepath)
     multi = len(selectors) > 1
     for selector in selectors:
         resolved = resolve_mount(f"{outer_filepath}:{selector}:")
@@ -397,7 +454,8 @@ def _attach_children_mount(mount, path: str, parent_tree_node) -> None:
         "file": "Per-file metadata when the path denotes a file.",
     }
 )
-def stat(compound_path: str):
+@force_options
+def stat(compound_path: str, force_filesystem: str | None, force_geometry: str | None):
     """Disc summary (no path) or file metadata (with path). Alias: *INFO.
 
     With no in-partition path, summarises the disc by walking its
@@ -417,9 +475,11 @@ def stat(compound_path: str):
     _selector, bare = split_selector(inner_path)
 
     if not bare:
-        return _stat_disc(compound_path, outer_filepath)
+        return _stat_disc(compound_path, outer_filepath, force_filesystem, force_geometry)
 
-    resolved = resolve_mount(compound_path)
+    resolved = resolve_mount(
+        compound_path, force_filesystem=force_filesystem, force_geometry=force_geometry
+    )
     mount = resolved.mount
     if not mount.exists(bare):
         raise click.ClickException(f"path not found: {bare}")
@@ -450,7 +510,12 @@ def stat(compound_path: str):
 _alias("*INFO", "stat")
 
 
-def _stat_disc(compound_path: str, outer_filepath: Path):
+def _stat_disc(
+    compound_path: str,
+    outer_filepath: Path,
+    force_filesystem: str | None = None,
+    force_geometry: str | None = None,
+):
     """Summarise a disc by navigating its partition structure.
 
     A single-partition image yields one ``partition_1`` block carrying
@@ -459,12 +524,21 @@ def _stat_disc(compound_path: str, outer_filepath: Path):
     (the host's physical geometry + total size) plus one block per
     partition; the partition sizes sum to the disc (issue #7). An
     explicit partition prefix scopes the view to that one partition,
-    keyed by its position (``afs:`` → ``partition_2``).
+    keyed by its position (``afs:`` → ``partition_2``). A forced
+    filesystem bypasses partition discovery — the whole image is a
+    single ``partition_1``.
     """
     from asyoulikeit.tabular_data import Report, Reports
     from oaknut.filesystem import PhysicalGeometry
 
     from .mount import split_selector
+
+    if force_filesystem is not None:
+        resolved = resolve_mount(
+            compound_path, force_filesystem=force_filesystem, force_geometry=force_geometry
+        )
+        block = _partition_block(resolved.mount, force_filesystem.upper(), geometry=True)
+        return Reports(partition_1=Report(data=block))
 
     selector, _ = split_selector(parse_compound_path(compound_path)[1])
     selectors = partition_selectors(outer_filepath)
@@ -589,7 +663,8 @@ def _partition_block(mount, title: str, *, geometry: bool = False, range_text: s
 
 @cli.command()
 @click.argument("compound_path", metavar="OUTER_PATH:INNER_PATH")
-def cat(compound_path: str) -> None:
+@force_options
+def cat(compound_path: str, force_filesystem: str | None, force_geometry: str | None) -> None:
     """Dump file contents to stdout as raw bytes.
 
     Accepts a ``COMPOUND_PATH``.
@@ -601,7 +676,9 @@ def cat(compound_path: str) -> None:
     _outer_filepath, path = parse_compound_path(compound_path)
     if not path:
         raise click.UsageError("PATH is required")
-    resolved = resolve_mount(compound_path)
+    resolved = resolve_mount(
+        compound_path, force_filesystem=force_filesystem, force_geometry=force_geometry
+    )
     mount = resolved.mount
     target = resolved.path or mount.path_root()
     if not mount.exists(target):
@@ -652,7 +729,13 @@ def _translate_line_endings(data: bytes, mode: str) -> bytes:
         "lf/crlf/cr = force a specific style; keep = no translation."
     ),
 )
-def type_(compound_path: str, line_endings: str) -> None:
+@force_options
+def type_(
+    compound_path: str,
+    line_endings: str,
+    force_filesystem: str | None,
+    force_geometry: str | None,
+) -> None:
     """Display a text file with line endings translated for the host.
 
     Accepts a ``COMPOUND_PATH``.
@@ -668,7 +751,9 @@ def type_(compound_path: str, line_endings: str) -> None:
     _outer_filepath, path = parse_compound_path(compound_path)
     if not path:
         raise click.UsageError("PATH is required")
-    resolved = resolve_mount(compound_path)
+    resolved = resolve_mount(
+        compound_path, force_filesystem=force_filesystem, force_geometry=force_geometry
+    )
     mount = resolved.mount
     target = resolved.path or mount.path_root()
     if not mount.exists(target):

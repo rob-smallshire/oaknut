@@ -109,6 +109,19 @@ def resolve_mount(
             )
             if geometry is None:
                 geometry = _geometry_from_sidecar(outer_filepath)
+            if geometry is None:
+                # Forcing means "open it as this even though detection
+                # declined"; with no proposed, sidecar or explicit
+                # geometry, fall back to the filesystem's default for the
+                # extension (.ssd → 80T SS, .adl → ADFS-L, …) so an
+                # unrecognised but well-shaped image still opens.
+                geometry = filesystem.default_geometry(outer_filepath.suffix.lower())
+            if geometry is None:
+                raise click.ClickException(
+                    f"cannot determine geometry for {force_filesystem} from "
+                    f"{outer_filepath.name!r}; pass --geometry "
+                    f"(run `disc describe-filesystem {force_filesystem}` for options)"
+                )
             ambiguities = _ambiguities(force_geometry, proposed)
             surface, geometry, in_path = filesystem.split_volume(in_path, geometry, ambiguities)
             mount = filesystem.open(reader, geometry, surface=surface)

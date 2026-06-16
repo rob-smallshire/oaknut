@@ -135,6 +135,75 @@ class TestLs:
         assert "0x00008023" in result.output
 
 
+class TestForceFilesystem:
+    """``--filesystem`` / ``--geometry`` force the interpretation of an
+    image that content-based identification cannot recognise — the
+    escape hatch the unrecognised-image error advertises.
+    """
+
+    @staticmethod
+    def _unidentifiable_ssd(tmp_path: Path) -> Path:
+        # An all-zero 200K image: a blank surface that no installed
+        # filesystem recognises (a wiped catalogue is not well-formed).
+        filepath = tmp_path / "mystery.ssd"
+        filepath.write_bytes(b"\x00" * 204800)
+        return filepath
+
+    def test_bare_ls_cannot_identify(self, runner: CliRunner, tmp_path: Path) -> None:
+        result = runner.invoke(cli, ["ls", str(self._unidentifiable_ssd(tmp_path))])
+        assert result.exit_code != 0
+        assert "no installed filesystem recognises" in result.output
+
+    def test_filesystem_flag_forces_the_read(self, runner: CliRunner, tmp_path: Path) -> None:
+        result = runner.invoke(
+            cli, ["ls", "--filesystem", "acorn-dfs", str(self._unidentifiable_ssd(tmp_path))]
+        )
+        assert result.exit_code == 0, result.output
+
+    def test_filesystem_flag_on_cat(self, runner: CliRunner, dfs_image_filepath: Path) -> None:
+        # Forcing the correct filesystem on a normal image reads as usual.
+        result = runner.invoke(
+            cli, ["cat", "--filesystem", "acorn-dfs", f"{dfs_image_filepath}:$.HELLO"]
+        )
+        assert result.exit_code == 0, result.output
+        assert "Hello" in result.output
+
+    def test_filesystem_flag_on_tree(self, runner: CliRunner, tmp_path: Path) -> None:
+        # tree's whole-image view normally walks partition discovery
+        # (which fails to identify); forcing bypasses it to one mount.
+        result = runner.invoke(
+            cli, ["tree", "--filesystem", "acorn-dfs", str(self._unidentifiable_ssd(tmp_path))]
+        )
+        assert result.exit_code == 0, result.output
+
+    def test_filesystem_flag_on_stat(self, runner: CliRunner, tmp_path: Path) -> None:
+        result = runner.invoke(
+            cli, ["stat", "--filesystem", "acorn-dfs", str(self._unidentifiable_ssd(tmp_path))]
+        )
+        assert result.exit_code == 0, result.output
+
+    def test_geometry_flag_pins_layout(self, runner: CliRunner, tmp_path: Path) -> None:
+        # An explicit --geometry is honoured alongside --filesystem.
+        result = runner.invoke(
+            cli,
+            [
+                "ls",
+                "--filesystem",
+                "acorn-dfs",
+                "--geometry",
+                "80t-ss",
+                str(self._unidentifiable_ssd(tmp_path)),
+            ],
+        )
+        assert result.exit_code == 0, result.output
+
+    def test_unknown_forced_filesystem_errors(self, runner: CliRunner, tmp_path: Path) -> None:
+        result = runner.invoke(
+            cli, ["ls", "--filesystem", "no-such-fs", str(self._unidentifiable_ssd(tmp_path))]
+        )
+        assert result.exit_code != 0
+
+
 # ---------------------------------------------------------------------------
 # Issue #12 — disc ls and disc stat must format AFS access bytes using the
 # on-disc AFS bit layout, not the wire-form Acorn byte layout.
