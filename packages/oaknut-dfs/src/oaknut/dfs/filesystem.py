@@ -116,6 +116,16 @@ class _DFSMount(AcornWildcards):
     def __init__(self, dfs: DFS):
         self._dfs = dfs
 
+    def close(self) -> None:
+        """Release the underlying DFS (and its borrowed buffer). Idempotent."""
+        self._dfs.close()
+
+    def __enter__(self) -> "_DFSMount":
+        return self
+
+    def __exit__(self, *exc_info) -> None:
+        self.close()
+
     def path_root(self) -> str:
         # DFS has a *nameless* virtual root holding the populated
         # directory letters ($, A, B, …) as siblings; $ is just the

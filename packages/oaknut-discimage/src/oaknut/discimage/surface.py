@@ -152,6 +152,29 @@ class DiscImage:
         """The underlying buffer containing the disc image data."""
         return self._buffer
 
+    def close(self) -> None:
+        """Release the buffer this image borrowed from its owner.
+
+        A :class:`DiscImage` does not own its backing store — it borrows a
+        ``memoryview`` (often a window onto an ``mmap``). Releasing that
+        view lets the owner close the mapping cleanly: an ``mmap`` cannot
+        be closed while any view it exported is still alive. Idempotent;
+        the image must not be used after closing. Any live sub-view (a
+        retained :class:`SectorsView`) must be released first, or the
+        underlying ``memoryview.release`` raises ``BufferError``.
+        """
+        if self._buffer is None:
+            return
+        self._buffer.release()
+        self._buffer = None
+        self._surfaces = []
+
+    def __enter__(self) -> "DiscImage":
+        return self
+
+    def __exit__(self, *exc_info) -> None:
+        self.close()
+
     @staticmethod
     def _validate_buffer_size(surface_specs: list[SurfaceSpec], buffer_size: int) -> None:
         """Check that all surface specs fit within the buffer size."""

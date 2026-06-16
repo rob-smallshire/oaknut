@@ -631,10 +631,16 @@ class DFS:
         :meth:`from_file` / :meth:`create_file` ``with`` block exits.
         Callers that build a :class:`DFS` from a buffer directly can
         call ``close()`` to mark the lifecycle ended.
+
+        Releases the borrowed buffer (a ``memoryview``, often a window
+        onto an ``mmap``) so the backing store's owner can close it
+        cleanly — an ``mmap`` cannot close while a view it exported is
+        still alive.
         """
         if self._closed:
             return
         self._closed = True
+        self._cs._surface._disc_image.close()
 
     def _require_open(self) -> None:
         """Raise :class:`FilesystemClosedError` if this handle is closed."""

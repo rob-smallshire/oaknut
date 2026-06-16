@@ -62,6 +62,13 @@ class ResolvedMount:
     _reader: object = None
 
     def close(self) -> None:
+        # Order matters: the mount borrows a memoryview over the reader's
+        # backing store, so it must release that borrow (close the mount)
+        # before the reader closes the mmap — an mmap cannot close while a
+        # view it exported is still alive.
+        mount_close = getattr(self.mount, "close", None)
+        if callable(mount_close):
+            mount_close()
         if self._reader is not None:
             self._reader.close()
 

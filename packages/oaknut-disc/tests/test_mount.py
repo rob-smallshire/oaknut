@@ -92,6 +92,20 @@ class TestWritableMount:
         resolved = resolve_mount(f"{outer_filepath}:afs:$")
         assert resolved.mount.read_bytes("$.NEWFILE") == b"persisted"
 
+    def test_writable_mount_closes_the_mmap_on_exit(self, dfs_image_filepath):
+        # A writable mount maps the file live. On exit the mapping must be
+        # closed, not merely flushed: the mount borrows a memoryview over
+        # the mmap, and the OS file stays locked (fatally so on Windows)
+        # until that borrow is released and mmap.close() actually runs.
+        # The mmap.closed check is platform-independent, so this guards the
+        # Windows file-locking bug everywhere.
+        resolved = resolve_mount(f"{dfs_image_filepath}:$", writable=True)
+        mapping = resolved._reader._closeables[0]
+        assert not mapping.closed
+        resolved.mount.write_bytes("$.GREET", b"hi")
+        resolved.close()
+        assert mapping.closed, "writable mmap leaked: still open after close()"
+
 
 @pytest.fixture
 def dsd_two_sides_filepath(tmp_path):
