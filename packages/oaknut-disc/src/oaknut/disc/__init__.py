@@ -1,3 +1,3 @@
 """Unified CLI for Acorn DFS, ADFS, and AFS disc images."""
 
-__version__ = "12.7.2"
+__version__ = "12.8.0"
