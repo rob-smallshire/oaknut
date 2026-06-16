@@ -15,9 +15,11 @@ the bytecode). The canonical way to move a BASIC program through a
 disc image is ``DFSPath.read_basic`` / ``write_basic``, which wrap
 these functions with the correct load-address default.
 
-Beyond ``oaknut-exception`` — the base layer, whose categorised errors
-the tokeniser and de-tokeniser raise — this module has no runtime
-dependencies on any other oaknut package.
+The tokeniser and de-tokeniser raise categorised errors from
+``oaknut-exception``; the data-file API additionally uses the ``acorn``
+text codec from ``oaknut-codecs`` for string records. Both are bottom-layer
+packages, so ``oaknut-basic`` stays independent of the file and disc-image
+layers.
 """
 
 from __future__ import annotations
