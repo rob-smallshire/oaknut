@@ -1,8 +1,7 @@
 """Tests for the Acorn/BBC Micro character codec."""
 
-import pytest
-
 import oaknut.codecs  # noqa: F401 - registers the "acorn" codec
+import pytest
 from oaknut.codecs import acorn_to_unicode, unicode_to_acorn
 
 
