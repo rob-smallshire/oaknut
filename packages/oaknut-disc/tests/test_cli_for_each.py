@@ -36,10 +36,29 @@ def _build_disc(tmp_path: Path) -> Path:
     return img
 
 
+def _untsv(cell: str) -> str:
+    """Decode asyoulikeit's reversible TSV escaping back to the raw value.
+
+    The TSV formatter backslash-escapes the four structural bytes
+    (``\\`` first, then tab/CR/LF). A single left-to-right pass reverses
+    it; this matters on Windows, where a path's ``\\`` separators are
+    escaped to ``\\\\`` in every cell.
+    """
+    out: list[str] = []
+    chars = iter(cell)
+    for char in chars:
+        if char == "\\":
+            nxt = next(chars, "")
+            out.append({"\\": "\\", "t": "\t", "r": "\r", "n": "\n"}.get(nxt, nxt))
+        else:
+            out.append(char)
+    return "".join(out)
+
+
 def _tsv_rows(output: str) -> dict[str, str]:
     """Parse a CliRunner-captured TSV into a {path: output} dict."""
     rows = [line for line in output.strip().splitlines() if line and not line.startswith("#")]
-    return dict(line.split("\t", 1) for line in rows)
+    return {_untsv(key): _untsv(value) for key, value in (line.split("\t", 1) for line in rows)}
 
 
 class TestContentMode:

@@ -214,18 +214,23 @@ class TestControlCharacterRendering:
     @staticmethod
     def _control_titled_image(tmp_path: Path) -> Path:
         # A normal DFS image with a control-character disc title poked into
-        # the catalogue (sector 0 bytes 0..7 + sector 1 bytes 0..3).
+        # the catalogue (sector 0 bytes 0..7 + sector 1 bytes 0..3). The
+        # doctored bytes are written to a *fresh* path: create_file leaves
+        # the source memory-mapped (the caller still holds the DFS), and
+        # on Windows you cannot reopen a mapped file for writing, so we
+        # must not overwrite it in place.
         from oaknut.dfs import ACORN_DFS_80T_SINGLE_SIDED, DFS
 
-        filepath = tmp_path / "ctrl.ssd"
-        with DFS.create_file(filepath, ACORN_DFS_80T_SINGLE_SIDED, title="X") as dfs:
+        base_filepath = tmp_path / "base.ssd"
+        with DFS.create_file(base_filepath, ACORN_DFS_80T_SINGLE_SIDED, title="X") as dfs:
             (dfs.root / "$.HELLO").write_bytes(b"hi")
-        raw = bytearray(filepath.read_bytes())
+        raw = bytearray(base_filepath.read_bytes())
         title = b"\x0cPascal\n\r"  # form-feed, "Pascal", LF, CR
         raw[0 : len(title[:8])] = title[:8]
         raw[256 : 256 + len(title[8:])] = title[8:]
-        filepath.write_bytes(raw)
-        return filepath
+        ctrl_filepath = tmp_path / "ctrl.ssd"
+        ctrl_filepath.write_bytes(raw)
+        return ctrl_filepath
 
     def test_stat_display_uses_control_pictures(self, runner: CliRunner, tmp_path: Path) -> None:
         image_filepath = self._control_titled_image(tmp_path)

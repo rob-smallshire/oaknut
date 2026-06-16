@@ -129,12 +129,16 @@ class TestProbe:
         # high-bit byte in the title field is not DFS, so even an
         # otherwise well-formed catalogue must be rejected. (A control
         # character is tolerated; a top-bit-set byte is not.)
-        image_filepath = _make_dfs_image(tmp_path)
-        assert any(r.filesystem == "acorn-dfs" for r in identify(image_filepath))
-        raw = bytearray(image_filepath.read_bytes())
+        good_filepath = _make_dfs_image(tmp_path)
+        assert any(r.filesystem == "acorn-dfs" for r in identify(good_filepath))
+        raw = bytearray(good_filepath.read_bytes())
         raw[1] = 0xC1  # top-bit-set byte in the title field
-        image_filepath.write_bytes(raw)
-        assert not any(r.filesystem == "acorn-dfs" for r in identify(image_filepath))
+        # Write the doctored copy to a fresh path: create_file/identify
+        # leave the source memory-mapped, and Windows forbids reopening a
+        # mapped file for writing, so we must not overwrite it in place.
+        bad_filepath = tmp_path / "topbit.ssd"
+        bad_filepath.write_bytes(raw)
+        assert not any(r.filesystem == "acorn-dfs" for r in identify(bad_filepath))
 
 
 class TestMount:
