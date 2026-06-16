@@ -45,7 +45,7 @@ class _BasicGroup(click.Group):
     help="Re-raise data and configuration errors with a full traceback.",
 )
 def cli(debug: bool) -> None:  # noqa: ARG001 - read by the group error boundary
-    """Tools for BBC BASIC source and tokenised programs."""
+    """Tools for BBC BASIC programs and data files."""
 
 
 def _validate_encoding(ctx: click.Context, param: click.Parameter, value: str) -> str:

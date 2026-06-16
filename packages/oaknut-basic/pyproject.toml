@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "oaknut-basic"
 dynamic = ["version"]
 authors = [{ name = "Robert Smallshire", email = "robert@smallshire.org.uk" }]
-description = "BBC BASIC tokeniser and detokeniser for Acorn 8-bit and 32-bit BASIC source files"
+description = "BBC BASIC tools: program tokeniser/de-tokeniser and PRINT#/INPUT# data-file reader/writer"
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
