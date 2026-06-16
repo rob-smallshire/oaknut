@@ -974,8 +974,12 @@ class DFS:
             try:
                 yield dfs
             finally:
+                # dfs.close() releases the memoryview over mm, so the
+                # mapping can be flushed and then closed cleanly. Without
+                # the close the file stays mapped, locking it on Windows.
                 dfs.close()
                 mm.flush()
+                mm.close()
 
     # Path API
     @property

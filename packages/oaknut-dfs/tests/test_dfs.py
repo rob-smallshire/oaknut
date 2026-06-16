@@ -17,6 +17,35 @@ from tests.fixtures import REFERENCE_IMAGES_DIRPATH
 GAME_IMAGE_FILEPATH = REFERENCE_IMAGES_DIRPATH / "games" / "Disc003-Zalaga.ssd"
 
 
+class TestCreateFileClosesMmap:
+    """create_file must close its mmap on exit, not just flush it.
+
+    A leaked mapping holds the file locked on Windows (you cannot then
+    overwrite or delete the freshly-created image). The mmap.closed check
+    is platform-independent, so this guards the behaviour everywhere.
+    """
+
+    def test_create_file_closes_its_mmap(self, tmp_path, monkeypatch):
+        import mmap as mmap_module
+
+        created: list = []
+        real_mmap = mmap_module.mmap
+
+        def capturing_mmap(*args, **kwargs):
+            mapping = real_mmap(*args, **kwargs)
+            created.append(mapping)
+            return mapping
+
+        monkeypatch.setattr(mmap_module, "mmap", capturing_mmap)
+
+        filepath = tmp_path / "fresh.ssd"
+        with DFS.create_file(filepath, ACORN_DFS_80T_SINGLE_SIDED, title="X") as dfs:
+            (dfs.root / "$.HELLO").write_bytes(b"hi")
+
+        assert created, "create_file did not memory-map the image"
+        assert all(m.closed for m in created), "create_file leaked its mmap"
+
+
 class TestDFSNamedConstructors:
     """Tests for from_ssd() and from_dsd()."""
 

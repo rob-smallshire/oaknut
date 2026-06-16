@@ -135,3 +135,42 @@ behaviour.
 3. `create_file`/`from_file` finally → `mm.close()`.
 4. Mirror in ADFS.
 5. Drop the `suppress` in `ImageReader.close()` last, once nothing leaks.
+
+## Implementation note (revised after step 2–3)
+
+Steps 1–3 are **done for DFS** and green:
+
+- `DiscImage.close()` releases the borrowed buffer (surface.py).
+- `DFS.close()` propagates it; `_DFSMount.close()` and the
+  `ResolvedMount.close()` mount-before-reader ordering close the reader
+  path; `DFS.create_file` now `mm.close()`s. Regression tests assert
+  `mapping.closed` (writable mount) and the captured create-file mmap is
+  closed — both platform-independent.
+
+**ADFS and AFS are a bigger job than "mirror DFS".** DFS is clean because
+its catalogue reads sectors *transiently*. ADFS and AFS instead **retain
+live `SectorsView`s** over the mmap for the handle's whole life:
+
+- `ADFS` keeps `self._fsm_ = OldFreeSpaceMap(unified.sector_range(0, 2))`
+  — a `SectorsView` whose slices are live views of the mmap.
+- AFS retains more: the cylinder bitmap shadow, map sectors, directory
+  state.
+- The `create_file`/`from_file` **generator frames also hold the
+  `SectorsView` locals** (e.g. `map_data`) across the `yield`, so even
+  nulling the handle's fields would not release them.
+
+So `DiscImage._buffer.release()` / `mm.close()` raise `BufferError:
+cannot close exported pointers exist` for ADFS/AFS. Closing them
+deterministically needs a real **release cascade**:
+
+- `SectorsView.release()` that releases each view in `self._views`.
+- Every retainer (`OldFreeSpaceMap`, directory objects, AFS
+  bitmap/map-sector) releases its `SectorsView`(s) on `close()`.
+- `create_file`/`from_file` release their own `SectorsView` locals before
+  `mm.close()`.
+
+This is sizeable and touches the ADFS/AFS internals broadly, with real
+regression risk. The DFS fix (the original Windows symptom) ships first;
+ADFS/AFS is tracked as the follow-up above. `open_image_mmap`'s
+`mm.close()` and step 5 (`ImageReader` un-suppress) wait until ADFS/AFS
+release cleanly, since both share that path.
