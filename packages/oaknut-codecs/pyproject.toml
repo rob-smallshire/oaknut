@@ -3,10 +3,10 @@ requires = ["setuptools>=68.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "oaknut-file"
+name = "oaknut-codecs"
 dynamic = ["version"]
 authors = [{ name = "Robert Smallshire", email = "robert@smallshire.org.uk" }]
-description = "Acorn file metadata handling: INF sidecars, filename encoding, xattrs, and access flags"
+description = "Text codecs for Acorn computer character sets (BBC Micro / Electron)"
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
@@ -17,24 +17,21 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
-    "Topic :: System :: Filesystems",
 ]
-dependencies = [
-    "oaknut-exception>=10.7",
-    "oaknut-codecs>=12.7",
-    "xattr>=1.0; sys_platform == 'darwin'",
-]
+# The codecs are implemented entirely against the standard library's
+# `codecs` machinery, so this package has no runtime dependencies. It is
+# the shared bottom layer that lets siblings use the "acorn" encoding
+# without depending on oaknut-file.
+dependencies = []
 
 [project.urls]
-Homepage = "https://github.com/rob-smallshire/oaknut/tree/master/packages/oaknut-file"
-Documentation = "https://rob-smallshire.github.io/oaknut/disc/api/reference/file.html"
+Homepage = "https://github.com/rob-smallshire/oaknut/tree/master/packages/oaknut-codecs"
 Repository = "https://github.com/rob-smallshire/oaknut"
 Issues = "https://github.com/rob-smallshire/oaknut/issues"
 
 [dependency-groups]
 test = [
     "pytest>=8.0",
-    "jinja2>=3.0",
 ]
 dev = [
     "bump-my-version>=0.28.0",
@@ -43,7 +40,7 @@ dev = [
 ]
 
 [tool.setuptools.dynamic]
-version = { attr = "oaknut.file.__version__" }
+version = { attr = "oaknut.codecs.__version__" }
 
 [tool.setuptools.packages.find]
 where = ["src"]

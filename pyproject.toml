@@ -60,6 +60,7 @@ members = ["packages/oaknut-*"]
 
 [tool.uv.sources]
 oaknut-exception = { workspace = true }
+oaknut-codecs = { workspace = true }
 oaknut-file  = { workspace = true }
 oaknut-extension = { workspace = true }
 oaknut-discimage = { workspace = true }
@@ -84,6 +85,7 @@ default-groups = ["test", "lint", "dev", "workspace"]
 # truly empty, and dev installs happen via this group instead.
 workspace = [
     "oaknut-exception",
+    "oaknut-codecs",
     "oaknut-file",
     "oaknut-extension",
     "oaknut-discimage",
@@ -133,6 +135,9 @@ replace = 'version = "{new_version}"'
 filename = "packages/oaknut-exception/src/oaknut/exception/__init__.py"
 
 [[tool.bumpversion.files]]
+filename = "packages/oaknut-codecs/src/oaknut/codecs/__init__.py"
+
+[[tool.bumpversion.files]]
 filename = "packages/oaknut-file/src/oaknut/file/__init__.py"
 
 [[tool.bumpversion.files]]
@@ -176,6 +181,7 @@ minversion = "8.0"
 addopts = ["--import-mode=importlib"]
 testpaths = [
     "packages/oaknut-exception/tests",
+    "packages/oaknut-codecs/tests",
     "packages/oaknut-file/tests",
     "packages/oaknut-extension/tests",
     "packages/oaknut-discimage/tests",
