@@ -15,6 +15,40 @@ from oaknut.file.capacity import format_capacity
 #: Acorn discs are addressed in 256-byte sectors throughout.
 SECTOR_SIZE = 256
 
+# The Unicode Control Pictures block (U+2400–U+241F) holds a visible,
+# inert glyph for each C0 control character (0x00–0x1F); U+2421 (␡) is
+# the symbol for DEL (0x7F). Mapping to these never emits an active
+# control code, so a terminal is never driven by data read off a disc.
+_CONTROL_PICTURES = {codepoint: chr(0x2400 + codepoint) for codepoint in range(0x20)}
+_CONTROL_PICTURES[0x7F] = "␡"
+_CONTROL_PICTURES_TABLE = str.maketrans(_CONTROL_PICTURES)
+
+
+def control_pictures(text: str) -> str:
+    """Render C0 control characters and DEL as Unicode Control Pictures.
+
+    Acorn names and titles are stored as arbitrary bytes and may carry
+    control characters (a disc title decorated with a form-feed, say).
+    This replaces each with the matching glyph from the Control Pictures
+    block so it is visible and inert; all other characters pass through.
+    """
+    return text.translate(_CONTROL_PICTURES_TABLE)
+
+
+def text_cell(text: str) -> str | ByAudience:
+    """On-disc text that may contain control characters, as a cell.
+
+    Clean text is returned unchanged, so the common case is untouched.
+    When control characters are present the cell becomes audience-aware:
+    machine formatters (JSON, TSV) keep the raw string for a faithful
+    round-trip, while the display formatter shows :func:`control_pictures`
+    so the terminal is never driven by active control codes.
+    """
+    pretty = control_pictures(text)
+    if pretty == text:
+        return text
+    return ByAudience(machine=text, human=pretty)
+
 
 def size_cell(sectors: int) -> ByAudience:
     """A capacity (given in sectors) as an audience-aware cell.

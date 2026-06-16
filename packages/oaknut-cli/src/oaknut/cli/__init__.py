@@ -32,8 +32,10 @@ from oaknut.cli.reports import (
     SECTOR_SIZE,
     address_cell,
     bytes_cell,
+    control_pictures,
     kv_table,
     size_cell,
+    text_cell,
 )
 
 __version__ = "12.7.2"
@@ -48,6 +50,8 @@ __all__ = [
     "SECTOR_SIZE",
     "address_cell",
     "bytes_cell",
+    "control_pictures",
     "kv_table",
     "size_cell",
+    "text_cell",
 ]
