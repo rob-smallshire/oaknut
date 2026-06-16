@@ -29,6 +29,7 @@ from oaknut.cli import (
     contributed_commands,
     kv_table,
     size_cell,
+    text_cell,
     use_plain_help,
 )
 from oaknut.file.exceptions import FSError
@@ -312,7 +313,7 @@ def ls(
     for child in sorted(mount.iter_entries(target), key=lambda e: _natural_name_key(e.name)):
         if child.is_dir:
             row = {
-                "name": child.name,
+                "name": text_cell(child.name),
                 "type": "dir",
                 "load": "",
                 "exec": "",
@@ -332,7 +333,7 @@ def ls(
                 attr_str = _format_access(Access(meta.access))
                 hex_cell = f"0x{int(meta.access):02X}"
         row = {
-            "name": child.name,
+            "name": text_cell(child.name),
             "type": "file",
             "load": load_cell,
             "exec": exec_cell,
@@ -422,7 +423,7 @@ def _attach_children_mount(mount, path: str, parent_tree_node) -> None:
     Siblings are shown in natural, case-insensitive order, matching ``ls``.
     """
     for child in sorted(mount.iter_entries(path), key=lambda e: _natural_name_key(e.name)):
-        node = parent_tree_node.add_child(name=child.name)
+        node = parent_tree_node.add_child(name=text_cell(child.name))
         if child.is_dir:
             _attach_children_mount(mount, child.path, node)
 
@@ -487,7 +488,7 @@ def stat(compound_path: str, force_filesystem: str | None, force_geometry: str |
 
     tc = TableContent(title=entry.name, present_transposed=True)
     tc.add_column("name", "Name", header=True)
-    row: dict = {"name": entry.name}
+    row: dict = {"name": text_cell(entry.name)}
     if isinstance(mount, AcornMetadata) and not entry.is_dir:
         meta = mount.acorn_meta(bare)
         tc.add_column("load", "Load")
@@ -626,7 +627,7 @@ def _partition_block(mount, title: str, *, geometry: bool = False, range_text: s
 
     pairs: list[tuple[str, str, object]] = []
     if isinstance(mount, Titled) and mount.title:
-        pairs.append(("title", "Title", mount.title))
+        pairs.append(("title", "Title", text_cell(mount.title)))
     if isinstance(mount, StatusReporting):
         notes = mount.status_notes()
         if notes:

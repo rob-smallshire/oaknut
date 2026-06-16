@@ -204,6 +204,63 @@ class TestForceFilesystem:
         assert result.exit_code != 0
 
 
+class TestControlCharacterRendering:
+    """A disc title (or filename) carrying control characters must render
+    safely for humans (Unicode Control Pictures) yet keep the raw bytes
+    for machine formatters. The Oxford Pascal 80-track disc titles itself
+    ``\\x0cPascal\\n\\r``.
+    """
+
+    @staticmethod
+    def _control_titled_image(tmp_path: Path) -> Path:
+        # A normal DFS image with a control-character disc title poked into
+        # the catalogue (sector 0 bytes 0..7 + sector 1 bytes 0..3).
+        from oaknut.dfs import ACORN_DFS_80T_SINGLE_SIDED, DFS
+
+        filepath = tmp_path / "ctrl.ssd"
+        with DFS.create_file(filepath, ACORN_DFS_80T_SINGLE_SIDED, title="X") as dfs:
+            (dfs.root / "$.HELLO").write_bytes(b"hi")
+        raw = bytearray(filepath.read_bytes())
+        title = b"\x0cPascal\n\r"  # form-feed, "Pascal", LF, CR
+        raw[0 : len(title[:8])] = title[:8]
+        raw[256 : 256 + len(title[8:])] = title[8:]
+        filepath.write_bytes(raw)
+        return filepath
+
+    def test_stat_display_uses_control_pictures(self, runner: CliRunner, tmp_path: Path) -> None:
+        image_filepath = self._control_titled_image(tmp_path)
+        result = runner.invoke(cli, ["stat", "--as", "display", str(image_filepath)])
+        assert result.exit_code == 0, result.output
+        # Humans see inert glyphs, never the raw cursor-driving controls.
+        assert "␌Pascal␊␍" in result.output
+        for raw_control in ("\x0c", "\x0a", "\x0d"):
+            assert raw_control not in result.output.replace("\n", "")
+
+    def test_stat_json_preserves_raw_bytes(self, runner: CliRunner, tmp_path: Path) -> None:
+        import json as _json
+
+        image_filepath = self._control_titled_image(tmp_path)
+        result = runner.invoke(cli, ["stat", "--as", "json", str(image_filepath)])
+        assert result.exit_code == 0, result.output
+        payload = _json.loads(result.output)
+        row = payload["reports"]["partition_1"]["rows"][0]
+        assert row["title"] == "\x0cPascal\n\r"
+
+    def test_stat_tsv_is_single_uncorrupted_record(
+        self, runner: CliRunner, tmp_path: Path
+    ) -> None:
+        image_filepath = self._control_titled_image(tmp_path)
+        result = runner.invoke(cli, ["stat", "--as", "tsv", str(image_filepath)])
+        assert result.exit_code == 0, result.output
+        # The title's embedded newline must not split the Title record.
+        # Split on the real record separator only (not str.splitlines(),
+        # which itself breaks on the raw form-feed in the machine value):
+        # exactly one record carries "Title", with its value intact.
+        title_lines = [ln for ln in result.output.split("\n") if "Title" in ln]
+        assert len(title_lines) == 1, result.output
+        assert "Pascal" in title_lines[0], repr(result.output)
+
+
 # ---------------------------------------------------------------------------
 # Issue #12 — disc ls and disc stat must format AFS access bytes using the
 # on-disc AFS bit layout, not the wire-form Acorn byte layout.
