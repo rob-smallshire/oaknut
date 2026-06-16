@@ -148,6 +148,7 @@ instead.
 - [**Online docs**](https://rob-smallshire.github.io/oaknut/) — CLI guide, cookbook, and API reference
 - [`docs/dev/cli-design.md`](docs/dev/cli-design.md) — CLI design rationale
 - [`docs/dev/monorepo.md`](docs/dev/monorepo.md) — monorepo architecture
+- [`docs/dev/basic-tokeniser.md`](docs/dev/basic-tokeniser.md) — BBC BASIC tokeniser/de-tokeniser internals
 
 ## Credits and thanks
 
