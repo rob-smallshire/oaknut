@@ -23,7 +23,7 @@ classifiers = [
 # The tokeniser and de-tokeniser raise categorised errors from the shared
 # oaknut-exception hierarchy, so the CLI boundary can render them without a
 # traceback. That is the package's only runtime dependency.
-dependencies = ["oaknut-exception>=10.0"]
+dependencies = ["oaknut-exception>=10.0", "oaknut-codecs>=12.7"]
 
 # The `cli` extra pulls the shared CLI toolkit (Click, asyoulikeit, the
 # Acorn text codec and the categorised-error boundary) so this package

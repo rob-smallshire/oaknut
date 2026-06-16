@@ -215,6 +215,113 @@ class Float5RangeError(BASICError):
         self.value = value
 
 
+# ---------------------------------------------------------------------------
+# Data files: PRINT# / INPUT# / BPUT# / BGET#
+# ---------------------------------------------------------------------------
+
+
+class DataFileError(BASICError):
+    """Base for a fault reading or writing a BBC BASIC data file.
+
+    Attributes:
+        offset: Byte offset of the record where the fault was found, or
+            ``None`` when the fault is not tied to a position.
+    """
+
+    def __init__(self, message: str, *, offset: int | None = None) -> None:
+        if offset is not None:
+            message = f"offset {offset}: {message}"
+        super().__init__(message)
+        self.offset = offset
+
+
+class UnknownTagError(DataFileError):
+    """A tagged record began with a byte that is not a known type tag.
+
+    A ``PRINT#`` record starts with ``&00`` (string), ``&40`` (integer)
+    or ``&FF`` (real); anything else means the stream is not tagged data
+    at this point (often raw ``BPUT#`` bytes read as if tagged).
+
+    Attributes:
+        tag: The offending tag byte.
+    """
+
+    def __init__(self, tag: int, offset: int) -> None:
+        super().__init__(
+            f"&{tag:02X} is not a known type tag (&00 string, &40 integer, &FF real)",
+            offset=offset,
+        )
+        self.tag = tag
+        self.add_note("Untagged bytes written by BPUT# must be read with read_byte/read_bytes.")
+
+
+class DataFileTypeMismatchError(DataFileError):
+    """A typed read found a record of a different type.
+
+    Mirrors BASIC's *Type mismatch* on ``INPUT#``: the record's tag did
+    not match the type the caller asked for. The stream position is left
+    at the start of the record so the caller can re-read it.
+
+    Attributes:
+        expected: Human-readable name of the requested type.
+        tag: The tag byte actually found.
+    """
+
+    def __init__(self, expected: str, tag: int, offset: int) -> None:
+        super().__init__(
+            f"expected a {expected} record but found type tag &{tag:02X}",
+            offset=offset,
+        )
+        self.expected = expected
+        self.tag = tag
+
+
+class TruncatedRecordError(DataFileError):
+    """A tagged record ran past the end of the stream.
+
+    Distinct from a clean end of file (which a typed read signals with
+    :class:`EOFError`): the tag, or part of the payload, was present but
+    the rest of the record was missing — the stream is corrupt.
+
+    Attributes:
+        detail: What was being read when the bytes ran out.
+    """
+
+    def __init__(self, offset: int, detail: str) -> None:
+        super().__init__(f"truncated record ({detail})", offset=offset)
+        self.detail = detail
+
+
+class IntegerRangeError(DataFileError):
+    """An integer is outside the signed 32-bit range a BBC integer holds.
+
+    Attributes:
+        value: The offending integer.
+    """
+
+    def __init__(self, value: int) -> None:
+        super().__init__(
+            f"{value} is out of range for a BBC integer "
+            f"(must be -2**31 .. 2**31 - 1)"
+        )
+        self.value = value
+
+
+class StringTooLongError(DataFileError):
+    """A string is longer than the single length byte can describe.
+
+    A ``PRINT#`` string is prefixed by one length byte, so it can hold at
+    most 255 characters.
+
+    Attributes:
+        length: The offending string length.
+    """
+
+    def __init__(self, length: int) -> None:
+        super().__init__(f"string of {length} characters exceeds the 255-character maximum")
+        self.length = length
+
+
 class InvalidLineLengthError(DetokeniseError):
     """A line's length byte is impossible.
 

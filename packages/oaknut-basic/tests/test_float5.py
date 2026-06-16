@@ -11,7 +11,6 @@ from __future__ import annotations
 import math
 
 import pytest
-
 from oaknut.basic.exceptions import Float5RangeError
 from oaknut.basic.float5 import pack_float5, unpack_float5
 

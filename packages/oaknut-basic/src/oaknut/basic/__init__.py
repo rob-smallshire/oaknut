@@ -22,20 +22,34 @@ dependencies on any other oaknut package.
 
 from __future__ import annotations
 
+from oaknut.basic.datafile import (
+    BbcBasicDataFile,
+    BbcBasicDataFileBase,
+    BbcBasicDataReader,
+    BbcBasicDataWriter,
+)
 from oaknut.basic.detokeniser import detokenise
 from oaknut.basic.exceptions import (
     AlreadyNumberedError,
     BASICError,
+    DataFileError,
+    DataFileTypeMismatchError,
     DetokeniseError,
+    Float5RangeError,
+    IntegerRangeError,
     InvalidLineLengthError,
     LineNumberOrderError,
     LineNumberRangeError,
     LineTooLongError,
     MissingLineMarkerError,
+    StringTooLongError,
     TokeniseError,
     TruncatedProgramError,
+    TruncatedRecordError,
+    UnknownTagError,
     UnnumberedLineError,
 )
+from oaknut.basic.float5 import pack_float5, unpack_float5
 from oaknut.basic.numbering import (
     DEFAULT_LINE_NUMBER,
     DEFAULT_LINE_STEP,
@@ -57,16 +71,29 @@ __all__ = [
     "ELECTRON_BASIC_LOAD_ADDRESS",
     "AlreadyNumberedError",
     "BASICError",
+    "BbcBasicDataFile",
+    "BbcBasicDataFileBase",
+    "BbcBasicDataReader",
+    "BbcBasicDataWriter",
+    "DataFileError",
+    "DataFileTypeMismatchError",
     "DetokeniseError",
+    "Float5RangeError",
+    "IntegerRangeError",
     "InvalidLineLengthError",
     "LineNumberOrderError",
     "LineNumberRangeError",
     "LineTooLongError",
     "MissingLineMarkerError",
+    "StringTooLongError",
     "TokeniseError",
     "TruncatedProgramError",
+    "TruncatedRecordError",
+    "UnknownTagError",
     "UnnumberedLineError",
     "detokenise",
     "number_lines",
+    "pack_float5",
+    "unpack_float5",
     "tokenise",
 ]
