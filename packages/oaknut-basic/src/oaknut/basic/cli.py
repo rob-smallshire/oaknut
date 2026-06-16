@@ -12,6 +12,7 @@ installed with its ``[cli]`` extra; the library core never imports it.
 from __future__ import annotations
 
 import click
+from asyoulikeit.cli import report_output
 
 from . import __version__
 
@@ -273,6 +274,185 @@ def detokenise(input_stream, output_stream, encoding: str) -> None:
 
     listing = detokenise_program(input_stream.read())
     output_stream.write(_listing_to_bytes(listing, encoding))
+
+
+@cli.group()
+def data() -> None:
+    """Read and write BBC BASIC data files (PRINT#/INPUT#/BPUT#/BGET#).
+
+    These commands work with the type-tagged record files BBC BASIC
+    creates with ``OPENOUT`` and writes with ``PRINT#``. ``inspect`` shows
+    a file's contents as a table; ``decode`` and ``encode`` are a lossless
+    JSON round-trip pair for editing and generating such files.
+    """
+
+
+def _kind_of(value: object) -> str:
+    """Return the record-type name for a value read from a data file."""
+    if isinstance(value, bool):  # pragma: no cover - reader never yields bool
+        raise TypeError("unexpected bool from a data file")
+    if isinstance(value, int):
+        return "int"
+    if isinstance(value, float):
+        return "real"
+    return "string"
+
+
+def _read_records(input_stream, encoding: str):
+    """Yield ``(offset, kind, value)`` for each tagged record in a stream."""
+    from oaknut.basic.datafile import open as open_datafile
+
+    with open_datafile(input_stream, "r", encoding=encoding) as reader:
+        while True:
+            offset = reader.tell()
+            value = reader.read()
+            if value is None:
+                return
+            yield offset, _kind_of(value), value
+
+
+@data.command()
+@click.argument(
+    "input_stream",
+    metavar="[INPUT]",
+    type=click.File("rb"),
+    default="-",
+    required=False,
+)
+@click.option(
+    "--encoding",
+    default="acorn",
+    show_default=True,
+    callback=_validate_encoding,
+    help="Text encoding of string records. Defaults to the BBC character set.",
+)
+def decode(input_stream, encoding: str) -> None:
+    """Decode a BBC BASIC data file to a JSON array of its values.
+
+    Reads a ``PRINT#``-tagged data file from INPUT and writes a JSON array
+    to standard output, one element per record: integers and reals as JSON
+    numbers, strings as JSON strings, and raw bytes as ``{"bytes": "hex"}``.
+    Reals keep their full ``float`` repr (e.g. ``5.0``) so they round-trip
+    back to reals rather than integers ::
+
+        oaknut-basic data decode scores.dat | jq '.[0]'
+
+    The output is consumed by ``oaknut-basic data encode`` to rebuild the
+    file byte-for-byte.
+    """
+    import json
+
+    payload = [value for _offset, _kind, value in _read_records(input_stream, encoding)]
+    click.echo(json.dumps(payload, ensure_ascii=False, indent=2))
+
+
+@data.command()
+@click.argument(
+    "input_stream",
+    metavar="[INPUT]",
+    type=click.File("rb"),
+    default="-",
+    required=False,
+)
+@click.argument(
+    "output_stream",
+    metavar="[OUTPUT]",
+    type=click.File("wb"),
+    default="-",
+    required=False,
+)
+@click.option(
+    "--encoding",
+    default="acorn",
+    show_default=True,
+    callback=_validate_encoding,
+    help="Text encoding for string records. Defaults to the BBC character set.",
+)
+def encode(input_stream, output_stream, encoding: str) -> None:
+    """Encode a JSON array of values into a BBC BASIC data file.
+
+    Reads the JSON array produced by ``oaknut-basic data decode`` from
+    INPUT and writes the tagged data file to OUTPUT. Each element becomes
+    one ``PRINT#`` record: a JSON integer becomes an integer, a JSON
+    number with a fractional part a real, a JSON string a string, and
+    ``{"bytes": "hex"}`` raw (untagged) bytes ::
+
+        echo '[42, "HELLO", 3.5]' | oaknut-basic data encode - scores.dat
+
+    A hand-authored real must carry a decimal point (``3.0``, not ``3``),
+    matching what ``decode`` emits.
+    """
+    import json
+
+    from oaknut.basic.datafile import open as open_datafile
+    from oaknut.exception import DataError
+
+    try:
+        payload = json.loads(input_stream.read())
+    except json.JSONDecodeError as error:
+        raise DataError(f"invalid JSON input: {error}") from error
+    if not isinstance(payload, list):
+        raise DataError("expected a JSON array of values")
+
+    with open_datafile(output_stream, "w", encoding=encoding) as writer:
+        for index, item in enumerate(payload):
+            if isinstance(item, bool):
+                raise DataError(f"item {index}: BBC BASIC has no boolean type")
+            if isinstance(item, int):
+                writer.write_int(item)
+            elif isinstance(item, float):
+                writer.write_float(item)
+            elif isinstance(item, str):
+                writer.write_str(item)
+            elif isinstance(item, dict) and set(item) == {"bytes"}:
+                try:
+                    writer.write_bytes(bytes.fromhex(item["bytes"]))
+                except (ValueError, TypeError) as error:
+                    raise DataError(f"item {index}: invalid hex in bytes value") from error
+            else:
+                raise DataError(f"item {index}: cannot encode JSON value {item!r}")
+
+
+@data.command()
+@click.argument(
+    "input_stream",
+    metavar="[INPUT]",
+    type=click.File("rb"),
+    default="-",
+    required=False,
+)
+@click.option(
+    "--encoding",
+    default="acorn",
+    show_default=True,
+    callback=_validate_encoding,
+    help="Text encoding of string records. Defaults to the BBC character set.",
+)
+@report_output(reports={"records": "The tagged records in the data file, in order."})
+def inspect(input_stream, encoding: str):
+    """Show the records in a BBC BASIC data file as a table.
+
+    Reads a ``PRINT#``-tagged data file from INPUT and reports each record
+    with its byte offset, type and value ::
+
+        oaknut-basic data inspect scores.dat
+        oaknut-basic data inspect scores.dat --as json
+
+    Rendered through the shared report machinery, so ``--as display`` (the
+    default at a terminal), ``--as tsv`` (the default in a pipe) and
+    ``--as json`` all describe the same records; the JSON form carries the
+    faithful values for scripting.
+    """
+    from asyoulikeit.tabular_data import Importance, Report, Reports, TableContent
+
+    table = TableContent(title="BBC BASIC data file")
+    table.add_column("index", "#", header=True)
+    table.add_column("type", "Type")
+    table.add_column("value", "Value")
+    table.add_column("offset", "Offset", importance=Importance.DETAIL)
+    for index, (offset, kind, value) in enumerate(_read_records(input_stream, encoding)):
+        table.add_row(index=index, type=kind, value=value, offset=offset)
+    return Reports(records=Report(data=table))
 
 
 if __name__ == "__main__":  # pragma: no cover
