@@ -375,16 +375,31 @@ data), driven by MOS service calls. A ROMFS ROM must answer at least:
   byte at `(&F6),Y=0`, increment the `&F6/&F7` pointer (carry into `&F7`),
   and claim. This is the byte-at-a-time spigot the loader in §2.7 pulls.
 
-> **The socket-0 scan-number wrap.** At each ROM's `&2B` end marker the MOS
-> increments `&F5` and re-issues `&0D` to chain into a continuation ROM in a
-> lower socket; the filing system ends only when no ROM claims. mkromfs's
-> handler tests the socket with `(&F5 EOR &FF) AND &0F`, masking the high
-> nibble — so a ROM in socket 0 (which sets `&F5 = &0F` on selection) sees
-> `&F5` step `&0F → &10` and the mask fold it back to `15 ≥ 0`, re-claiming
-> itself and looping `*CAT` forever. The genuine Acornsoft ROMs guard this
-> with `CMP #&10` / `BCS exit` before the socket compare; this package's
-> created handler does the same (the six extra bytes that move the empty
-> anchor from `&805D` to `&8063`). Sockets 1–15 are unaffected either way.
+> **The `&0D` scan number: machine differences the handler must survive.**
+> The OS passes the serial-ROM scan number in `Y` (and `&F5`) on the init
+> call, and the BBC and Electron seed it *differently*:
+>
+> - **BBC OS 1.20 / Master** seed `&FF` and `INC` to `&00`, so the first init
+>   arrives with `Y = 0` (positive).
+> - **Electron OS** seeds `&EF` and `INC`s to `&F0`, so the first init arrives
+>   with `Y = &F0` (**negative**). The genuine Acornsoft handlers test this
+>   first (`TYA : BMI <select self>`) and claim unconditionally — "initialise
+>   from the top RFS ROM". A handler without it never initialises on an Elk.
+>
+> - **The socket-0 wrap.** At each `&2B` the MOS `INC`s the scan number and
+>   re-issues `&0D` to chain into a lower socket; the filing system ends only
+>   when no ROM claims. mkromfs inverts with `EOR #&FF : AND #&0F`, masking the
+>   high nibble — so a socket-0 ROM (which sets `&F5 = &0F` on selection) sees
+>   `&F5` step `&0F → &10` and the mask fold it back to `15 ≥ 0`, re-claiming
+>   itself and looping `*CAT` forever. The genuine ROMs invert with `EOR #&0F`
+>   (high nibble intact) and test `CMP #&10 : BCS exit`, so the hunt
+>   terminates. **Note:** the wrap guard must come *after* the negative-`Y`
+>   test and operate on the *inverted* value — testing the raw scan number
+>   (`&F0 ≥ &10`) would reject the Electron's init.
+>
+> This package's created handler does both, matching the genuine ROMs (the
+> extra bytes move the empty-header anchor from `&805D` to `&8063`). Sockets
+> 1–15 on the BBC are unaffected either way.
 
 A richer handler may also answer:
 

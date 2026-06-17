@@ -8,11 +8,14 @@ next byte). See ``docs/romfs-format-spec.md`` §2.10.
 This module assembles that handler. The 6502 is the canonical handler from
 the *New Advanced User Guide* (as used by ``mkromfs``'s ``handlesvc.asm``):
 it answers ``&0D`` / ``&0E`` for its own ROM and passes every other call
-on. One deliberate deviation from mkromfs: the ``&0D`` path guards the
-serial-ROM scan number against rising past the sixteen sockets, so a ROM in
-socket 0 does not loop ``*CAT`` (see :data:`_CORE_BODY`). A small two-pass
-assembler resolves the branch and jump targets so the machine code is
-correct by construction rather than hand-counted.
+on. The ``&0D`` path follows the genuine Acornsoft ROMs rather than mkromfs
+in two ways the *New Advanced User Guide* example gets wrong: it treats a
+negative serial-ROM scan number as "initialise from the top" (so a created
+ROM works on the Electron, whose MOS issues the init with ``Y`` negative),
+and it guards the scan number against wrapping past the sixteen sockets (so
+a ROM in socket 0 does not loop ``*CAT``). See :data:`_CORE_BODY`. A small
+two-pass assembler resolves the branch and jump targets so the machine code
+is correct by construction rather than hand-counted.
 
 The handler is hand-assembled and verified for layout and length here;
 its execution is confirmed in a 6502 emulator (a created ROM answers
@@ -87,21 +90,28 @@ _PLAIN_DISPATCH = [
 ]
 
 # The &0D / &0E core (the mkromfs / NAUG handler body), shared by both.
-# The &0D path adds a guard absent from mkromfs: the MOS advances the
-# serial-ROM scan number (&F5) past each ROM's &2B end marker, looking for a
-# continuation ROM in a lower socket. mkromfs masks &F5 with AND #&0F (in
-# invsno), so once it wraps &0F->&10 a socket-0 ROM maps back to 15 and
-# re-claims itself, restarting *CAT forever. Testing &F5 >= &10 first — as the
-# genuine Acornsoft ROMs do — lets the continuation hunt terminate.
+# The &0D path follows the genuine Acornsoft ROMs rather than mkromfs, in two
+# ways the example handler in the New Advanced User Guide gets wrong:
+#   * Negative scan number -> "select self". The OS passes the serial-ROM scan
+#     number in Y. The BBC seeds it &FF and INCs to &00 (positive); the
+#     Electron seeds it &EF and INCs to &F0, so its init call arrives with Y
+#     negative. A negative Y means "initialise from the top RFS ROM", so claim
+#     unconditionally — without this an oaknut ROM never initialises on an Elk.
+#   * Wrap guard. After each &2B the OS INCs the scan number to hunt a
+#     continuation ROM in a lower socket. mkromfs masks it with AND #&0F, so
+#     when it wraps &0F->&10 a socket-0 ROM folds back to 15 and re-claims
+#     itself, looping *CAT forever. Inverting with EOR #&0F (high nibble
+#     intact) and testing CMP #&10 lets the hunt terminate.
 _CORE_BODY = [
     ("initsp", "PHA", "imp", None),
-    (None, "LDA", "zp", _SER_ROM),  # the serial-ROM scan number
-    (None, "CMP", "imm", 0x10),  # advanced past the sixteen sockets?
-    (None, "BCS", "rel", "exit"),  # yes — the scan is exhausted, don't re-claim
-    (None, "JSR", "abs", "invsno"),  # A = inverted *ROM number
+    (None, "TYA", "imp", None),  # A = the serial-ROM scan number (Y)
+    (None, "BMI", "rel", "selfsel"),  # negative (Electron init) -> select self
+    (None, "EOR", "imm", 0x0F),  # invert; high nibble kept for the wrap test
+    (None, "CMP", "imm", 0x10),  # scan advanced past the sixteen sockets?
+    (None, "BCS", "rel", "exit"),  # yes — exhausted, don't re-claim (socket-0 loop)
     (None, "CMP", "zp", _ROM_ID),
     (None, "BCC", "rel", "exit"),  # scanned ROM below us — not yet our turn
-    (None, "LDA", "imm", ("lo", "data")),
+    ("selfsel", "LDA", "imm", ("lo", "data")),
     (None, "STA", "zp", _ROM_PTR),
     (None, "LDA", "imm", ("hi", "data")),
     (None, "STA", "zp", _ROM_PTR + 1),
@@ -186,7 +196,7 @@ def _layout(program: list) -> tuple[dict[str, int], int]:
 
 
 #: Length of the bare &0D/&0E handler (87 bytes: the mkromfs body plus the
-#: socket-0 scan-number guard).
+#: negative-Y "select self" and scan-number wrap handling in the &0D path).
 HANDLER_LENGTH = _layout(_program(with_help=False))[1]
 
 

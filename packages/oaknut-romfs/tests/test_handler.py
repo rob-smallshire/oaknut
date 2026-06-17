@@ -33,7 +33,9 @@ def _run_service_call(handler: bytes, base: int, *, a: int, f4: int, f5: int) ->
     decode = {opcode: (mnem, mode, length) for (mnem, mode), (opcode, length) in _OPCODES.items()}
     mem = {base + i: b for i, b in enumerate(handler)}
     mem[_ROM_ID], mem[_SER_ROM] = f4, f5
-    x = y = 0
+    # For the &0D init the OS passes the scan number in Y as well as &F5
+    # (it does LDY &F5 before the call), so seed Y from f5.
+    x, y = 0, f5
     carry = zero = neg = False
     stack: list[int | None] = [None]  # sentinel: the top-level RTS pops it
     pc = base
@@ -156,6 +158,18 @@ def test_cat_terminates_in_every_socket():
     handler = build_rfs_handler(0x800C, 0x9000)
     for socket in range(16):
         assert _catalogue_passes(handler, 0x800C, socket) == 1, f"socket {socket}"
+
+
+def test_initialise_claims_on_the_electron_negative_y():
+    # The Electron MOS seeds the RFS scan number at &EF and INCs it to &F0
+    # before the first &0D, so the init arrives with Y negative (&F0) — unlike
+    # the BBC (&FF -> &00, positive). The handler must treat a negative scan
+    # number as "select self" (the top RFS ROM initialises from the start), or
+    # the filing system never initialises on an Electron, whatever the socket.
+    handler = build_rfs_handler(0x800C, 0x9000)
+    for socket in range(16):
+        a, _ = _run_service_call(handler, 0x800C, a=_SERVICE_INITIALISE, f4=socket, f5=0xF0)
+        assert a == 0, f"socket {socket}: &0D with Y=&F0 (Electron init) was not claimed"
 
 
 def test_initialise_does_not_reclaim_once_scanned_past():

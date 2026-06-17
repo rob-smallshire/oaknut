@@ -90,11 +90,13 @@ the two real sizes are offered — **16 KiB** (default) and **8 KiB** (`--geomet
 
 The handler is assembled by a small two-pass 6502 assembler
 (`handler.py`) so branch/jump targets are correct by construction. The bare
-`&0D`/`&0E` handler is the canonical mkromfs/NAUG one plus a `CMP #&10` /
-`BCS` guard on the scan number — 87 bytes, putting data at `&8063` for an
-empty header (the test anchor). The guard stops a socket-0 ROM re-claiming
-itself when the MOS scans past it at the `&2B` end marker, which otherwise
-loops `*CAT` forever; the genuine Acornsoft ROMs carry the same guard. By
+`&0D`/`&0E` handler is based on the canonical mkromfs/NAUG one but follows
+the genuine Acornsoft ROMs in the `&0D` path — 87 bytes, putting data at
+`&8063` for an empty header (the test anchor). It treats a negative scan
+number as "select self" (the Electron's MOS issues the init with `Y`
+negative, so without this a created ROM never initialises on an Elk) and
+guards the scan number against wrapping past the sixteen sockets (otherwise
+a socket-0 ROM re-claims itself at the `&2B` and loops `*CAT` forever). By
 default a `&09` `*HELP` responder is also included, printing the title (so
 the title is the `*HELP` message). A created ROM has been confirmed in a
 6502 emulator: `*HELP` prints the title, and `*CAT` / `CHAIN` / `*TYPE`
