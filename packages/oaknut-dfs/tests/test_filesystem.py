@@ -65,6 +65,38 @@ class TestProbe:
         results = identify(truncated)
         assert results and results[0].filesystem == "acorn-dfs"
 
+    def test_truncated_image_reads_its_file_data(self, tmp_path):
+        # The realistic truncated case: a disc whose trailing unused sectors
+        # are dropped, so the file holds only the catalogue plus the sectors
+        # actually in use while the catalogue still declares the full disc
+        # size. Such an image must both identify *and* read its files back
+        # transparently (a ~10 KB file standing in for an 80-track disc).
+        image_filepath = tmp_path / "game.ssd"
+        payload = b"X" * 5000  # ~20 sectors of data
+        with DFS.create_file(image_filepath, ACORN_DFS_80T_SINGLE_SIDED, title="GAME") as dfs:
+            (dfs.root / "$.DATA").write_bytes(payload)
+
+        full = image_filepath.read_bytes()
+        truncated_filepath = tmp_path / "game-trunc.ssd"
+        truncated_filepath.write_bytes(full[: 40 * 256])  # 10 KB: catalogue + data only
+        truncated_size = truncated_filepath.stat().st_size
+        assert truncated_size < len(full)
+
+        # The catalogue still declares the full 800-sector disc, larger than
+        # the truncated file — the defining property of this case.
+        sector1 = full[256:512]
+        declared_total_sectors = ((sector1[6] & 0x03) << 8) | sector1[7]
+        assert declared_total_sectors == 800
+        assert declared_total_sectors * 256 > truncated_size
+
+        results = identify(truncated_filepath)
+        assert results and results[0].filesystem == "acorn-dfs"
+
+        filesystem = create_filesystem("acorn-dfs")
+        with reader_for(truncated_filepath) as reader:
+            mount = filesystem.open(reader, filesystem.probe(reader).geometry)
+            assert mount.read_bytes("$.DATA") == payload
+
     def test_identifies_watford_dfs(self):
         results = identify(_watford_image_bytes(), suffix_hint=".ssd")
         assert results[0].filesystem == "watford-dfs"
