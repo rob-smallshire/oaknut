@@ -43,8 +43,10 @@ from oaknut.filesystem.wildcards import ACORN_WILDCARDS, AcornWildcards
 # with a digit (``2.FILE`` is directory ``2``; ``:2.FILE`` is drive 2).
 _DRIVE_RE = re.compile(r"^:(\d+)(?:\.(.*))?$", re.DOTALL)
 
-# An Acorn/Watford catalogue lives in sectors 0–3; matching needs them.
-_MIN_SECTORS = 4
+# The smallest DFS catalogue — Acorn's — is sectors 0–1, so two sectors
+# is the floor for examining one at all. Watford's extended catalogue
+# needs sectors 0–3, a minimum its own ``match_evidence`` enforces.
+_MIN_SECTORS = 2
 
 # Named floppy geometry presets the DFS filesystems offer.
 _GEOMETRY_PRESETS = {

@@ -67,8 +67,13 @@ class AcornDFSCatalogue(Catalogue):
         disqualifying check returns ``None``; a well-formed catalogue
         returns the verified signals. :meth:`matches` derives from this.
         """
-        # Need at least 4 sectors to check for Watford DFS markers
-        if surface.num_sectors < 4:
+        # The Acorn catalogue is sectors 0-1, so two sectors is the
+        # minimum — a blank disc truncated to just its catalogue is a
+        # legitimate (truncated) Acorn DFS image. The Watford-exclusion
+        # check below needs sectors 2-3 and so runs only when present;
+        # with fewer than four sectors the image cannot be Watford anyway
+        # (its extended catalogue lives there), so nothing is lost.
+        if surface.num_sectors < 2:
             return None
 
         # Read catalogue sectors
@@ -140,24 +145,27 @@ class AcornDFSCatalogue(Catalogue):
         # exceeds the surface is *accepted*, not rejected — the checks
         # above already establish a well-formed catalogue.
 
-        # EXCLUSION CHECK: Must NOT be Watford DFS
-        # Watford DFS has specific markers in sectors 2-3
-        sector2 = surface.sector_range(2, 1)
-        sector3 = surface.sector_range(3, 1)
+        # EXCLUSION CHECK: Must NOT be Watford DFS. Watford's markers live
+        # in sectors 2-3, so this only applies when the image actually has
+        # them; a two- or three-sector image cannot be Watford (its
+        # extended catalogue would be missing), so it is left to Acorn.
+        if surface.num_sectors >= 4:
+            sector2 = surface.sector_range(2, 1)
+            sector3 = surface.sector_range(3, 1)
 
-        # If sector 2 starts with 8 bytes of 0xAA, it's Watford
-        if all(sector2[i] == 0xAA for i in range(8)):
-            return None
+            # If sector 2 starts with 8 bytes of 0xAA, it's Watford
+            if all(sector2[i] == 0xAA for i in range(8)):
+                return None
 
-        # If sector 3 starts with 4 bytes of 0x00 AND has matching boot/sectors
-        # then it's Watford
-        if (
-            all(sector3[i] == 0x00 for i in range(4))
-            and sector3[5] & 0x07 == 0  # bits 0,1,2 clear
-            and sector3[6] == sector1[6]  # matches boot/sectors high
-            and sector3[7] == sector1[7]
-        ):  # matches sectors low
-            return None
+            # If sector 3 starts with 4 bytes of 0x00 AND has matching
+            # boot/sectors then it's Watford
+            if (
+                all(sector3[i] == 0x00 for i in range(4))
+                and sector3[5] & 0x07 == 0  # bits 0,1,2 clear
+                and sector3[6] == sector1[6]  # matches boot/sectors high
+                and sector3[7] == sector1[7]
+            ):  # matches sectors low
+                return None
 
         # All checks passed - this is standard Acorn DFS.
         plural = "" if num_files == 1 else "s"

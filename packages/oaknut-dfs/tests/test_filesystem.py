@@ -97,6 +97,34 @@ class TestProbe:
             mount = filesystem.open(reader, filesystem.probe(reader).geometry)
             assert mount.read_bytes("$.DATA") == payload
 
+    def test_identifies_two_sector_acorn_catalogue(self, tmp_path):
+        # The Acorn DFS catalogue is just sectors 0-1, so a blank disc
+        # truncated to its two catalogue sectors is a legitimate (truncated)
+        # Acorn DFS image. With only two sectors it cannot be Watford —
+        # whose extended catalogue lives in sectors 2-3 — so the
+        # Watford-exclusion check is skipped rather than disqualifying it.
+        image_filepath = tmp_path / "blank.ssd"
+        with DFS.create_file(image_filepath, ACORN_DFS_80T_SINGLE_SIDED, title="EMPTY"):
+            pass
+        two_sector_filepath = tmp_path / "blank-2sec.ssd"
+        two_sector_filepath.write_bytes(image_filepath.read_bytes()[:512])
+        assert [r.filesystem for r in identify(two_sector_filepath)] == ["acorn-dfs"]
+
+    def test_two_sectors_of_zeros_is_not_dfs(self, tmp_path):
+        # The two-sector minimum lets the catalogue be examined, but a
+        # zero-filled region carries no positive evidence (no declared
+        # total, no files), so it must still not be claimed as DFS.
+        zeros_filepath = tmp_path / "zeros.ssd"
+        zeros_filepath.write_bytes(b"\x00" * 512)
+        assert identify(zeros_filepath) == []
+
+    def test_identifies_four_sector_watford_with_zero_files(self):
+        # A Watford disc truncated to its four catalogue sectors (sections
+        # 1 and 2), holding zero files, is a legitimate truncated Watford
+        # image — the 0xAA marker and mirrored metadata are all present.
+        results = identify(_watford_image_bytes()[:1024], suffix_hint=".ssd")
+        assert [r.filesystem for r in results] == ["watford-dfs"]
+
     def test_identifies_watford_dfs(self):
         results = identify(_watford_image_bytes(), suffix_hint=".ssd")
         assert results[0].filesystem == "watford-dfs"
