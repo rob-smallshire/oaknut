@@ -26,18 +26,15 @@ template:
   `docs/manuals/sidewrom.pdf`. It corroborates §1–§3 below field-for-field
   and is the source for the service-call interface in §2.10.
 - **New Advanced User Guide**, §17.5 (Acorn Computers) — the original
-  published reference for the `*ROM` filing system: the on-ROM data format,
-  the `&0D`/`&0E` service calls, and a complete worked `&0D`/`&0E` handler
-  in BBC BASIC. In-repo extract at `docs/dev/manuals/ROMFS-Advanced-Guide.pdf`.
-  The mkromfs handler (and hence ours) descends from this example. **Its
-  printed handler has a defect**: it masks the serial-ROM scan number with
-  `AND #&F`, so a ROM in sideways socket 0 re-claims itself past the `&2B`
-  end marker and loops `*CAT` forever. The genuine Acornsoft ROMs guard this
-  with `CMP #&10` / `BCS`; oaknut's created handler does too (see §2.10).
-- **mkromfs** — Dominic Beesley's Perl + beebasm ROM generator.
-  <https://github.com/dominicbeesley/mkromfs> (`handlesvc.asm`,
-  `mkromfs.pl`). The most precise field-by-field *writer* reference and
-  the basis for the byte tables below.
+  published reference for the `*ROM` filing system, and the basis for the
+  byte tables below: the on-ROM data format, the `&0D`/`&0E` service calls,
+  and a complete worked `&0D`/`&0E` handler in BBC BASIC. In-repo extract at
+  `docs/dev/manuals/ROMFS-Advanced-Guide.pdf`. Our created handler descends
+  from this example. **Its printed handler has a defect**: it masks the
+  serial-ROM scan number with `AND #&F`, so a ROM in sideways socket 0
+  re-claims itself past the `&2B` end marker and loops `*CAT` forever. The
+  genuine Acornsoft ROMs guard this with `CMP #&10` / `BCS`; our created
+  handler does too (see §2.10).
 - **MakeRFS** — J.G. Harston's 6502 builder, with a fast loader.
   <https://mdfs.net/Software/BBC/ROMFS/MakeRFS>
 - **UEF2ROM** — converts UEF cassette images to Acorn Electron ROM
@@ -47,7 +44,7 @@ template:
 
 > **Verification status.** The paged-ROM header, the per-file block field
 > layout, and the marker-byte / flag-bit semantics below are corroborated
-> by *both* the MOS reader disassembly and the mkromfs writer source, and
+> by *both* the MOS reader disassembly and the New Advanced User Guide, and
 > are high-confidence. The items still marked **(confirm against images)**
 > are the few that the OS reader does not pin down — chiefly where the
 > filing-system data starts within a given generator's ROM, and multi-bank
@@ -100,8 +97,8 @@ byte.
 > **Observed on the reference corpus** (six Acornsoft Electron cartridges,
 > §6). The ROM type byte is **`&C2`** — service *and* language entry
 > present (the cartridges are language ROMs too), so `probe()` must test
-> *bit 7* rather than match `&82` (which is what mkromfs, a service-only
-> ROM, emits). Every cartridge carries the generic header title
+> *bit 7* rather than match `&82` (which is what a service-only ROM emits).
+> Every cartridge carries the generic header title
 > `"ROM Cartridge"`, version `&01`, and copyright `(C) 1984 Acornsoft` at
 > offset `&18`. The *filing-system* title is **not** this header title; it
 > is the `*…*`-wrapped title block (§2.5). So treat the header title as
@@ -113,8 +110,9 @@ Between the header and the filing-system data sits the 6502 service
 handler that responds to OSRDRM-style byte reads (`handlesvc.asm`
 implements service calls `&0D` *initialise filing system* and `&0E` *read
 byte*). The parser does not need to interpret this code; it only needs to
-know that the filing-system data begins *after* it. In mkromfs the data
-starts at a fixed offset that depends only on the lengths of the title,
+know that the filing-system data begins *after* it. In the New Advanced
+User Guide layout the data starts at a fixed offset that depends only on
+the lengths of the title,
 version and copyright strings:
 
 ```
@@ -132,8 +130,8 @@ CRC-valid block.)
 > because the hand-written 6502 handler differs in length. The robust
 > approach, confirmed across all six images, is to **scan forward from the
 > header for the first `&2A` whose block header CRC validates**, and treat
-> that as the start of the filing-system data. The mkromfs `DATA_OFFSET`
-> formula above applies only to mkromfs-built ROMs.
+> that as the start of the filing-system data. The `DATA_OFFSET` formula
+> above applies only to ROMs a generator lays out that way.
 
 ## 2. The filing-system data: a chain of CFS blocks
 
@@ -156,7 +154,7 @@ when it reaches the end of the ROM's data.
 ### 2.2 Block header
 
 A header block begins with the `&2A` sync byte, then the following fields
-(this is exactly mkromfs's `pack("Z* L L S S C L", …)` plus the two CRCs):
+(the fixed fields in order, then the two CRCs):
 
 | Field | Size | Encoding | Notes |
 |-------|-----:|----------|-------|
@@ -207,7 +205,7 @@ for a ROMFS file.
 
 ### 2.4 Multi-block files
 
-For a file spanning *N* > 1 blocks, mkromfs emits:
+For a file spanning *N* > 1 blocks, the layout is:
 
 1. **Block 0** — full header (sync `&2A`), flag *without* `&80`, 256 data
    bytes, data CRC.
@@ -216,7 +214,7 @@ For a file spanning *N* > 1 blocks, mkromfs emits:
 3. **Last block** (`N-1`) — full header (sync `&2A`), flag *with* `&80`,
    the final 1–256 data bytes, data CRC.
 
-So mkromfs repeats the full header on the *last* block as well as the
+So the full header is repeated on the *last* block as well as the
 first; middle blocks are headerless. The header must reappear on the last
 block because a `&23` continuation block carries no flag byte, so the
 final block re-syncs with `&2A` precisely to deliver the `&80` "last
@@ -252,7 +250,7 @@ style varies by author:
 
 - **Acornsoft cartridges** wrap it in asterisks: `*Hopper01*`, `*Snap00*`,
   `*Doom01*`, `*Star01*`, `*Star02*` (the asterisks are part of the stored
-  name). mkromfs likewise writes `*<title>*`.
+  name). The New Advanced User Guide example likewise writes `*<title>*`.
 - **The BBC Master Demonstration cartridges** use a **bare** name —
   `DEMO-A`, `DEMO-B` — matching the paged-ROM header title, with no
   asterisks. So a parser must **not** key off asterisks; key off "first
@@ -264,7 +262,7 @@ style varies by author:
   (shown by `*HELP`, §2.9), a separate string.
 
 The Acornsoft title block's flag is **`&81` (last + run-only)**, *not* the
-`&C0` (last + empty) that mkromfs and the NAUG `*EXAMPLE*` example emit:
+`&C0` (last + empty) that the New Advanced User Guide `*EXAMPLE*` example emits:
 Acorn leaves the `&40` empty bit clear even on a zero-length block. A
 reader must therefore treat "block length 0", not "empty bit set", as the
 test for an empty block.
@@ -388,8 +386,9 @@ data), driven by MOS service calls. A ROMFS ROM must answer at least:
 >
 > - **The socket-0 wrap.** At each `&2B` the MOS `INC`s the scan number and
 >   re-issues `&0D` to chain into a lower socket; the filing system ends only
->   when no ROM claims. mkromfs inverts with `EOR #&FF : AND #&0F`, masking the
->   high nibble — so a socket-0 ROM (which sets `&F5 = &0F` on selection) sees
+>   when no ROM claims. The Guide's example inverts with `EOR #&FF : AND #&0F`,
+>   masking the high nibble — so a socket-0 ROM (which sets `&F5 = &0F` on
+>   selection) sees
 >   `&F5` step `&0F → &10` and the mask fold it back to `15 ≥ 0`, re-claiming
 >   itself and looping `*CAT` forever. The genuine ROMs invert with `EOR #&0F`
 >   (high nibble intact) and test `CMP #&10 : BCS exit`, so the hunt
@@ -422,10 +421,12 @@ until a `&0D`/`&0E` handler is prepended. This is exactly the opaque
 preamble this package preserves (§1.2) and refuses to mutate (the
 plain-versus-composite split in `docs/architecture.md`). `disc create
 --filesystem romfs` therefore emits such a handler (`oaknut.romfs.handler`):
-the bare `&0D`/`&0E` handler is the canonical mkromfs/NAUG one with one
-fix — a `CMP #&10` / `BCS` guard on the scan number so the ROM works in
-socket 0 (87 bytes, data at `&8063` for an empty header; see §2.10) — and
-by default a `&09` `*HELP` responder is added that
+the bare `&0D`/`&0E` handler is the canonical New Advanced User Guide one,
+with the `&0D` path following the genuine Acornsoft ROMs where the Guide's
+example is wrong — selecting self on a negative scan number (so it
+initialises on the Electron) and guarding the scan number against wrapping
+(so it works in socket 0): 87 bytes, data at `&8063` for an empty header;
+see §2.10. By default a `&09` `*HELP` responder is added that
 prints the ROM's title — so the created ROM answers `*HELP` with its
 title. The handler is assembled by a small two-pass 6502 assembler so its
 branch and jump targets are correct by construction, and a created ROM has
@@ -477,7 +478,7 @@ a `JMP language` entry and a small stub which `OSCLI`s `*ROM` then
 
 Both CRCs are the CFS/tape CRC: CRC-16-CCITT, polynomial `0x1021`,
 initial value `0x0000`, processed most-significant-bit first, **stored
-big-endian**. mkromfs computes it as:
+big-endian**. The New Advanced User Guide computes it as:
 
 ```python
 def crc16_ccitt(data: bytes) -> int:
@@ -497,9 +498,9 @@ standard `0x1021` polynomial step. The header CRC covers the header bytes
 *after* the sync byte (name through next-file pointer); the data CRC
 covers that block's data bytes.
 
-## 4. Worked reference (from the mkromfs NAUG check)
+## 4. Worked reference (the New Advanced User Guide example)
 
-mkromfs ships a sanity check against the NAUG example:
+The New Advanced User Guide's worked example checks out as:
 
 ```perl
 crc(pack("Z* L L S S C L", "*EXAMPLE*", 0, 0, 0, 0, 0xC0, 0x809E))
@@ -527,7 +528,7 @@ Still to confirm:
    the sideways-ROM notes, but **no spanning image is yet in the corpus**
    to verify a reassembler against, so it is unimplemented.
 3. ~~**Non-Acornsoft / non-cartridge ROMFS**~~ — **resolved**: a genuine
-   mkromfs build (`Snapper_mkromfs.rom`, service-only `&82`, `&C0`
+   tool-built ROM (`Snapper_mkromfs.rom`, service-only `&82`, `&C0`
    empty-flag title block) is now in the corpus. It exercises the `bit 7`
    type test, and the reader preserves the `&C0` "no data" bit so it
    round-trips byte-exact (the writer otherwise re-derives the flag; see
@@ -540,8 +541,8 @@ Twelve ROM images live at the workspace root under
 data CRCs: eight Acornsoft Electron cartridges (including the two-disc
 Countdown To Doom, Starship Command and Tree Of Knowledge), two BBC Master
 Demonstration cartridges (`DEMO-A` / `DEMO-B`), one BBC Micro ROM
-(`Zalaga`), and one tool-built image — `Snapper_mkromfs.rom`, produced by
-Dominic Beesley's `mkromfs` (service-only `&82`, a `&C0` empty-flag title
+(`Zalaga`), and one tool-built image — `Snapper_mkromfs.rom` (service-only
+`&82`, a `&C0` empty-flag title
 block, and the unguarded handler from §2.10). The on-ROM format is
 *identical* across machines (§5); they differ only in *authoring*:
 
@@ -687,7 +688,7 @@ it the "end of ROM marker", per ROM), and the OS only hands off *at* a
   shows them all (e.g. `*Doom01*` then `*Doom02*`); by convention the
   title's trailing digits are the part number.
 - **The socket-0 caveat applies to whichever member is lowest.** With the
-  unguarded mkromfs/NAUG handler a member in socket 0 loops `*CAT`;
+  unguarded New Advanced User Guide handler a member in socket 0 loops `*CAT`;
   oaknut's handler carries the `CMP #&10` guard (§2.10), so its members are
   safe in any socket.
 

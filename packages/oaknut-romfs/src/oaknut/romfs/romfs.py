@@ -63,9 +63,9 @@ class ROMFSFile:
     delete-lock (`oaknut.file.Access.L`) — it is `oaknut.file.Access.X`.
 
     *flag_extra* preserves the block-flag bits this class does not otherwise
-    model — chiefly the ``&40`` "no data" bit some generators (mkromfs, the
-    New Advanced User Guide example) set on a zero-length block, which Acorn's
-    own ROMs leave clear. Captured on parse and re-emitted on serialise so a
+    model — chiefly the ``&40`` "no data" bit the New Advanced User Guide
+    example sets on a zero-length block, which Acorn's own ROMs leave clear.
+    Captured on parse and re-emitted on serialise so a
     round-trip is byte-exact; ``0`` for files this library creates, which
     follow the Acornsoft convention. The ``last`` (``&80``) and ``*RUN``-only
     (``&01``) bits are *not* held here — they are derived from the block

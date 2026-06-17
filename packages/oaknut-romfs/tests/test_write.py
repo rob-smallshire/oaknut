@@ -33,15 +33,15 @@ def test_to_bytes_preserves_image_size():
 
 
 def test_non_derived_flag_bits_are_preserved():
-    # mkromfs (and the New Advanced User Guide example) set the &40 "no data"
-    # bit on the zero-length title block; Acorn's own ROMs leave it clear.
-    # The reader must capture that bit and the writer re-emit it, so a
-    # round-trip does not churn the flag (the byte-exact corpus test relies on
-    # this for Snapper_mkromfs.rom).
+    # The New Advanced User Guide example sets the &40 "no data" bit on the
+    # zero-length title block; Acorn's own ROMs leave it clear. The reader must
+    # capture that bit and the writer re-emit it, so a round-trip does not churn
+    # the flag (the byte-exact corpus test relies on this for the tool-built
+    # ROM, whose title block carries &40).
     from oaknut.romfs.block import FLAG_EMPTY
 
-    mkromfs = ROMFS.from_bytes((ROMFS_DIRPATH / "Snapper_mkromfs.rom").read_bytes())
-    assert mkromfs.files[0].flag_extra == FLAG_EMPTY  # &40 captured
+    tool_built = ROMFS.from_bytes((ROMFS_DIRPATH / "Snapper_mkromfs.rom").read_bytes())
+    assert tool_built.files[0].flag_extra == FLAG_EMPTY  # &40 captured
 
     acornsoft = ROMFS.from_bytes((ROMFS_DIRPATH / "Electron_Snapper.rom").read_bytes())
     assert acornsoft.files[0].flag_extra == 0  # Acorn leaves it clear

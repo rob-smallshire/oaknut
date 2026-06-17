@@ -1,12 +1,13 @@
 """Tests for the ROM filing-system service handler assembler.
 
-The handler is based on the mkromfs / NAUG &0D/&0E handler, with one change:
-the &0D (initialise) path guards against the service-ROM scan number rising
-past the sixteen valid sockets, so a ROM in sideways socket 0 does not
-re-claim itself after its data is exhausted. (mkromfs masks the scan number
-with AND #&0F and so loops *CAT forever in socket 0; the genuine Acornsoft
-ROMs add a CMP #&10 / BCS guard, which this handler follows.) Execution on
-real hardware is confirmed against a 6502 emulator.
+The handler is the New Advanced User Guide &0D/&0E handler, with the &0D
+(initialise) path following the genuine Acornsoft ROMs where the Guide's
+printed example is wrong: it selects self on a negative scan number (the
+Electron issues the init with Y negative) and guards the scan number against
+rising past the sixteen valid sockets, so a ROM in sideways socket 0 does
+not re-claim itself after its data is exhausted (the Guide's example masks
+the scan number with AND #&0F and so loops *CAT forever in socket 0).
+Execution on real hardware is confirmed against a 6502 emulator.
 """
 
 from __future__ import annotations
@@ -182,8 +183,8 @@ def test_initialise_does_not_reclaim_once_scanned_past():
 
 
 def test_handler_length_matches_the_guarded_handler():
-    # The guard adds a few bytes over mkromfs's 81; pin the new length so an
-    # accidental regression in the instruction list is caught.
+    # The &0D additions take the handler a few bytes over the Guide's 81; pin
+    # the length so an accidental regression in the instruction list is caught.
     assert HANDLER_LENGTH == len(build_rfs_handler(0x800C, 0x805D))
 
 

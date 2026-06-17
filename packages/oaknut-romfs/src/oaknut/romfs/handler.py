@@ -6,11 +6,11 @@ the OS reads the filing system only through paged-ROM service calls ``&0D``
 next byte). See ``docs/romfs-format-spec.md`` §2.10.
 
 This module assembles that handler. The 6502 is the canonical handler from
-the *New Advanced User Guide* (as used by ``mkromfs``'s ``handlesvc.asm``):
-it answers ``&0D`` / ``&0E`` for its own ROM and passes every other call
-on. The ``&0D`` path follows the genuine Acornsoft ROMs rather than mkromfs
-in two ways the *New Advanced User Guide* example gets wrong: it treats a
-negative serial-ROM scan number as "initialise from the top" (so a created
+the *New Advanced User Guide*: it answers ``&0D`` / ``&0E`` for its own ROM
+and passes every other call on. The ``&0D`` path follows the genuine
+Acornsoft ROMs in two ways the *New Advanced User Guide* example gets wrong:
+it treats a negative serial-ROM scan number as "initialise from the top" (so
+a created
 ROM works on the Electron, whose MOS issues the init with ``Y`` negative),
 and it guards the scan number against wrapping past the sixteen sockets (so
 a ROM in socket 0 does not loop ``*CAT``). See :data:`_CORE_BODY`. A small
@@ -89,17 +89,18 @@ _PLAIN_DISPATCH = [
     (None, "RTS", "imp", None),  # not ours
 ]
 
-# The &0D / &0E core (the mkromfs / NAUG handler body), shared by both.
-# The &0D path follows the genuine Acornsoft ROMs rather than mkromfs, in two
-# ways the example handler in the New Advanced User Guide gets wrong:
+# The &0D / &0E core (the New Advanced User Guide handler body), shared by both.
+# The &0D path follows the genuine Acornsoft ROMs in two ways the example
+# handler printed in the New Advanced User Guide gets wrong:
 #   * Negative scan number -> "select self". The OS passes the serial-ROM scan
 #     number in Y. The BBC seeds it &FF and INCs to &00 (positive); the
 #     Electron seeds it &EF and INCs to &F0, so its init call arrives with Y
 #     negative. A negative Y means "initialise from the top RFS ROM", so claim
 #     unconditionally — without this an oaknut ROM never initialises on an Elk.
 #   * Wrap guard. After each &2B the OS INCs the scan number to hunt a
-#     continuation ROM in a lower socket. mkromfs masks it with AND #&0F, so
-#     when it wraps &0F->&10 a socket-0 ROM folds back to 15 and re-claims
+#     continuation ROM in a lower socket. The Guide's example masks it with
+#     AND #&0F, so when it wraps &0F->&10 a socket-0 ROM folds back to 15 and
+#     re-claims
 #     itself, looping *CAT forever. Inverting with EOR #&0F (high nibble
 #     intact) and testing CMP #&10 lets the hunt terminate.
 _CORE_BODY = [
@@ -195,8 +196,8 @@ def _layout(program: list) -> tuple[dict[str, int], int]:
     return labels, offset
 
 
-#: Length of the bare &0D/&0E handler (87 bytes: the mkromfs body plus the
-#: negative-Y "select self" and scan-number wrap handling in the &0D path).
+#: Length of the bare &0D/&0E handler (87 bytes: the New Advanced User Guide
+#: body plus the negative-Y "select self" and scan-number wrap handling in &0D).
 HANDLER_LENGTH = _layout(_program(with_help=False))[1]
 
 

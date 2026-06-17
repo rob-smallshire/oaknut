@@ -29,8 +29,9 @@ END_OF_FILESYSTEM = 0x2B
 
 #: Flag bit: this is the last block of its file.
 FLAG_LAST = 0x80
-#: Flag bit: this block carries no data (mkromfs sets it; Acorn does not —
-#: test ``block_length == 0`` rather than this bit to detect an empty file).
+#: Flag bit: this block carries no data (the New Advanced User Guide example
+#: sets it; the genuine Acorn ROMs do not — test ``block_length == 0`` rather
+#: than this bit to detect an empty file).
 FLAG_EMPTY = 0x40
 #: Flag bit: the file is *RUN-only — a form of copy protection. The MOS
 #: refuses to ``*LOAD`` / ``*EXEC`` / ``CHAIN`` it (only ``*RUN``); the OS

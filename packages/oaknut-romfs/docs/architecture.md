@@ -51,7 +51,8 @@ Dependencies flow strictly downward, mirroring oaknut-dfs.
 
 - **`probe(reader)`** — structural identification. Strong signals: the
   ROM type byte at `&8006` has **bit 7 set** (service entry — the corpus
-  cartridges are `&C2`, mkromfs is `&82`, so test the bit, not the value);
+  cartridges are `&C2`, a service-only ROM is `&82`, so test the bit, not
+  the value);
   a copyright string beginning `(C)` at the offset named by `&8007`; and a
   well-formed first block found by **scanning for the first `&2A` whose
   header CRC validates** (the data start varies with handler size). With
@@ -90,8 +91,8 @@ the two real sizes are offered — **16 KiB** (default) and **8 KiB** (`--geomet
 
 The handler is assembled by a small two-pass 6502 assembler
 (`handler.py`) so branch/jump targets are correct by construction. The bare
-`&0D`/`&0E` handler is based on the canonical mkromfs/NAUG one but follows
-the genuine Acornsoft ROMs in the `&0D` path — 87 bytes, putting data at
+`&0D`/`&0E` handler is the canonical New Advanced User Guide one, with the
+`&0D` path following the genuine Acornsoft ROMs — 87 bytes, putting data at
 `&8063` for an empty header (the test anchor). It treats a negative scan
 number as "select self" (the Electron's MOS issues the init with `Y`
 negative, so without this a created ROM never initialises on an Elk) and
@@ -104,7 +105,7 @@ read files correctly.
 
 Writing (`write_bytes`, `create`) is deferred. The medium is read-only
 ROM; identification and reading come first. If image creation is added
-(equivalent to `mkromfs`) it is reached only via `--filesystem romfs`, so
+it is reached only via `--filesystem romfs`, so
 `creates` stays empty and ROMFS is never inferred as a default creator
 from a file extension.
 

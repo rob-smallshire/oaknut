@@ -23,7 +23,7 @@ Consequences that shape the whole package:
 - **CFS metadata.** Files carry an Acorn load address, execution address
   and a lock bit (`AcornMetadata`); the ROM carries a title (`Titled`).
 - **Read-mostly.** The medium is ROM. Reading and identification come
-  first; image *creation* (à la `mkromfs`) is a later, optional concern
+  first; image *creation* is a later, optional concern
   and only via `--filesystem`, never as a default creator (`creates`
   stays empty).
 - **Byte-linear geometry.** There is no meaningful disc geometry — a
@@ -32,7 +32,7 @@ Consequences that shape the whole package:
   not a floppy or a winchester.
 
 See `docs/romfs-format-spec.md` for the authoritative on-ROM byte layout
-(derived from the `mkromfs` generator source and J.G. Harston's MakeRFS)
+(derived from the New Advanced User Guide and J.G. Harston's MakeRFS)
 and `docs/architecture.md` for the planned module layout and how the
 native API maps onto the `oaknut.filesystem` plug-in contract.
 

@@ -155,10 +155,10 @@ instead.
 oaknut stands on decades of Acorn documentation and preservation work. In particular:
 
 - The **New Advanced User Guide** (Acorn Computers) — the primary published reference for the ROM Filing System's on-ROM format and its `&0D`/`&0E` service handler. Note that the service-handler example it prints loops `*CAT` indefinitely when the ROM is fitted in sideways socket 0; oaknut's generated handler corrects this with the `CMP #&10` guard that the genuine Acornsoft ROMs carry (see [`packages/oaknut-romfs/docs/romfs-format-spec.md`](packages/oaknut-romfs/docs/romfs-format-spec.md)).
-- **Dominic Beesley**'s [`mkromfs`](https://github.com/dominicbeesley/mkromfs) — the reference ROMFS writer that oaknut's service handler is based on.
+- **Dominic Beesley** — for the friendly cross-project collaboration on the ROM filing system, including confirming and fixing the socket-0 `*CAT` defect.
 - **J.G. Harston**'s [MakeRFS and the mdfs.net documentation](https://mdfs.net/) — a second ROMFS writer and an extensive, careful reference for Acorn filing-system internals.
 - **tobylobster**'s [annotated disassembly of Acorn MOS 1.20](https://tobylobster.github.io/mos/) — the authoritative reader-side reference for the ROM filing system's service-call behaviour.
-- **`dasmos`** — the tracing disassembler used to compare the genuine Acornsoft and mkromfs service handlers byte for byte.
+- **`dasmos`** — the tracing disassembler used to compare service handlers byte for byte.
 
 ## Licence
 

@@ -22,7 +22,7 @@ def test_xmodem_standard_check_value():
 
 
 def test_naug_example_header_record():
-    # The mkromfs sanity check against the New Advanced User Guide example:
+    # The header record from the New Advanced User Guide example:
     # a title block named "*EXAMPLE*", load=exec=0, block 0, length 0,
     # flag &C0 (last + empty), end-of-file address &809E. The CRC is taken
     # over the header bytes from the name through the end-of-file address.
