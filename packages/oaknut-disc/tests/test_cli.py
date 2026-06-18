@@ -1454,6 +1454,32 @@ class TestPut:
         assert result.exit_code == 0
         assert b"adfs payload" in result.output_bytes
 
+    def test_put_reads_stdin_when_piped_without_dash(
+        self, runner: CliRunner, dfs_image_filepath: Path
+    ) -> None:
+        # Omitting HOST_PATH while stdin is piped reads the bytes from
+        # stdin, so `... | disc put img:$.F` needs no trailing `-`.
+        result = runner.invoke(
+            cli,
+            ["put", f"{dfs_image_filepath}:$.Piped"],
+            input=b"piped bytes",
+        )
+        assert result.exit_code == 0
+
+        result = runner.invoke(cli, ["cat", f"{dfs_image_filepath}:$.Piped"])
+        assert result.exit_code == 0
+        assert b"piped bytes" in result.output_bytes
+
+    def test_put_no_host_path_interactive_errors(
+        self, runner: CliRunner, dfs_image_filepath: Path, monkeypatch
+    ) -> None:
+        # With no HOST_PATH and stdin attached to a terminal, there is
+        # nothing to read; error clearly rather than hang on stdin.
+        monkeypatch.setattr("oaknut.disc.cli._stdin_is_interactive", lambda: True)
+        result = runner.invoke(cli, ["put", f"{dfs_image_filepath}:$.Nope"])
+        assert result.exit_code != 0
+        assert "HOST_PATH" in result.output
+
     def test_put_invalid_load_address_clean_error(
         self, runner: CliRunner, dfs_image_filepath: Path, tmp_path: Path
     ) -> None:

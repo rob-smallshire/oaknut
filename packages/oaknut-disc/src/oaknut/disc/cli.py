@@ -1316,6 +1316,15 @@ def get(
     )
 
 
+def _stdin_is_interactive() -> bool:
+    """Whether stdin is attached to a terminal rather than a pipe.
+
+    Factored out as a seam: under the Click test runner stdin is never a
+    TTY, so tests patch this to exercise the interactive branch of ``put``.
+    """
+    return sys.stdin.isatty()
+
+
 @cli.command()
 @click.argument("compound_path", metavar="OUTER_PATH:INNER_PATH")
 @click.argument("host_path", required=False, default=None)
@@ -1362,12 +1371,14 @@ def put(
     Accepts a ``COMPOUND_PATH`` (the in-image destination) and a
     ``HOST_PATH``.
 
-    ``HOST_PATH`` is required. When it is ``-``, the raw bytes are
-    read from stdin with no metadata-sidecar lookup; supply
-    ``--load`` / ``--exec`` to set the addresses, otherwise they
+    When ``HOST_PATH`` is ``-``, or is omitted while stdin is piped,
+    the raw bytes are read from stdin with no metadata-sidecar lookup;
+    supply ``--load`` / ``--exec`` to set the addresses, otherwise they
     default to ``0xFFFF`` (the Acorn "address not meaningful"
-    sentinel). Otherwise ``HOST_PATH`` names the host file to
-    import.
+    sentinel). This lets ``... | disc put img:$.F`` work without a
+    trailing ``-``; omitting ``HOST_PATH`` at an interactive terminal,
+    with nothing to read, is an error. Otherwise ``HOST_PATH`` names
+    the host file to import.
 
     When reading from a host file, Acorn metadata (load address,
     exec address, access bits) is sourced from the surroundings of
@@ -1393,8 +1404,14 @@ def put(
     # files on DFS and ADFS where the address is not meaningful.
     _DEFAULT_ADDR = 0xFFFF
 
-    # Read data.
-    if host_path is not None and str(host_path) == "-":
+    # Read data. An explicit "-" always means stdin; omitting HOST_PATH
+    # reads stdin too when it is piped, so `... | disc put img:$.F` works
+    # without a trailing "-". A bare invocation at a terminal has nothing
+    # to read, so it errors rather than blocking on stdin.
+    read_stdin = (host_path is not None and str(host_path) == "-") or (
+        host_path is None and not _stdin_is_interactive()
+    )
+    if read_stdin:
         data = sys.stdin.buffer.read()
         resolved_load = parse_address(load_address) if load_address else _DEFAULT_ADDR
         resolved_exec = parse_address(exec_address) if exec_address else _DEFAULT_ADDR
