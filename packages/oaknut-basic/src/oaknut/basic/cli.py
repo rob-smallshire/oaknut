@@ -190,10 +190,11 @@ def _listing_to_bytes(listing: str, encoding: str) -> bytes:
 )
 @click.option(
     "--encoding",
-    default="acorn",
+    default="utf-8",
     show_default=True,
     callback=_validate_encoding,
-    help="Text encoding of the INPUT source. Defaults to the BBC character set.",
+    help='Text encoding of the INPUT source. Use "acorn" for the BBC '
+    "character set (e.g. source taken straight off a disc image).",
 )
 @click.option(
     "--start",
@@ -226,8 +227,9 @@ def tokenise(
 
         oaknut-basic tokenise --start 10 unnumbered.bas MENU
 
-    INPUT is read in --encoding (the BBC ``acorn`` character set by default;
-    pass ``utf-8`` for source authored in a modern editor).
+    INPUT is read in --encoding (``utf-8`` by default, for source authored
+    in a modern editor; pass ``acorn`` for the BBC character set, e.g.
+    source taken straight off a disc image).
     """
     from oaknut.basic import tokenise as tokenise_source
 
@@ -252,10 +254,11 @@ def tokenise(
 )
 @click.option(
     "--encoding",
-    default="acorn",
+    default="utf-8",
     show_default=True,
     callback=_validate_encoding,
-    help="Text encoding for the OUTPUT source. Defaults to the BBC character set.",
+    help='Text encoding for the OUTPUT source. Use "acorn" for the BBC '
+    "character set with CR line endings (e.g. writing back to a disc image).",
 )
 def detokenise(input_stream, output_stream, encoding: str) -> None:
     """De-tokenise a stored BBC BASIC program into source text.
@@ -267,8 +270,9 @@ def detokenise(input_stream, output_stream, encoding: str) -> None:
         oaknut-basic detokenise MENU menu.bas
         disc get game.ssd MENU - | oaknut-basic detokenise
 
-    OUTPUT is written in --encoding (the BBC ``acorn`` character set with CR
-    line endings by default; pass ``utf-8`` for a host text file).
+    OUTPUT is written in --encoding (``utf-8`` with host-native ``LF`` line
+    endings by default, for a host text file; pass ``acorn`` for the BBC
+    character set with ``CR`` endings, e.g. writing back to a disc image).
     """
     from oaknut.basic import detokenise as detokenise_program
 

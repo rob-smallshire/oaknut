@@ -176,14 +176,53 @@ class TestTokeniseCommand:
         assert "no line number" in result.output
 
 
+class TestTokeniseEncoding:
+    def test_default_decodes_host_utf8_pound_sign(self):
+        # The default encoding is UTF-8, so a £ typed in a host editor
+        # (0xC2 0xA3) maps to the single Acorn code point, not the raw
+        # multibyte sequence.
+        runner = CliRunner()
+        result = runner.invoke(cli, ["tokenise"], input='10 PRINT "£"\n'.encode("utf-8"))
+        assert result.exit_code == 0
+        # Acorn stores £ as 0x60 inside the tokenised string literal.
+        assert b'"\x60"' in result.stdout_bytes
+
+    def test_acorn_encoding_passes_raw_bytes_through(self):
+        # --encoding acorn treats the input as Acorn bytes already, so a
+        # 0x60 byte is the £ literal verbatim.
+        runner = CliRunner()
+        result = runner.invoke(
+            cli, ["tokenise", "--encoding", "acorn"], input=b'10 PRINT "\x60"\n'
+        )
+        assert result.exit_code == 0
+        assert b'"\x60"' in result.stdout_bytes
+
+
 class TestDetokeniseCommand:
     def test_pipe_detokenises_to_stdout(self):
         program = basic.tokenise("10 PRINT")
         runner = CliRunner()
         result = runner.invoke(cli, ["detokenise"], input=program)
         assert result.exit_code == 0
-        # Acorn output: CR line ending.
+        # Default UTF-8 output: host-native LF line ending.
+        assert result.stdout_bytes == b"10 PRINT\n"
+
+    def test_acorn_encoding_uses_cr_terminators(self):
+        program = basic.tokenise("10 PRINT")
+        runner = CliRunner()
+        result = runner.invoke(cli, ["detokenise", "--encoding", "acorn"], input=program)
+        assert result.exit_code == 0
+        # Acorn output: native CR line ending.
         assert result.stdout_bytes == b"10 PRINT\r"
+
+    def test_default_writes_host_utf8_pound_sign(self):
+        # A program whose string literal holds the Acorn £ (0x60)
+        # de-tokenises to a UTF-8 £ under the default encoding.
+        program = basic.tokenise('10 PRINT "£"')
+        runner = CliRunner()
+        result = runner.invoke(cli, ["detokenise"], input=program)
+        assert result.exit_code == 0
+        assert "£".encode("utf-8") in result.stdout_bytes
 
     def test_malformed_program_reports_the_offset(self):
         runner = CliRunner()
@@ -199,4 +238,5 @@ class TestTokeniseDetokeniseRoundTrip:
         assert tokenised.exit_code == 0
         listing = runner.invoke(cli, ["detokenise"], input=tokenised.stdout_bytes)
         assert listing.exit_code == 0
-        assert listing.stdout_bytes == b"10 PRINT\r20 GOTO 10\r"
+        # Default UTF-8 output: host-native LF line endings.
+        assert listing.stdout_bytes == b"10 PRINT\n20 GOTO 10\n"
