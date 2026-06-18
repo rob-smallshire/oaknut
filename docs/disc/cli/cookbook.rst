@@ -624,6 +624,54 @@ For just the paths of the files that matched, strip the header with
    :section: paths
 
 
+Store host BASIC source on a disc as a tokenised program
+--------------------------------------------------------
+
+A BBC Micro keeps a BASIC program on disc in *tokenised* form — keywords
+packed to single bytes, each line framed by an ``&0D`` marker — not as the
+source text you type at the keyboard. The ``oaknut-basic`` tool converts
+between the two halves of that divide, and it reads stdin / writes stdout
+by default, so it stands either side of ``disc`` in a pipe.
+
+**1. The host source.**
+
+A plain, numbered ``.bas`` text file authored in any editor:
+
+.. cli-example:: basic_text_roundtrip
+   :section: author
+
+**2. Tokenise it onto the disc.**
+
+One pipe tokenises the source and stores the program bytes. ``disc put``
+reads its data from stdin when no host path is given, so the pipe needs no
+trailing ``-``:
+
+.. cli-example:: basic_text_roundtrip
+   :section: put
+
+The ``--encoding utf-8`` on ``tokenise`` reads source written in a modern
+editor; drop it for source already in the BBC ``acorn`` character set. The
+``--load 0x1900`` / ``--exec 0x8023`` stamp the addresses a BASIC program
+carries on disc — ``PAGE`` and the BASIC ROM's entry — so the stored
+``GREET`` is ready to ``CHAIN``. The catalogue confirms the 69-byte
+tokenised program landed with those addresses.
+
+**3. Lift it back out to a host text file.**
+
+The reverse direction streams the stored program through the
+de-tokeniser. ``disc cat`` writes the file's raw bytes to stdout, which
+``oaknut-basic detokenise`` turns back into numbered source:
+
+.. cli-example:: basic_text_roundtrip
+   :section: get
+
+Here ``--encoding utf-8`` writes a host text file with ``LF`` line
+endings; the default ``acorn`` encoding would instead emit the BBC
+character set with the ``CR`` endings a real Acorn editor expects. The
+recovered listing matches the source it started from — the round trip is
+lossless.
+
+
 Create a game cartridge ROM
 ---------------------------
 
