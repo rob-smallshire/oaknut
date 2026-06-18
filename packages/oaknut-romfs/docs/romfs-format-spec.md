@@ -373,16 +373,24 @@ data), driven by MOS service calls. A ROMFS ROM must answer at least:
   byte at `(&F6),Y=0`, increment the `&F6/&F7` pointer (carry into `&F7`),
   and claim. This is the byte-at-a-time spigot the loader in §2.7 pulls.
 
-> **The `&0D` scan number: machine differences the handler must survive.**
+> **The `&0D` scan number: why the Electron differs (it's the speech).**
 > The OS passes the serial-ROM scan number in `Y` (and `&F5`) on the init
-> call, and the BBC and Electron seed it *differently*:
+> call. Both the BBC (OS 1.20) and the Electron seed it `&EF` and `INC` to
+> `&F0` — but `&F5` is *shared* with the speech-PHROM system, where PHROMs are
+> `&F0`–`&FF` (negative) and paged ROMs `0`–`15` (positive):
 >
-> - **BBC OS 1.20 / Master** seed `&FF` and `INC` to `&00`, so the first init
->   arrives with `Y = 0` (positive).
-> - **Electron OS** seeds `&EF` and `INC`s to `&F0`, so the first init arrives
->   with `Y = &F0` (**negative**). The genuine Acornsoft handlers test this
->   first (`TYA : BMI <select self>`) and claim unconditionally — "initialise
->   from the top RFS ROM". A handler without it never initialises on an Elk.
+> - **BBC OS 1.20** — `readByteFromROMOrPHROM` does `INC &F5 : LDY &F5 :
+>   BPL romServiceCall`. A negative number (the PHROM range, which includes the
+>   `&F0` seed) is routed to the *speech* path; the paged-ROM `&0D` goes out
+>   only once `&F5` has stepped up into the positive paged-ROM range. So a
+>   paged ROM's `&0D` handler is only ever entered with a non-negative `Y`, and
+>   the negative branch is dead code on a Beeb. (The Master MOS reorganises
+>   this, seeding `&FF` → `&00` directly.)
+> - **Electron OS** — no speech hardware, so its equivalent (`LEA97`) has no
+>   `BPL`/PHROM branch: it hands the paged-ROM `&0D` the raw `&F0`
+>   (**negative**). The genuine Acornsoft handlers test this first
+>   (`TYA : BMI <select self>`) and claim unconditionally — "initialise from
+>   the top RFS ROM". A handler without it never initialises on an Elk.
 >
 > - **The socket-0 wrap.** At each `&2B` the MOS `INC`s the scan number and
 >   re-issues `&0D` to chain into a lower socket; the filing system ends only

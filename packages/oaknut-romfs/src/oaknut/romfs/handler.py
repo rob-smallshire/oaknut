@@ -92,11 +92,14 @@ _PLAIN_DISPATCH = [
 # The &0D / &0E core (the New Advanced User Guide handler body), shared by both.
 # The &0D path follows the genuine Acornsoft ROMs in two ways the example
 # handler printed in the New Advanced User Guide gets wrong:
-#   * Negative scan number -> "select self". The OS passes the serial-ROM scan
-#     number in Y. The BBC seeds it &FF and INCs to &00 (positive); the
-#     Electron seeds it &EF and INCs to &F0, so its init call arrives with Y
-#     negative. A negative Y means "initialise from the top RFS ROM", so claim
-#     unconditionally — without this an oaknut ROM never initialises on an Elk.
+#   * Negative scan number -> "select self". The OS passes the scan number in
+#     Y; both the BBC (OS 1.20) and the Electron seed it &EF and INC to &F0.
+#     But &F5 is shared with the speech PHROMs (&F0-&FF, negative): the BBC's
+#     reader (readByteFromROMOrPHROM) routes a negative value down the speech
+#     path, so its paged ROMs only ever see a non-negative Y; the Electron has
+#     no speech, so the paged-ROM &0D is handed the raw &F0. A negative Y means
+#     "initialise from the top RFS ROM", so claim unconditionally — else an
+#     oaknut ROM never initialises on an Elk.
 #   * Wrap guard. After each &2B the OS INCs the scan number to hunt a
 #     continuation ROM in a lower socket. The Guide's example masks it with
 #     AND #&0F, so when it wraps &0F->&10 a socket-0 ROM folds back to 15 and
