@@ -649,11 +649,9 @@ trailing ``-``:
 .. cli-example:: basic_text_roundtrip
    :section: put
 
-The ``--encoding utf-8`` on ``tokenise`` reads source written in a modern
-editor; drop it for source already in the BBC ``acorn`` character set. The
-``--load 0x1900`` / ``--exec 0x8023`` stamp the addresses a BASIC program
-carries on disc — ``PAGE`` and the BASIC ROM's entry — so the stored
-``GREET`` is ready to ``CHAIN``. The catalogue confirms the 69-byte
+The ``--load 0x1900`` / ``--exec 0x8023`` stamp the addresses a BASIC
+program carries on disc — ``PAGE`` and the BASIC ROM's entry — so the
+stored ``GREET`` is ready to ``CHAIN``. The catalogue confirms the 69-byte
 tokenised program landed with those addresses.
 
 **3. Lift it back out to a host text file.**
@@ -665,11 +663,8 @@ de-tokeniser. ``disc cat`` writes the file's raw bytes to stdout, which
 .. cli-example:: basic_text_roundtrip
    :section: get
 
-Here ``--encoding utf-8`` writes a host text file with ``LF`` line
-endings; the default ``acorn`` encoding would instead emit the BBC
-character set with the ``CR`` endings a real Acorn editor expects. The
-recovered listing matches the source it started from — the round trip is
-lossless.
+The recovered listing is identical to the source it started from — the
+round trip is lossless.
 
 
 Create a game cartridge ROM

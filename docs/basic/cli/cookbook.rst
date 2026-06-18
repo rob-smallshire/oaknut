@@ -37,14 +37,17 @@ pipeline — or in a single ``tokenise`` invocation with auto-numbering:
 Convert a UTF-8 listing to a BBC program
 ----------------------------------------
 
-A listing authored in a modern editor is UTF-8; the program on the
-image must be in the Acorn character set. ``--encoding`` bridges the two
-— decode the input as UTF-8 on the way in, and the tokenised output is
-Acorn-native:
+A listing authored in a modern editor is UTF-8; the program on the image
+must be in the Acorn character set. ``tokenise`` bridges the two by
+default — UTF-8 in, Acorn-native tokenised bytes out, with ``£`` and
+friends mapped across — so no flag is needed:
 
 .. code-block:: console
 
-   $ oaknut-basic tokenise --encoding utf-8 menu.bas | disc put game.ssd MENU -
+   $ oaknut-basic tokenise menu.bas | disc put game.ssd MENU -
+
+Pass ``--encoding acorn`` only when the source is already Acorn bytes,
+such as a listing taken straight off another image.
 
 
 Batch-detokenise every program on a disc

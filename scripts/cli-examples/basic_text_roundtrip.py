@@ -45,17 +45,16 @@ with in_tmp_dir():
     # reads stdin when no host path is given, so no trailing `-` is needed;
     # --load/--exec stamp the addresses a BASIC program carries on disc.
     show(
-        "oaknut-basic tokenise --encoding utf-8 greeting.bas "
+        "oaknut-basic tokenise greeting.bas "
         "| disc put 'greeting.ssd:$.GREET' --load 0x1900 --exec 0x8023"
     )
     show("disc ls 'greeting.ssd:$'")
 
     section("get")
     # The reverse: stream the stored program through the de-tokeniser into
-    # a host text file. --encoding utf-8 writes LF-terminated source an
-    # ordinary editor can open, rather than the BBC `acorn` set with CRs.
+    # a host text file an ordinary editor can open.
     show(
         "disc cat 'greeting.ssd:$.GREET' "
-        "| oaknut-basic detokenise --encoding utf-8 > recovered.bas"
+        "| oaknut-basic detokenise > recovered.bas"
     )
     show("cat recovered.bas")

@@ -29,14 +29,14 @@ with in_tmp_dir():
     # Unnumbered source, numbered as if typed under AUTO, then read back.
     show(
         "printf 'PRINT\\nEND\\n' | oaknut-basic tokenise --start 10 "
-        "| oaknut-basic detokenise --encoding utf-8"
+        "| oaknut-basic detokenise"
     )
 
     section("roundtrip")
     show(
         "printf '10 PRINT\\n20 GOTO 10\\n' "
-        "| oaknut-basic tokenise --encoding utf-8 "
-        "| oaknut-basic detokenise --encoding utf-8"
+        "| oaknut-basic tokenise "
+        "| oaknut-basic detokenise"
     )
 
     section("already-numbered")
