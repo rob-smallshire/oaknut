@@ -25,6 +25,8 @@ Two structural facts drive the tables below:
 
 from __future__ import annotations
 
+from types import MappingProxyType
+
 # The line-number reference token. Not a table entry: the tokeniser
 # produces ``&8D`` followed by a 3-byte encoded line number, and the
 # de-tokeniser special-cases it (see :mod:`oaknut.basic.linenumber`).
@@ -192,6 +194,9 @@ _ASSIGNMENT_FORMS: tuple[tuple[str, int], ...] = (
 )
 
 # token byte -> keyword spelling, covering every entry in the ROM table.
-# &8D (line number) and &CE (unused gap) are deliberately absent.
-TOKEN_TO_KEYWORD: dict[int, str] = {token: keyword for keyword, token, _flags in KEYWORDS}
-TOKEN_TO_KEYWORD.update({token: keyword for keyword, token in _ASSIGNMENT_FORMS})
+# &8D (line number) and &CE (unused gap) are deliberately absent. Exposed
+# read-only: it is public API a byte-level consumer reads but must not
+# mutate (a stray write would corrupt the tokeniser and de-tokeniser).
+_token_to_keyword: dict[int, str] = {token: keyword for keyword, token, _flags in KEYWORDS}
+_token_to_keyword.update({token: keyword for keyword, token in _ASSIGNMENT_FORMS})
+TOKEN_TO_KEYWORD: MappingProxyType[int, str] = MappingProxyType(_token_to_keyword)

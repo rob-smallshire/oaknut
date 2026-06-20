@@ -1,10 +1,15 @@
-"""De-tokenise a stored BBC BASIC II program into source text.
+"""De-tokenise BBC BASIC II bytes into source text.
 
-Mirrors the ROM's ``LIST`` walk: split the program into lines on the
-``&0D`` start-of-line markers, render each line's number followed by its
-de-tokenised body. Within a body, keyword tokens expand to their table
-spelling, ``&8D`` references decode back to plain decimal, and bytes
-inside a quoted string are emitted verbatim (no token expansion).
+The de-tokeniser is the *text projection* of the token scanner
+(:mod:`oaknut.basic.scanner`): :func:`detokenise` mirrors the ROM's
+``LIST`` walk over the ``&0D``-framed stored form — rendering each line's
+number followed by its body — while :func:`detokenise_body` flattens one
+unframed line body. Both join the body :class:`~oaknut.basic.Token`
+stream's values: keyword tokens expand to their table spelling, ``&8D``
+references decode back to plain decimal, and bytes inside a quoted string
+are emitted verbatim (no token expansion). Where keyword *adjacency*
+matters — ``?QPLOT`` is not re-typeable as a program — reach past the
+text for :func:`oaknut.basic.scan` instead.
 
 The returned string uses latin-1/code-point semantics: a stored byte
 ``b`` becomes ``chr(b)``, so the text round-trips byte-exactly through
@@ -21,17 +26,7 @@ including) the next one, so ``length = 4 + len(body)``.
 
 from __future__ import annotations
 
-from oaknut.basic.exceptions import (
-    InvalidLineLengthError,
-    MissingLineMarkerError,
-    TruncatedProgramError,
-)
-from oaknut.basic.linenumber import decode_line_number
-from oaknut.basic.tokens import HEADER_LENGTH, LINE_NUMBER_TOKEN, TOKEN_TO_KEYWORD
-
-_CR = 0x0D
-_END_MARKER = 0xFF
-_QUOTE = 0x22
+from oaknut.basic.scanner import scan, scan_program
 
 
 def detokenise(data: bytes) -> str:
@@ -50,67 +45,29 @@ def detokenise(data: bytes) -> str:
             marker, a truncated header or reference, or an impossible
             length byte.
     """
-    lines: list[str] = []
-    i = 0
-    n = len(data)
-    while i < n:
-        if data[i] != _CR:
-            raise MissingLineMarkerError(offset=i, found=data[i])
-        if i + 1 >= n:
-            raise TruncatedProgramError(offset=i, detail="line marker with no line number")
-        if data[i + 1] == _END_MARKER:
-            break
-        if i + HEADER_LENGTH > n:
-            raise TruncatedProgramError(offset=i, detail="incomplete line header")
-        line_number = (data[i + 1] << 8) | data[i + 2]
-        length = data[i + 3]
-        if length < HEADER_LENGTH or i + length > n:
-            raise InvalidLineLengthError(offset=i, length=length)
-        body = data[i + HEADER_LENGTH : i + length]
-        lines.append(f"{line_number}{_detokenise_body(body, base_offset=i + HEADER_LENGTH)}")
-        i += length
-    return "".join(f"{line}\n" for line in lines)
+    return "".join(
+        f"{record.line_number}{''.join(token.value for token in record.tokens)}\n"
+        for record in scan_program(data)
+    )
 
 
-def _detokenise_body(body: bytes, *, base_offset: int) -> str:
-    """Expand one line's body bytes to text.
+def detokenise_body(data: bytes) -> str:
+    """De-tokenise an unframed line body into text.
 
-    *base_offset* is the absolute offset of ``body[0]`` within the whole
-    program, so any fault can be reported at its true location.
+    Unlike :func:`detokenise`, this expects a line *body* — inline token
+    bytes with no ``&0D`` framing and no leading line number, the form
+    BBC Micro Bot / Owlet programs and AUTO-style entry arrive in. It is
+    the text join of :func:`oaknut.basic.scan`; when keyword adjacency
+    matters, consume that token stream directly instead.
+
+    Args:
+        data: A line body of inline token bytes.
+
+    Returns:
+        The body as source text, using latin-1/code-point semantics so it
+        round-trips byte-exactly through :func:`oaknut.basic.tokenise`.
+
+    Raises:
+        DetokeniseError: A ``&8D`` line-number reference is truncated.
     """
-    out: list[str] = []
-    i = 0
-    n = len(body)
-    in_string = False
-    while i < n:
-        b = body[i]
-        if in_string:
-            out.append(chr(b))
-            if b == _QUOTE:
-                in_string = False
-            i += 1
-            continue
-        if b == _QUOTE:
-            in_string = True
-            out.append('"')
-            i += 1
-            continue
-        if b == LINE_NUMBER_TOKEN:
-            payload = body[i + 1 : i + 4]
-            if len(payload) != 3:
-                raise TruncatedProgramError(
-                    offset=base_offset + i,
-                    detail="incomplete &8D line-number reference",
-                )
-            out.append(str(decode_line_number(payload)))
-            i += 4
-            continue
-        if b >= 0x80:
-            # Unknown high bytes (e.g. the &CE gap) fall back to a raw
-            # character so the bytes still round-trip.
-            out.append(TOKEN_TO_KEYWORD.get(b, chr(b)))
-            i += 1
-            continue
-        out.append(chr(b))
-        i += 1
-    return "".join(out)
+    return "".join(token.value for token in scan(data))
