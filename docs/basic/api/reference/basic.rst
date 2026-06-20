@@ -13,7 +13,63 @@ Conversion functions
 
 .. autofunction:: oaknut.basic.detokenise
 
+.. autofunction:: oaknut.basic.detokenise_body
+
 .. autofunction:: oaknut.basic.number_lines
+
+
+Token stream
+------------
+
+De-tokenising to text loses keyword *adjacency* — the body ``?Q <PLOT>
+?Q`` renders as ``?QPLOT?Q``, which the ROM tokeniser re-reads as the
+variable ``QPLOT``. A consumer that must recover the program (a faithful
+front end, a re-tokeniser) needs the bytes as a token stream, not text.
+:func:`~oaknut.basic.scan` provides it for an unframed line body, and
+:func:`~oaknut.basic.scan_program` walks the ``&0D``-framed stored form.
+The text de-tokenisers above are the join of these streams' values.
+
+.. autofunction:: oaknut.basic.scan
+
+.. autofunction:: oaknut.basic.scan_program
+
+.. autoclass:: oaknut.basic.Token
+   :members:
+
+.. autoclass:: oaknut.basic.TokenKind
+   :members:
+
+.. autoclass:: oaknut.basic.LineRecord
+   :members:
+
+
+Token table
+-----------
+
+The BBC BASIC II keyword/token table and flag definitions, for a
+byte-level consumer that resolves tokens itself. The mapping is exposed
+read-only; mutating it would corrupt the tokeniser and de-tokeniser.
+
+.. autodata:: oaknut.basic.TOKEN_TO_KEYWORD
+   :no-value:
+
+.. autodata:: oaknut.basic.KEYWORDS
+   :no-value:
+
+.. autodata:: oaknut.basic.LINE_NUMBER_TOKEN
+
+.. autofunction:: oaknut.basic.decode_line_number
+
+The crunch flag bits, as read from the disassembly's bit-by-bit
+dispatch:
+
+.. autodata:: oaknut.basic.FLAG_CONDITIONAL
+.. autodata:: oaknut.basic.FLAG_MIDDLE
+.. autodata:: oaknut.basic.FLAG_START
+.. autodata:: oaknut.basic.FLAG_FN_PROC
+.. autodata:: oaknut.basic.FLAG_LINE_NUMBER
+.. autodata:: oaknut.basic.FLAG_STOP_LINE
+.. autodata:: oaknut.basic.FLAG_PSEUDO_VAR
 
 
 Data files

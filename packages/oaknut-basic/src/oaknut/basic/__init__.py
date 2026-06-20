@@ -30,7 +30,7 @@ from oaknut.basic.datafile import (
     BbcBasicDataReader,
     BbcBasicDataWriter,
 )
-from oaknut.basic.detokeniser import detokenise
+from oaknut.basic.detokeniser import detokenise, detokenise_body
 from oaknut.basic.exceptions import (
     AlreadyNumberedError,
     BASICError,
@@ -52,12 +52,32 @@ from oaknut.basic.exceptions import (
     UnnumberedLineError,
 )
 from oaknut.basic.float5 import pack_float5, unpack_float5
+from oaknut.basic.linenumber import decode_line_number
 from oaknut.basic.numbering import (
     DEFAULT_LINE_NUMBER,
     DEFAULT_LINE_STEP,
     number_lines,
 )
+from oaknut.basic.scanner import (
+    LineRecord,
+    Token,
+    TokenKind,
+    scan,
+    scan_program,
+)
 from oaknut.basic.tokeniser import tokenise
+from oaknut.basic.tokens import (
+    FLAG_CONDITIONAL,
+    FLAG_FN_PROC,
+    FLAG_LINE_NUMBER,
+    FLAG_MIDDLE,
+    FLAG_PSEUDO_VAR,
+    FLAG_START,
+    FLAG_STOP_LINE,
+    KEYWORDS,
+    LINE_NUMBER_TOKEN,
+    TOKEN_TO_KEYWORD,
+)
 
 __version__ = "12.8.2"
 
@@ -71,6 +91,16 @@ __all__ = [
     "DEFAULT_LINE_NUMBER",
     "DEFAULT_LINE_STEP",
     "ELECTRON_BASIC_LOAD_ADDRESS",
+    "FLAG_CONDITIONAL",
+    "FLAG_FN_PROC",
+    "FLAG_LINE_NUMBER",
+    "FLAG_MIDDLE",
+    "FLAG_PSEUDO_VAR",
+    "FLAG_START",
+    "FLAG_STOP_LINE",
+    "KEYWORDS",
+    "LINE_NUMBER_TOKEN",
+    "TOKEN_TO_KEYWORD",
     "AlreadyNumberedError",
     "BASICError",
     "BbcBasicDataFile",
@@ -85,17 +115,24 @@ __all__ = [
     "InvalidLineLengthError",
     "LineNumberOrderError",
     "LineNumberRangeError",
+    "LineRecord",
     "LineTooLongError",
     "MissingLineMarkerError",
     "StringTooLongError",
+    "Token",
+    "TokenKind",
     "TokeniseError",
     "TruncatedProgramError",
     "TruncatedRecordError",
     "UnknownTagError",
     "UnnumberedLineError",
+    "decode_line_number",
     "detokenise",
+    "detokenise_body",
     "number_lines",
     "pack_float5",
+    "scan",
+    "scan_program",
     "unpack_float5",
     "tokenise",
 ]
