@@ -1737,7 +1737,11 @@ def cp(src: str, dst: str, force: bool, recursive: bool, wildcards: bool) -> Non
     creating intermediate destination directories as needed.  Copies
     across DFS, ADFS, and AFS in any combination; load/exec addresses
     are preserved and access attributes are mapped best-effort (DFS only
-    has the locked bit).
+    has the locked bit). A filetype or datestamp is translated through
+    each filesystem's own representation — ADFS encodes both in load/exec,
+    AFS keeps a native date and no filetype — so a date survives an
+    ADFS↔AFS copy. Where ADFS must choose (it cannot hold both a real
+    address and a datestamp in the one field), the datestamp wins.
     """
     _cp_dispatch(src, dst, force=force, recursive=recursive, wildcards=wildcards)
 
@@ -2160,7 +2164,12 @@ def _walk_tree(
 
 def _file_item(src_mount, src_path: str, rel_dst: str) -> dict:
     """Build a ``file`` copy item, reading data and metadata from the mount."""
-    from oaknut.filesystem import AcornMetadata, StorageOrdered
+    from oaknut.filesystem import (
+        AcornMetadata,
+        Datestamped,
+        Filetyped,
+        StorageOrdered,
+    )
 
     load = exec_addr = access = 0
     if isinstance(src_mount, AcornMetadata):
@@ -2168,6 +2177,17 @@ def _file_item(src_mount, src_path: str, rel_dst: str) -> dict:
         load = meta.load_address or 0
         exec_addr = meta.exec_address or 0
         access = int(meta.access) if meta.access is not None else 0
+    # Read the *logical* filetype/datestamp through the capabilities so a
+    # cross-filesystem copy can re-encode them the destination's own way,
+    # instead of copying raw load/exec (which mean different things on ADFS
+    # and AFS). A typed file's load/exec hold the encoding, not a real
+    # address, so do not carry them to a filesystem that stores addresses.
+    filetype = src_mount.filetype(src_path) if isinstance(src_mount, Filetyped) else None
+    datestamp = (
+        src_mount.datestamp(src_path) if isinstance(src_mount, Datestamped) else None
+    )
+    if filetype is not None:
+        load = exec_addr = 0
     item = {
         "kind": "file",
         "dst": rel_dst,
@@ -2175,6 +2195,8 @@ def _file_item(src_mount, src_path: str, rel_dst: str) -> dict:
         "load": load,
         "exec": exec_addr,
         "access": access,
+        "filetype": filetype,
+        "datestamp": datestamp,
     }
     # The source's whole-disc position, so the write phase can lay files
     # down in storage order across directories (see _in_global_storage_order).
@@ -2243,7 +2265,12 @@ def _ensure_dir_chain(dst_mount, bare: str) -> None:
 def _write_copy_item(dst_mount, dst_path: str, item: dict, force: bool) -> None:
     """Write a file item to its destination path."""
     from oaknut.file import AcornMeta
-    from oaknut.filesystem import AcornMetadata, HierarchicalDirectories
+    from oaknut.filesystem import (
+        AcornMetadata,
+        Datestamped,
+        Filetyped,
+        HierarchicalDirectories,
+    )
 
     # Ensure the parent exists for hierarchical destinations; on a flat
     # catalogue the letter prefix appears when a file claims it (and the
@@ -2263,6 +2290,16 @@ def _write_copy_item(dst_mount, dst_path: str, item: dict, force: bool) -> None:
             dst_path,
             AcornMeta(load_address=item["load"], exec_address=item["exec"], access=item["access"]),
         )
+    # Re-encode the logical filetype/datestamp in the destination's own form.
+    # Filetype first, so a following datestamp preserves it; on ADFS each of
+    # these overwrites the load/exec fields with the 0xFFF encoding (where the
+    # datestamp therefore wins over a real address it cannot also hold).
+    filetype = item.get("filetype")
+    if filetype is not None and isinstance(dst_mount, Filetyped):
+        dst_mount.set_filetype(dst_path, filetype)
+    datestamp = item.get("datestamp")
+    if datestamp is not None and isinstance(dst_mount, Datestamped):
+        dst_mount.set_datestamp(dst_path, datestamp)
 
 
 _alias("*COPY", "cp")
