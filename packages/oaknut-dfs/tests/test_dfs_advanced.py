@@ -454,4 +454,6 @@ class TestCatalogueOrdering:
         (dfs.root / "$" / "PROG").write_bytes(b"p" * 100, load_address=0x30000)
         (dfs.root / "$" / "TEMP").write_bytes(b"t" * 100)
         (dfs.root / "$" / "TEMP").unlink()
-        assert (dfs.root / "$" / "PROG").stat().load_address == 0x30000
+        # Both top bits set marks a host address; it reads back with the top
+        # byte expanded to FF (matching Acorn *INFO).
+        assert (dfs.root / "$" / "PROG").stat().load_address == 0xFF0000

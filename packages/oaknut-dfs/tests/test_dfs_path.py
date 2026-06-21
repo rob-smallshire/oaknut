@@ -340,7 +340,9 @@ class TestDFSPathModification:
         dfs = _make_dfs_with_files()
         p = dfs.root / "$" / "HELLO"
         p.set_load_address(0x3FF00)
-        assert p.stat().load_address == 0x3FF00
+        # Both top bits set marks a host address, so the top byte reads
+        # back expanded to FF (matching Acorn *INFO).
+        assert p.stat().load_address == 0xFFFF00
         # Exec should be unchanged.
         assert p.stat().exec_address == 0x8000
 
@@ -348,7 +350,8 @@ class TestDFSPathModification:
         dfs = _make_dfs_with_files()
         p = dfs.root / "$" / "HELLO"
         p.set_exec_address(0x38000)
-        assert p.stat().exec_address == 0x38000
+        # Both top bits set marks a host address; the top byte expands to FF.
+        assert p.stat().exec_address == 0xFF8000
         # Load should be unchanged.
         assert p.stat().load_address == 0x1900
 
