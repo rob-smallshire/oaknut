@@ -214,6 +214,26 @@ Metadata
 
    .. cli-example:: cmd_set_exec
 
+.. oaknut-command:: oaknut.disc.cli:get-filetype
+   :prog: disc get-filetype
+
+   .. cli-example:: cmd_get_filetype
+
+.. oaknut-command:: oaknut.disc.cli:set-filetype
+   :prog: disc set-filetype
+
+   .. cli-example:: cmd_set_filetype
+
+.. oaknut-command:: oaknut.disc.cli:get-datestamp
+   :prog: disc get-datestamp
+
+   .. cli-example:: cmd_get_datestamp
+
+.. oaknut-command:: oaknut.disc.cli:set-datestamp
+   :prog: disc set-datestamp
+
+   .. cli-example:: cmd_set_datestamp
+
 
 Whole-image operations
 ----------------------

@@ -53,6 +53,12 @@ protocol.
 .. autoclass:: oaknut.filesystem.AcornMetadata
    :members:
 
+.. autoclass:: oaknut.filesystem.Filetyped
+   :members:
+
+.. autoclass:: oaknut.filesystem.Datestamped
+   :members:
+
 .. autoclass:: oaknut.filesystem.Titled
    :members:
 
