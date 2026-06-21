@@ -47,6 +47,23 @@ DFS_NAME_GRAMMAR = NameGrammar(
 _name_key = DFS_NAME_GRAMMAR.name_key
 
 
+def expand_host_address(address: int) -> int:
+    """Expand a DFS 18-bit load/exec address to its full host form.
+
+    A DFS catalogue stores load and execution addresses as 18-bit values
+    (16 bits in the entry plus two high bits packed into the shared "extra"
+    byte). When those top two bits are both set the address denotes a host
+    I/O-processor address, and Acorn MOS fills the top byte with ``FF`` —
+    so ``*EX`` / ``*INFO`` print a value such as ``FFFFFF`` where the raw
+    field holds ``0x3FFFF``. Reconstructing the same value here keeps
+    oaknut's output matching the machine, and it round-trips: writing it
+    back masks down to the same two high bits.
+    """
+    if (address & 0x30000) == 0x30000:
+        return address | 0xFF0000
+    return address
+
+
 @dataclass(frozen=True)
 class FileEntry:
     """File entry in a catalog."""

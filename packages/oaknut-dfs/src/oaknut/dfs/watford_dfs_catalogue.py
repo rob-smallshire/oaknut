@@ -9,6 +9,7 @@ from oaknut.dfs.catalogue import (
     DiscInfo,
     FileEntry,
     ParsedFilename,
+    expand_host_address,
 )
 from oaknut.dfs.exceptions import CatalogFullError, DFSValidationError
 from oaknut.discimage.surface import Surface
@@ -305,8 +306,8 @@ class WatfordDFSCatalogue(Catalogue):
             # Bits 6-7 of extra_byte = bits 16-17 of exec_address
             # Bits 4-5 of extra_byte = bits 16-17 of length
             # Bits 0-1 of extra_byte = bits 8-9 of start_sector
-            load_address = load_low | ((extra_byte & 0x0C) << 14)
-            exec_address = exec_low | ((extra_byte & 0xC0) << 10)
+            load_address = expand_host_address(load_low | ((extra_byte & 0x0C) << 14))
+            exec_address = expand_host_address(exec_low | ((extra_byte & 0xC0) << 10))
             length = length_low | ((extra_byte & 0x30) << 12)
             start_sector = sector_low | ((extra_byte & 0x03) << 8)
 

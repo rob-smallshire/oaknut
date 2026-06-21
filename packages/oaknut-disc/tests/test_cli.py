@@ -131,8 +131,8 @@ class TestLs:
             cli, ["ls", "--as", "display", "--detailed", f"{dfs_image_filepath}:$"]
         )
         assert result.exit_code == 0, result.output
-        assert "0x00001900" in result.output
-        assert "0x00008023" in result.output
+        assert "0x001900" in result.output
+        assert "0x008023" in result.output
 
 
 class TestForceFilesystem:
@@ -862,8 +862,8 @@ class TestStat:
         assert result.exit_code == 0
         assert "Hello" in result.output
         # Addresses render as hex for humans.
-        assert "0x00001900" in result.output
-        assert "0x00008023" in result.output
+        assert "0x001900" in result.output
+        assert "0x008023" in result.output
 
     def test_stat_file_machine_addresses_are_integers(
         self, runner: CliRunner, dfs_image_filepath: Path
@@ -1690,8 +1690,8 @@ class TestCp:
         )
         result = runner.invoke(cli, ["stat", "--as", "display", f"{adfs_image_filepath}:$.Copied"])
         assert result.exit_code == 0
-        assert "0x00001900" in result.output  # load address preserved
-        assert "0x00008023" in result.output  # exec address preserved
+        assert "0x001900" in result.output  # load address preserved
+        assert "0x008023" in result.output  # exec address preserved
 
 
 # ---------------------------------------------------------------------------
@@ -1846,7 +1846,7 @@ class TestCpGlob:
         )
         assert result.exit_code == 0, result.output
         stat = runner.invoke(cli, ["stat", "--as", "display", f"{adfs_empty_filepath}:$.Hello"])
-        assert "0x00001900" in stat.output  # load address
+        assert "0x001900" in stat.output  # load address
 
 
 class TestCpStorageOrder:
@@ -2413,7 +2413,7 @@ class TestSetGetLoad:
             cli, ["get-load", "--as", "display", f"{dfs_image_filepath}:$.HELLO"]
         )
         assert result.exit_code == 0
-        assert "0x0000FF00" in result.output
+        assert "0x00FF00" in result.output
 
     def test_set_load_adfs(self, runner: CliRunner, adfs_image_filepath: Path) -> None:
         result = runner.invoke(cli, ["set-load", f"{adfs_image_filepath}:$.Hello", "0xFFFF1234"])
@@ -2429,7 +2429,7 @@ class TestSetGetLoad:
             cli, ["get-load", "--as", "display", f"{dfs_image_filepath}:$.HELLO"]
         )
         assert result.exit_code == 0
-        assert "0x00001900" in result.output
+        assert "0x001900" in result.output
 
     def test_get_load_machine_is_integer(self, runner: CliRunner, dfs_image_filepath: Path) -> None:
         """A piped get-load gives the raw integer, base-free for consumers."""
@@ -2446,7 +2446,7 @@ class TestSetGetLoad:
         result = runner.invoke(
             cli, ["get-load", "--as", "display", f"{dfs_image_filepath}:$.HELLO"]
         )
-        assert "0x00000100" in result.output
+        assert "0x000100" in result.output
 
     def test_set_load_invalid_address_clean_error(
         self, runner: CliRunner, dfs_image_filepath: Path
@@ -2466,14 +2466,14 @@ class TestSetGetExec:
             cli, ["get-exec", "--as", "display", f"{dfs_image_filepath}:$.HELLO"]
         )
         assert result.exit_code == 0
-        assert "0x0000ABCD" in result.output
+        assert "0x00ABCD" in result.output
 
     def test_get_exec_original(self, runner: CliRunner, dfs_image_filepath: Path) -> None:
         result = runner.invoke(
             cli, ["get-exec", "--as", "display", f"{dfs_image_filepath}:$.HELLO"]
         )
         assert result.exit_code == 0
-        assert "0x00008023" in result.output
+        assert "0x008023" in result.output
 
     def test_get_exec_machine_is_integer(self, runner: CliRunner, dfs_image_filepath: Path) -> None:
         result = runner.invoke(cli, ["get-exec", "--as", "tsv", f"{dfs_image_filepath}:$.HELLO"])
@@ -2612,10 +2612,10 @@ class TestBulkMutation:
             ],
         )
         assert result.exit_code == 0, result.output
-        # Every file descendant should have load_address 0x0000CAFE.
+        # Every file descendant should have load_address 0x00CAFE.
         for bare in ("$.Dir.Inside", "$.Dir.Sub.Deep"):
             st = runner.invoke(cli, ["get-load", "--as", "display", f"{adfs_image_tree}:{bare}"])
-            assert "0x0000CAFE" in st.output, f"{bare} not set: {st.output!r}"
+            assert "0x00CAFE" in st.output, f"{bare} not set: {st.output!r}"
 
     def test_set_exec_glob(
         self,
@@ -2632,7 +2632,7 @@ class TestBulkMutation:
         )
         assert result.exit_code == 0, result.output
         st = runner.invoke(cli, ["get-exec", "--as", "display", f"{adfs_image_tree}:$.Dir.Inside"])
-        assert "0x0000BEEF" in st.output
+        assert "0x00BEEF" in st.output
 
     def test_rm_glob(
         self,
