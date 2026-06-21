@@ -90,6 +90,8 @@ def reference_image(tmp_path):
 
         # Only copy if it doesn't already exist
         if not tmp_copy.exists():
+            # reference_name may name a subdirectory of the corpus.
+            tmp_copy.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(src_path, tmp_copy)
             # Make the copy writable for pytest cleanup
             tmp_copy.chmod(stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IROTH)
@@ -129,8 +131,9 @@ def writable_copy(tmp_path):
         if not src_path.exists():
             pytest.skip(f"Reference image not found: {reference_name}")
 
-        # Create writable copy
+        # Create writable copy (reference_name may name a corpus subdirectory).
         dst_path = tmp_path / reference_name
+        dst_path.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(src_path, dst_path)
         dst_path.chmod(stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IROTH)
 
