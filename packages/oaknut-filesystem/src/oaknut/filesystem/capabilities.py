@@ -18,6 +18,8 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
+    from datetime import datetime, timedelta
+
     from _typeshed import SupportsRichComparison
     from oaknut.file import AcornMeta, BootOption
     from oaknut.filesystem.identification import Partition
@@ -136,6 +138,49 @@ class AcornMetadata(Protocol):
 
     def set_acorn_meta(self, path: str, meta: "AcornMeta") -> None:
         """Replace the Acorn metadata of the file at *path*."""
+        ...
+
+
+@runtime_checkable
+class Filetyped(Protocol):
+    """Files carry a RISC OS filetype.
+
+    On ADFS the filetype is folded into the load address (the ``0xFFF``
+    marker); a filesystem with nowhere to keep one simply does not
+    provide this capability.
+    """
+
+    def filetype(self, path: str) -> int | None:
+        """The 12-bit filetype of the file at *path*, or None if untyped."""
+        ...
+
+    def set_filetype(self, path: str, filetype: int) -> None:
+        """Set the filetype of the file at *path*."""
+        ...
+
+
+@runtime_checkable
+class Datestamped(Protocol):
+    """Files carry a single datestamp.
+
+    The instant is naive local time. Filesystems differ in resolution —
+    ADFS keeps centiseconds in its load/exec fields, AFS only a calendar
+    day — so :attr:`datestamp_resolution` reports the granularity and a
+    caller renders the value to suit (a bare date when the resolution is
+    a day or coarser).
+    """
+
+    @property
+    def datestamp_resolution(self) -> "timedelta":
+        """The smallest datestamp increment this filesystem records."""
+        ...
+
+    def datestamp(self, path: str) -> "datetime | None":
+        """The datestamp of the file at *path*, or None if unstamped."""
+        ...
+
+    def set_datestamp(self, path: str, when: "datetime") -> None:
+        """Set the datestamp of the file at *path* (naive local time)."""
         ...
 
 

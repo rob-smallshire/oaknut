@@ -71,3 +71,22 @@ class InvalidAddressError(FSError):
     carries the data-error exit code and is rendered by the CLI
     boundary without a traceback.
     """
+
+
+class InvalidFiletypeError(FSError):
+    """A RISC OS filetype could not be parsed.
+
+    A filetype is a 12-bit number (``0x000``–``0xFFF``), written
+    either as a registered name (``Text``, ``Obey``) or as a literal
+    (``&fff``, ``0xfff``, or decimal). Unrecognised text or an
+    out-of-range number raises this.
+    """
+
+
+class DatestampRangeError(FSError):
+    """A datestamp fell outside the representable range.
+
+    The RISC OS load/exec datestamp is a 40-bit count of centiseconds
+    since 1900-01-01 00:00:00, so it cannot represent an instant before
+    1900 or beyond the field's overflow in the 23rd century.
+    """

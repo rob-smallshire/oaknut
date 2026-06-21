@@ -14,6 +14,7 @@ Part of Phase B of the filesystem-extensibility refactor.
 from __future__ import annotations
 
 from collections.abc import Iterable
+from datetime import datetime, timedelta
 
 from oaknut.adfs.adfs import ADFS as _ADFSDisc
 from oaknut.adfs.directory import ADFS_NAME_GRAMMAR
@@ -21,6 +22,7 @@ from oaknut.adfs.exceptions import ADFSError
 from oaknut.adfs.free_space_map import _calculate_old_map_checksum
 from oaknut.discimage import BYTES_PER_SECTOR
 from oaknut.file import AcornMeta
+from oaknut.file.datestamp import decode_datestamp, encode_datestamp, is_datestamped
 from oaknut.filesystem import (
     FLOPPY,
     WINCHESTER,
@@ -197,6 +199,46 @@ class _ADFSMount(AcornWildcards):
         if meta.exec_address is not None:
             target.set_exec_address(meta.exec_address)
         target.chmod(int(meta.access))
+
+    # -- Filetyped / Datestamped --
+    #
+    # Both are encoded in the load/exec fields under the 0xFFF marker, so
+    # setting one preserves the other; adopting the marker on a plain
+    # addressed file uses deterministic defaults (epoch date, Data type).
+    @property
+    def datestamp_resolution(self) -> timedelta:
+        return timedelta(milliseconds=10)  # ADFS keeps centiseconds
+
+    def filetype(self, path: str) -> int | None:
+        load_address = self._navigate(path).stat().load_address
+        if not is_datestamped(load_address):
+            return None
+        return (load_address >> 8) & 0xFFF
+
+    def set_filetype(self, path: str, filetype: int) -> None:
+        target = self._navigate(path)
+        stat = target.stat()
+        if is_datestamped(stat.load_address):
+            date_high = stat.load_address & 0xFF  # preserve the existing date
+        else:
+            date_high = 0x00  # plain file: deterministic epoch date
+            target.set_exec_address(0x00000000)
+        target.set_load_address(0xFFF00000 | ((filetype & 0xFFF) << 8) | date_high)
+
+    def datestamp(self, path: str) -> datetime | None:
+        stat = self._navigate(path).stat()
+        return decode_datestamp(stat.load_address, stat.exec_address)
+
+    def set_datestamp(self, path: str, when: datetime) -> None:
+        target = self._navigate(path)
+        stat = target.stat()
+        if is_datestamped(stat.load_address):
+            filetype = (stat.load_address >> 8) & 0xFFF  # preserve the type
+        else:
+            filetype = 0xFFD  # plain file: default to Data
+        date_high, exec_word = encode_datestamp(when)
+        target.set_load_address(0xFFF00000 | (filetype << 8) | date_high)
+        target.set_exec_address(exec_word)
 
     # -- Titled / Bootable --
     @property

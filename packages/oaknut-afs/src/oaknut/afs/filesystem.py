@@ -15,7 +15,9 @@ Part of Phase B of the filesystem-extensibility refactor.
 from __future__ import annotations
 
 from collections.abc import Iterable
+from datetime import datetime, timedelta
 
+from exit_codes import ExitCode
 from oaknut.afs.afs import AFS as _AFSRegion
 from oaknut.afs.directory import AFS_NAME_GRAMMAR
 from oaknut.afs.exceptions import AFSInfoSectorError
@@ -182,6 +184,32 @@ class _AFSMount(AcornWildcards):
         if meta.exec_address is not None:
             target.set_exec_address(meta.exec_address)
         target.chmod(int(meta.access))
+        self._afs.flush()
+
+    # -- Datestamped --
+    #
+    # AFS keeps a native per-entry date (separate from its load/exec
+    # addresses, which stay real addresses), so it does not implement
+    # Filetyped. The native field has calendar-day resolution only.
+    @property
+    def datestamp_resolution(self) -> timedelta:
+        return timedelta(days=1)
+
+    def datestamp(self, path: str) -> datetime | None:
+        afs_date = self._navigate(path).stat().date
+        if afs_date is None:
+            return None
+        return datetime(afs_date.date.year, afs_date.date.month, afs_date.date.day)
+
+    def set_datestamp(self, path: str, when: datetime) -> None:
+        from oaknut.afs.exceptions import AFSError
+        from oaknut.afs.types import AfsDate
+
+        try:
+            afs_date = AfsDate(when.date())  # AFS resolution is the day
+        except ValueError as error:
+            raise AFSError(str(error), exit_code=ExitCode.OS_FILE) from error
+        self._navigate(path).set_date(afs_date)
         self._afs.flush()
 
     # -- Titled --
