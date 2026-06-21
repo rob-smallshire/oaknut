@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from asyoulikeit import ByAudience
-from oaknut.cli import control_pictures, text_cell
+from oaknut.cli import address_cell, control_pictures, text_cell
 
 
 class TestControlPictures:
@@ -36,3 +36,27 @@ class TestTextCell:
         # Machines keep the raw bytes; humans get control pictures.
         assert cell.machine == "\x0cPascal\n\r"
         assert cell.human == "␌Pascal␊␍"
+
+
+class TestAddressCell:
+    def test_machine_keeps_raw_int(self):
+        cell = address_cell(0x1900)
+        assert isinstance(cell, ByAudience)
+        assert cell.machine == 0x1900
+
+    def test_human_keeps_0x_prefix(self):
+        assert address_cell(0x1900).human.startswith("0x")
+
+    def test_human_trimmed_to_minimum_six_hexits(self):
+        # Acorn MOS shows DFS addresses in six hex digits; leading zeros
+        # beyond that serve no purpose, so the narrowest form is six.
+        assert address_cell(0x1900).human == "0x001900"
+        assert address_cell(0x838F).human == "0x00838F"
+        assert address_cell(0x0).human == "0x000000"
+
+    def test_human_grows_in_whole_bytes(self):
+        # Above six hexits the width rounds up to an even number of hexits
+        # (a whole number of bytes), never an odd count.
+        assert address_cell(0xFFFFFF).human == "0xFFFFFF"
+        assert address_cell(0x1FF0000).human == "0x01FF0000"
+        assert address_cell(0xFFFF0E00).human == "0xFFFF0E00"

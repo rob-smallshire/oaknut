@@ -72,13 +72,19 @@ def bytes_cell(num_bytes: int) -> ByAudience:
 
 
 def address_cell(address: int) -> ByAudience:
-    """A 32-bit Acorn address as an audience-aware cell.
+    """An Acorn load/exec address as an audience-aware cell.
 
-    Humans read the conventional ``0x``-prefixed 8-hex-digit form;
-    machine formatters (JSON, TSV) get the raw integer, so a consumer
-    never has to parse a base back out of a string.
+    Humans read the ``0x``-prefixed hex form, trimmed of leading zeros
+    to a whole number of bytes (an even count of hex digits) with a
+    minimum of six — the width Acorn MOS uses for a DFS address, so a
+    table stays narrow without diverging from ``*EX`` / ``*INFO``. A
+    larger address (an ADFS 32-bit value) grows in whole bytes. Machine
+    formatters (JSON, TSV) get the raw integer, so a consumer never has
+    to parse a base back out of a string.
     """
-    return ByAudience(machine=address, human=f"0x{address:08X}")
+    digits = max(6, len(f"{address:X}"))
+    width = digits + (digits & 1)  # round up to a whole number of bytes
+    return ByAudience(machine=address, human=f"0x{address:0{width}X}")
 
 
 def kv_table(title: str, pairs: list[tuple[str, str, object]]):
