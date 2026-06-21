@@ -674,6 +674,19 @@ class AFSPath(AcornPath):
         afs._write_object_bytes(parent_sin, new_parent)
 
     @resolving_io
+    def set_date(self, date: "AfsDate") -> None:
+        """Rewrite this entry's date without touching its data."""
+        from oaknut.afs.directory import update_entry_fields
+
+        afs = self._require_afs()
+        if self.is_root():
+            raise AFSPathError("cannot set_date on the root directory")
+        parent_sin, name = afs._resolve_parent_and_name(self)
+        parent_raw = afs._read_object_bytes(parent_sin)
+        new_parent = update_entry_fields(parent_raw, name, date=date)
+        afs._write_object_bytes(parent_sin, new_parent)
+
+    @resolving_io
     def rename(self, target: "str | AFSPath") -> AFSPath:
         """Rename or move this entry to ``target``, returning the new path.
 
