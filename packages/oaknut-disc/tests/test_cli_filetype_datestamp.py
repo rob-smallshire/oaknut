@@ -83,6 +83,87 @@ class TestADFSDisplay:
         assert "2024-03-01T14:22:08" in out
 
 
+class TestPutOverrides:
+    def test_put_filetype(self, runner: CliRunner, adfs_image_filepath: Path):
+        result = runner.invoke(
+            cli,
+            ["put", f"{adfs_image_filepath}:$.NEW", "-", "--filetype", "Obey"],
+            input="data",
+        )
+        assert result.exit_code == 0, result.output
+        got = _run(runner, "get-filetype", "--as", "display", f"{adfs_image_filepath}:$.NEW")
+        assert "Obey" in got.output
+
+    def test_put_datestamp(self, runner: CliRunner, adfs_image_filepath: Path):
+        result = runner.invoke(
+            cli,
+            ["put", f"{adfs_image_filepath}:$.NEW", "-", "--datestamp", "2024-03-01T14:22:08"],
+            input="data",
+        )
+        assert result.exit_code == 0, result.output
+        got = _run(runner, "get-datestamp", "--as", "display", f"{adfs_image_filepath}:$.NEW")
+        assert "2024-03-01T14:22:08" in got.output
+
+    def test_put_filetype_conflicts_with_load(
+        self, runner: CliRunner, adfs_image_filepath: Path
+    ):
+        result = runner.invoke(
+            cli,
+            ["put", f"{adfs_image_filepath}:$.NEW", "-", "--filetype", "Text", "--load", "0x1900"],
+            input="data",
+        )
+        assert result.exit_code != 0
+        assert "cannot be combined" in result.output
+
+    def test_put_filetype_on_dfs_errors(self, runner: CliRunner, dfs_image_filepath: Path):
+        result = runner.invoke(
+            cli,
+            ["put", f"{dfs_image_filepath}:$.NEW", "-", "--filetype", "Text"],
+            input="data",
+        )
+        assert result.exit_code != 0
+        assert "filetype" in result.output
+
+
+class TestImportOverrides:
+    def _host_tree(self, tmp_path: Path) -> Path:
+        host = tmp_path / "host"
+        host.mkdir()
+        (host / "ONE").write_bytes(b"one")
+        (host / "TWO").write_bytes(b"two")
+        return host
+
+    def test_import_datestamp_applies_to_all(
+        self, runner: CliRunner, tmp_path: Path
+    ):
+        from oaknut.adfs import ADFS, ADFS_L
+
+        image = tmp_path / "imp.adl"
+        with ADFS.create_file(image, ADFS_L, title="Imp"):
+            pass
+        host = self._host_tree(tmp_path)
+        result = runner.invoke(
+            cli, ["import", str(image), str(host), "--datestamp", "2024-03-01T14:22:08"]
+        )
+        assert result.exit_code == 0, result.output
+        for name in ("ONE", "TWO"):
+            got = _run(runner, "get-datestamp", "--as", "display", f"{image}:$.{name}")
+            assert "2024-03-01" in got.output, name
+
+    def test_import_filetype_on_dfs_fails_fast(
+        self, runner: CliRunner, tmp_path: Path
+    ):
+        from oaknut.dfs import ACORN_DFS_80T_SINGLE_SIDED, DFS
+
+        image = tmp_path / "imp.ssd"
+        with DFS.create_file(image, ACORN_DFS_80T_SINGLE_SIDED, title="Imp"):
+            pass
+        host = self._host_tree(tmp_path)
+        result = runner.invoke(cli, ["import", str(image), str(host), "--filetype", "Text"])
+        assert result.exit_code != 0
+        assert "filetype" in result.output
+
+
 class TestUnsupportedFilesystems:
     def test_dfs_set_filetype_errors_cleanly(self, runner: CliRunner, dfs_image_filepath: Path):
         result = _run(runner, "set-filetype", f"{dfs_image_filepath}:$.Hello", "Text")

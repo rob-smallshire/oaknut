@@ -1367,6 +1367,64 @@ def _stdin_is_interactive() -> bool:
     return sys.stdin.isatty()
 
 
+def _typestamp_options(func):
+    """Add ``--filetype`` / ``--datestamp`` to a write command.
+
+    These set a RISC OS filetype and/or datestamp on the written
+    file(s). On ADFS both live in the load/exec fields, so they are
+    mutually exclusive with ``--load`` / ``--exec``; a filesystem that
+    cannot hold one rejects the option cleanly.
+    """
+    func = click.option(
+        "--datestamp",
+        default=None,
+        help="Datestamp the written file(s): 'now' or an ISO 8601 local time.",
+    )(func)
+    func = click.option(
+        "--filetype",
+        default=None,
+        help="Set the RISC OS filetype: a name (Text) or number (&fff, 0xfff).",
+    )(func)
+    return func
+
+
+def _parse_typestamp_options(filetype: str | None, datestamp: str | None):
+    """Validate ``--filetype`` / ``--datestamp`` up front, before any writes.
+
+    Returns ``(filetype_number, when)`` with either element ``None`` when
+    its option was not supplied.
+    """
+    from oaknut.file.filetypes import parse_filetype
+
+    filetype_number = parse_filetype(filetype) if filetype is not None else None
+    when = _parse_datestamp(datestamp) if datestamp is not None else None
+    return filetype_number, when
+
+
+def _apply_typestamp(mount, filesystem_name: str, target: str, filetype, when) -> None:
+    """Apply parsed filetype / datestamp overrides to a written file.
+
+    Raises a clean :class:`FSError` when the filesystem lacks the
+    matching capability, so an override on (say) DFS fails informatively.
+    """
+    from oaknut.filesystem import Datestamped, Filetyped
+
+    if filetype is not None:
+        if not isinstance(mount, Filetyped):
+            raise FSError(
+                f"{filesystem_name} files carry no filetype",
+                exit_code=ExitCode.OS_FILE,
+            )
+        mount.set_filetype(target, filetype)
+    if when is not None:
+        if not isinstance(mount, Datestamped):
+            raise FSError(
+                f"{filesystem_name} files carry no datestamp",
+                exit_code=ExitCode.OS_FILE,
+            )
+        mount.set_datestamp(target, when)
+
+
 @cli.command()
 @click.argument("compound_path", metavar="OUTER_PATH:INNER_PATH")
 @click.argument("host_path", required=False, default=None)
@@ -1401,12 +1459,15 @@ def _stdin_is_interactive() -> bool:
     default=None,
     help="Metadata format to read from host file.",
 )
+@_typestamp_options
 def put(
     compound_path: str,
     host_path: str | None,
     load_address: str | None,
     exec_address: str | None,
     meta_format: str | None,
+    filetype: str | None,
+    datestamp: str | None,
 ) -> None:
     """Import a host file into the image.
 
@@ -1440,6 +1501,15 @@ def put(
     _outer_filepath, path = parse_compound_path(compound_path)
     if not path:
         raise click.UsageError("PATH is required")
+    # On ADFS the filetype/datestamp occupy the load/exec fields, so an
+    # explicit address and a filetype/datestamp would fight over them.
+    if (filetype is not None or datestamp is not None) and (
+        load_address is not None or exec_address is not None
+    ):
+        raise click.UsageError(
+            "--filetype/--datestamp cannot be combined with --load/--exec"
+        )
+    filetype_number, when = _parse_typestamp_options(filetype, datestamp)
     host_path = Path(host_path) if host_path is not None else None
 
     # Default addresses: 0xFFFF matches the convention for text/data
@@ -1493,6 +1563,7 @@ def put(
                     access=access,
                 ),
             )
+        _apply_typestamp(mount, resolved.filesystem, target, filetype_number, when)
 
 
 # ---------------------------------------------------------------------------
@@ -3074,26 +3145,64 @@ def _export_recursive(
     help="Metadata format to read from host files.",
 )
 @click.option("-v", "--verbose", is_flag=True, help="Show import progress.")
+@_typestamp_options
 def import_cmd(
     image: Path,
     host_dir: Path,
     meta_format: str | None,
     verbose: bool,
+    filetype: str | None,
+    datestamp: str | None,
 ) -> None:
-    """Bulk-import a host directory into the image."""
+    """Bulk-import a host directory into the image.
+
+    ``--filetype`` / ``--datestamp`` apply the same type or date to every
+    imported file, overriding what a sidecar or filename suffix would set.
+    """
     from oaknut.file import DEFAULT_IMPORT_META_FORMATS, MetaFormat
+    from oaknut.filesystem import Datestamped, Filetyped
 
     if meta_format is not None and meta_format != "none":
         meta_formats = (MetaFormat(meta_format),)
     else:
         meta_formats = DEFAULT_IMPORT_META_FORMATS
 
+    filetype_number, when = _parse_typestamp_options(filetype, datestamp)
     with resolve_mount(str(image), writable=True) as resolved:
         mount = resolved.mount
-        _import_host_dir(mount, mount.path_root(), host_dir, meta_formats, verbose)
+        # Fail before importing anything if the overrides cannot apply.
+        if filetype_number is not None and not isinstance(mount, Filetyped):
+            raise FSError(
+                f"{resolved.filesystem} files carry no filetype",
+                exit_code=ExitCode.OS_FILE,
+            )
+        if when is not None and not isinstance(mount, Datestamped):
+            raise FSError(
+                f"{resolved.filesystem} files carry no datestamp",
+                exit_code=ExitCode.OS_FILE,
+            )
+        _import_host_dir(
+            mount,
+            mount.path_root(),
+            host_dir,
+            meta_formats,
+            verbose,
+            resolved.filesystem,
+            filetype_number,
+            when,
+        )
 
 
-def _import_host_dir(mount, parent_path: str, host_dir: Path, meta_formats, verbose) -> None:
+def _import_host_dir(
+    mount,
+    parent_path: str,
+    host_dir: Path,
+    meta_formats,
+    verbose,
+    filesystem_name: str,
+    filetype,
+    when,
+) -> None:
     """Recursively import a host directory into *mount* under *parent_path*."""
     from oaknut.file import AcornMeta, import_with_metadata
     from oaknut.filesystem import AcornMetadata, HierarchicalDirectories
@@ -3120,17 +3229,24 @@ def _import_host_dir(mount, parent_path: str, host_dir: Path, meta_formats, verb
                         access=int(meta.access) if meta.access is not None else 0,
                     ),
                 )
+            _apply_typestamp(mount, filesystem_name, target, filetype, when)
             if verbose:
                 click.echo(leaf, err=True)
         elif entry.is_dir():
             if flat:
                 # A flat catalogue (DFS) imports files from subdirectories
                 # directly into the same directory.
-                _import_host_dir(mount, parent_path, entry, meta_formats, verbose)
+                _import_host_dir(
+                    mount, parent_path, entry, meta_formats, verbose,
+                    filesystem_name, filetype, when,
+                )
             else:
                 sub = mount.join(parent_path, entry.name)
                 mount.make_directory(sub, exist_ok=True)
-                _import_host_dir(mount, sub, entry, meta_formats, verbose)
+                _import_host_dir(
+                    mount, sub, entry, meta_formats, verbose,
+                    filesystem_name, filetype, when,
+                )
 
 
 # ---------------------------------------------------------------------------
