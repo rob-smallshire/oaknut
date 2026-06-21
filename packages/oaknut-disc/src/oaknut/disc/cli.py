@@ -27,6 +27,8 @@ from oaknut.cli import (
     address_cell,
     bytes_cell,
     contributed_commands,
+    datestamp_cell,
+    filetype_cell,
     kv_table,
     size_cell,
     text_cell,
@@ -268,7 +270,13 @@ def ls(
     """
     from asyoulikeit.tabular_data import Importance, Report, Reports, TableContent
     from oaknut.file import Access
-    from oaknut.filesystem import AcornMetadata, FreeSpace, Titled
+    from oaknut.filesystem import (
+        AcornMetadata,
+        Datestamped,
+        Filetyped,
+        FreeSpace,
+        Titled,
+    )
 
     resolved = resolve_mount(
         compound_path, force_filesystem=force_filesystem, force_geometry=force_geometry
@@ -308,12 +316,18 @@ def ls(
     # piped view stays concise. --detailed restores them.
     table.add_column("load", "Load", importance=Importance.DETAIL)
     table.add_column("exec", "Exec", importance=Importance.DETAIL)
+    # A filetype-stamped file shows its type and datestamp here instead of
+    # the load/exec they encode; other filesystems leave these blank.
+    table.add_column("filetype", "Filetype", importance=Importance.DETAIL)
+    table.add_column("datestamp", "Datestamp", importance=Importance.DETAIL)
     table.add_column("length", "Length")
     table.add_column("attr", "Attr")
     if show_access_byte:
         table.add_column("hex", "Hex")
 
     has_acorn = isinstance(mount, AcornMetadata)
+    has_filetype = isinstance(mount, Filetyped)
+    has_datestamp = isinstance(mount, Datestamped)
     for child in sorted(mount.iter_entries(target), key=lambda e: _natural_name_key(e.name)):
         if child.is_dir:
             row = {
@@ -321,6 +335,8 @@ def ls(
                 "type": "dir",
                 "load": "",
                 "exec": "",
+                "filetype": "",
+                "datestamp": "",
                 "length": sum(1 for _ in mount.iter_entries(child.path)),
                 "attr": "",
             }
@@ -329,18 +345,33 @@ def ls(
             table.add_row(**row)
             continue
         load_cell = exec_cell = attr_str = hex_cell = ""
+        filetype_str: object = ""
+        datestamp_str = ""
         if has_acorn:
             meta = mount.acorn_meta(child.path)
-            load_cell = address_cell(meta.load_address)
-            exec_cell = address_cell(meta.exec_address)
+            # A stamped file's load/exec hold an encoded filetype/date;
+            # conceal them from humans but keep the raw bytes for machines.
+            stamped = meta.is_filetype_stamped
+            load_cell = address_cell(meta.load_address, conceal=stamped)
+            exec_cell = address_cell(meta.exec_address, conceal=stamped)
             if meta.access is not None:
                 attr_str = _format_access(Access(meta.access))
                 hex_cell = f"0x{int(meta.access):02X}"
+        if has_filetype:
+            filetype = mount.filetype(child.path)
+            if filetype is not None:
+                filetype_str = filetype_cell(filetype)
+        if has_datestamp:
+            when = mount.datestamp(child.path)
+            if when is not None:
+                datestamp_str = datestamp_cell(when, mount.datestamp_resolution)
         row = {
             "name": text_cell(child.name),
             "type": "file",
             "load": load_cell,
             "exec": exec_cell,
+            "filetype": filetype_str,
+            "datestamp": datestamp_str,
             "length": child.length,
             "attr": attr_str,
         }
@@ -472,7 +503,7 @@ def stat(compound_path: str, force_filesystem: str | None, force_geometry: str |
     """
     from asyoulikeit.tabular_data import Report, Reports, TableContent
     from oaknut.file import Access
-    from oaknut.filesystem import AcornMetadata
+    from oaknut.filesystem import AcornMetadata, Datestamped, Filetyped
 
     from .mount import split_selector
 
@@ -495,10 +526,21 @@ def stat(compound_path: str, force_filesystem: str | None, force_geometry: str |
     row: dict = {"name": text_cell(entry.name)}
     if isinstance(mount, AcornMetadata) and not entry.is_dir:
         meta = mount.acorn_meta(bare)
+        stamped = meta.is_filetype_stamped
         tc.add_column("load", "Load")
-        row["load"] = address_cell(meta.load_address)
+        row["load"] = address_cell(meta.load_address, conceal=stamped)
         tc.add_column("exec", "Exec")
-        row["exec"] = address_cell(meta.exec_address)
+        row["exec"] = address_cell(meta.exec_address, conceal=stamped)
+        if isinstance(mount, Filetyped):
+            filetype = mount.filetype(bare)
+            if filetype is not None:
+                tc.add_column("filetype", "Filetype")
+                row["filetype"] = filetype_cell(filetype)
+        if isinstance(mount, Datestamped):
+            when = mount.datestamp(bare)
+            if when is not None:
+                tc.add_column("datestamp", "Datestamp")
+                row["datestamp"] = datestamp_cell(when, mount.datestamp_resolution)
         tc.add_column("length", "Length")
         row["length"] = entry.length
         tc.add_column("attr", "Attr")
@@ -2491,6 +2533,198 @@ def get_exec(compound_path: str):
             data=ScalarContent(value=address_cell(meta.exec_address), title="Exec"),
         ),
     )
+
+
+def _require_read_target(compound_path: str, capability, noun: str):
+    """Resolve *compound_path* to an existing file, gated on *capability*.
+
+    Returns ``(mount, target)``. Raises a clean :class:`FSError` if the
+    path is missing or the filesystem does not provide the capability.
+    """
+    _outer_filepath, path = parse_compound_path(compound_path)
+    if not path:
+        raise click.UsageError("PATH is required")
+    resolved = resolve_mount(compound_path)
+    mount = resolved.mount
+    target = resolved.path or mount.path_root()
+    if not mount.exists(target):
+        raise FSError(f"path not found: {target}", exit_code=ExitCode.OS_FILE)
+    if not isinstance(mount, capability):
+        raise FSError(
+            f"{resolved.filesystem} files carry no {noun}",
+            exit_code=ExitCode.OS_FILE,
+        )
+    return mount, target
+
+
+def _parse_datestamp(text: str):
+    """Parse a ``set-datestamp`` argument: ``now`` or an ISO 8601 local time."""
+    from datetime import datetime
+
+    if text.strip().lower() == "now":
+        return datetime.now()
+    try:
+        return datetime.fromisoformat(text)
+    except ValueError as error:
+        raise click.BadParameter(
+            f"{text!r} is not an ISO 8601 date-time (or 'now')"
+        ) from error
+
+
+@cli.command(name="get-filetype")
+@click.argument("compound_path", metavar="OUTER_PATH:INNER_PATH")
+@report_output(
+    reports={
+        "filetype": (
+            "File RISC OS filetype: a name (or ``&XXX``) for humans, the "
+            "raw 12-bit number for machine formatters; empty when untyped."
+        )
+    }
+)
+def get_filetype(compound_path: str):
+    """Print a file's RISC OS filetype.
+
+    Accepts a ``COMPOUND_PATH``.
+    """
+    from asyoulikeit import ByAudience
+    from asyoulikeit.scalar_data import ScalarContent
+    from asyoulikeit.tabular_data import Report, Reports
+    from oaknut.filesystem import Filetyped
+
+    mount, target = _require_read_target(compound_path, Filetyped, "filetype")
+    filetype = mount.filetype(target)
+    value = (
+        filetype_cell(filetype)
+        if filetype is not None
+        else ByAudience(machine=None, human="untyped")
+    )
+    return Reports(
+        filetype=Report(data=ScalarContent(value=value, title="Filetype")),
+    )
+
+
+@cli.command(name="set-filetype")
+@click.argument("compound_path", metavar="OUTER_PATH:INNER_PATH")
+@click.argument("filetype", metavar="FILETYPE")
+@click.option("-r", "--recursive", is_flag=True, help="Recurse into directory matches.")
+@click.option(
+    "--dry-run", is_flag=True, help="Print what would change without modifying the image."
+)
+@_wildcards_option
+def set_filetype(
+    compound_path: str,
+    filetype: str,
+    recursive: bool,
+    dry_run: bool,
+    wildcards: bool,
+) -> None:
+    """Set a file's RISC OS filetype.
+
+    Accepts a ``COMPOUND_PATH`` and a ``FILETYPE`` — a registered name
+    (``Text``, ``Obey``) or a number (``&fff``, ``0xfff``, or decimal).
+    On ADFS this stamps the load/exec fields; a file that was not
+    already typed is dated to the epoch (1900-01-01).
+    """
+    from oaknut.file.filetypes import filetype_name, parse_filetype
+    from oaknut.filesystem import Filetyped
+
+    _outer_filepath, path = parse_compound_path(compound_path)
+    if not path:
+        raise click.UsageError("PATH is required")
+    filetype_number = parse_filetype(filetype)
+    with resolve_mount(compound_path, writable=not dry_run) as resolved:
+        mount = resolved.mount
+        if not isinstance(mount, Filetyped):
+            raise FSError(
+                f"{resolved.filesystem} files carry no filetype",
+                exit_code=ExitCode.OS_FILE,
+            )
+        target_pattern = resolved.path or mount.path_root()
+        for target in _iter_target_paths(
+            mount, target_pattern, recursive=recursive, wildcards=wildcards
+        ):
+            if mount.stat(target).is_dir:
+                continue  # a directory carries no filetype
+            if dry_run:
+                click.echo(f"would set-filetype {target} {filetype_name(filetype_number)}")
+                continue
+            mount.set_filetype(target, filetype_number)
+
+
+@cli.command(name="get-datestamp")
+@click.argument("compound_path", metavar="OUTER_PATH:INNER_PATH")
+@report_output(
+    reports={
+        "datestamp": (
+            "File datestamp as a naive-local ISO 8601 string at the "
+            "filesystem's resolution; empty when unstamped."
+        )
+    }
+)
+def get_datestamp(compound_path: str):
+    """Print a file's datestamp.
+
+    Accepts a ``COMPOUND_PATH``.
+    """
+    from asyoulikeit.scalar_data import ScalarContent
+    from asyoulikeit.tabular_data import Report, Reports
+    from oaknut.filesystem import Datestamped
+
+    mount, target = _require_read_target(compound_path, Datestamped, "datestamp")
+    when = mount.datestamp(target)
+    value = (
+        datestamp_cell(when, mount.datestamp_resolution) if when is not None else ""
+    )
+    return Reports(
+        datestamp=Report(data=ScalarContent(value=value, title="Datestamp")),
+    )
+
+
+@cli.command(name="set-datestamp")
+@click.argument("compound_path", metavar="OUTER_PATH:INNER_PATH")
+@click.argument("datetime_text", metavar="DATETIME")
+@click.option("-r", "--recursive", is_flag=True, help="Recurse into directory matches.")
+@click.option(
+    "--dry-run", is_flag=True, help="Print what would change without modifying the image."
+)
+@_wildcards_option
+def set_datestamp(
+    compound_path: str,
+    datetime_text: str,
+    recursive: bool,
+    dry_run: bool,
+    wildcards: bool,
+) -> None:
+    """Set a file's datestamp.
+
+    Accepts a ``COMPOUND_PATH`` and a ``DATETIME`` — ``now`` or an ISO
+    8601 local date-time (e.g. ``2024-03-01T14:22:08``). On ADFS this
+    stamps the load/exec fields; a file that was not already typed is
+    given the Data (&FFD) type. AFS records only the calendar day.
+    """
+    from oaknut.filesystem import Datestamped
+
+    _outer_filepath, path = parse_compound_path(compound_path)
+    if not path:
+        raise click.UsageError("PATH is required")
+    when = _parse_datestamp(datetime_text)
+    with resolve_mount(compound_path, writable=not dry_run) as resolved:
+        mount = resolved.mount
+        if not isinstance(mount, Datestamped):
+            raise FSError(
+                f"{resolved.filesystem} files carry no datestamp",
+                exit_code=ExitCode.OS_FILE,
+            )
+        target_pattern = resolved.path or mount.path_root()
+        for target in _iter_target_paths(
+            mount, target_pattern, recursive=recursive, wildcards=wildcards
+        ):
+            if mount.stat(target).is_dir:
+                continue  # a directory carries no datestamp
+            if dry_run:
+                click.echo(f"would set-datestamp {target} {when.isoformat()}")
+                continue
+            mount.set_datestamp(target, when)
 
 
 @cli.command()

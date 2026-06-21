@@ -9,8 +9,11 @@ command can render output without depending on ``oaknut-disc``.
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta
+
 from asyoulikeit import ByAudience
 from oaknut.file.capacity import format_capacity
+from oaknut.file.filetypes import filetype_name
 
 #: Acorn discs are addressed in 256-byte sectors throughout.
 SECTOR_SIZE = 256
@@ -71,7 +74,7 @@ def bytes_cell(num_bytes: int) -> ByAudience:
     return ByAudience(machine=num_bytes, human=format_capacity(num_bytes))
 
 
-def address_cell(address: int) -> ByAudience:
+def address_cell(address: int, *, conceal: bool = False) -> ByAudience:
     """An Acorn load/exec address as an audience-aware cell.
 
     Humans read the ``0x``-prefixed hex form, trimmed of leading zeros
@@ -81,10 +84,39 @@ def address_cell(address: int) -> ByAudience:
     larger address (an ADFS 32-bit value) grows in whole bytes. Machine
     formatters (JSON, TSV) get the raw integer, so a consumer never has
     to parse a base back out of a string.
+
+    When *conceal* is set the human form is blank but the machine form
+    keeps the raw integer: a filetype-stamped file's load/exec hold an
+    encoded filetype and datestamp shown in their own columns, yet a
+    machine consumer still gets the faithful bytes.
     """
+    if conceal:
+        return ByAudience(machine=address, human="")
     digits = max(6, len(f"{address:X}"))
     width = digits + (digits & 1)  # round up to a whole number of bytes
     return ByAudience(machine=address, human=f"0x{address:0{width}X}")
+
+
+def filetype_cell(filetype: int) -> ByAudience:
+    """A RISC OS filetype as an audience-aware cell.
+
+    Humans read the registered name (or the ``&XXX`` hex form);
+    machine formatters get the raw 12-bit number.
+    """
+    return ByAudience(machine=filetype, human=filetype_name(filetype))
+
+
+def datestamp_cell(when: datetime, resolution: timedelta) -> str:
+    """A datestamp as an ISO 8601 string at the filesystem's resolution.
+
+    A filesystem that records only a calendar day (AFS) yields a bare
+    date; one that records time of day (ADFS, centiseconds) yields a
+    full naive-local timestamp. The value is the same for humans and
+    machines, so a single string serves every formatter.
+    """
+    if resolution >= timedelta(days=1):
+        return when.date().isoformat()
+    return when.isoformat(sep="T", timespec="milliseconds")
 
 
 def kv_table(title: str, pairs: list[tuple[str, str, object]]):
