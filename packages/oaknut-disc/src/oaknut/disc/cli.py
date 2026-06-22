@@ -268,6 +268,7 @@ def ls(
 
     Accepts a ``COMPOUND_PATH`` (the in-image ``INNER_PATH`` is optional and defaults to the root).
     """
+    from asyoulikeit import Audience
     from asyoulikeit.tabular_data import Importance, Report, Reports, TableContent
     from oaknut.file import Access
     from oaknut.filesystem import (
@@ -313,13 +314,22 @@ def ls(
     # files and an entry count for directories unambiguously.
     table.add_column("type", "Type")
     # Load/exec are display-focused; drop them from TSV by default so the
-    # piped view stays concise. --detailed restores them.
-    table.add_column("load", "Load", importance=Importance.DETAIL)
-    table.add_column("exec", "Exec", importance=Importance.DETAIL)
+    # piped view stays concise. --detailed restores them. The metadata
+    # columns vanish from the human view when empty across the whole
+    # listing (a DFS disc has no filetype/datestamp; an all-typed ADFS
+    # listing has no real load/exec) so a dead column never costs width;
+    # machine formatters keep them for a stable schema.
+    _OMIT = {Audience.HUMAN}
+    table.add_column("load", "Load", importance=Importance.DETAIL, omit_if_empty_for=_OMIT)
+    table.add_column("exec", "Exec", importance=Importance.DETAIL, omit_if_empty_for=_OMIT)
     # A filetype-stamped file shows its type and datestamp here instead of
     # the load/exec they encode; other filesystems leave these blank.
-    table.add_column("filetype", "Filetype", importance=Importance.DETAIL)
-    table.add_column("datestamp", "Datestamp", importance=Importance.DETAIL)
+    table.add_column(
+        "filetype", "Filetype", importance=Importance.DETAIL, omit_if_empty_for=_OMIT
+    )
+    table.add_column(
+        "datestamp", "Datestamp", importance=Importance.DETAIL, omit_if_empty_for=_OMIT
+    )
     table.add_column("length", "Length")
     table.add_column("attr", "Attr")
     if show_access_byte:
@@ -501,6 +511,7 @@ def stat(compound_path: str, force_filesystem: str | None, force_geometry: str |
 
     Accepts a ``COMPOUND_PATH`` (the in-image ``INNER_PATH`` is optional and defaults to the root).
     """
+    from asyoulikeit import Audience
     from asyoulikeit.tabular_data import Report, Reports, TableContent
     from oaknut.file import Access
     from oaknut.filesystem import AcornMetadata, Datestamped, Filetyped
@@ -527,20 +538,23 @@ def stat(compound_path: str, force_filesystem: str | None, force_geometry: str |
     if isinstance(mount, AcornMetadata) and not entry.is_dir:
         meta = mount.acorn_meta(bare)
         stamped = meta.is_filetype_stamped
-        tc.add_column("load", "Load")
+        # Declare every metadata field for a stable machine schema; the
+        # human view drops whichever are empty for this file (a stamped
+        # file's load/exec, or filetype/datestamp on a filesystem that has
+        # none), mirroring the ls listing.
+        _omit = {Audience.HUMAN}
+        tc.add_column("load", "Load", omit_if_empty_for=_omit)
         row["load"] = address_cell(meta.load_address, conceal=stamped)
-        tc.add_column("exec", "Exec")
+        tc.add_column("exec", "Exec", omit_if_empty_for=_omit)
         row["exec"] = address_cell(meta.exec_address, conceal=stamped)
-        if isinstance(mount, Filetyped):
-            filetype = mount.filetype(bare)
-            if filetype is not None:
-                tc.add_column("filetype", "Filetype")
-                row["filetype"] = filetype_cell(filetype)
-        if isinstance(mount, Datestamped):
-            when = mount.datestamp(bare)
-            if when is not None:
-                tc.add_column("datestamp", "Datestamp")
-                row["datestamp"] = datestamp_cell(when, mount.datestamp_resolution)
+        filetype = mount.filetype(bare) if isinstance(mount, Filetyped) else None
+        tc.add_column("filetype", "Filetype", omit_if_empty_for=_omit)
+        row["filetype"] = filetype_cell(filetype) if filetype is not None else ""
+        when = mount.datestamp(bare) if isinstance(mount, Datestamped) else None
+        tc.add_column("datestamp", "Datestamp", omit_if_empty_for=_omit)
+        row["datestamp"] = (
+            datestamp_cell(when, mount.datestamp_resolution) if when is not None else ""
+        )
         tc.add_column("length", "Length")
         row["length"] = entry.length
         tc.add_column("attr", "Attr")

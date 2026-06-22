@@ -164,6 +164,43 @@ class TestImportOverrides:
         assert "filetype" in result.output
 
 
+class TestEmptyColumnOmission:
+    def test_dfs_display_drops_filetype_and_datestamp(
+        self, runner: CliRunner, dfs_image_filepath: Path
+    ):
+        out = _run(
+            runner, "ls", "--as", "display", "--detailed", f"{dfs_image_filepath}:$"
+        ).output
+        # DFS has neither capability, so both columns are empty for the whole
+        # listing and vanish from the human table.
+        assert "Filetype" not in out
+        assert "Datestamp" not in out
+        # Load/exec are real on DFS, so they stay.
+        assert "Load" in out
+
+    def test_tsv_keeps_columns_for_stable_schema(
+        self, runner: CliRunner, dfs_image_filepath: Path
+    ):
+        header = _run(
+            runner, "ls", "--as", "tsv", "--detailed", f"{dfs_image_filepath}:$"
+        ).output.splitlines()[0]
+        assert "Filetype" in header and "Datestamp" in header
+
+    def test_adfs_all_typed_listing_drops_load_exec(
+        self, runner: CliRunner, adfs_image_filepath: Path
+    ):
+        # Make the one file in a fresh ADFS image typed+dated, so the whole
+        # listing has no real load/exec.
+        image = adfs_image_filepath
+        # Remove the fixture's plain files, leave a single typed one.
+        _run(runner, "set-filetype", f"{image}:$.Hello", "Obey")
+        _run(runner, "set-datestamp", f"{image}:$.Hello", "2024-03-01T14:22:08")
+        _run(runner, "rm", f"{image}:$.Games", "-r")
+        out = _run(runner, "ls", "--as", "display", "--detailed", f"{image}:$").output
+        assert "Filetype" in out and "Datestamp" in out
+        assert "Load" not in out and "Exec" not in out
+
+
 class TestUnsupportedFilesystems:
     def test_dfs_set_filetype_errors_cleanly(self, runner: CliRunner, dfs_image_filepath: Path):
         result = _run(runner, "set-filetype", f"{dfs_image_filepath}:$.Hello", "Text")
