@@ -949,7 +949,11 @@ class TestNetUtilsZip:
 
     def test_list_command(self):
         runner = CliRunner()
-        result = runner.invoke(cli, ["list", str(NETUTILS_ZIP_FILEPATH)])
+        result = runner.invoke(
+            cli,
+            ["list", "--as", "display", str(NETUTILS_ZIP_FILEPATH)],
+            env={"COLUMNS": "200"},
+        )
         assert result.exit_code == 0
         assert "Free" in result.output
         assert "FFFF0E10" in result.output
@@ -1423,7 +1427,11 @@ class TestCliList:
             tmp_path, [("PROG", b"\x00" * 8, extra), ("README", b"text", None)]
         )
         runner = CliRunner()
-        result = runner.invoke(cli, ["list", str(zip_filepath)])
+        # Display audience renders addresses as 0x-hex; widen so the columns
+        # are not truncated.
+        result = runner.invoke(
+            cli, ["list", "--as", "display", str(zip_filepath)], env={"COLUMNS": "200"}
+        )
         assert result.exit_code == 0
         assert "PROG" in result.output
         assert "FFFF0E10" in result.output
@@ -1444,6 +1452,50 @@ class TestCliList:
         result = runner.invoke(cli, ["list", str(zip_filepath)])
         assert result.exit_code == 0
         assert "subdir" in result.output
+
+    def test_display_drops_metadata_columns_for_plain_zip(self, tmp_path):
+        # A ZIP with no Acorn metadata leaves every metadata column empty.
+        zip_filepath = make_zip_file(
+            tmp_path, [("README", b"text", None), ("NOTES", b"more", None)]
+        )
+        runner = CliRunner()
+        out = runner.invoke(
+            cli, ["list", "--as", "display", str(zip_filepath)], env={"COLUMNS": "200"}
+        ).output
+        for column in ("Load", "Exec", "Filetype", "Attr", "Source"):
+            assert column not in out, column
+        assert "Filename" in out and "Length" in out
+
+    def test_tsv_keeps_metadata_columns_for_plain_zip(self, tmp_path):
+        zip_filepath = make_zip_file(tmp_path, [("README", b"text", None)])
+        runner = CliRunner()
+        header = (
+            runner.invoke(cli, ["list", "--as", "tsv", str(zip_filepath)])
+            .output.splitlines()[0]
+        )
+        for column in ("Load", "Exec", "Filetype", "Attr", "Source"):
+            assert column in header, column
+
+    def test_display_shows_tree_prefixes(self, tmp_path):
+        zip_filepath = make_zip_file(
+            tmp_path, [("subdir/", b"", None), ("subdir/file", b"x", None)]
+        )
+        runner = CliRunner()
+        out = runner.invoke(
+            cli, ["list", "--as", "display", str(zip_filepath)], env={"COLUMNS": "200"}
+        ).output
+        assert "file" in out
+        assert "└" in out or "├" in out  # box-drawing tree prefix
+
+    def test_tsv_filename_is_plain_path(self, tmp_path):
+        # Machine output gets the raw path, not the box-drawing tree form.
+        zip_filepath = make_zip_file(
+            tmp_path, [("subdir/", b"", None), ("subdir/file", b"x", None)]
+        )
+        runner = CliRunner()
+        out = runner.invoke(cli, ["list", "--as", "tsv", str(zip_filepath)]).output
+        assert "subdir/file" in out
+        assert "└" not in out and "├" not in out
 
     def test_list_invalid_zip(self, tmp_path):
         bad = tmp_path / "bad.zip"
