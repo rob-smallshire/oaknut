@@ -22,7 +22,8 @@ classifiers = [
 ]
 dependencies = [
     "click>=8.0",
-    "rich>=13.0",
+    "asyoulikeit>=1.4.0",
+    "oaknut-cli>=12.0",
     "oaknut-file>=10.0",
     "oaknut-filesystem>=10.0",
 ]

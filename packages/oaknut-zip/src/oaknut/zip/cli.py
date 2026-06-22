@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import click
+from asyoulikeit.cli import report_output
 from oaknut.file import MetaFormat, format_access_text
 
 from . import __version__
@@ -150,69 +151,53 @@ def _tree_display_names(entries: list[dict]) -> list[str]:
 
 @cli.command(name="list")
 @click.argument("zipfile_path", type=click.Path(exists=True, path_type=Path))
-def list_cmd(zipfile_path: Path) -> None:
+@report_output(
+    reports={
+        "contents": (
+            "Archive entries with Acorn load/exec addresses, filetype, "
+            "attributes, and the source of each entry's metadata."
+        )
+    }
+)
+def list_cmd(zipfile_path: Path):
     """List ZIP contents showing Acorn metadata."""
-    from rich.console import Console
-    from rich.table import Table
+    from asyoulikeit import Audience, ByAudience, Report, Reports
+    from asyoulikeit.tabular_data import TableContent
+    from oaknut.cli import address_cell, filetype_cell
 
     entries = list_archive(zipfile_path)
     tree_names = _tree_display_names(entries)
 
-    table = Table(title=zipfile_path.name)
-    table.add_column("Filename", style="cyan", no_wrap=True)
-    table.add_column("Load", justify="right", style="green", no_wrap=True)
-    table.add_column("Exec", justify="right", style="green", no_wrap=True)
-    table.add_column("Length", justify="right", no_wrap=True)
-    table.add_column("Attr", justify="right", style="yellow", no_wrap=True)
-    table.add_column("Type", justify="right", style="magenta", no_wrap=True)
-    table.add_column("Source", style="dim", no_wrap=True)
+    # The metadata columns are empty for a plain ZIP that carries no Acorn
+    # sidecar/extra data, so drop them from the human view while keeping
+    # them in machine output for a stable schema.
+    omit = {Audience.HUMAN}
+    table = TableContent(title=zipfile_path.name)
+    table.add_column("filename", "Filename", header=True)
+    table.add_column("load", "Load", omit_if_empty_for=omit)
+    table.add_column("exec", "Exec", omit_if_empty_for=omit)
+    table.add_column("length", "Length")
+    table.add_column("filetype", "Filetype", omit_if_empty_for=omit)
+    table.add_column("attr", "Attr", omit_if_empty_for=omit)
+    table.add_column("source", "Source", omit_if_empty_for=omit)
 
     for entry, display_name in zip(entries, tree_names):
-        if entry[IS_DIR_KEY]:
-            if entry[LOAD_ADDR_KEY] is not None:
-                ft = entry[FILETYPE_KEY]
-                ft_str = f"{ft:03X}" if ft is not None else ""
-                attr_str = (
-                    format_access_text(entry[ATTR_KEY]) if entry[ATTR_KEY] is not None else ""
-                )
-                table.add_row(
-                    display_name,
-                    f"{entry[LOAD_ADDR_KEY]:08X}",
-                    f"{entry[EXEC_ADDR_KEY]:08X}",
-                    "",
-                    attr_str,
-                    ft_str,
-                    entry[SOURCE_KEY],
-                )
-            else:
-                table.add_row(display_name, "", "", "", "", "", "")
-            continue
-
-        if entry[LOAD_ADDR_KEY] is not None:
-            ft = entry[FILETYPE_KEY]
-            ft_str = f"{ft:03X}" if ft is not None else ""
-            attr_str = format_access_text(entry[ATTR_KEY]) if entry[ATTR_KEY] is not None else ""
-            table.add_row(
-                display_name,
-                f"{entry[LOAD_ADDR_KEY]:08X}",
-                f"{entry[EXEC_ADDR_KEY]:08X}",
-                f"{entry[FILE_SIZE_KEY]:08X}",
-                attr_str,
-                ft_str,
-                entry[SOURCE_KEY],
-            )
-        else:
-            table.add_row(
-                display_name,
-                "",
-                "",
-                f"{entry[FILE_SIZE_KEY]:08X}",
-                "",
-                "",
-                "",
-            )
-
-    Console().print(table)
+        # The human form shows the box-drawing tree; machine formatters get
+        # the plain path so a consumer never has to strip the prefixes.
+        raw_path = entry[FILENAME_KEY].rstrip("/")
+        has_meta = entry[LOAD_ADDR_KEY] is not None
+        filetype = entry[FILETYPE_KEY] if has_meta else None
+        attr = entry[ATTR_KEY] if has_meta else None
+        table.add_row(
+            filename=ByAudience(machine=raw_path, human=display_name),
+            load=address_cell(entry[LOAD_ADDR_KEY]) if has_meta else "",
+            exec=address_cell(entry[EXEC_ADDR_KEY]) if has_meta else "",
+            length="" if entry[IS_DIR_KEY] else entry[FILE_SIZE_KEY],
+            filetype=filetype_cell(filetype) if filetype is not None else "",
+            attr=format_access_text(attr) if attr is not None else "",
+            source=entry[SOURCE_KEY] if has_meta else "",
+        )
+    return Reports(contents=Report(data=table))
 
 
 @cli.command()

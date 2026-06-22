@@ -982,9 +982,13 @@ def for_each(compound_path: str, command_argv: tuple[str, ...], mode: str):
 
     rows = _for_each_run(outer_filepath, matches, list(command_argv), mode)
 
+    from asyoulikeit import Audience
+
     table = TableContent(title="results")
     table.add_column("path", "Path", header=True)
-    table.add_column("output", "Output")
+    # When no matched command produced any stdout the column is empty for
+    # the whole run; drop it from the human view, keep it for machines.
+    table.add_column("output", "Output", omit_if_empty_for={Audience.HUMAN})
     for row in rows:
         table.add_row(**row)
     return Reports(results=Report(data=table))
