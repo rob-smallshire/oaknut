@@ -221,3 +221,36 @@ class TestMaterialiseMode:
         rows = _tsv_rows(result.output)
         for temp_path in rows.values():
             assert not Path(temp_path).exists(), f"temp file leaked: {temp_path}"
+
+
+class TestEmptyOutputColumn:
+    """The Output column drops from the human view when no command emits."""
+
+    def test_display_drops_output_when_all_empty(
+        self, runner: CliRunner, tmp_path: Path
+    ) -> None:
+        img = _build_disc(tmp_path)
+        # `true` produces no stdout for any file, so the column is empty.
+        result = runner.invoke(cli, ["for-each", "--as", "display", f"{img}:*", "--", "true"])
+        assert result.exit_code == 0, result.output
+        assert "Output" not in result.output
+        assert "Path" in result.output
+
+    def test_display_keeps_output_when_present(
+        self, runner: CliRunner, tmp_path: Path
+    ) -> None:
+        img = _build_disc(tmp_path)
+        result = runner.invoke(
+            cli, ["for-each", "--as", "display", f"{img}:*", "--", *_BYTELEN]
+        )
+        assert result.exit_code == 0, result.output
+        assert "Output" in result.output
+
+    def test_tsv_keeps_output_for_stable_schema(
+        self, runner: CliRunner, tmp_path: Path
+    ) -> None:
+        img = _build_disc(tmp_path)
+        header = runner.invoke(
+            cli, ["for-each", "--as", "tsv", f"{img}:*", "--", "true"]
+        ).output.splitlines()[0]
+        assert "Output" in header
