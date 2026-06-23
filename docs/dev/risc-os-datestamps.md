@@ -17,8 +17,9 @@ local wall-clock? And how should a tool display it?
 
 ## The authoritative answer
 
-From discussion on Stardot (research by Sophira, and confirmed by SKS1 — the
-author of the RISC OS filesystem code, which is as authoritative as it gets):
+From discussion on Stardot (research by Sophira, and confirmed by Stuart Swales
+— the author of the RISC OS filesystem code, which is as authoritative as it
+gets):
 
 - **RISC OS 3 and later** store file datestamps in **UTC**. The Filer displays
   them adjusted to the machine's currently-configured timezone **and DST**.
@@ -59,6 +60,6 @@ The same face-value policy applies to PanOS DFS timestamps
 
 - Stardot thread "oaknut-disc : DFS, ADFS and AFS0 (L3FS) tools", June 2026 —
   Sophira's research that RISC OS stores datestamps in UTC and the Filer
-  applies the prevailing (proleptic) timezone + DST on display; and SKS1's
-  clarification that RISC OS 2 and earlier used the uncorrected, usually
-  local-time, system clock.
+  applies the prevailing (proleptic) timezone + DST on display; and Stuart
+  Swales's clarification that RISC OS 2 and earlier used the uncorrected,
+  usually local-time, system clock.
