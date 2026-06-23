@@ -56,6 +56,39 @@ which era's convention produced it. Consequences:
 The same face-value policy applies to PanOS DFS timestamps
 (`docs/dev/panos-dfs-timestamps.md`), which are additionally lossy and unmarked.
 
+## Crossing into a fixed reference frame: naive is UTC
+
+Reading and display never need a reference frame — and copying a datestamp
+between Acorn filesystems does not either, because all of them (ADFS, AFS,
+PanOS DFS) store **floating** wall-clock values with no fixed instant, so an
+Acorn→Acorn copy is a pure passthrough.
+
+A frame only has to be chosen when a datestamp crosses into a filesystem that
+stores an **absolute** instant. The first such case is the **host filesystem**:
+POSIX `mtime` is seconds since 1970 in **UTC**. So the question arises if/when
+oaknut preserves datestamps as host modification times (e.g. on `disc export` /
+`disc import`), or vice versa.
+
+**Decision — the default is: interpret a naive Acorn datestamp as UTC.** That
+is, the stored wall-clock digits are taken to *be* UTC, with **no numeric
+shift** — crossing the floating↔absolute boundary only attaches or strips a
+`UTC` tzinfo; the displayed time never changes. This keeps the conversion
+deterministic and independent of the host's locale, consistent with the
+face-value policy above. A naive `12:05:10.57` becomes `12:05:10.57Z`, full
+stop.
+
+A future **`--assume-timezone`** option on the boundary commands would let a
+user override this when they *know* a disc holds local time — for example a
+RISC OS 2 / Arthur-era disc known to have been written in `Europe/London` —
+shifting the value accordingly. Absent that flag, naive means UTC.
+
+This is the intended model; it is **not yet implemented**, because no current
+filesystem uses a non-floating frame and there is therefore nothing to convert.
+When host-mtime preservation is built, the planned shape is: the `Datestamped`
+capability gains a `datestamp_reference` (FLOATING vs UTC) so each filesystem
+declares its frame; same-frame copies stay passthrough; cross-frame conversion
+lives in the boundary layer and applies the naive-is-UTC default above.
+
 ## Sources
 
 - Stardot thread "oaknut-disc : DFS, ADFS and AFS0 (L3FS) tools", June 2026 —
