@@ -66,8 +66,10 @@ Acorn→Acorn copy is a pure passthrough.
 A frame only has to be chosen when a datestamp crosses into a filesystem that
 stores an **absolute** instant. The first such case is the **host filesystem**:
 POSIX `mtime` is seconds since 1970 in **UTC**. So the question arises if/when
-oaknut preserves datestamps as host modification times (e.g. on `disc export` /
-`disc import`), or vice versa.
+oaknut preserves datestamps as host modification times across the host
+boundary, or vice versa — that is, on any of the four host-boundary commands
+`disc get`, `disc put`, `disc export` and `disc import` (`get`/`put` are the
+single-file forms of `export`/`import`, and cross exactly the same boundary).
 
 **Decision — the default is: interpret a naive Acorn datestamp as UTC.** That
 is, the stored wall-clock digits are taken to *be* UTC, with **no numeric
