@@ -2782,8 +2782,8 @@ def set_filetype(
 @report_output(
     reports={
         "datestamp": (
-            "File datestamp as a naive-local ISO 8601 string at the "
-            "filesystem's resolution; empty when unstamped."
+            "File datestamp as a naive ISO 8601 string at the filesystem's "
+            "resolution; empty when unstamped."
         )
     }
 )
@@ -2791,6 +2791,13 @@ def get_datestamp(compound_path: str):
     """Print a file's datestamp.
 
     Accepts a ``COMPOUND_PATH``.
+
+    The datestamp is reported **at face value** — exactly as stored, with
+    no timezone or daylight-saving conversion (the field records none).
+    Note that a RISC OS Filer adjusts datestamps to the prevailing local
+    time when displaying them, so on a DST-active machine it may read up
+    to an hour ahead of this value. See
+    :doc:`/cli/conventions/metadata`.
     """
     from asyoulikeit.scalar_data import ScalarContent
     from asyoulikeit.tabular_data import Report, Reports

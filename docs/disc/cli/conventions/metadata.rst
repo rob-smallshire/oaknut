@@ -184,6 +184,32 @@ sidecars, xattr'd files, and filename-suffixed files imports
 correctly as one ``disc import HOST_DIR`` invocation.
 
 
+Datestamps are reported at face value
+-------------------------------------
+
+A RISC OS file's datestamp (held in the load/exec fields alongside
+the filetype) is a count of centiseconds since 1900 with **no
+timezone** recorded. ``disc ls``, ``disc stat`` and ``disc
+get-datestamp`` report it **exactly as stored** — no timezone or
+daylight-saving conversion, and no guess about which era's
+convention produced it.
+
+This matters because the meaning of the stored instant is not
+fixed: RISC OS 3 and later store datestamps in UTC, while RISC OS 2
+and earlier (the Arthur era) used the uncorrected system clock,
+usually set to local time. The disc does not record which. Reporting
+verbatim keeps oaknut's output reproducible and independent of where
+or when you run it.
+
+One visible consequence: a RISC OS Filer adjusts datestamps to the
+machine's *current* timezone and daylight-saving setting when it
+displays them (a proleptic adjustment that ignores whether DST was
+actually in force on the file's date). So on a DST-active machine the
+Filer can read up to an hour ahead of what oaknut reports. That is
+the Filer applying a local-time conversion oaknut deliberately does
+not — not a disagreement about the bytes.
+
+
 Cross-host gotchas
 ------------------
 
