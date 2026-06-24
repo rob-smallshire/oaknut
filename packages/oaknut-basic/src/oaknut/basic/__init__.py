@@ -79,7 +79,7 @@ from oaknut.basic.tokens import (
     TOKEN_TO_KEYWORD,
 )
 
-__version__ = "12.10.0"
+__version__ = "12.10.1"
 
 # Canonical load addresses for BBC BASIC programs on each host.
 # Programs saved by *SAVE on a real machine use these by default.

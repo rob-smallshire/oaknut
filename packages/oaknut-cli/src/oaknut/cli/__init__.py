@@ -40,7 +40,7 @@ from oaknut.cli.reports import (
     text_cell,
 )
 
-__version__ = "12.10.0"
+__version__ = "12.10.1"
 
 __all__ = [
     "COMMAND_KIND",
