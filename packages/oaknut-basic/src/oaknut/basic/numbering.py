@@ -14,8 +14,34 @@ stream plumbing on top.
 
 from __future__ import annotations
 
+import re
+
 DEFAULT_LINE_NUMBER = 10
 DEFAULT_LINE_STEP = 10
+
+# A BBC BASIC line ends only at a carriage return (or a host newline);
+# Python's str.splitlines() additionally breaks on &0B, &0C, &1C-&1E and
+# others, which occur legitimately inside string literals (mode-7 / VDU
+# control codes), so split strictly on the real terminators only. This
+# definition is shared with the tokeniser, which imports it from here.
+LINE_SEPARATOR_RE = re.compile(r"\r\n|\r|\n")
+
+
+def split_source_lines(source: str) -> list[str]:
+    """Split BBC BASIC source into lines on real terminators only.
+
+    Matches :meth:`str.splitlines` semantics for the terminators a BBC
+    BASIC line actually ends on (``"\\n"``, ``"\\r"``, ``"\\r\\n"``) — an
+    empty *source* yields no lines and a single trailing terminator is
+    not treated as introducing a final empty line — but, unlike
+    :meth:`str.splitlines`, never breaks on the in-string control codes
+    (&0B, &0C, &1C-&1E, ...) that BBC BASIC string literals legitimately
+    contain.
+    """
+    lines = LINE_SEPARATOR_RE.split(source)
+    if lines and lines[-1] == "":
+        lines.pop()
+    return lines
 
 
 def number_lines(
@@ -54,7 +80,7 @@ def number_lines(
 
     number = start
     numbered = []
-    for line in source.splitlines():
+    for line in split_source_lines(source):
         numbered.append(f"{number} {line}")
         number += step
 

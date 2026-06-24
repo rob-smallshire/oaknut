@@ -47,6 +47,13 @@ class TestNumberLines:
     def test_blank_lines_are_numbered_too(self):
         assert basic.number_lines("A\n\nB") == "10 A\n20 \n30 B"
 
+    def test_control_codes_in_string_literal_do_not_split_the_line(self):
+        # VDU / mode-7 control codes (here &0C, &1C) appear legitimately
+        # inside string literals; str.splitlines() would break on them,
+        # corrupting a single program line into several numbered lines.
+        source = 'PRINT "' + chr(0x0C) + chr(0x1C) + 'banner"'
+        assert basic.number_lines(source) == '10 PRINT "\x0c\x1cbanner"'
+
     def test_internal_references_are_left_untouched(self):
         # The facade only prepends numbers; it does not rewrite GOTO etc.
         source = "GOTO 20\nEND"

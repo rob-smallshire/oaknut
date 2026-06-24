@@ -27,8 +27,6 @@ the CLI does it at its I/O boundary.
 
 from __future__ import annotations
 
-import re
-
 from oaknut.basic.exceptions import (
     AlreadyNumberedError,
     LineNumberOrderError,
@@ -37,7 +35,12 @@ from oaknut.basic.exceptions import (
     UnnumberedLineError,
 )
 from oaknut.basic.linenumber import MAX_LINE_NUMBER, encode_line_number
-from oaknut.basic.numbering import DEFAULT_LINE_NUMBER, DEFAULT_LINE_STEP, number_lines
+from oaknut.basic.numbering import (
+    DEFAULT_LINE_NUMBER,
+    DEFAULT_LINE_STEP,
+    LINE_SEPARATOR_RE,
+    number_lines,
+)
 from oaknut.basic.tokens import (
     FLAG_CONDITIONAL,
     FLAG_FN_PROC,
@@ -56,15 +59,9 @@ from oaknut.basic.tokens import (
 _CR = 0x0D
 _END_MARKER = 0xFF
 
-# A BBC BASIC line ends only at a carriage return (or a host newline);
-# Python's str.splitlines() additionally breaks on &0B, &0C, &1C-&1E and
-# others, which occur legitimately inside string literals (mode-7 / VDU
-# control codes), so split strictly on the real terminators only.
-_LINE_SEPARATOR_RE = re.compile(r"\r\n|\r|\n")
-
 
 def _split_source_lines(source: str) -> list[str]:
-    return _LINE_SEPARATOR_RE.split(source)
+    return LINE_SEPARATOR_RE.split(source)
 
 # Keyword entries grouped by first character, preserving ROM order within
 # each group, so the crunch only scans the relevant group.
