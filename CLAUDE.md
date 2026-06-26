@@ -18,7 +18,7 @@ Layered strictly bottom-up:
 | `oaknut-codecs` | `oaknut.codecs` | — | Dependency-free Acorn character-set codecs. Registers the `acorn` text codec on import; the shared bottom layer so language and file packages can use the encoding without depending on each other |
 | `oaknut-file` | `oaknut.file` | `exception`, `codecs` | INF sidecars, xattr namespaces, filename encoding, `Access`, `AcornMeta`, `MetaFormat`, `BootOption`, `FSError` base (a `DataError`), `host_bridge` |
 | `oaknut-discimage` | `oaknut.discimage` | `file` | `Surface`, `SectorsView`, `UnifiedDisc`, generic `DiskFormat` + surface-spec helpers |
-| `oaknut-basic` | `oaknut.basic` | `exception`, `codecs` | BBC BASIC tokeniser/detokeniser (BASIC II), line numbering, language constants, `data files` (PRINT#/INPUT#/BPUT#/BGET#) with the 5-byte REAL codec |
+| `oaknut-basic` | `oaknut.basic` | `exception`, `codecs` | BBC BASIC tokeniser (BASIC II) and detokeniser (BASIC II + BASIC V dialect via the `Dialect`/`BASIC_II`/`BASIC_V` de-tokenising path), line numbering, language constants, `data files` (PRINT#/INPUT#/BPUT#/BGET#) with the 5-byte REAL codec |
 | `oaknut-dfs` | `oaknut.dfs` | `file`, `discimage`, `basic` | Acorn DFS / Watford DFS / Opus DDOS — flat-catalogue BBC floppies |
 | `oaknut-adfs` | `oaknut.adfs` | `file`, `discimage`, `basic` | ADFS hierarchical directories, free space maps, hard-disc images |
 | `oaknut-afs` | `oaknut.afs` | `file`, `discimage`, `adfs` | Acorn Level 3 File Server private on-disc format (`AFS0` magic). Read/write, `wfsinit` partitioning + initialisation, merge, host-tree import, shipped library images |
