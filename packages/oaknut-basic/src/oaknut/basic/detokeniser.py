@@ -26,15 +26,21 @@ including) the next one, so ``length = 4 + len(body)``.
 
 from __future__ import annotations
 
+from oaknut.basic.dialect import BASIC_II, Dialect
 from oaknut.basic.scanner import scan, scan_program
 
 
-def detokenise(data: bytes) -> str:
-    """De-tokenise a BBC BASIC II program into source text.
+def detokenise(data: bytes, *, dialect: Dialect = BASIC_II) -> str:
+    """De-tokenise a stored BBC BASIC program into source text.
 
     Args:
         data: A tokenised program, as stored on disc or in memory,
             terminated by the ``&0D &FF`` end marker.
+        dialect: The BBC BASIC variant whose token tables to use.
+            Defaults to :data:`~oaknut.basic.BASIC_II`; pass
+            :data:`~oaknut.basic.BASIC_V` for Archimedes / RISC OS
+            programs so the ``&C6``/``&C7``/``&C8`` escape tokens and the
+            re-purposed single-byte tokens decode correctly.
 
     Returns:
         The program as numbered source text, lines separated by ``"\\n"``
@@ -47,11 +53,11 @@ def detokenise(data: bytes) -> str:
     """
     return "".join(
         f"{record.line_number}{''.join(token.value for token in record.tokens)}\n"
-        for record in scan_program(data)
+        for record in scan_program(data, dialect=dialect)
     )
 
 
-def detokenise_body(data: bytes) -> str:
+def detokenise_body(data: bytes, *, dialect: Dialect = BASIC_II) -> str:
     """De-tokenise an unframed line body into text.
 
     Unlike :func:`detokenise`, this expects a line *body* — inline token
@@ -62,6 +68,9 @@ def detokenise_body(data: bytes) -> str:
 
     Args:
         data: A line body of inline token bytes.
+        dialect: The BBC BASIC variant whose token tables to use, passed
+            through to :func:`scan`. Defaults to
+            :data:`~oaknut.basic.BASIC_II`.
 
     Returns:
         The body as source text, using latin-1/code-point semantics so it
@@ -70,4 +79,4 @@ def detokenise_body(data: bytes) -> str:
     Raises:
         DetokeniseError: A ``&8D`` line-number reference is truncated.
     """
-    return "".join(token.value for token in scan(data))
+    return "".join(token.value for token in scan(data, dialect=dialect))

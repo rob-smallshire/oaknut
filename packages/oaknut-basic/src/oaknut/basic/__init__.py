@@ -31,6 +31,7 @@ from oaknut.basic.datafile import (
     BbcBasicDataWriter,
 )
 from oaknut.basic.detokeniser import detokenise, detokenise_body
+from oaknut.basic.dialect import BASIC_II, BASIC_V, Dialect
 from oaknut.basic.exceptions import (
     AlreadyNumberedError,
     BASICError,
@@ -87,6 +88,8 @@ BBC_BASIC_LOAD_ADDRESS = 0x1900
 ELECTRON_BASIC_LOAD_ADDRESS = 0x0E00
 
 __all__ = [
+    "BASIC_II",
+    "BASIC_V",
     "BBC_BASIC_LOAD_ADDRESS",
     "DEFAULT_LINE_NUMBER",
     "DEFAULT_LINE_STEP",
@@ -110,6 +113,7 @@ __all__ = [
     "DataFileError",
     "DataFileTypeMismatchError",
     "DetokeniseError",
+    "Dialect",
     "Float5RangeError",
     "IntegerRangeError",
     "InvalidLineLengthError",

@@ -26,13 +26,14 @@ import enum
 from collections.abc import Iterator
 from dataclasses import dataclass
 
+from oaknut.basic.dialect import BASIC_II, Dialect
 from oaknut.basic.exceptions import (
     InvalidLineLengthError,
     MissingLineMarkerError,
     TruncatedProgramError,
 )
 from oaknut.basic.linenumber import decode_line_number
-from oaknut.basic.tokens import HEADER_LENGTH, LINE_NUMBER_TOKEN, TOKEN_TO_KEYWORD
+from oaknut.basic.tokens import HEADER_LENGTH, LINE_NUMBER_TOKEN
 
 _CR = 0x0D
 _END_MARKER = 0xFF
@@ -90,7 +91,7 @@ class LineRecord:
     start: int
 
 
-def scan(data: bytes, *, base_offset: int = 0) -> Iterator[Token]:
+def scan(data: bytes, *, base_offset: int = 0, dialect: Dialect = BASIC_II) -> Iterator[Token]:
     """Scan an unframed line body into a stream of :class:`Token`.
 
     Args:
@@ -99,10 +100,17 @@ def scan(data: bytes, *, base_offset: int = 0) -> Iterator[Token]:
         base_offset: Added to every token's :attr:`~Token.start`, so
             offsets can be reported against a larger buffer (for example
             the line body's position within a whole program).
+        dialect: The BBC BASIC variant whose token tables to use.
+            Defaults to :data:`~oaknut.basic.BASIC_II`; pass
+            :data:`~oaknut.basic.BASIC_V` to resolve the
+            ``&C6``/``&C7``/``&C8`` two-byte escape tokens and the
+            re-purposed single-byte tokens of the Archimedes language.
 
     Yields:
         One :class:`Token` per keyword, literal run, string literal, and
-        ``&8D`` line-number reference, in source order.
+        ``&8D`` line-number reference, in source order. For a two-byte
+        escape keyword the token's :attr:`~Token.token` is the prefix
+        byte and its :attr:`~Token.start` is the prefix's offset.
 
     Raises:
         DetokeniseError: A ``&8D`` reference is truncated.
@@ -141,13 +149,20 @@ def scan(data: bytes, *, base_offset: int = 0) -> Iterator[Token]:
             yield Token(TokenKind.LINENUM, str(decode_line_number(payload)), base_offset + i)
             i += 4
             continue
-        if b >= 0x80 and b in TOKEN_TO_KEYWORD:
+        if b in dialect.escape and i + 1 < n and data[i + 1] in dialect.escape[b]:
             yield from flush()
-            yield Token(TokenKind.KEYWORD, TOKEN_TO_KEYWORD[b], base_offset + i, b)
+            keyword = dialect.escape[b][data[i + 1]]
+            yield Token(TokenKind.KEYWORD, keyword, base_offset + i, b)
+            i += 2
+            continue
+        if b in dialect.single_byte:
+            yield from flush()
+            yield Token(TokenKind.KEYWORD, dialect.single_byte[b], base_offset + i, b)
             i += 1
             continue
-        # A literal byte (< &80) or an unknown high byte (e.g. the &CE
-        # gap): coalesce into a TEXT run so the byte still round-trips.
+        # A literal byte, an unknown high byte, or an escape prefix whose
+        # following byte has no extended-token meaning: coalesce into a
+        # TEXT run so the byte still round-trips.
         if text_start < 0:
             text_start = i
         text_chars.append(chr(b))
@@ -155,12 +170,15 @@ def scan(data: bytes, *, base_offset: int = 0) -> Iterator[Token]:
     yield from flush()
 
 
-def scan_program(data: bytes) -> Iterator[LineRecord]:
+def scan_program(data: bytes, *, dialect: Dialect = BASIC_II) -> Iterator[LineRecord]:
     """Walk a ``&0D``-framed stored program, scanning each line body.
 
     Args:
         data: A tokenised program as stored on disc or in memory,
             terminated by the ``&0D &FF`` end marker.
+        dialect: The BBC BASIC variant whose token tables to use, passed
+            through to :func:`scan`. Defaults to
+            :data:`~oaknut.basic.BASIC_II`.
 
     Yields:
         One :class:`LineRecord` per line, in storage order, each carrying
@@ -187,6 +205,6 @@ def scan_program(data: bytes) -> Iterator[LineRecord]:
         if length < HEADER_LENGTH or i + length > n:
             raise InvalidLineLengthError(offset=i, length=length)
         body = data[i + HEADER_LENGTH : i + length]
-        tokens = tuple(scan(body, base_offset=i + HEADER_LENGTH))
+        tokens = tuple(scan(body, base_offset=i + HEADER_LENGTH, dialect=dialect))
         yield LineRecord(line_number=line_number, tokens=tokens, start=i)
         i += length

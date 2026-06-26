@@ -43,6 +43,37 @@ The text de-tokenisers above are the join of these streams' values.
    :members:
 
 
+Dialects
+--------
+
+BBC BASIC II is the BBC Micro's 8-bit language ROM. BBC BASIC V — the
+Archimedes / RISC OS ARM BASIC — keeps that token table but re-uses the
+``&C6``/``&C7``/``&C8`` command bytes as two-byte *escape prefixes* (the
+following byte selects an extended keyword such as ``SUM``, ``RENUMBER``,
+``CASE``, ``SYS`` or ``ORIGIN``) and re-purposes several single-byte
+slots (``&7F`` becomes ``OTHERWISE``; ``&C9``-``&CE`` become the block
+keywords ``WHEN``/``OF``/``ENDCASE``/``ELSE``/``ENDIF``/``ENDWHILE``).
+De-tokenising a BASIC V program with the BASIC II tables corrupts every
+extended keyword, so :func:`~oaknut.basic.detokenise`,
+:func:`~oaknut.basic.detokenise_body`, :func:`~oaknut.basic.scan` and
+:func:`~oaknut.basic.scan_program` take a ``dialect`` argument.
+:data:`BASIC_II` is the default everywhere.
+
+.. autoclass:: oaknut.basic.Dialect
+   :members:
+
+.. py:data:: BASIC_II
+
+   The default :class:`Dialect`: BBC BASIC II, the BBC Micro's 8-bit
+   language ROM. No escape tokens.
+
+.. py:data:: BASIC_V
+
+   The :class:`Dialect` for BBC BASIC V — the Archimedes / RISC OS ARM
+   BASIC — with the ``&C6``/``&C7``/``&C8`` escape tables and the
+   re-purposed single-byte tokens.
+
+
 Token table
 -----------
 
