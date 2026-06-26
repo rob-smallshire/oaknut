@@ -9,6 +9,7 @@ rather than re-testing the numbering or tokenising logic itself.
 from pathlib import Path
 
 import oaknut.basic as basic
+import pytest
 from click.testing import CliRunner
 from oaknut.basic.cli import cli
 
@@ -230,13 +231,23 @@ class TestDetokeniseCommand:
         assert result.exit_code != 0
         assert "offset 0" in result.output
 
-    def test_dialect_v_decodes_escape_tokens(self):
+    @pytest.mark.parametrize("dialect", ["v", "5"])
+    def test_dialect_v_decodes_escape_tokens(self, dialect: str):
         # &C8 &91 is the BASIC V ORIGIN statement, not "LOADTIME".
+        # The Roman "v" and Arabic "5" numerals are interchangeable.
         program = b"\x0d\x00\x8c\x0e\xc8\x91 640,512\x0d\xff"
         runner = CliRunner()
-        result = runner.invoke(cli, ["detokenise", "--dialect", "v"], input=program)
+        result = runner.invoke(cli, ["detokenise", "--dialect", dialect], input=program)
         assert result.exit_code == 0
         assert result.stdout_bytes == b"140ORIGIN 640,512\n"
+
+    @pytest.mark.parametrize("dialect", ["ii", "2"])
+    def test_dialect_ii_keeps_basic_ii_meaning(self, dialect: str):
+        program = b"\x0d\x00\x8c\x0e\xc8\x91 640,512\x0d\xff"
+        runner = CliRunner()
+        result = runner.invoke(cli, ["detokenise", "--dialect", dialect], input=program)
+        assert result.exit_code == 0
+        assert result.stdout_bytes == b"140LOADTIME 640,512\n"
 
     def test_default_dialect_is_basic_ii(self):
         program = b"\x0d\x00\x8c\x0e\xc8\x91 640,512\x0d\xff"
