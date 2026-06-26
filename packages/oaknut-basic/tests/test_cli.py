@@ -230,6 +230,21 @@ class TestDetokeniseCommand:
         assert result.exit_code != 0
         assert "offset 0" in result.output
 
+    def test_dialect_v_decodes_escape_tokens(self):
+        # &C8 &91 is the BASIC V ORIGIN statement, not "LOADTIME".
+        program = b"\x0d\x00\x8c\x0e\xc8\x91 640,512\x0d\xff"
+        runner = CliRunner()
+        result = runner.invoke(cli, ["detokenise", "--dialect", "v"], input=program)
+        assert result.exit_code == 0
+        assert result.stdout_bytes == b"140ORIGIN 640,512\n"
+
+    def test_default_dialect_is_basic_ii(self):
+        program = b"\x0d\x00\x8c\x0e\xc8\x91 640,512\x0d\xff"
+        runner = CliRunner()
+        result = runner.invoke(cli, ["detokenise"], input=program)
+        assert result.exit_code == 0
+        assert result.stdout_bytes == b"140LOADTIME 640,512\n"
+
 
 class TestTokeniseDetokeniseRoundTrip:
     def test_cli_round_trip(self):

@@ -260,7 +260,15 @@ def tokenise(
     help='Text encoding for the OUTPUT source. Use "acorn" for the BBC '
     "character set with CR line endings (e.g. writing back to a disc image).",
 )
-def detokenise(input_stream, output_stream, encoding: str) -> None:
+@click.option(
+    "--dialect",
+    type=click.Choice(["ii", "v"]),
+    default="ii",
+    show_default=True,
+    help='BBC BASIC dialect. Use "v" for Archimedes / RISC OS programs, so the '
+    "&C6/&C7/&C8 escape tokens (CASE, SYS, ORIGIN, ...) decode correctly.",
+)
+def detokenise(input_stream, output_stream, encoding: str, dialect: str) -> None:
     """De-tokenise a stored BBC BASIC program into source text.
 
     Reads a tokenised program from INPUT and writes numbered source text
@@ -273,10 +281,15 @@ def detokenise(input_stream, output_stream, encoding: str) -> None:
     OUTPUT is written in --encoding (``utf-8`` with host-native ``LF`` line
     endings by default, for a host text file; pass ``acorn`` for the BBC
     character set with ``CR`` endings, e.g. writing back to a disc image).
+
+    Pass ``--dialect v`` for Archimedes / RISC OS programs (BBC BASIC V),
+    whose extended keywords use the &C6/&C7/&C8 two-byte escape tokens.
     """
+    from oaknut.basic import BASIC_II, BASIC_V
     from oaknut.basic import detokenise as detokenise_program
 
-    listing = detokenise_program(input_stream.read())
+    selected_dialect = BASIC_V if dialect == "v" else BASIC_II
+    listing = detokenise_program(input_stream.read(), dialect=selected_dialect)
     output_stream.write(_listing_to_bytes(listing, encoding))
 
 
