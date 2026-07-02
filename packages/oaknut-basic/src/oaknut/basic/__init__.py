@@ -30,6 +30,7 @@ from oaknut.basic.datafile import (
     BbcBasicDataReader,
     BbcBasicDataWriter,
 )
+from oaknut.basic.detect import Detection, Verdict, detect
 from oaknut.basic.detokeniser import detokenise, detokenise_body
 from oaknut.basic.dialect import BASIC_II, BASIC_V, Dialect
 from oaknut.basic.exceptions import (
@@ -112,6 +113,7 @@ __all__ = [
     "BbcBasicDataWriter",
     "DataFileError",
     "DataFileTypeMismatchError",
+    "Detection",
     "DetokeniseError",
     "Dialect",
     "Float5RangeError",
@@ -130,7 +132,9 @@ __all__ = [
     "TruncatedRecordError",
     "UnknownTagError",
     "UnnumberedLineError",
+    "Verdict",
     "decode_line_number",
+    "detect",
     "detokenise",
     "detokenise_body",
     "number_lines",

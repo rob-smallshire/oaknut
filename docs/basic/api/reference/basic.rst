@@ -43,6 +43,27 @@ The text de-tokenisers above are the join of these streams' values.
    :members:
 
 
+Detection
+---------
+
+Files harvested from Acorn disc images carry no filetype or extension,
+so whether a blob is a tokenised BBC BASIC program has to be inferred
+from its bytes. :func:`~oaknut.basic.detect` walks the ``&0D``-framed
+line structure the ROM's ``LIST`` walks — a length-driven scan that
+needs no de-tokenise — and, unlike :func:`~oaknut.basic.scan_program`,
+never raises: any blob is classified into a :class:`~oaknut.basic.Verdict`
+with the evidence behind the decision. The framing is identical across
+BASIC I/II/IV/V, so detection is purely structural and takes no dialect.
+
+.. autofunction:: oaknut.basic.detect
+
+.. autoclass:: oaknut.basic.Detection
+   :members:
+
+.. autoclass:: oaknut.basic.Verdict
+   :members:
+
+
 Dialects
 --------
 
