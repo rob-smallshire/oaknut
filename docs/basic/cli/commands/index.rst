@@ -51,6 +51,21 @@ De-tokenising
       :section: detokenise
 
 
+Detecting
+---------
+
+Files pulled off a disc image carry no filetype, so ``detect``
+classifies a blob as tokenised BBC BASIC by its structure alone — no
+de-tokenise needed. It exits non-zero if any input is not a program, so
+it composes as a shell filter (see :doc:`/cli/conventions/exit-codes`):
+
+.. oaknut-command:: oaknut.basic.cli:detect
+   :prog: oaknut-basic detect
+
+   .. cli-example:: cmd_basic_detect
+      :section: detect
+
+
 Data files
 ----------
 

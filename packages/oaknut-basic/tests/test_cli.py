@@ -257,6 +257,59 @@ class TestDetokeniseCommand:
         assert result.stdout_bytes == b"140LOADTIME 640,512\n"
 
 
+class TestDetectCommand:
+    def test_stdin_basic_program_exits_zero(self):
+        program = basic.tokenise("10 PRINT")
+        runner = CliRunner()
+        result = runner.invoke(cli, ["detect"], input=program)
+        assert result.exit_code == 0
+        assert "BASIC" in result.output
+        assert "basic" in result.output
+
+    def test_stdin_non_basic_exits_nonzero(self):
+        runner = CliRunner()
+        result = runner.invoke(cli, ["detect"], input=b"just some text")
+        assert result.exit_code == 1
+        assert "not-basic" in result.output
+
+    def test_files_mixed_reports_each_and_exits_nonzero(self, tmp_path):
+        good = tmp_path / "PROG"
+        good.write_bytes(basic.tokenise("10 END"))
+        bad = tmp_path / "DATA"
+        bad.write_bytes(b"not a program")
+        runner = CliRunner()
+        result = runner.invoke(cli, ["detect", str(good), str(bad)])
+        assert result.exit_code == 1
+        assert str(good) in result.output
+        assert str(bad) in result.output
+        # One line per file.
+        assert result.output.count("PROG") == 1
+        assert result.output.count("DATA") == 1
+
+    def test_all_basic_files_exit_zero(self, tmp_path):
+        first = tmp_path / "A"
+        first.write_bytes(basic.tokenise("10 END"))
+        second = tmp_path / "B"
+        second.write_bytes(basic.tokenise("20 PRINT"))
+        runner = CliRunner()
+        result = runner.invoke(cli, ["detect", str(first), str(second)])
+        assert result.exit_code == 0
+
+    def test_quiet_suppresses_output_but_keeps_exit_code(self):
+        runner = CliRunner()
+        result = runner.invoke(cli, ["detect", "--quiet"], input=b"not basic")
+        assert result.exit_code == 1
+        assert result.output == ""
+
+    def test_non_ff_terminator_notes_are_shown(self):
+        program = bytearray(basic.tokenise("10 PRINT"))
+        program[-1] = 0x80  # top bit still set, so still a terminator
+        runner = CliRunner()
+        result = runner.invoke(cli, ["detect"], input=bytes(program))
+        assert result.exit_code == 0
+        assert "note:" in result.output
+
+
 class TestTokeniseDetokeniseRoundTrip:
     def test_cli_round_trip(self):
         runner = CliRunner()

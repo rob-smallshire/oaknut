@@ -296,6 +296,58 @@ def detokenise(input_stream, output_stream, encoding: str, dialect: str) -> None
     output_stream.write(_listing_to_bytes(listing, encoding))
 
 
+@cli.command()
+@click.argument(
+    "inputs",
+    metavar="[FILE]...",
+    type=click.File("rb"),
+    nargs=-1,
+)
+@click.option(
+    "--quiet",
+    "-q",
+    is_flag=True,
+    help="Suppress per-file output; report the verdict through the exit code only.",
+)
+@click.pass_context
+def detect(ctx: click.Context, inputs, quiet: bool) -> None:
+    """Identify whether each FILE is a tokenised BBC BASIC program.
+
+    Classifies each FILE by its byte structure alone — the length-driven
+    line walk the BBC BASIC ROM performs to ``LIST`` a program — without
+    de-tokenising, so unlabelled files harvested from disc images can be
+    filtered. With no FILE, or ``-``, reads a single blob from standard
+    input ::
+
+        oaknut-basic detect *
+        disc get game.ssd MENU - | oaknut-basic detect
+
+    Each line reports a ``BASIC`` flag (blank when not), the verdict, the
+    path and the reason; non-fatal observations follow as indented notes.
+    The exit code is non-zero if any input is not a BASIC program, so it
+    composes as a shell filter. The verdict is one of ``basic`` (a clean
+    program), ``basic+`` (a program with data appended), ``maybe`` (begins
+    as BASIC, then the structure breaks) or ``not-basic``.
+    """
+    from oaknut.basic import detect as detect_blob
+
+    streams = inputs if inputs else (click.get_binary_stream("stdin"),)
+    all_basic = True
+    for stream in streams:
+        result = detect_blob(stream.read())
+        all_basic = all_basic and result.is_basic
+        if quiet:
+            continue
+        name = getattr(stream, "name", "<stdin>")
+        flag = "BASIC" if result.is_basic else "     "
+        click.echo(f"{flag} {result.verdict.value:9} {name}  -- {result.reason}")
+        for note in result.notes:
+            click.echo(f"          note: {note}")
+
+    if not all_basic:
+        ctx.exit(1)
+
+
 @cli.group()
 def data() -> None:
     """Read and write BBC BASIC data files (PRINT#/INPUT#/BPUT#/BGET#).
