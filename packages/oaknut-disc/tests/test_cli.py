@@ -134,6 +134,37 @@ class TestLs:
         assert "0x001900" in result.output
         assert "0x008023" in result.output
 
+    def test_ls_display_elides_names_from_the_middle(
+        self, runner: CliRunner, tmp_path: Path
+    ) -> None:
+        """A squeezed listing elides names rather than wrapping them.
+
+        Every detailed column in 40 terminal columns leaves the Name
+        column far less width than a full ADFS name needs. Wrapping would
+        spill each entry over two rows, stranding the name from its data;
+        eliding from the middle keeps one row per entry and keeps the
+        tail, which is what tells these two names apart.
+        """
+        from oaknut.adfs import ADFS, ADFS_L
+
+        filepath = tmp_path / "long.adl"
+        with ADFS.create_file(filepath, ADFS_L, title="Long") as adfs:
+            (adfs.root / "Dircopy267").write_bytes(b"x" * 16)
+            (adfs.root / "Dircopy254").write_bytes(b"x" * 16)
+
+        result = runner.invoke(
+            cli,
+            ["ls", "--as", "display", "--detailed", f"{filepath}:$"],
+            env={"COLUMNS": "40"},
+        )
+        assert result.exit_code == 0, result.output
+        body_rows = [line for line in result.output.splitlines() if line.lstrip().startswith("│")]
+        assert len(body_rows) == 2, result.output  # one row per entry, not one per line
+        names = [row.split("│")[1].strip() for row in body_rows]
+        assert all("…" in name for name in names), names
+        # The discriminating tails survive; the shared head does not blur them.
+        assert {name[-1] for name in names} == {"7", "4"}, names
+
 
 class TestForceFilesystem:
     """``--filesystem`` / ``--geometry`` force the interpretation of an

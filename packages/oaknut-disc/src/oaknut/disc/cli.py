@@ -290,7 +290,7 @@ def ls(
 
     Accepts a ``COMPOUND_PATH`` (the in-image ``INNER_PATH`` is optional and defaults to the root).
     """
-    from asyoulikeit import Audience
+    from asyoulikeit import Audience, Overflow
     from asyoulikeit.tabular_data import Importance, Report, Reports, TableContent
     from oaknut.file import Access
     from oaknut.filesystem import (
@@ -331,7 +331,11 @@ def ls(
     description = f"Free: {mount.free_bytes():,} bytes" if isinstance(mount, FreeSpace) else None
 
     table = TableContent(title=table_title, description=description)
-    table.add_column("name", "Name", header=True)
+    # A filename is atomic: wrapping one costs a whole extra row and, on a
+    # DFS disc whose names may contain spaces, splits it where no split
+    # belongs. Neighbouring Acorn names differ in their tails as often as
+    # their heads, so elide from the middle and keep both ends.
+    table.add_column("name", "Name", header=True, overflow=Overflow.ELIDE_MIDDLE)
     # ``type`` discriminates rows so the length column can carry bytes for
     # files and an entry count for directories unambiguously.
     table.add_column("type", "Type")
@@ -427,6 +431,7 @@ def tree(compound_path: str, force_filesystem: str | None, force_geometry: str |
 
     Accepts a ``COMPOUND_PATH`` (the in-image ``INNER_PATH`` is optional and defaults to the root).
     """
+    from asyoulikeit import Overflow
     from asyoulikeit.tabular_data import Report, Reports
     from asyoulikeit.tree_data import TreeContent
 
@@ -436,7 +441,9 @@ def tree(compound_path: str, force_filesystem: str | None, force_geometry: str |
     # 0.5.1 drops the Rich-table chrome around single-column trees —
     # setting a TreeContent title would duplicate it.
     tc = TreeContent()
-    tc.add_column("name", "Name", header=True)
+    # Eliding the name keeps a deep branch on one line; the connectors are
+    # outside the budget, so the shape of the tree survives the squeeze.
+    tc.add_column("name", "Name", header=True, overflow=Overflow.ELIDE_MIDDLE)
 
     if path:
         # Explicit path (possibly with a partition prefix) — that subtree only.
@@ -886,6 +893,7 @@ def find(compound_path: str):
     unchanged.  Single-partition images emit bare paths, unchanged
     from earlier behaviour.
     """
+    from asyoulikeit import Overflow
     from asyoulikeit.tabular_data import Report, Reports, TableContent
 
     from .mount import split_selector
@@ -916,7 +924,8 @@ def find(compound_path: str):
         _find_recursive(mount, mount.path_root(), bare_pattern, prefix, rows)
 
     table = TableContent(title="matches")
-    table.add_column("path", "Path", header=True)
+    # A matched path is atomic and often long; elide it rather than wrap.
+    table.add_column("path", "Path", header=True, overflow=Overflow.ELIDE_MIDDLE)
     for row in rows:
         table.add_row(**row)
     return Reports(matches=Report(data=table))
@@ -1022,10 +1031,10 @@ def for_each(compound_path: str, command_argv: tuple[str, ...], mode: str):
 
     rows = _for_each_run(outer_filepath, matches, list(command_argv), mode)
 
-    from asyoulikeit import Audience
+    from asyoulikeit import Audience, Overflow
 
     table = TableContent(title="results")
-    table.add_column("path", "Path", header=True)
+    table.add_column("path", "Path", header=True, overflow=Overflow.ELIDE_MIDDLE)
     # When no matched command produced any stdout the column is empty for
     # the whole run; drop it from the human view, keep it for machines.
     table.add_column("output", "Output", omit_if_empty_for={Audience.HUMAN})
@@ -1220,6 +1229,7 @@ def storage_order(compound_path: str):
     with no defined storage order — its files have none, or are
     fragmented (AFS).
     """
+    from asyoulikeit import Overflow
     from asyoulikeit.tabular_data import Report, Reports, TableContent
     from oaknut.filesystem import StorageOrdered
 
@@ -1231,7 +1241,7 @@ def storage_order(compound_path: str):
         files.sort(key=lambda entry: mount.storage_key(entry.path))
 
     table = TableContent(title="storage order")
-    table.add_column("path", "Path", header=True)
+    table.add_column("path", "Path", header=True, overflow=Overflow.ELIDE_MIDDLE)
     table.add_column("size", "Size")
     for entry in files:
         table.add_row(path=entry.path, size=bytes_cell(entry.length))
