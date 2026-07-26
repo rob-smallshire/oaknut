@@ -431,7 +431,6 @@ def tree(compound_path: str, force_filesystem: str | None, force_geometry: str |
 
     Accepts a ``COMPOUND_PATH`` (the in-image ``INNER_PATH`` is optional and defaults to the root).
     """
-    from asyoulikeit import Overflow
     from asyoulikeit.tabular_data import Report, Reports
     from asyoulikeit.tree_data import TreeContent
 
@@ -441,9 +440,10 @@ def tree(compound_path: str, force_filesystem: str | None, force_geometry: str |
     # 0.5.1 drops the Rich-table chrome around single-column trees —
     # setting a TreeContent title would duplicate it.
     tc = TreeContent()
-    # Eliding the name keeps a deep branch on one line; the connectors are
-    # outside the budget, so the shape of the tree survives the squeeze.
-    tc.add_column("name", "Name", header=True, overflow=Overflow.ELIDE_MIDDLE)
+    # No overflow policy: a single-column tree renders as bare art, which
+    # asyoulikeit emits without consulting the terminal width at all, so
+    # declaring one here would say more than it delivers.
+    tc.add_column("name", "Name", header=True)
 
     if path:
         # Explicit path (possibly with a partition prefix) — that subtree only.
