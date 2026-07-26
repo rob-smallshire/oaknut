@@ -694,6 +694,66 @@ class TestAcornWildcards:
         assert _matcher(Bare()) is UNIX_MATCHER
 
 
+class TestFindElision:
+    """Deep ADFS paths squeezed into terminals too narrow to hold them."""
+
+    @staticmethod
+    def _deep_image(tmp_path: Path) -> Path:
+        """``$.Utilities.Uncrunched.Compressor`` holding two files.
+
+        Four levels down, so the leaf paths are long enough that no
+        ordinary terminal can show one whole.
+        """
+        from oaknut.adfs import ADFS, ADFS_L
+
+        filepath = tmp_path / "deep.adl"
+        with ADFS.create_file(filepath, ADFS_L, title="Deep") as adfs:
+            (adfs.root / "Utilities").mkdir()
+            (adfs.root / "Utilities" / "Uncrunched").mkdir()
+            (adfs.root / "Utilities" / "Uncrunched" / "Compressor").mkdir()
+            for name in ("Copyfiles2", "Dircopy267"):
+                (adfs.root / "Utilities" / "Uncrunched" / "Compressor" / name).write_bytes(b"x")
+        return filepath
+
+    @pytest.mark.parametrize("columns", ["18", "24", "30", "40", "200"])
+    def test_find_keeps_one_row_per_match(
+        self, runner: CliRunner, tmp_path: Path, columns: str
+    ) -> None:
+        """A match occupies exactly one row at any width."""
+        filepath = self._deep_image(tmp_path)
+        result = runner.invoke(
+            cli, ["find", "--as", "display", f"{filepath}:*"], env={"COLUMNS": columns}
+        )
+        assert result.exit_code == 0, result.output
+        body_rows = [line for line in result.output.splitlines() if line.lstrip().startswith("│")]
+        assert len(body_rows) == 5, result.output  # three directories, two files
+
+    def test_find_elides_the_middle_and_keeps_the_filename(
+        self, runner: CliRunner, tmp_path: Path
+    ) -> None:
+        """The leaf name survives the squeeze; the shared parents give way.
+
+        This is the whole argument for eliding from the middle rather
+        than the end: these paths share every character up to the last
+        component, so end-elision would render them indistinguishable.
+        """
+        filepath = self._deep_image(tmp_path)
+        result = runner.invoke(
+            cli, ["find", "--as", "display", f"{filepath}:*"], env={"COLUMNS": "30"}
+        )
+        assert result.exit_code == 0, result.output
+        cells = [
+            line.split("│")[1].strip()
+            for line in result.output.splitlines()
+            if line.lstrip().startswith("│")
+        ]
+        files = [cell for cell in cells if cell.endswith(("Copyfiles2", "Dircopy267"))]
+        assert len(files) == 2, cells
+        assert all("…" in cell for cell in files), files
+        # Both ends survive: the root marker and the distinguishing leaf.
+        assert all(cell.startswith("$.") for cell in files), files
+
+
 class TestFind:
     def test_find_dfs_bare_paths(self, runner: CliRunner, dfs_image_filepath: Path) -> None:
         """Single-partition DFS image: output stays unprefixed for

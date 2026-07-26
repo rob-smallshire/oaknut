@@ -32,6 +32,8 @@ from oaknut.zip import (
 )
 from oaknut.zip.cli import cli
 
+from tests.fixtures import REFERENCE_IMAGES_DIRPATH
+
 requires_xattr = pytest.mark.skipif(
     sys.platform == "win32", reason="Extended attributes not supported on Windows"
 )
@@ -58,6 +60,8 @@ def list_xattrs(filepath: Path) -> list[str]:
 
 
 FIXTURES_DIRPATH = Path(__file__).resolve().parent / "fixtures"
+ARCHIVES_DIRPATH = REFERENCE_IMAGES_DIRPATH / "archives"
+M128WELC_ZIP_FILEPATH = ARCHIVES_DIRPATH / "M128Welc.zip"
 NETUTILS_ZIP_FILEPATH = FIXTURES_DIRPATH / "NetUtils.zip"
 NETUTILB_ZIP_FILEPATH = FIXTURES_DIRPATH / "NetUtilB.zip"
 SWEH_ZIP_FILEPATH = FIXTURES_DIRPATH / "sweh_econet_system.zip"
@@ -1523,6 +1527,77 @@ class TestCliList:
         ).output
         for cell in first_column_cells(out):
             assert cell.strip("│├└─ ") != "", f"orphaned tree prefix: {cell!r}"
+
+    @staticmethod
+    def _deep_archive(tmp_path):
+        """An archive three levels deep whose leaf names are long.
+
+        Long enough that the Filename column cannot show them whole at
+        any ordinary terminal width, so the elision path is taken rather
+        than merely available.
+        """
+        extra = build_sparkfs_extra(0xFFFFFB3F, 0x9D57DA00, 0x03)
+        return make_zip_file(
+            tmp_path,
+            [
+                ("Archive/", b"", None),
+                ("Archive/Interpreters/", b"", None),
+                ("Archive/Interpreters/Tokenisers/", b"", None),
+                ("Archive/Interpreters/Tokenisers/BasicTokeniserImplementation", b"x" * 10, extra),
+                ("Archive/Interpreters/Tokenisers/BasicDetokeniserImplementation", b"x" * 10, extra),
+            ],
+        )
+
+    @pytest.mark.parametrize("columns", ["60", "70", "80", "100"])
+    def test_deep_archive_keeps_one_row_per_entry(self, tmp_path, columns):
+        """However narrow the terminal, an entry never spans two rows."""
+        zip_filepath = self._deep_archive(tmp_path)
+        out = CliRunner().invoke(
+            cli, ["list", "--as", "display", str(zip_filepath)], env={"COLUMNS": columns}
+        ).output
+        assert len(first_column_cells(out)) == 5, out  # three dirs, two files
+
+    def test_deep_archive_elides_names_that_do_not_fit(self, tmp_path):
+        """Squeezed names are elided, and the tree art is left alone.
+
+        At 80 columns the leaf names cannot be shown whole, but the
+        connectors that place them in the tree still can, so an elided
+        row still says which directory it belongs to.
+        """
+        zip_filepath = self._deep_archive(tmp_path)
+        out = CliRunner().invoke(
+            cli, ["list", "--as", "display", str(zip_filepath)], env={"COLUMNS": "80"}
+        ).output
+        leaves = [cell.strip() for cell in first_column_cells(out) if "Basic" in cell]
+        assert len(leaves) == 2, out
+        assert all("…" in leaf for leaf in leaves), leaves
+        assert leaves[0].startswith("├── ") and leaves[1].startswith("└── "), leaves
+
+    @pytest.mark.parametrize("columns", ["60", "76", "80", "100"])
+    def test_reported_archive_keeps_its_tree_intact(self, columns):
+        """The archive from the original report, at the width it broke.
+
+        M128Welc.zip nests three directories one level down; at 80
+        columns the Filename column used to be two cells short of
+        ``└── Dircopy267``, which put the name on a row of its own.
+        """
+        out = CliRunner().invoke(
+            cli,
+            ["list", "--as", "display", str(M128WELC_ZIP_FILEPATH)],
+            env={"COLUMNS": columns},
+        ).output
+        for cell in first_column_cells(out):
+            assert cell.strip("│├└─ ") != "", f"orphaned tree prefix: {cell!r}"
+
+    def test_reported_archive_shows_uncrunched_children_whole(self):
+        """At 80 columns — the reported width — no name needs eliding."""
+        out = CliRunner().invoke(
+            cli,
+            ["list", "--as", "display", str(M128WELC_ZIP_FILEPATH)],
+            env={"COLUMNS": "80"},
+        ).output
+        assert "├── Copyf254" in out
+        assert "└── Dircopy267" in out
 
     def test_tsv_filename_is_plain_path(self, tmp_path):
         # Machine output gets the raw path, not the box-drawing tree form.
