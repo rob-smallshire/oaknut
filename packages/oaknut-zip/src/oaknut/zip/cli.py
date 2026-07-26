@@ -161,7 +161,7 @@ def _tree_display_names(entries: list[dict]) -> list[str]:
 )
 def list_cmd(zipfile_path: Path):
     """List ZIP contents showing Acorn metadata."""
-    from asyoulikeit import Audience, ByAudience, Report, Reports
+    from asyoulikeit import Audience, ByAudience, Overflow, Report, Reports
     from asyoulikeit.tabular_data import TableContent
     from oaknut.cli import address_cell, filetype_cell
 
@@ -173,7 +173,11 @@ def list_cmd(zipfile_path: Path):
     # them in machine output for a stable schema.
     omit = {Audience.HUMAN}
     table = TableContent(title=zipfile_path.name)
-    table.add_column("filename", "Filename", header=True)
+    # A name carries tree art, and the space after a connector is a legal
+    # break opportunity, so wrapping strands "├──" above its own name. The
+    # tail of an archived name is also what tells siblings apart, so elide
+    # from the middle rather than the end.
+    table.add_column("filename", "Filename", header=True, overflow=Overflow.ELIDE_MIDDLE)
     table.add_column("load", "Load", omit_if_empty_for=omit)
     table.add_column("exec", "Exec", omit_if_empty_for=omit)
     table.add_column("length", "Length")

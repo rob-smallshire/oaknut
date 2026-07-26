@@ -94,6 +94,21 @@ def make_zip_bytes(entries: list[tuple[str, bytes, bytes | None]]) -> bytes:
     return buf.getvalue()
 
 
+def first_column_cells(display_output: str) -> list[str]:
+    """Extract the first-column cell of each body row of a rendered table.
+
+    Column boundaries come from the top border row, so a cell whose own text
+    contains a vertical bar (a tree continuation prefix) is handled correctly.
+    """
+    lines = display_output.splitlines()
+    borders = [line for line in lines if line.lstrip().startswith("┏")]
+    if not borders:
+        return []
+    border = borders[0]
+    end = border.index("┳")
+    return [line[border.index("┏") + 1 : end] for line in lines if line.lstrip().startswith("│")]
+
+
 def make_zip_file(
     tmp_path: Path,
     entries: list[tuple[str, bytes, bytes | None]],
@@ -1486,6 +1501,28 @@ class TestCliList:
         ).output
         assert "file" in out
         assert "└" in out or "├" in out  # box-drawing tree prefix
+
+    @pytest.mark.parametrize("columns", ["60", "70", "76", "80", "90"])
+    def test_tree_prefix_never_orphaned_from_its_name(self, tmp_path, columns):
+        # The space inside a tree prefix must not be a line-break opportunity:
+        # wrapping there strands "├── " on one row and the leaf name on the
+        # next, which reads as an entry with no name followed by a name with
+        # no branch.
+        extra = build_sparkfs_extra(0xFFFFFB3F, 0x9D57DA00, 0x03)
+        zip_filepath = make_zip_file(
+            tmp_path,
+            [
+                ("UNCRUNCHED/", b"", None),
+                ("UNCRUNCHED/Copyf254", b"x" * 10, extra),
+                ("UNCRUNCHED/Dircopy267", b"x" * 10, extra),
+            ],
+        )
+        runner = CliRunner()
+        out = runner.invoke(
+            cli, ["list", "--as", "display", str(zip_filepath)], env={"COLUMNS": columns}
+        ).output
+        for cell in first_column_cells(out):
+            assert cell.strip("│├└─ ") != "", f"orphaned tree prefix: {cell!r}"
 
     def test_tsv_filename_is_plain_path(self, tmp_path):
         # Machine output gets the raw path, not the box-drawing tree form.
