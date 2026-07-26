@@ -144,6 +144,10 @@ class TestLs:
         spill each entry over two rows, stranding the name from its data;
         eliding from the middle keeps one row per entry and keeps the
         tail, which is what tells these two names apart.
+
+        Rendered without a header: Rich draws the light box style on
+        Windows, where a column-label row opens with the same character
+        as a body row and could not be told apart when counting rows.
         """
         from oaknut.adfs import ADFS, ADFS_L
 
@@ -154,7 +158,7 @@ class TestLs:
 
         result = runner.invoke(
             cli,
-            ["ls", "--as", "display", "--detailed", f"{filepath}:$"],
+            ["ls", "--as", "display", "--detailed", "--no-header", f"{filepath}:$"],
             env={"COLUMNS": "40"},
         )
         assert result.exit_code == 0, result.output
@@ -695,7 +699,13 @@ class TestAcornWildcards:
 
 
 class TestFindElision:
-    """Deep ADFS paths squeezed into terminals too narrow to hold them."""
+    """Deep ADFS paths squeezed into terminals too narrow to hold them.
+
+    Every case renders with ``--no-header``: Rich draws the light box
+    style on Windows and the heavy one elsewhere, so with a header the
+    column-label row opens with the same character as a body row and the
+    row counts below would come out one too high on one platform only.
+    """
 
     @staticmethod
     def _deep_image(tmp_path: Path) -> Path:
@@ -722,7 +732,9 @@ class TestFindElision:
         """A match occupies exactly one row at any width."""
         filepath = self._deep_image(tmp_path)
         result = runner.invoke(
-            cli, ["find", "--as", "display", f"{filepath}:*"], env={"COLUMNS": columns}
+            cli,
+            ["find", "--as", "display", "--no-header", f"{filepath}:*"],
+            env={"COLUMNS": columns},
         )
         assert result.exit_code == 0, result.output
         body_rows = [line for line in result.output.splitlines() if line.lstrip().startswith("│")]
@@ -739,7 +751,9 @@ class TestFindElision:
         """
         filepath = self._deep_image(tmp_path)
         result = runner.invoke(
-            cli, ["find", "--as", "display", f"{filepath}:*"], env={"COLUMNS": "30"}
+            cli,
+            ["find", "--as", "display", "--no-header", f"{filepath}:*"],
+            env={"COLUMNS": "30"},
         )
         assert result.exit_code == 0, result.output
         cells = [

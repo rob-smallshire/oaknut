@@ -103,14 +103,23 @@ def first_column_cells(display_output: str) -> list[str]:
 
     Column boundaries come from the top border row, so a cell whose own text
     contains a vertical bar (a tree continuation prefix) is handled correctly.
+
+    Rich draws the heavy box style on POSIX and the light one on Windows, so
+    both corner sets are recognised. Callers must render with ``--no-header``:
+    under the light style a column-label row opens with the same character as
+    a body row, and there would be no way to tell one from the other.
     """
     lines = display_output.splitlines()
-    borders = [line for line in lines if line.lstrip().startswith("┏")]
-    if not borders:
-        return []
-    border = borders[0]
-    end = border.index("┳")
-    return [line[border.index("┏") + 1 : end] for line in lines if line.lstrip().startswith("│")]
+    corners = {"┏": "┳", "┌": "┬"}
+    border = next(
+        (line for line in lines if line.lstrip()[:1] in corners),
+        None,
+    )
+    if border is None:
+        raise AssertionError(f"no table border found in:\n{display_output}")
+    start = min(border.index(corner) for corner in corners if corner in border)
+    end = border.index(corners[border[start]])
+    return [line[start + 1 : end] for line in lines if line.lstrip().startswith("│")]
 
 
 def make_zip_file(
@@ -1523,7 +1532,9 @@ class TestCliList:
         )
         runner = CliRunner()
         out = runner.invoke(
-            cli, ["list", "--as", "display", str(zip_filepath)], env={"COLUMNS": columns}
+            cli,
+            ["list", "--as", "display", "--no-header", str(zip_filepath)],
+            env={"COLUMNS": columns},
         ).output
         for cell in first_column_cells(out):
             assert cell.strip("│├└─ ") != "", f"orphaned tree prefix: {cell!r}"
@@ -1553,7 +1564,9 @@ class TestCliList:
         """However narrow the terminal, an entry never spans two rows."""
         zip_filepath = self._deep_archive(tmp_path)
         out = CliRunner().invoke(
-            cli, ["list", "--as", "display", str(zip_filepath)], env={"COLUMNS": columns}
+            cli,
+            ["list", "--as", "display", "--no-header", str(zip_filepath)],
+            env={"COLUMNS": columns},
         ).output
         assert len(first_column_cells(out)) == 5, out  # three dirs, two files
 
@@ -1566,7 +1579,9 @@ class TestCliList:
         """
         zip_filepath = self._deep_archive(tmp_path)
         out = CliRunner().invoke(
-            cli, ["list", "--as", "display", str(zip_filepath)], env={"COLUMNS": "80"}
+            cli,
+            ["list", "--as", "display", "--no-header", str(zip_filepath)],
+            env={"COLUMNS": "80"},
         ).output
         leaves = [cell.strip() for cell in first_column_cells(out) if "Basic" in cell]
         assert len(leaves) == 2, out
@@ -1583,7 +1598,7 @@ class TestCliList:
         """
         out = CliRunner().invoke(
             cli,
-            ["list", "--as", "display", str(M128WELC_ZIP_FILEPATH)],
+            ["list", "--as", "display", "--no-header", str(M128WELC_ZIP_FILEPATH)],
             env={"COLUMNS": columns},
         ).output
         for cell in first_column_cells(out):
