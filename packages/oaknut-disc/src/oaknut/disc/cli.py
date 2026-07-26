@@ -242,6 +242,26 @@ def force_options(func):
     return func
 
 
+#: Show the raw load/exec pair rather than decoding a RISC OS filetype and
+#: datestamp from it. The ``&FFF`` marker that triggers the decode overlaps
+#: genuine addresses (the ``&FFFFxxxx`` host convention, the ``&FFFFFFFF``
+#: sentinel), so a real address can be misread as a "coincidental" date;
+#: this forces the address reading. Display-only; the stored bytes are
+#: untouched, and machine formatters already carry the raw values. The
+#: ``OAKNUT_DISC_RAW_ADDRESSES`` environment variable sets the default
+#: across commands.
+_raw_addresses_option = click.option(
+    "--raw-addresses",
+    is_flag=True,
+    envvar="OAKNUT_DISC_RAW_ADDRESSES",
+    help=(
+        "Show the raw load/exec addresses instead of decoding a filetype and "
+        "datestamp from them. Useful when a genuine address is misread as a "
+        "datestamp by coincidence. Default settable via OAKNUT_DISC_RAW_ADDRESSES."
+    ),
+)
+
+
 # ---------------------------------------------------------------------------
 # Inspection commands
 # ---------------------------------------------------------------------------
@@ -256,11 +276,13 @@ def force_options(func):
     is_flag=True,
     help="Show the raw access byte as two hex digits alongside the symbolic form.",
 )
+@_raw_addresses_option
 @force_options
 @report_output(reports={"entries": "Directory entries with load/exec/length/attributes."})
 def ls(
     compound_path: str,
     show_access_byte: bool,
+    raw_addresses: bool,
     force_filesystem: str | None,
     force_geometry: str | None,
 ):
@@ -360,18 +382,19 @@ def ls(
         if has_acorn:
             meta = mount.acorn_meta(child.path)
             # A stamped file's load/exec hold an encoded filetype/date;
-            # conceal them from humans but keep the raw bytes for machines.
-            stamped = meta.is_filetype_stamped
+            # conceal them from humans but keep the raw bytes for machines —
+            # unless --raw-addresses asks for the address reading throughout.
+            stamped = meta.is_filetype_stamped and not raw_addresses
             load_cell = address_cell(meta.load_address, conceal=stamped)
             exec_cell = address_cell(meta.exec_address, conceal=stamped)
             if meta.access is not None:
                 attr_str = _format_access(Access(meta.access))
                 hex_cell = f"0x{int(meta.access):02X}"
-        if has_filetype:
+        if has_filetype and not raw_addresses:
             filetype = mount.filetype(child.path)
             if filetype is not None:
                 filetype_str = filetype_cell(filetype)
-        if has_datestamp:
+        if has_datestamp and not raw_addresses:
             when = mount.datestamp(child.path)
             if when is not None:
                 datestamp_str = datestamp_cell(when, mount.datestamp_resolution)
@@ -500,8 +523,14 @@ def _attach_children_mount(mount, path: str, parent_tree_node) -> None:
         "file": "Per-file metadata when the path denotes a file.",
     }
 )
+@_raw_addresses_option
 @force_options
-def stat(compound_path: str, force_filesystem: str | None, force_geometry: str | None):
+def stat(
+    compound_path: str,
+    raw_addresses: bool,
+    force_filesystem: str | None,
+    force_geometry: str | None,
+):
     """Disc summary (no path) or file metadata (with path). Alias: *INFO.
 
     With no in-partition path, summarises the disc by walking its
@@ -537,7 +566,10 @@ def stat(compound_path: str, force_filesystem: str | None, force_geometry: str |
     row: dict = {"name": text_cell(entry.name)}
     if isinstance(mount, AcornMetadata) and not entry.is_dir:
         meta = mount.acorn_meta(bare)
-        stamped = meta.is_filetype_stamped
+        # --raw-addresses forces the address reading throughout; otherwise a
+        # stamped file's load/exec are concealed in favour of the decoded
+        # filetype/datestamp.
+        stamped = meta.is_filetype_stamped and not raw_addresses
         # Declare every metadata field for a stable machine schema; the
         # human view drops whichever are empty for this file (a stamped
         # file's load/exec, or filetype/datestamp on a filesystem that has
@@ -547,10 +579,18 @@ def stat(compound_path: str, force_filesystem: str | None, force_geometry: str |
         row["load"] = address_cell(meta.load_address, conceal=stamped)
         tc.add_column("exec", "Exec", omit_if_empty_for=_omit)
         row["exec"] = address_cell(meta.exec_address, conceal=stamped)
-        filetype = mount.filetype(bare) if isinstance(mount, Filetyped) else None
+        filetype = (
+            mount.filetype(bare)
+            if isinstance(mount, Filetyped) and not raw_addresses
+            else None
+        )
         tc.add_column("filetype", "Filetype", omit_if_empty_for=_omit)
         row["filetype"] = filetype_cell(filetype) if filetype is not None else ""
-        when = mount.datestamp(bare) if isinstance(mount, Datestamped) else None
+        when = (
+            mount.datestamp(bare)
+            if isinstance(mount, Datestamped) and not raw_addresses
+            else None
+        )
         tc.add_column("datestamp", "Datestamp", omit_if_empty_for=_omit)
         row["datestamp"] = (
             datestamp_cell(when, mount.datestamp_resolution) if when is not None else ""

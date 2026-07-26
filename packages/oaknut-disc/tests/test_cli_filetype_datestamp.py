@@ -256,3 +256,78 @@ class TestAFS:
         assert "2005-06-15" in out
         # AFS keeps real load/exec addresses; the datestamp is a separate field.
         assert "0x" in out
+
+
+class TestRawAddresses:
+    """--raw-addresses shows the load/exec pair instead of decoding it."""
+
+    def _stamp(self, runner: CliRunner, image: Path) -> None:
+        _run(runner, "set-filetype", f"{image}:$.Hello", "Obey")
+        _run(runner, "set-datestamp", f"{image}:$.Hello", "2024-03-01T14:22:08")
+
+    def test_ls_raw_shows_load_exec_not_decoded(
+        self, runner: CliRunner, adfs_image_filepath: Path
+    ):
+        self._stamp(runner, adfs_image_filepath)
+        out = runner.invoke(
+            cli,
+            ["ls", "--as", "display", "--detailed", "--raw-addresses",
+             f"{adfs_image_filepath}:$"],
+            env={"COLUMNS": "200"},
+        ).output
+        assert "Load" in out and "Exec" in out
+        assert "0xFFFFEB" in out            # the encoded load, shown as an address
+        assert "Filetype" not in out        # not decoded
+        assert "Datestamp" not in out
+        assert "Obey" not in out
+
+    def test_ls_default_still_decodes(
+        self, runner: CliRunner, adfs_image_filepath: Path
+    ):
+        self._stamp(runner, adfs_image_filepath)
+        out = runner.invoke(
+            cli,
+            ["ls", "--as", "display", "--detailed", f"{adfs_image_filepath}:$"],
+            env={"COLUMNS": "200"},
+        ).output
+        assert "Obey" in out and "Datestamp" in out
+
+    def test_stat_raw_shows_load_exec(
+        self, runner: CliRunner, adfs_image_filepath: Path
+    ):
+        self._stamp(runner, adfs_image_filepath)
+        out = runner.invoke(
+            cli,
+            ["stat", "--as", "display", "--raw-addresses", f"{adfs_image_filepath}:$.Hello"],
+            env={"COLUMNS": "200"},
+        ).output
+        assert "Load" in out
+        assert "Filetype" not in out and "Datestamp" not in out
+
+    def test_ls_raw_tsv_empties_typed_columns(
+        self, runner: CliRunner, adfs_image_filepath: Path
+    ):
+        self._stamp(runner, adfs_image_filepath)
+        out = runner.invoke(
+            cli,
+            ["ls", "--as", "tsv", "--detailed", "--raw-addresses", f"{adfs_image_filepath}:$"],
+        ).output
+        lines = out.splitlines()
+        header = lines[0].lstrip("# ").split("\t")
+        row = next(r.split("\t") for r in lines[1:] if r.startswith("Hello"))
+        cell = dict(zip(header, row))
+        assert cell["Filetype"] == "" and cell["Datestamp"] == ""
+        assert int(cell["Load"]) & 0xFFF00000 == 0xFFF00000   # raw encoded load kept
+
+    def test_env_var_sets_default(
+        self, runner: CliRunner, adfs_image_filepath: Path
+    ):
+        # OAKNUT_DISC_RAW_ADDRESSES acts as the cross-command default.
+        self._stamp(runner, adfs_image_filepath)
+        out = runner.invoke(
+            cli,
+            ["ls", "--as", "display", "--detailed", f"{adfs_image_filepath}:$"],
+            env={"COLUMNS": "200", "OAKNUT_DISC_RAW_ADDRESSES": "1"},
+        ).output
+        assert "Load" in out and "Exec" in out
+        assert "Filetype" not in out and "Datestamp" not in out

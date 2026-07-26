@@ -210,6 +210,29 @@ the Filer applying a local-time conversion oaknut deliberately does
 not — not a disagreement about the bytes.
 
 
+Address or datestamp? ``--raw-addresses``
+-----------------------------------------
+
+On ADFS a file's load/exec fields hold *either* a real address pair
+*or* a filetype-and-datestamp — distinguished by the RISC OS marker
+"the top twelve bits of the load address are ``&FFF``". ``disc ls``
+and ``disc stat`` follow that marker: a marked file shows *Filetype*
+and *Datestamp* columns, and its raw load/exec are hidden from the
+human view (they are only the encoding). The raw values are never
+lost — they stay in ``--as json`` / ``--as tsv`` output, and ``disc
+get-load`` / ``disc get-exec`` always report them.
+
+That marker overlaps genuine addresses, though — the ``&FFFFxxxx``
+host-address convention and the ``&FFFFFFFF`` "unset" sentinel both
+trip it — so a file whose load/exec are genuinely more useful as an
+address can be shown as a filetype and a *coincidental* date. Pass
+**``--raw-addresses``** to ``disc ls`` or ``disc stat`` to force the
+address reading: the *Load* and *Exec* columns are shown for every
+file and the decode is suppressed. It changes the display only; the
+stored bytes are untouched. Set ``OAKNUT_DISC_RAW_ADDRESSES=1`` to
+make that the default across commands.
+
+
 Cross-host gotchas
 ------------------
 
