@@ -293,6 +293,12 @@ Acorn convention: `*` matches any sequence within one name component, `?` matche
 
 Follow oaknut-zip's default: commands that emit Rich output (`ls`, `tree`, `info`, `stat`, `freemap`) use `Console()` which auto-detects TTY and strips ANSI when piped. Add one global `--plain` flag that forces plain output even at a TTY, for scripting. No `--no-color`; Rich already honours `NO_COLOR` via its standard logic.
 
+### Environment variables
+
+**Naming convention (pinned).** oaknut's own environment variables are `OAKNUT_<TOOL>_<SETTING>` — upper-case, underscore-separated, scoped to the reading tool (`DISC` for the `disc` CLI, leaving room for a future `OAKNUT_ZIP_…` etc.). Each such variable is the default for an explicit flag of the same meaning, so the flag can override it per invocation and the two never drift; wire it with Click's per-option `envvar=`, **not** `auto_envvar_prefix` (which would bake the *subcommand* into the name and so give `ls` and `stat` different variables for one setting). Standard cross-tool variables (`NO_COLOR`, `CLICOLOR`) are honoured **unprefixed** — renaming them would defeat the point.
+
+The live list lives in the user docs at `docs/disc/cli/conventions/environment.rst`; keep it in step when adding a variable. As of writing: `OAKNUT_DISC_RAW_ADDRESSES` (oaknut-owned), plus `NO_COLOR` / `CLICOLOR` (external).
+
 ### Error handling
 
 The contract has two halves:

@@ -14,3 +14,4 @@ understands one command understands the surface.
    output-formats
    metadata
    exit-codes
+   environment
