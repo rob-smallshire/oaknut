@@ -203,6 +203,13 @@ class TestHelpFormatting:
             )
 
     @pytest.mark.parametrize("argv", _ALL_COMMANDS)
+    def test_no_rst_inline_markup_leaks(self, argv):
+        runner = CliRunner()
+        result = runner.invoke(cli, [*argv, "--help"])
+        assert result.exit_code == 0
+        assert "`" not in result.output
+
+    @pytest.mark.parametrize("argv", _ALL_COMMANDS)
     def test_no_rst_literal_block_markers_leak(self, argv):
         runner = CliRunner()
         result = runner.invoke(cli, [*argv, "--help"])

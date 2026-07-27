@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import click
 from asyoulikeit.cli import report_output
+from oaknut.cli.help import use_plain_help
 
 from . import __version__
 
@@ -534,6 +535,12 @@ def inspect(input_stream, encoding: str):
     for index, (offset, kind, value) in enumerate(_read_records(input_stream, encoding)):
         table.add_row(index=index, type=kind, value=value, offset=offset)
     return Reports(records=Report(data=table))
+
+
+# With the whole tree assembled, render every command's help with RST inline
+# markup stripped — the docstrings keep their markup for the Sphinx command
+# reference, but a terminal sees plain text, not stray backticks.
+use_plain_help(cli)
 
 
 if __name__ == "__main__":  # pragma: no cover
