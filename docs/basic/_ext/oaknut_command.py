@@ -162,26 +162,38 @@ def _strip_click_markers(text: str) -> str:
     Used for option / report help text where the marker may slip in but
     there is no block-level transform to apply. For the command-level
     description, prefer :func:`_convert_b_blocks` which preserves line
-    breaks by rewriting the marked block as an RST line block.
+    breaks by rewriting the marked block as an RST literal block.
     """
     return text.replace("\x08", "")
 
 
+# ``literal`` and `interpreted` spans — one or two backticks either side.
+_BACKTICK_SPAN_RE = re.compile(r"`{1,2}([^`]+)`{1,2}")
 _ACORN_STAR_RE = re.compile(r"(?<![\w`])(\*[A-Z][A-Z0-9_]*)")
 _OPTION_TOKEN_RE = re.compile(r"(?<![\w`-])(--?[A-Za-z][\w-]*)")
 
 
-def _convert_b_blocks(text: str) -> str:
-    """Rewrite Click ``\\b``-marked no-rewrap blocks as RST line blocks.
+def _convert_b_blocks(text: str) -> tuple[str, set[int]]:
+    """Rewrite Click ``\\b``-marked no-rewrap blocks as RST literal blocks.
 
     Click uses ``\\b`` (ASCII backspace, on its own line) to mark the
     start of a paragraph the plain-text formatter should not rewrap —
-    typically a small aligned table like the boot-option enum. The
-    natural RST equivalent is a line block (``| line``) which preserves
-    the source's line breaks under HTML rendering.
+    a command example or a small aligned table like the boot-option
+    enum. A literal block is the faithful RST equivalent: it preserves
+    both the line breaks and the column alignment, which a proportional
+    font would otherwise lose.
+
+    The preceding paragraph carries the ``::`` marker, gaining a second
+    colon where it already ends in one so the rendered text reads
+    naturally; a block with nothing before it gets a standalone ``::``.
+
+    Returns the rewritten text together with the indices of the lines
+    that now sit inside a literal block, where no further inline-markup
+    rewriting may be applied.
     """
     lines = text.splitlines()
     out: list[str] = []
+    literal: set[int] = set()
     i = 0
     while i < len(lines):
         line = lines[i]
@@ -191,28 +203,45 @@ def _convert_b_blocks(text: str) -> str:
             while j < len(lines) and lines[j].strip():
                 block.append(lines[j])
                 j += 1
-            if out and out[-1] != "":
-                out.append("")
+            previous = next((k for k in range(len(out) - 1, -1, -1) if out[k].strip()), None)
+            if previous is None:
+                out.append("::")
+            else:
+                out[previous] += ":" if out[previous].endswith(":") else " ::"
+                del out[previous + 1 :]
+            out.append("")
+            # A literal block is delimited by indentation; guarantee some
+            # even if the docstring block sat flush against the margin.
+            pad = "" if min(len(bl) - len(bl.lstrip()) for bl in block) else "   "
             for block_line in block:
-                out.append("| " + block_line)
+                literal.add(len(out))
+                # Inline markup is inert inside a literal block, where
+                # backticks would show as themselves.
+                out.append(pad + _BACKTICK_SPAN_RE.sub(r"\1", block_line))
             if j < len(lines):
                 out.append("")
             i = j
         else:
             out.append(line.replace("\x08", ""))
             i += 1
-    return "\n".join(out)
+    return "\n".join(out), literal
 
 
-def _escape_acorn_stars(text: str) -> str:
+def _escape_acorn_stars(text: str, skip: set[int] = frozenset()) -> str:
     """Wrap Acorn ``*COMMAND`` references in inline literal markup.
 
     Without this, the leading ``*`` is misread by docutils as an
     emphasis marker, producing ``<span class="problematic">*</span>``
     in the HTML. Acorn star commands are always ``*`` followed by an
     uppercase token, so the heuristic is unambiguous.
+
+    Lines whose indices are in *skip* are left alone: they sit inside a
+    literal block, where markup would render as backticks.
     """
-    return _ACORN_STAR_RE.sub(r"``\1``", text)
+    return "\n".join(
+        line if index in skip else _ACORN_STAR_RE.sub(r"``\1``", line)
+        for index, line in enumerate(text.splitlines())
+    )
 
 
 def _extract_description(help_text: str | None) -> str:
@@ -223,7 +252,7 @@ def _extract_description(help_text: str | None) -> str:
       - The asyoulikeit ``Produces reports:`` line block (rendered separately).
 
     Rewrites:
-      - ``\\b`` no-rewrap blocks into RST line blocks (line breaks preserved).
+      - ``\\b`` no-rewrap blocks into RST literal blocks (line breaks preserved).
       - ``*COMMAND`` Acorn references into RST inline literals.
     """
     if not help_text:
@@ -231,8 +260,8 @@ def _extract_description(help_text: str | None) -> str:
     head = help_text.split("\f", 1)[0]
     head = _REPORTS_EPILOG_RE.sub("\n", head)
     head = inspect.cleandoc(head)
-    head = _convert_b_blocks(head)
-    head = _escape_acorn_stars(head)
+    head, literal_lines = _convert_b_blocks(head)
+    head = _escape_acorn_stars(head, literal_lines)
     return head
 
 
