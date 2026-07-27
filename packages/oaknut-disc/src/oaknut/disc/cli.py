@@ -969,8 +969,9 @@ def for_each(compound_path: str, command_argv: tuple[str, ...], mode: str):
     """Run a command for each file matching an inner-path pattern.
 
     Use ``--`` to separate ``disc``'s options from the command's, so
-    flags meant for the command are not interpreted by ``for-each``::
+    flags meant for the command are not interpreted by ``for-each``:
 
+    \b
         disc for-each 'img:*' -- md5sum
 
     The ``--mode`` option picks one of four ways to present each file
@@ -1141,8 +1142,9 @@ def materialise(compound_path: str, command_argv: tuple[str, ...]) -> None:
     temp file — even if the command fails.
 
     Use it to point a host-native tool at an in-image file without
-    extracting it manually::
+    extracting it manually:
 
+    \b
         disc materialise 'img:$.IMG' -- xdg-open {}
         disc materialise 'img:$.PROG' -- ./run-emulator {}
         disc materialise 'img:$.HELLO' -- file {}

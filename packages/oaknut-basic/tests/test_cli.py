@@ -6,6 +6,7 @@ usage, the option parsing, and the byte/text (Acorn-encoding) boundary —
 rather than re-testing the numbering or tokenising logic itself.
 """
 
+import inspect
 from pathlib import Path
 
 import oaknut.basic as basic
@@ -141,6 +142,74 @@ class TestTopLevel:
         assert "number" in result.output
 
 
+def _walk_commands(command, path=()):
+    """Yield ``(argv, command)`` for every command and sub-command."""
+    yield list(path), command
+    for name, child in getattr(command, "commands", {}).items():
+        yield from _walk_commands(child, (*path, name))
+
+
+def _no_rewrap_lines(help_text):
+    """Return the stripped lines of a docstring's ``\\b`` no-rewrap blocks."""
+    if not help_text:
+        return []
+    lines = inspect.cleandoc(help_text).splitlines()
+    marked = []
+    in_block = False
+    for line in lines:
+        if line.strip() == "\b":
+            in_block = True
+        elif not line.strip():
+            in_block = False
+        elif in_block:
+            # The asyoulikeit reports epilog is a \b block of prose that
+            # the help formatter deliberately re-wraps.
+            if line.strip() == "Produces reports:":
+                in_block = False
+                continue
+            marked.append(line.strip())
+    return marked
+
+
+_ALL_COMMANDS = [
+    pytest.param(argv, id=" ".join(argv) or "oaknut-basic") for argv, _ in _walk_commands(cli)
+]
+
+
+class TestHelpFormatting:
+    """The example blocks in command docstrings must survive Click's rewrapper.
+
+    Click reflows every paragraph of a docstring unless it is preceded by
+    a ``\\b`` no-rewrap marker. Without one, a block of example command
+    lines is run together into a single paragraph and re-broken at
+    arbitrary points, which reads as two commands spliced together.
+    """
+
+    @pytest.mark.parametrize("argv", _ALL_COMMANDS)
+    def test_docstring_example_lines_survive_verbatim(self, argv):
+        command = cli
+        for name in argv:
+            command = command.commands[name]
+        expected = _no_rewrap_lines(command.help)
+        if not expected:
+            pytest.skip("no example block in this command's docstring")
+        runner = CliRunner()
+        result = runner.invoke(cli, [*argv, "--help"])
+        assert result.exit_code == 0
+        rendered = {line.strip() for line in result.output.splitlines()}
+        for line in expected:
+            assert line in rendered, (
+                f"example line reflowed away in `{' '.join(argv)} --help`: {line!r}"
+            )
+
+    @pytest.mark.parametrize("argv", _ALL_COMMANDS)
+    def test_no_rst_literal_block_markers_leak(self, argv):
+        runner = CliRunner()
+        result = runner.invoke(cli, [*argv, "--help"])
+        assert result.exit_code == 0
+        assert " ::" not in result.output
+
+
 class TestTokeniseCommand:
     def test_pipe_tokenises_to_stdout(self):
         runner = CliRunner()
@@ -192,9 +261,7 @@ class TestTokeniseEncoding:
         # --encoding acorn treats the input as Acorn bytes already, so a
         # 0x60 byte is the £ literal verbatim.
         runner = CliRunner()
-        result = runner.invoke(
-            cli, ["tokenise", "--encoding", "acorn"], input=b'10 PRINT "\x60"\n'
-        )
+        result = runner.invoke(cli, ["tokenise", "--encoding", "acorn"], input=b'10 PRINT "\x60"\n')
         assert result.exit_code == 0
         assert b'"\x60"' in result.stdout_bytes
 

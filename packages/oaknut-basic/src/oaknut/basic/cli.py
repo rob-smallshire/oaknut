@@ -107,12 +107,14 @@ def number(input_stream, output_stream, encoding: str, start: int, step: int) ->
 
     Reads BASIC source text from INPUT and writes the numbered program
     to OUTPUT. Both default to ``-``: INPUT to standard input, OUTPUT to
-    standard output, so the command works file-to-file ::
+    standard output, so the command works file-to-file:
 
+    \b
         oaknut-basic number menu.bas menu-numbered.bas
 
-    and as a pipe stage between ``disc get`` and ``disc put`` ::
+    and as a pipe stage between ``disc get`` and ``disc put``:
 
+    \b
         disc get game.ssd MENU - | oaknut-basic number --encoding acorn | disc put game.ssd MENU -
 
     Text is read and written in ``--encoding`` (``utf-8`` by default; pass
@@ -216,15 +218,17 @@ def tokenise(
 
     Reads numbered BASIC source from INPUT and writes the tokenised
     program bytes to OUTPUT. Both default to ``-`` (stdin / stdout), so it
-    drops in alongside ``disc put`` ::
+    drops in alongside ``disc put``:
 
+    \b
         oaknut-basic tokenise menu.bas MENU
         cat menu.bas | oaknut-basic tokenise | disc put game.ssd MENU -
 
     Passing --start and/or --step auto-numbers unnumbered source, exactly
     as typing it under ``AUTO`` would; it is an error to use them on source
-    that already carries line numbers ::
+    that already carries line numbers:
 
+    \b
         oaknut-basic tokenise --start 10 unnumbered.bas MENU
 
     INPUT is read in --encoding (``utf-8`` by default, for source authored
@@ -274,8 +278,9 @@ def detokenise(input_stream, output_stream, encoding: str, dialect: str) -> None
 
     Reads a tokenised program from INPUT and writes numbered source text
     to OUTPUT. Both default to ``-`` (stdin / stdout), so it drops in
-    alongside ``disc get`` ::
+    alongside ``disc get``:
 
+    \b
         oaknut-basic detokenise MENU menu.bas
         disc get game.ssd MENU - | oaknut-basic detokenise
 
@@ -317,8 +322,9 @@ def detect(ctx: click.Context, inputs, quiet: bool) -> None:
     line walk the BBC BASIC ROM performs to ``LIST`` a program — without
     de-tokenising, so unlabelled files harvested from disc images can be
     filtered. With no FILE, or ``-``, reads a single blob from standard
-    input ::
+    input:
 
+    \b
         oaknut-basic detect *
         disc get game.ssd MENU - | oaknut-basic detect
 
@@ -405,8 +411,9 @@ def decode(input_stream, encoding: str) -> None:
     to standard output, one element per record: integers and reals as JSON
     numbers, strings as JSON strings, and raw bytes as ``{"bytes": "hex"}``.
     Reals keep their full ``float`` repr (e.g. ``5.0``) so they round-trip
-    back to reals rather than integers ::
+    back to reals rather than integers:
 
+    \b
         oaknut-basic data decode scores.dat | jq '.[0]'
 
     The output is consumed by ``oaknut-basic data encode`` to rebuild the
@@ -447,8 +454,9 @@ def encode(input_stream, output_stream, encoding: str) -> None:
     INPUT and writes the tagged data file to OUTPUT. Each element becomes
     one ``PRINT#`` record: a JSON integer becomes an integer, a JSON
     number with a fractional part a real, a JSON string a string, and
-    ``{"bytes": "hex"}`` raw (untagged) bytes ::
+    ``{"bytes": "hex"}`` raw (untagged) bytes:
 
+    \b
         echo '[42, "HELLO", 3.5]' | oaknut-basic data encode - scores.dat
 
     A hand-authored real must carry a decimal point (``3.0``, not ``3``),
@@ -505,8 +513,9 @@ def inspect(input_stream, encoding: str):
     """Show the records in a BBC BASIC data file as a table.
 
     Reads a ``PRINT#``-tagged data file from INPUT and reports each record
-    with its byte offset, type and value ::
+    with its byte offset, type and value:
 
+    \b
         oaknut-basic data inspect scores.dat
         oaknut-basic data inspect scores.dat --as json
 

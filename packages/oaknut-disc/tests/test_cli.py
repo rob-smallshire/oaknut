@@ -6,11 +6,13 @@ disc images created by the library fixtures.
 
 from __future__ import annotations
 
+import inspect
 import os
 from pathlib import Path
 
 import pytest
 from click.testing import CliRunner
+from oaknut.cli.help import strip_rst
 from oaknut.disc.cli import cli
 
 # ---------------------------------------------------------------------------
@@ -286,9 +288,7 @@ class TestControlCharacterRendering:
         row = payload["reports"]["partition_1"]["rows"][0]
         assert row["title"] == "\x0cPascal\n\r"
 
-    def test_stat_tsv_is_single_uncorrupted_record(
-        self, runner: CliRunner, tmp_path: Path
-    ) -> None:
+    def test_stat_tsv_is_single_uncorrupted_record(self, runner: CliRunner, tmp_path: Path) -> None:
         image_filepath = self._control_titled_image(tmp_path)
         result = runner.invoke(cli, ["stat", "--as", "tsv", str(image_filepath)])
         assert result.exit_code == 0, result.output
@@ -313,9 +313,7 @@ class TestControlCharacterRendering:
         for raw_control in ("\x0c", "\x0a", "\x0d"):
             assert raw_control not in result.output.replace("\n", "")
 
-    def test_ls_json_heading_preserves_raw_bytes(
-        self, runner: CliRunner, tmp_path: Path
-    ) -> None:
+    def test_ls_json_heading_preserves_raw_bytes(self, runner: CliRunner, tmp_path: Path) -> None:
         import json as _json
 
         image_filepath = self._control_titled_image(tmp_path)
@@ -663,9 +661,7 @@ class TestAcornWildcards:
         assert "$.A?" in out
         assert "AX" not in out
 
-    def test_find_hash_is_the_single_char_wildcard(
-        self, runner: CliRunner, tmp_path: Path
-    ) -> None:
+    def test_find_hash_is_the_single_char_wildcard(self, runner: CliRunner, tmp_path: Path) -> None:
         image = self._image_with_question_mark(tmp_path)
         out = runner.invoke(cli, ["find", f"{image}:A#"]).output
         # # matches exactly one character, so both A-and-one-char names.
@@ -1827,9 +1823,7 @@ class TestCpGlob:
         assert result.exit_code == 0, result.output
         for name in ("Hello", "Help", "Data"):
             listed = runner.invoke(cli, ["ls", f"{dfs_empty_filepath}:$"])
-            assert name in listed.output, (
-                f"{name} missing from destination:\n{listed.output}"
-            )
+            assert name in listed.output, f"{name} missing from destination:\n{listed.output}"
 
     def test_glob_prefix_match_only(
         self,
@@ -2044,9 +2038,7 @@ class TestCpStorageOrder:
             if line.strip() and not line.startswith("#")
         ]
 
-    def test_moxon_dsd_build_preserves_each_drive(
-        self, runner: CliRunner, tmp_path: Path
-    ) -> None:
+    def test_moxon_dsd_build_preserves_each_drive(self, runner: CliRunner, tmp_path: Path) -> None:
         """Mark Moxon's report (stardot p485425): assembling a DSD from two
         SSDs must preserve each source's storage order on its drive — drive
         0 as well as drive 2.
@@ -4054,3 +4046,75 @@ class TestGenerateDsc:
         assert result_ls.exit_code == 0, result_ls.output
         for i in range(40):
             assert f"F{i:02d}" in result_ls.output
+
+
+# ---------------------------------------------------------------------------
+# Help formatting
+# ---------------------------------------------------------------------------
+
+
+def _walk_commands(command, path=()):
+    """Yield ``(argv, command)`` for every command and sub-command."""
+    yield list(path), command
+    for name, child in getattr(command, "commands", {}).items():
+        yield from _walk_commands(child, (*path, name))
+
+
+def _no_rewrap_lines(help_text: str | None) -> list[str]:
+    """Return the stripped lines of a docstring's ``\\b`` no-rewrap blocks."""
+    if not help_text:
+        return []
+    marked: list[str] = []
+    in_block = False
+    for line in inspect.cleandoc(help_text).splitlines():
+        if line.strip() == "\b":
+            in_block = True
+        elif not line.strip():
+            in_block = False
+        elif in_block:
+            # The asyoulikeit reports epilog is a \b block of prose that
+            # the help formatter deliberately re-wraps.
+            if line.strip() == "Produces reports:":
+                in_block = False
+                continue
+            marked.append(line.strip())
+    return marked
+
+
+_ALL_COMMANDS = [pytest.param(argv, id=" ".join(argv) or "disc") for argv, _ in _walk_commands(cli)]
+
+
+class TestHelpFormatting:
+    """Example blocks in command docstrings must survive Click's rewrapper.
+
+    Click reflows every paragraph of a docstring unless it is preceded
+    by a ``\\b`` no-rewrap marker. Without one, a block of example
+    command lines is run together into a single paragraph and re-broken
+    at arbitrary points, which reads as two commands spliced together.
+    """
+
+    @pytest.mark.parametrize("argv", _ALL_COMMANDS)
+    def test_docstring_example_lines_survive_verbatim(
+        self, runner: CliRunner, argv: list[str]
+    ) -> None:
+        command = cli
+        for name in argv:
+            command = command.commands[name]
+        expected = _no_rewrap_lines(command.help)
+        if not expected:
+            pytest.skip("no example block in this command's docstring")
+        result = runner.invoke(cli, [*argv, "--help"])
+        assert result.exit_code == 0
+        # The disc help formatter reduces RST literal spans to plain
+        # text, so compare with the backticks taken out of both sides.
+        rendered = {strip_rst(line.strip()) for line in result.output.splitlines()}
+        for line in map(strip_rst, expected):
+            assert line in rendered, (
+                f"example line reflowed away in `{' '.join(argv)} --help`: {line!r}"
+            )
+
+    @pytest.mark.parametrize("argv", _ALL_COMMANDS)
+    def test_no_rst_literal_block_markers_leak(self, runner: CliRunner, argv: list[str]) -> None:
+        result = runner.invoke(cli, [*argv, "--help"])
+        assert result.exit_code == 0
+        assert " ::" not in result.output
