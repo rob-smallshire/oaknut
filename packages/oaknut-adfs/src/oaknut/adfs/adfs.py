@@ -2873,19 +2873,49 @@ def _try_new_map(unified: UnifiedDisc) -> "NewMap | None":
     single-zone maps are accepted at this rung; a valid multi-zone record is
     surfaced as an error rather than silently mistaken for an Old map.
     """
-    from oaknut.adfs.new_map import calculate_zone_check
+    from oaknut.adfs.new_map import calculate_zone_check, compute_bootmap
 
-    header = unified.sector_range(0, 1)
-    disc_record = DiscRecord.parse(header)
-    if not disc_record.looks_valid():
+    # Single-zone (E): the disc record sits at 0x04 and zone 0 is at disc
+    # offset 0. Confirm with a plausibility gate and the zone-0 check.
+    single = DiscRecord.parse(unified.sector_range(0, 1))
+    if single.looks_valid() and single.nzones == 1:
+        sectors = single.sector_size // _ADFS_BYTES_PER_SECTOR
+        zone0 = unified.sector_range(0, sectors)
+        if zone0[0x00] == calculate_zone_check(zone0, 0, single.log2_sector_size):
+            return _new_map_over(unified, single)
+
+    # Multi-zone (F): a partial disc record lives in the boot block at 0xDC0.
+    # Read it to locate the map (bootmap) and the full disc record, then
+    # confirm every zone's check byte. Only discs large enough to hold the boot
+    # block (and, ultimately, a mid-disc map) can be multi-zone.
+    boot_sectors = _bytes_to_sectors(0xE00)
+    if unified.num_sectors < boot_sectors:
         return None
+    boot = unified.sector_range(0, boot_sectors)
+    partial = DiscRecord.parse(boot, offset=0xDC0)
+    if partial.looks_valid() and partial.nzones > 1:
+        bootmap = compute_bootmap(partial)
+        first = bootmap // _ADFS_BYTES_PER_SECTOR
+        map_sectors = 2 * partial.nzones * partial.sector_size // _ADFS_BYTES_PER_SECTOR
+        if bootmap % _ADFS_BYTES_PER_SECTOR == 0 and first + map_sectors <= unified.num_sectors:
+            drview = unified.sector_range(first, _bytes_to_sectors(0x100))
+            full = DiscRecord.parse(drview, offset=0x04)
+            if full.looks_valid() and full.nzones == partial.nzones:
+                map_sectors = full.nzones * full.sector_size // _ADFS_BYTES_PER_SECTOR
+                map_view = unified.sector_range(first, map_sectors)
+                if all(
+                    map_view[zone * full.sector_size]
+                    == calculate_zone_check(map_view, zone, full.log2_sector_size)
+                    for zone in range(full.nzones)
+                ):
+                    return _new_map_over(unified, full)
 
-    sectors = disc_record.sector_size // _ADFS_BYTES_PER_SECTOR
-    zone0 = unified.sector_range(0, sectors)
-    if zone0[0x00] != calculate_zone_check(zone0, 0, disc_record.log2_sector_size):
-        return None
+    return None
 
-    return _new_map_over(unified, disc_record)
+
+def _bytes_to_sectors(num_bytes: int) -> int:
+    """Number of 256-byte sectors needed to cover *num_bytes*."""
+    return (num_bytes + _ADFS_BYTES_PER_SECTOR - 1) // _ADFS_BYTES_PER_SECTOR
 
 
 def _new_map_over(unified: UnifiedDisc, disc_record: DiscRecord) -> NewMap:
@@ -2896,8 +2926,13 @@ def _new_map_over(unified: UnifiedDisc, disc_record: DiscRecord) -> NewMap:
     the read/write closures resolve linear disc addresses to the covering
     sectors, so they work for any addressing granularity the map produces.
     """
-    sectors = disc_record.sector_size // _ADFS_BYTES_PER_SECTOR
-    map_view = unified.sector_range(0, 2 * sectors)
+    from oaknut.adfs.new_map import compute_bootmap
+
+    secsize = disc_record.sector_size
+    bootmap = compute_bootmap(disc_record)
+    # Both map copies: nzones zones × 2 copies, starting at bootmap.
+    map_sectors = (2 * disc_record.nzones * secsize) // _ADFS_BYTES_PER_SECTOR
+    map_view = unified.sector_range(bootmap // _ADFS_BYTES_PER_SECTOR, map_sectors)
 
     def read_bytes(byte_address: int, length: int) -> bytes:
         first = byte_address // _ADFS_BYTES_PER_SECTOR

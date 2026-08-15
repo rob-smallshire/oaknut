@@ -167,6 +167,21 @@ class DiscRecord:
         return True
 
 
+def compute_bootmap(disc_record: DiscRecord) -> int:
+    """The disc offset of the allocation map (0 single-zone, mid-disc multi-zone).
+
+    FileCore places a multi-zone map in the middle of the disc. The formula
+    (from DiscImageManager) subtracts the disc record's 480 bits for discs of
+    more than two zones.
+    """
+    if disc_record.nzones <= 1:
+        return 0
+    secsize = disc_record.sector_size
+    zz = _DISC_RECORD_SIZE * 8 if disc_record.nzones > 2 else 0
+    zone_bits = 8 * secsize - disc_record.zone_spare
+    return ((disc_record.nzones // 2) * zone_bits - zz) * disc_record.bytes_per_map_bit
+
+
 def calculate_zone_check(map_bytes: SectorsView | bytes, zone: int, log2_sector_size: int) -> int:
     """Compute a zone's ``Zone_Check`` byte (FileCore ``map_zone_valid_byte``).
 
@@ -211,18 +226,31 @@ class NewMap:
         read_bytes,
         write_bytes=None,
     ):
-        if disc_record.nzones != 1:
-            raise ADFSMapError(
-                f"multi-zone New Map (nzones={disc_record.nzones}) is not yet supported"
-            )
+        # ``map_bytes`` starts at ``bootmap`` — the map's disc offset, which is
+        # zero for the single-zone (E) format and mid-disc for multi-zone (F).
         self._map = map_bytes
         self._dr = disc_record
         self._read_bytes = read_bytes
         self._write_bytes = write_bytes
-        # fragment id -> list of (disc_address_bytes, capacity_bytes) in scan order
+        self._bootmap = compute_bootmap(disc_record)
+        # fragment id -> list of (logical_disc_address, capacity_bytes) in scan order
         self._fragments: dict[int, list[tuple[int, int]]] = {}
         self._free_bytes = 0
         self._build_index()
+
+    @property
+    def _multizone(self) -> bool:
+        return self._dr.nzones > 1
+
+    def _root_physical(self) -> int:
+        """Physical disc offset of the root directory.
+
+        The root is special-cased (as in FileCore): it always sits just past
+        the two map copies, at ``bootmap + nzones*secsize*2``. Its fragment id
+        (2) is shared with the system area, so it cannot be resolved through the
+        ordinary bitmap scan.
+        """
+        return self._bootmap + self._dr.nzones * self._dr.sector_size * 2
 
     @property
     def disc_record(self) -> DiscRecord:
@@ -288,6 +316,11 @@ class NewMap:
     def _build_index(self) -> None:
         self._fragments = {}
         self._free_bytes = 0
+        if self._multizone:
+            for zone in range(self._dr.nzones):
+                self._index_zone(zone)
+            return
+
         bpmb = self._dr.bytes_per_map_bit
         free_positions = self._free_area_positions()
 
@@ -302,6 +335,67 @@ class NewMap:
                 self._fragments.setdefault(frag_id, []).append((pos * bpmb, length_bytes))
             pos += length_bits
 
+    # --- Multi-zone reading (F format) ---
+    #
+    # The map lives at ``bootmap`` (mid-disc) as ``nzones`` zones, each a
+    # sector with its own header; zone 0 also carries the disc record. All map
+    # coordinates below are absolute bits from ``bootmap`` (``self._map`` bit 0).
+    # Ported from DiscImageManager's BuildADFSBitmapIndex.
+
+    def _zone_bit_span(self, zone: int) -> tuple[int, int]:
+        """(start, end) map-bit positions of *zone*'s allocation area."""
+        secsize = self._dr.sector_size
+        start = zone * secsize * 8 + (_ZONE0_MAP_START * 8 if zone == 0 else _ZONE_HEADER_SIZE * 8)
+        end = (zone + 1) * secsize * 8
+        return start, end
+
+    def _free_positions_in_zone(self, zone: int) -> set[int]:
+        """Cell-start bit positions of free areas in *zone*, via its FreeLink chain."""
+        positions: set[int] = set()
+        secsize = self._dr.sector_size
+        header_bit = (zone * secsize + _ZONE_FREELINK_OFFSET) * 8
+        header = self._read_bits(header_bit, 16) & 0x7FFF
+        if header == 0:
+            return positions
+        _, end = self._zone_bit_span(zone)
+        freeptr = header_bit + header  # the free area is `header` bits past the link field
+        guard = 0
+        while guard <= secsize * 8:
+            positions.add(freeptr)
+            link = self._read_bits(freeptr, self._dr.idlen)
+            if link == 0 or freeptr >= end:
+                break
+            freeptr += link
+            guard += 1
+        return positions
+
+    def _index_zone(self, zone: int) -> None:
+        dr = self._dr
+        idlen = dr.idlen
+        bpmb = dr.bytes_per_map_bit
+        start, end = self._zone_bit_span(zone)
+        free_positions = self._free_positions_in_zone(zone)
+
+        b = start
+        while b < end:
+            # Cell = idlen-bit field, then zeros, then a set stop bit (inclusive).
+            j = b + idlen
+            while j < end and not self._bit(j):
+                j += 1
+            length_bits = (j - b) + 1
+            length_bytes = length_bits * bpmb
+            if b in free_positions:
+                self._free_bytes += length_bytes
+            else:
+                frag_id = self._read_bits(b, idlen)
+                if frag_id > 0:
+                    off = b - _ZONE0_MAP_START * 8  # the "id offset" DIM subtracts from
+                    disc_address = ((off - dr.zone_spare * zone) * bpmb) % dr.disc_size
+                    self._fragments.setdefault(frag_id, []).append(
+                        (disc_address, length_bytes)
+                    )
+            b = j + 1
+
     @staticmethod
     def _split_indirect(indirect: int) -> tuple[int, int]:
         """Split a three-byte indirect address into (fragment_id, sector_offset)."""
@@ -314,18 +408,31 @@ class NewMap:
             return 0
         return (sector_offset - 1) * self._dr.sector_size
 
+    def _read_physical(self, physical: int, length: int) -> bytes:
+        """Read *length* bytes from a physical offset, wrapping at the disc size."""
+        disc_size = self._dr.disc_size
+        if physical + length <= disc_size:
+            return self._read_bytes(physical, length)
+        first = disc_size - physical
+        return self._read_bytes(physical, first) + self._read_bytes(0, length - first)
+
     def object_start(self, indirect: int) -> int:
-        """Return the linear disc byte address an object begins at."""
+        """Return the physical disc byte address an object begins at."""
+        if indirect == self._dr.root:
+            return self._root_physical()
         frag_id, sector_offset = self._split_indirect(indirect)
         fragments = self._fragments.get(frag_id)
         if not fragments:
             raise ADFSMapError(
                 f"No allocated fragment for id 0x{frag_id:X} (indirect 0x{indirect:X})"
             )
+        # A fragment's disc address is already a physical image offset.
         return fragments[0][0] + self._within_offset(sector_offset)
 
     def read_object(self, indirect: int, length: int) -> bytes:
         """Read *length* bytes of an object, following its fragment chain."""
+        if indirect == self._dr.root:
+            return self._read_physical(self._root_physical(), length)
         frag_id, sector_offset = self._split_indirect(indirect)
         fragments = self._fragments.get(frag_id)
         if not fragments:
@@ -335,13 +442,13 @@ class NewMap:
         skip = self._within_offset(sector_offset)
         out = bytearray()
         remaining = length
-        for disc_address, capacity in fragments:
+        for physical_address, capacity in fragments:
             if skip >= capacity:
                 skip -= capacity
                 continue
             available = capacity - skip
             take = min(available, remaining)
-            out += self._read_bytes(disc_address + skip, take)
+            out += self._read_physical(physical_address + skip, take)
             skip = 0
             remaining -= take
             if remaining <= 0:
@@ -448,6 +555,8 @@ class NewMap:
         :meth:`write_object_data`, or resolve the address via
         :meth:`object_start` and write through the directory layer.
         """
+        if self._multizone:
+            raise ADFSMapError("writing multi-zone New Map discs is not yet supported")
         idlen = self._dr.idlen
         bpmb = self._dr.bytes_per_map_bit
         # Round each fragment up to a whole sector's worth of map bits. The free
@@ -488,6 +597,8 @@ class NewMap:
 
     def free_object(self, indirect: int) -> None:
         """Free every fragment of an object and merge adjacent free areas."""
+        if self._multizone:
+            raise ADFSMapError("writing multi-zone New Map discs is not yet supported")
         frag_id = indirect >> 8
         cells = self._parse_cells()
         if not any(fid == frag_id for fid, _ in cells):
@@ -515,13 +626,13 @@ class NewMap:
         skip = self._within_offset(sector_offset)
         offset = 0
         remaining = len(data)
-        for disc_address, capacity in fragments:
+        for physical_address, capacity in fragments:
             if skip >= capacity:
                 skip -= capacity
                 continue
             available = capacity - skip
             take = min(available, remaining)
-            self._write_bytes(disc_address + skip, data[offset : offset + take])
+            self._write_bytes(physical_address + skip, data[offset : offset + take])
             skip = 0
             offset += take
             remaining -= take
@@ -551,17 +662,19 @@ class NewMap:
         return self._dr.disc_name
 
     def validate(self) -> list[ADFSValidationError]:
-        """Validate the zone-0 check byte."""
+        """Validate every zone's check byte."""
         errors: list[ADFSValidationError] = []
-        expected = self._map[_ZONE_CHECK_OFFSET]
-        calculated = calculate_zone_check(self._map, 0, self._dr.log2_sector_size)
-        if expected != calculated:
-            errors.append(
-                ADFSValidationError(
-                    f"Zone 0 check byte mismatch: stored 0x{expected:02X}, "
-                    f"calculated 0x{calculated:02X}"
+        secsize = self._dr.sector_size
+        for zone in range(self._dr.nzones):
+            expected = self._map[zone * secsize + _ZONE_CHECK_OFFSET]
+            calculated = calculate_zone_check(self._map, zone, self._dr.log2_sector_size)
+            if expected != calculated:
+                errors.append(
+                    ADFSValidationError(
+                        f"Zone {zone} check byte mismatch: stored 0x{expected:02X}, "
+                        f"calculated 0x{calculated:02X}"
+                    )
                 )
-            )
         return errors
 
 
