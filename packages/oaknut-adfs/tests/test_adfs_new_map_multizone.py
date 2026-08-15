@@ -142,12 +142,58 @@ def test_created_f_matches_dim_structurally():
     assert raw[0xDFF] == dim[0xDFF]
 
 
-@pytest.mark.skipif(not _DIM_BLANK_F.exists(), reason="DIM reference blank not present")
-def test_multizone_write_is_refused():
-    buffer = memoryview(bytearray(_DIM_BLANK_F.read_bytes()))
-    adfs = ADFS.from_buffer(buffer)
+def test_multizone_write_read_and_delete():
+    adfs = ADFS.create(ADFS_F, title="WriteF")
     try:
-        with pytest.raises(Exception):
-            (adfs.root / "Nope").write_bytes(b"x")
+        (adfs.root / "Hello").write_bytes(b"Hello multi-zone Acorn!")
+        (adfs.root / "Big").write_bytes(bytes((i * 3) & 0xFF for i in range(9000)))
+        (adfs.root / "Dir").mkdir()
+        (adfs.root / "Dir" / "Nested").write_bytes(b"nested content")
+        assert adfs.validate() == []
+        assert (adfs.root / "Hello").read_bytes() == b"Hello multi-zone Acorn!"
+        assert len((adfs.root / "Big").read_bytes()) == 9000
+        assert (adfs.root / "Dir" / "Nested").read_bytes() == b"nested content"
+        # Subdirectory keeps the "Nick" signature.
+        games_addr = adfs._object_disc_sector(
+            (adfs.root / "Dir")._resolve()[1].indirect_disc_address
+        )
+        raw = bytes(adfs._disc.sector_range(0, ADFS_F.total_sectors))
+        assert raw[games_addr * 256 + 1 : games_addr * 256 + 5] == b"Nick"
+
+        (adfs.root / "Hello").unlink()
+        assert adfs.validate() == []
+        assert {p.name for p in adfs.root.iterdir()} == {"Big", "Dir"}
+    finally:
+        adfs.close()
+
+
+def test_multizone_write_persists(tmp_path):
+    image = tmp_path / "f.adf"
+    with ADFS.create_file(image, ADFS_F, title="PersistF") as adfs:
+        for i in range(30):
+            (adfs.root / f"F{i:02d}").write_bytes(bytes([i]) * (2000 + i * 50))
+    with ADFS.from_file(image) as adfs:
+        assert adfs.validate() == []
+        for i in range(30):
+            assert (adfs.root / f"F{i:02d}").read_bytes() == bytes([i]) * (2000 + i * 50)
+
+
+def test_multizone_allocation_spans_zones():
+    """Fill past zone 0 (via subdirectories) so later fragments land in zone 1+."""
+    adfs = ADFS.create(ADFS_F, title="SpanF")
+    try:
+        id_per_zone = adfs._map._id_per_zone()
+        count = 0
+        # 12 dirs × ~40 files ≈ 480 fragments > id_per_zone (412) → spills to zone 1.
+        for d in range(12):
+            (adfs.root / f"D{d}").mkdir()
+            for f in range(40):
+                (adfs.root / f"D{d}" / f"f{f}").write_bytes(bytes([f & 0xFF]) * 300)
+                count += 1
+        assert adfs.validate() == []
+        zones_used = {fid // id_per_zone for fid in adfs._map._fragments if fid >= 3}
+        assert max(zones_used) >= 1, f"expected spill beyond zone 0, got {zones_used}"
+        # A file in a spilled zone still reads back.
+        assert (adfs.root / "D11" / "f39").read_bytes() == bytes([39]) * 300
     finally:
         adfs.close()

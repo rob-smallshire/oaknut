@@ -556,7 +556,7 @@ class NewMap:
         :meth:`object_start` and write through the directory layer.
         """
         if self._multizone:
-            raise ADFSMapError("writing multi-zone New Map discs is not yet supported")
+            return self._allocate_multizone(length_bytes)
         idlen = self._dr.idlen
         bpmb = self._dr.bytes_per_map_bit
         # Round each fragment up to a whole sector's worth of map bits. The free
@@ -598,7 +598,7 @@ class NewMap:
     def free_object(self, indirect: int) -> None:
         """Free every fragment of an object and merge adjacent free areas."""
         if self._multizone:
-            raise ADFSMapError("writing multi-zone New Map discs is not yet supported")
+            return self._free_multizone(indirect)
         frag_id = indirect >> 8
         cells = self._parse_cells()
         if not any(fid == frag_id for fid, _ in cells):
@@ -642,6 +642,151 @@ class NewMap:
             raise ADFSMapError(
                 f"Object 0x{indirect:X} fragments hold too little for {len(data)} bytes"
             )
+
+    # --- Multi-zone writing (F format) ---
+    #
+    # Each zone is allocated independently: a new object goes in a zone that has
+    # room, taking a fragment id from that zone's id range so RISC OS's
+    # zone-from-id search lands on it. Only the chosen zone's bitstream,
+    # FreeLink chain, check byte and map copy are rewritten. Single-fragment,
+    # like the single-zone allocator.
+
+    def _zone_usable_end(self, zone: int) -> int:
+        """One past the last allocation bit of *zone* (the free terminator)."""
+        secsize = self._dr.sector_size
+        terminator = _ZONE_HEADER_SIZE * 8 + (secsize * 8 - self._dr.zone_spare - 1)
+        return zone * secsize * 8 + terminator + 1
+
+    def _parse_zone_cells(self, zone: int) -> list[list]:
+        """Tile *zone*'s allocation area into ``[fragment_id_or_None, len]`` cells."""
+        idlen = self._dr.idlen
+        free_positions = self._free_positions_in_zone(zone)
+        cells: list[list] = []
+        b = self._zone_bit_span(zone)[0]
+        end = self._zone_usable_end(zone)
+        while b < end:
+            j = b + idlen
+            while j < end and not self._bit(j):
+                j += 1
+            length_bits = (j - b) + 1
+            if b in free_positions:
+                cells.append([None, length_bits])
+            else:
+                cells.append([self._read_bits(b, idlen), length_bits])
+            b = j + 1
+        return cells
+
+    def _write_zone_free_chain(self, zone: int, free_positions: list[int]) -> None:
+        secsize = self._dr.sector_size
+        idlen = self._dr.idlen
+        link_offset = zone * secsize + _ZONE_FREELINK_OFFSET
+        if not free_positions:
+            _write_le(self._map, link_offset, 0x8000, 2)
+            return
+        header_bit = (zone * secsize + _ZONE_FREELINK_OFFSET) * 8
+        prev = header_bit
+        for i, pos in enumerate(free_positions):
+            distance = pos - prev
+            if i == 0:
+                _write_le(self._map, link_offset, 0x8000 | distance, 2)
+            else:
+                write_bits(self._map, prev, idlen, distance)
+            prev = pos
+        # The last free area's link stays zero (cleared) — chain end.
+
+    def _rewrite_zone(self, zone: int, cells: list[list]) -> None:
+        secsize = self._dr.sector_size
+        idlen = self._dr.idlen
+        alloc_start = self._zone_bit_span(zone)[0]
+        end = self._zone_usable_end(zone)
+
+        for byte in range(alloc_start // 8, (end + 7) // 8):
+            self._map[byte] = 0
+
+        b = alloc_start
+        free_positions: list[int] = []
+        for fid, length_bits in cells:
+            if fid is not None:
+                write_bits(self._map, b, idlen, fid)
+            else:
+                free_positions.append(b)
+            write_bits(self._map, b + length_bits - 1, 1, 1)  # stop bit
+            b += length_bits
+
+        self._write_zone_free_chain(zone, free_positions)
+
+        zone_bytes = bytearray(self._map[zone * secsize + i] for i in range(secsize))
+        self._map[zone * secsize + _ZONE_CHECK_OFFSET] = calculate_zone_check(
+            zone_bytes, 0, self._dr.log2_sector_size
+        )
+        for i in range(secsize):
+            self._map[self._dr.nzones * secsize + zone * secsize + i] = self._map[
+                zone * secsize + i
+            ]
+
+        self._build_index()
+
+    def _id_per_zone(self) -> int:
+        return (self._dr.sector_size * 8 - self._dr.zone_spare) // (self._dr.idlen + 1)
+
+    def _allocate_multizone(self, length_bytes: int) -> int:
+        idlen = self._dr.idlen
+        bpmb = self._dr.bytes_per_map_bit
+        align_bits = self._dr.sector_size // bpmb
+        need_bits = max(-(-length_bytes // bpmb), idlen + 1)
+        need_bits = -(-need_bits // align_bits) * align_bits
+
+        id_per_zone = self._id_per_zone()
+        used = set(self._fragments) | {0, 1, 2}
+
+        for zone in range(self._dr.nzones):
+            cells = self._parse_zone_cells(zone)
+            index = next(
+                (i for i, (fid, ln) in enumerate(cells) if fid is None and ln >= need_bits),
+                None,
+            )
+            if index is None:
+                continue
+            low = max(zone * id_per_zone, 3)
+            new_fid = next(
+                (c for c in range(low, (zone + 1) * id_per_zone) if c not in used), None
+            )
+            if new_fid is None:
+                continue
+
+            _, length_bits = cells[index]
+            take = need_bits
+            leftover = length_bits - take
+            if 0 < leftover < idlen + 1:
+                take = length_bits
+                leftover = 0
+            replacement = [[new_fid, take]]
+            if leftover > 0:
+                replacement.append([None, leftover])
+            cells[index : index + 1] = replacement
+            self._rewrite_zone(zone, cells)
+            return new_fid << 8
+
+        raise ADFSDiscFullError(f"no zone has room for {length_bytes} bytes")
+
+    def _free_multizone(self, indirect: int) -> None:
+        frag_id = indirect >> 8
+        for zone in range(self._dr.nzones):
+            cells = self._parse_zone_cells(zone)
+            if not any(fid == frag_id for fid, _ in cells):
+                continue
+            for cell in cells:
+                if cell[0] == frag_id:
+                    cell[0] = None
+            merged: list[list] = []
+            for fid, length_bits in cells:
+                if fid is None and merged and merged[-1][0] is None:
+                    merged[-1][1] += length_bits
+                else:
+                    merged.append([fid, length_bits])
+            self._rewrite_zone(zone, merged)
+            return
+        raise ADFSMapError(f"No allocated fragment for id 0x{frag_id:X}")
 
     # --- Disc-level metadata ---
 
