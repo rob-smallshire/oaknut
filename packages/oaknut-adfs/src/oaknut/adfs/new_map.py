@@ -1264,6 +1264,30 @@ def _boot_block_checksum(data: SectorsView, offset: int, size: int) -> int:
     return acc & 0xFF
 
 
+#: Largest floppy New Map disc; above this the boot block carries hard-disc
+#: hardware information (RISC OS/emulators expect it to mount the disc).
+_FLOPPY_MAX_SIZE = 1638400
+
+
+def _write_hard_disc_hardware_info(data: SectorsView, dr: DiscRecord) -> None:
+    """Write the boot block's hard-disc hardware fields (matching FileCore/HForm).
+
+    Notably the *initialised* flag at 0xDBB, without which RISC OS treats the
+    disc as unformatted, plus the parking cylinder and the 0xDAC marker.
+    """
+    _write_le(data, 0xDAC, 0xFFFFFFFF, 4)
+    data[0xDBA] = 0x00  # LBA flag (IDE)
+    data[0xDBB] = 0x01  # disc-initialised flag
+    cylinder_bytes = dr.sectors_per_track * dr.heads * dr.sector_size
+    cylinders = dr.disc_size // cylinder_bytes if cylinder_bytes else 0
+    last = max(cylinders - 1, 0)
+    if dr.uses_big_directories:
+        parking = dr.sectors_per_track * dr.heads * last
+    else:
+        parking = dr.sector_size * dr.sectors_per_track * dr.heads * last
+    _write_le(data, 0xDBC, parking & 0xFFFFFFFF, 4)
+
+
 def _write_partial_disc_record(data: SectorsView, dr: DiscRecord) -> None:
     o = _PARTIAL_DISC_RECORD_OFFSET
     data[o + 0x00] = dr.log2_sector_size
@@ -1305,8 +1329,11 @@ def format_blank_f(
     zone_spare = dr.zone_spare
     bootmap = compute_bootmap(dr)
 
-    # Boot block: defect-list terminator (0x20000000) and partial disc record.
+    # Boot block: defect-list terminator (0x20000000), hard-disc hardware info
+    # (for hard discs), the partial disc record, and the checksum last.
     data[_BOOT_BLOCK_OFFSET + 3] = 0x20
+    if dr.disc_size > _FLOPPY_MAX_SIZE:
+        _write_hard_disc_hardware_info(data, dr)
     _write_partial_disc_record(data, dr)
     data[_BOOT_CHECKSUM_OFFSET] = _boot_block_checksum(
         data, _BOOT_BLOCK_OFFSET, _BOOT_BLOCK_SIZE

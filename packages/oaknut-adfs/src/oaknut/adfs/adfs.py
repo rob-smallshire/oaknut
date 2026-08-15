@@ -1913,12 +1913,21 @@ class ADFS:
             size, title, big_directories=big_directories, boot_option=boot_option
         )
 
-        buffer = memoryview(bytearray(size))
         spec = _flat_spec(size // _ADFS_BYTES_PER_SECTOR)
-        unified = UnifiedDisc(DiscImage(buffer, [spec]))
-        _lay_down_new_map(unified, disc_record, title)
 
-        new_map = _new_map_over(unified, disc_record)
+        # FileCore numbers sectors from ``low_sector``, so disc address 0 sits
+        # ``low_sector`` sectors into the image (0x200 for the IDE default). Build
+        # the disc at offset 0, then rotate it into that layout so the on-disc
+        # structures land where RISC OS and emulators look for them.
+        build = bytearray(size)
+        _lay_down_new_map(UnifiedDisc(DiscImage(memoryview(build), [spec])), disc_record, title)
+
+        base_offset = disc_record.low_sector * disc_record.sector_size
+        if base_offset:
+            build = build[size - base_offset :] + build[: size - base_offset]
+
+        unified = UnifiedDisc(DiscImage(memoryview(build), [spec]))
+        new_map = _new_map_over(unified, disc_record, base_offset)
         dir_format = BigDirectoryFormat() if big_directories else NewDirectoryFormat()
         bytes_per_cylinder = (
             disc_record.heads * disc_record.sectors_per_track * disc_record.sector_size

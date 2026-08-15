@@ -139,3 +139,27 @@ def test_create_new_map_hard_disc_persists(tmp_path):
         assert adfs.validate() == []
         for i in range(20):
             assert (adfs.root / f"File{i:03d}").read_bytes() == bytes([i]) * (300 + i)
+
+
+def test_created_hdd_is_emulator_mountable_structure():
+    """A created IDE HDD has the lowsector layout, hardware info and init flag
+    that RISC OS and emulators require to mount it (matching a real .hdf)."""
+    from oaknut.adfs.new_map import _boot_block_checksum
+
+    adfs = ADFS.create_new_map_hard_disc("8MB", title="Mountable")
+    try:
+        dr = adfs._map.disc_record
+        assert dr.low_sector == 1  # IDE
+        assert adfs._map._base_offset == dr.low_sector * dr.sector_size  # 0x200
+        raw = bytes(adfs._disc.sector_range(0, dr.disc_size // 256))
+    finally:
+        adfs.close()
+
+    boot = dr.low_sector * dr.sector_size + 0xC00  # boot block, shifted by lowsector
+    # The initialised flag — without it RISC OS treats the disc as unformatted.
+    assert raw[boot + 0x1BB] == 0x01
+    assert raw[boot + 0x1AC : boot + 0x1B0] == b"\xff\xff\xff\xff"
+    # The boot block checksum is valid.
+    assert raw[boot + 0x1FF] == _boot_block_checksum(bytearray(raw[boot : boot + 0x200]), 0, 0x200)
+    # The header region (the wrapped disc tail) is unused, as on real .hdf images.
+    assert all(b == 0 for b in raw[: dr.low_sector * dr.sector_size])
