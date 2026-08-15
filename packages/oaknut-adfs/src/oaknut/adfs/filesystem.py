@@ -85,20 +85,6 @@ def _propose_geometry(size: int) -> Geometry | None:
     return None
 
 
-def _directory_tree_traverses(reader: ImageReader) -> bool:
-    """Whether the whole directory tree parses, not just the root.
-
-    Used to keep :meth:`ADFS.probe` from claiming STRONG confidence for
-    an image whose root and free-space map are intact but which fails the
-    moment a command descends into a corrupt subdirectory.
-    """
-    try:
-        adfs = _ADFSDisc.from_buffer(reader.buffer())
-    except ADFSError:
-        return False
-    return not adfs._directory_tree_errors()
-
-
 # The old map records a reserved-tail info-sector pointer at &F6 of
 # sector 0 (the gap after the 82-entry free-start table). It is the
 # logical sector of the tail filesystem's info sector; the region
@@ -360,33 +346,58 @@ class ADFS(Filesystem):
     creates = frozenset({".adf", ".ads", ".adm", ".adl", ".dat"})
 
     def probe(self, reader: ImageReader) -> Identification | None:
-        sectors = reader.read(0, _MAP_BYTES)
-        if len(sectors) < _MAP_BYTES:
-            return None
-        has_hugo = reader.read(0x201, 4) == b"Hugo"
-        has_nick = reader.read(0x401, 4) == b"Nick"
-        if not (has_hugo or has_nick):
+        if reader.size < _MAP_BYTES:
             return None
 
-        map_valid = (
-            _calculate_old_map_checksum(sectors, 0) == sectors[0xFF]
-            and _calculate_old_map_checksum(sectors, 0x100) == sectors[0x1FF]
-        )
-        evidence = [
-            "old-format root directory ('Hugo')"
-            if has_hugo
-            else "new-format root directory ('Nick')"
-        ]
-        if map_valid:
-            evidence.append("old-map free-space-map checksums valid")
+        # Recognise exactly what ``open`` can read: the content detector
+        # handles every layout (Old map with Old or New directories, and the
+        # New map — single-zone, multi-zone and hard disc). It validates the
+        # FileCore disc record and zone check (New map) or the directory root
+        # (Old map), and rejects non-ADFS data, so a clean parse is the
+        # recognition signal — no separate signature pre-check that could drift
+        # from what the reader actually supports.
+        try:
+            adfs = _ADFSDisc.from_buffer(reader.buffer())
+        except ADFSError:
+            return None
 
-        confidence = Confidence.STRONG if map_valid else Confidence.PROBABLE
-        if not _directory_tree_traverses(reader):
-            # A valid root and map do not guarantee the disc can be walked:
-            # a corrupt subdirectory only surfaces on descent. Don't claim
-            # STRONG for an image a single `ls` would fail to traverse.
+        if adfs.is_new_map:
+            dr = adfs._map.disc_record
+            layout = "Big directories" if dr.uses_big_directories else "New directories"
+            zones = "single-zone" if dr.nzones == 1 else f"{dr.nzones}-zone"
+            evidence = [f"New map FileCore disc record and zone check valid ({zones}, {layout})"]
+            structurally_strong = True
+        else:
+            sectors = reader.read(0, _MAP_BYTES)
+            has_hugo = reader.read(0x201, 4) == b"Hugo"
+            # A New directory root sits one sector later and may carry either
+            # the BBC ('Hugo') or Acorn ('Nick') signature.
+            new_root_signature = reader.read(0x401, 4)
+            has_new_directory = new_root_signature in (b"Hugo", b"Nick")
+            map_valid = (
+                _calculate_old_map_checksum(sectors, 0) == sectors[0xFF]
+                and _calculate_old_map_checksum(sectors, 0x100) == sectors[0x1FF]
+            )
+            if has_hugo:
+                evidence = ["Old-format root directory ('Hugo')"]
+            elif has_new_directory:
+                signature = new_root_signature.decode("latin-1")
+                evidence = [f"New-directory root ('{signature}') on the Old map"]
+            else:
+                evidence = ["ADFS root directory"]
+            if map_valid:
+                evidence.append("Old-map free-space-map checksums valid")
+            structurally_strong = map_valid
+
+        # A valid root and map do not guarantee the disc can be walked: a
+        # corrupt subdirectory only surfaces on descent. Don't claim STRONG for
+        # an image a single ``ls`` would fail to traverse.
+        traverses = not adfs._directory_tree_errors()
+        if not traverses:
             evidence.append("directory tree is not fully traversable")
-            confidence = Confidence.PROBABLE
+        confidence = (
+            Confidence.STRONG if (structurally_strong and traverses) else Confidence.PROBABLE
+        )
 
         return Identification(
             filesystem=self.name,
