@@ -17,16 +17,19 @@ from __future__ import annotations
 import mmap
 from collections.abc import Sequence
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from os import PathLike
 from pathlib import Path
 from typing import TYPE_CHECKING, Iterator, Union
 
 import oaknut.basic as basic
 from oaknut.adfs.directory import (
+    ADFS_BIG_NAME_GRAMMAR,
     ADFS_NAME_GRAMMAR,
     Access,
     ADFSDirectoryFormat,
+    BigDirectoryFormat,
+    NewDirectoryFormat,
     OldDirectoryFormat,
     _ADFSDirectory,
     _ADFSDirectoryEntry,
@@ -36,6 +39,7 @@ from oaknut.adfs.exceptions import (
     ADFSDirectoryError,
     ADFSDirectoryFullError,
     ADFSDirectoryNotEmptyError,
+    ADFSDiscFullError,
     ADFSEntryExistsError,
     ADFSError,
     ADFSFileLockedError,
@@ -44,6 +48,19 @@ from oaknut.adfs.exceptions import (
     ADFSValidationError,
 )
 from oaknut.adfs.free_space_map import OldFreeSpaceMap
+from oaknut.adfs.new_map import (
+    DiscRecord,
+    NewMap,
+    e_disc_record,
+    e_plus_disc_record,
+    f_disc_record,
+    f_plus_disc_record,
+    format_blank_f,
+    format_blank_single_zone,
+    g_disc_record,
+    g_plus_disc_record,
+    hdd_disc_record,
+)
 from oaknut.discimage.surface import DiscImage, SurfaceSpec
 from oaknut.discimage.unified_disc import UnifiedDisc
 from oaknut.file import AcornMeta, AcornPath, MetaFormat, resolving_io
@@ -63,16 +80,17 @@ if TYPE_CHECKING:
 _name_key = ADFS_NAME_GRAMMAR.name_key
 
 
-def _validate_adfs_leaf(name: str) -> None:
-    """Validate a *new* leaf name against :data:`ADFS_NAME_GRAMMAR`.
+def _validate_adfs_leaf(name: str, grammar=ADFS_NAME_GRAMMAR) -> None:
+    """Validate a *new* leaf name against *grammar*.
 
     Applied only when *creating* a name (write, mkdir, rename target) —
     never on navigation or read, so a byte-edited disc whose names break
-    these rules still lists and reads. The grammar raises
-    :class:`ValueError`; re-raise it as an :class:`ADFSPathError`.
+    these rules still lists and reads. Big directory discs pass the longer
+    :data:`ADFS_BIG_NAME_GRAMMAR`. The grammar raises :class:`ValueError`;
+    re-raise it as an :class:`ADFSPathError`.
     """
     try:
-        ADFS_NAME_GRAMMAR.validate(name)
+        grammar.validate(name)
     except ValueError as exc:
         raise ADFSPathError(str(exc)) from exc
 
@@ -80,8 +98,13 @@ def _validate_adfs_leaf(name: str) -> None:
 _ADFS_SECTORS_PER_TRACK = 16
 _ADFS_BYTES_PER_SECTOR = 256
 
-# Root directory sector address for old map formats
+# Root directory sector address for old map formats. S/M/L place the root
+# (an Old directory) at sector 2 (0x200); the D format places its New
+# directory at sector 4 (0x400), because its 1024-byte physical sectors push
+# the post-map boundary to 0x400. Both address in 256-byte sector units.
 _OLD_MAP_ROOT_SECTOR = 2
+_D_MAP_ROOT_SECTOR = 4
+_D_SECTOR_SIZE = 1024  # D format's physical sector size (S/M/L use 256)
 _OLD_DIR_SECTORS = 5  # Old directory occupies 5 sectors
 _OLD_FSM_SECTORS = 2  # Old free space map occupies sectors 0-1
 
@@ -97,6 +120,15 @@ class ADFSFormat:
     total_sectors: int
     total_bytes: int
     label: str
+    #: Whether this shape uses the New Map (FileCore zoned allocation) rather
+    #: than the Old free-space map. Governs which structures ``create`` lays down.
+    new_map: bool = False
+    #: Whether this shape uses New directories (2048-byte, ROR-13 check byte).
+    #: The New Map shapes always do; the D format pairs New directories with
+    #: the Old map, so this is set independently. S/M/L use Old directories.
+    new_directory: bool = False
+    #: Whether this shape uses Big directories (the New Map ``+`` formats).
+    big_directories: bool = False
 
     def __post_init__(self):
         if not self.surface_specs:
@@ -193,10 +225,94 @@ ADFS_L_SEQUENTIAL = ADFSFormat(
     label="L",
 )
 
+
+def _flat_spec(total_sectors: int) -> SurfaceSpec:
+    """A single surface addressing the whole image as linear 256-byte sectors."""
+    return SurfaceSpec(
+        num_tracks=1,
+        sectors_per_track=total_sectors,
+        bytes_per_sector=_ADFS_BYTES_PER_SECTOR,
+        track_zero_offset_bytes=0,
+        track_stride_bytes=total_sectors * _ADFS_BYTES_PER_SECTOR,
+    )
+
+
+#: ADFS D — 800K, Old free-space map but a New directory rooted at sector 4.
+#: Modelled as a single linear surface (3200 × 256-byte sectors); the D-format
+#: images in circulation are not side-interleaved. Interleaved D layout, like
+#: the interleaved/linear split at 640K, is not yet disambiguated.
+ADFS_D = ADFSFormat(
+    surface_specs=[_flat_spec(3200)],
+    total_sectors=3200,
+    total_bytes=819200,
+    label="D",
+    new_directory=True,
+)
+
+#: ADFS E — 800K single-zone New Map with New directories. Same linear surface
+#: as D (they share a size); the map/directory structure distinguishes them.
+ADFS_E = ADFSFormat(
+    surface_specs=[_flat_spec(3200)],
+    total_sectors=3200,
+    total_bytes=819200,
+    label="E",
+    new_map=True,
+)
+
+#: ADFS F — 1.6MB four-zone New Map with New directories. The map lives
+#: mid-disc, reached via a partial disc record in the boot block at 0xC00.
+ADFS_F = ADFSFormat(
+    surface_specs=[_flat_spec(6400)],
+    total_sectors=6400,
+    total_bytes=1638400,
+    label="F",
+    new_map=True,
+)
+
+#: ADFS E+ — 800K single-zone New Map with Big directories.
+ADFS_E_PLUS = ADFSFormat(
+    surface_specs=[_flat_spec(3200)],
+    total_sectors=3200,
+    total_bytes=819200,
+    label="E+",
+    new_map=True,
+    big_directories=True,
+)
+
+#: ADFS F+ — 1.6MB four-zone New Map with Big directories.
+ADFS_F_PLUS = ADFSFormat(
+    surface_specs=[_flat_spec(6400)],
+    total_sectors=6400,
+    total_bytes=1638400,
+    label="F+",
+    new_map=True,
+    big_directories=True,
+)
+
+#: ADFS G — 3.2MB eight-zone New Map with New directories (octal density).
+ADFS_G = ADFSFormat(
+    surface_specs=[_flat_spec(12800)],
+    total_sectors=12800,
+    total_bytes=3276800,
+    label="G",
+    new_map=True,
+)
+
+#: ADFS G+ — 3.2MB eight-zone New Map with Big directories.
+ADFS_G_PLUS = ADFSFormat(
+    surface_specs=[_flat_spec(12800)],
+    total_sectors=12800,
+    total_bytes=3276800,
+    label="G+",
+    new_map=True,
+    big_directories=True,
+)
+
 _ADFS_FORMATS_BY_SIZE = {
     ADFS_S.total_bytes: ADFS_S,
     ADFS_M.total_bytes: ADFS_M,
     ADFS_L.total_bytes: ADFS_L,
+    ADFS_D.total_bytes: ADFS_D,
 }
 
 
@@ -250,6 +366,8 @@ _FLOPPY_GEOMETRY = {
     ADFS_S.total_bytes: ADFSGeometry(cylinders=40, heads=1, sectors_per_track=16),
     ADFS_M.total_bytes: ADFSGeometry(cylinders=80, heads=1, sectors_per_track=16),
     ADFS_L.total_bytes: ADFSGeometry(cylinders=80, heads=2, sectors_per_track=16),
+    # D: 5 × 1024-byte sectors/track = 20 × 256-byte sectors, 80 tracks, 2 sides.
+    ADFS_D.total_bytes: ADFSGeometry(cylinders=80, heads=2, sectors_per_track=20),
 }
 
 
@@ -604,7 +722,7 @@ class ADFSPath(AcornPath):
             ADFSPathError: If this path is a file, not a directory.
         """
         if self._path == "$":
-            disc_address = _OLD_MAP_ROOT_SECTOR
+            disc_address = self._adfs._root_address
         else:
             _, entry = self._resolve()
             if not entry.is_directory:
@@ -619,6 +737,7 @@ class ADFSPath(AcornPath):
             disc_address=directory.disc_address,
             entries=directory.entries,
             sequence_number=directory.sequence_number,
+            signature=directory.signature,
         )
         self._adfs._write_directory_at(updated, disc_address)
 
@@ -709,7 +828,7 @@ class ADFSPath(AcornPath):
         parts = self._path.split(".")
         if len(parts) < 2 or parts[0] != "$":
             raise ADFSPathError(f"Invalid path: {self._path!r}")
-        _validate_adfs_leaf(parts[-1])
+        _validate_adfs_leaf(parts[-1], self._adfs._name_grammar)
 
         self._adfs._write_file(
             parts,
@@ -791,7 +910,7 @@ class ADFSPath(AcornPath):
         """
         if self._path == "$":
             raise ADFSPathError("Cannot mkdir root directory")
-        _validate_adfs_leaf(self._path.split(".")[-1])
+        _validate_adfs_leaf(self._path.split(".")[-1], self._adfs._name_grammar)
 
         if parents:
             parent = self.parent
@@ -842,7 +961,7 @@ class ADFSPath(AcornPath):
             target_path = target
 
         target_parts = target_path.split(".")
-        _validate_adfs_leaf(target_parts[-1])
+        _validate_adfs_leaf(target_parts[-1], self._adfs._name_grammar)
         self._adfs._rename(self._path.split("."), target_parts)
         return ADFSPath(self._adfs, target_path)
 
@@ -1121,14 +1240,22 @@ def _initialise_old_free_space_map(
     unified: UnifiedDisc,
     total_sectors: int,
     boot_option: int = 0,
+    used_sectors: int | None = None,
 ) -> None:
-    """Write an empty old-format free space map to sectors 0–1."""
+    """Write an empty old-format free space map to sectors 0–1.
+
+    *used_sectors* is the count of sectors occupied by the map and root
+    directory before free space begins; it defaults to the S/M/L layout
+    (map + 5-sector Old directory). The D format passes a larger value
+    because its root is an 8-sector New directory placed at sector 4.
+    """
     from oaknut.adfs.free_space_map import _calculate_old_map_checksum
 
     data = unified.sector_range(0, 2)
 
     # Single free space entry: everything after the root directory
-    used_sectors = _OLD_FSM_SECTORS + _OLD_DIR_SECTORS  # 7
+    if used_sectors is None:
+        used_sectors = _OLD_FSM_SECTORS + _OLD_DIR_SECTORS  # 7
     free_start = used_sectors
     free_length = total_sectors - used_sectors
 
@@ -1202,6 +1329,106 @@ def _initialise_old_root_directory(
     data[tail + 52] = 0x00
 
 
+def _initialise_d_blank(
+    unified: UnifiedDisc,
+    total_sectors: int,
+    title: str,
+    boot_option: int,
+) -> None:
+    """Lay down a blank D format: Old map with a New directory root at sector 4.
+
+    The Old free-space map reserves the map (sectors 0–1), the 1024-byte-sector
+    padding (2–3) and the 8-sector New directory root (4–11), so free space
+    begins at sector 12. The root is a "Nick"-signed New directory.
+    """
+    dir_format = NewDirectoryFormat()
+    root_sector = _D_MAP_ROOT_SECTOR  # 4
+    used_sectors = root_sector + dir_format.size_in_sectors  # 12
+    _initialise_old_free_space_map(
+        unified, total_sectors, boot_option, used_sectors=used_sectors
+    )
+
+    root_dir = _ADFSDirectory(
+        name="$",
+        title=title,
+        parent_address=root_sector,
+        disc_address=root_sector,
+        entries=(),
+        sequence_number=0,
+        signature=b"Nick",
+    )
+    root_data = unified.sector_range(root_sector, dir_format.size_in_sectors)
+    dir_format.serialize(root_dir, root_data)
+
+
+def _initialise_new_map_blank(
+    unified: UnifiedDisc,
+    total_sectors: int,
+    title: str,
+    boot_option: int,
+    big_directories: bool = False,
+) -> DiscRecord:
+    """Lay down a blank New Map disc and its empty root directory.
+
+    The New Map counterpart of :func:`_initialise_old_free_space_map` plus
+    :func:`_initialise_old_root_directory`. Handles the E/F (New directory) and
+    E+/F+ (Big directory) shapes; the ``+`` shapes give the root its own
+    fragment so it can grow. Returns the disc record so the caller can build the
+    :class:`NewMap` over the finished image.
+    """
+    # Pick the disc-record builder by total size: E (800K), F (1.6MB) or
+    # G (3.2MB), each with a Big-directory (``+``) variant.
+    total_bytes = total_sectors * _ADFS_BYTES_PER_SECTOR
+    builders = {
+        ADFS_E.total_bytes: (e_disc_record, e_plus_disc_record),
+        ADFS_F.total_bytes: (f_disc_record, f_plus_disc_record),
+        ADFS_G.total_bytes: (g_disc_record, g_plus_disc_record),
+    }
+    plain, plus = builders[total_bytes]
+    builder = plus if big_directories else plain
+    dr = builder(title, boot_option=boot_option)
+    _lay_down_new_map(unified, dr, title)
+    return dr
+
+
+def _lay_down_new_map(unified: UnifiedDisc, dr: DiscRecord, title: str) -> None:
+    """Write the map, boot block and empty root for a New Map disc record.
+
+    Shared by every New Map create path (floppy and hard disc). The ``+`` shapes
+    (a disc record with ``format_version >= 1``) use Big directories and give
+    the root its own fragment so it can grow; the rest use New directories.
+    """
+    big = dr.uses_big_directories
+    dir_format: ADFSDirectoryFormat = BigDirectoryFormat() if big else NewDirectoryFormat()
+    total_sectors = dr.disc_size // _ADFS_BYTES_PER_SECTOR
+    full = unified.sector_range(0, total_sectors)
+    root_fragment_id = (dr.root >> 8) if big else None
+
+    if dr.nzones > 1:
+        root_address = format_blank_f(
+            full, dr, dir_format.size_in_bytes, root_fragment_id=root_fragment_id
+        )
+    else:
+        root_address = format_blank_single_zone(
+            full, dr, dir_format.size_in_bytes, root_fragment_id=root_fragment_id
+        )
+
+    root_dir = _ADFSDirectory(
+        name="$",
+        title="" if big else title,
+        parent_address=dr.root,
+        disc_address=dr.root,
+        entries=(),
+        sequence_number=0,
+        signature=b"SBPr" if big else b"Nick",
+        big_dir_size=dir_format.size_in_bytes if big else 0,
+    )
+    root_data = unified.sector_range(
+        root_address // _ADFS_BYTES_PER_SECTOR, dir_format.size_in_sectors
+    )
+    dir_format.serialize(root_dir, root_data)
+
+
 @contextmanager
 def _create_image_file(
     filepath: Path,
@@ -1220,14 +1447,25 @@ def _create_image_file(
         disc_image = DiscImage(buffer, fmt.surface_specs)
         unified = UnifiedDisc(disc_image)
 
-        _initialise_old_free_space_map(unified, fmt.total_sectors, boot_option)
-        _initialise_old_root_directory(unified, title)
+        if fmt.new_map:
+            disc_record = _initialise_new_map_blank(
+                unified, fmt.total_sectors, title, boot_option,
+                big_directories=fmt.big_directories,
+            )
+            new_map = _new_map_over(unified, disc_record)
+            dir_format = BigDirectoryFormat() if fmt.big_directories else NewDirectoryFormat()
+            adfs = ADFS(unified, dir_format, None, geometry, disc_record.root, new_map=new_map)
+        elif fmt.new_directory:
+            _initialise_d_blank(unified, fmt.total_sectors, title, boot_option)
+            fsm = OldFreeSpaceMap(unified.sector_range(0, 2))
+            adfs = ADFS(unified, NewDirectoryFormat(), fsm, geometry, _D_MAP_ROOT_SECTOR)
+        else:
+            _initialise_old_free_space_map(unified, fmt.total_sectors, boot_option)
+            _initialise_old_root_directory(unified, title)
 
-        map_data = unified.sector_range(0, 2)
-        fsm = OldFreeSpaceMap(map_data)
-        dir_format = OldDirectoryFormat()
-
-        adfs = ADFS(unified, dir_format, fsm, geometry)
+            map_data = unified.sector_range(0, 2)
+            fsm = OldFreeSpaceMap(map_data)
+            adfs = ADFS(unified, OldDirectoryFormat(), fsm, geometry)
         try:
             yield adfs
         finally:
@@ -1345,8 +1583,10 @@ class ADFS:
         self,
         unified_disc: UnifiedDisc,
         dir_format: ADFSDirectoryFormat,
-        fsm: OldFreeSpaceMap,
+        fsm: "OldFreeSpaceMap | None",
         geometry: ADFSGeometry,
+        root_address: int = _OLD_MAP_ROOT_SECTOR,
+        new_map: "NewMap | None" = None,
     ):
         # _closed must be set before any attribute that property-gates
         # would touch via _require_open.
@@ -1355,7 +1595,28 @@ class ADFS:
         self._dir_format = dir_format
         self._fsm_ = fsm
         self._geometry = geometry
+        # For old-map discs ``root_address`` is a 256-byte sector number; for
+        # New Map discs it is the root's three-byte indirect disc address,
+        # resolved through ``self._map`` on every read/write.
+        self._root_address = root_address
+        self._map = new_map
         self._afs_partition_cache = None
+        # D format is old-map with a New directory in 1024-byte sectors, so its
+        # directories must align to 4 (256-byte) sectors. S/M/L (Old directory)
+        # and New Map discs need no old-map alignment.
+        is_d_format = new_map is None and isinstance(dir_format, NewDirectoryFormat)
+        self._old_map_dir_alignment = _D_SECTOR_SIZE // _ADFS_BYTES_PER_SECTOR if is_d_format else 1
+        # Big directories lift the ten-character name limit.
+        self._name_grammar = (
+            ADFS_BIG_NAME_GRAMMAR
+            if isinstance(dir_format, BigDirectoryFormat)
+            else ADFS_NAME_GRAMMAR
+        )
+
+    @property
+    def is_new_map(self) -> bool:
+        """Whether this disc uses the New Map (FileCore zoned allocation)."""
+        return self._map is not None
 
     @property
     def closed(self) -> bool:
@@ -1387,6 +1648,17 @@ class ADFS:
                 "ADFS handle is closed; I/O outside the with block is not supported"
             )
 
+    def _require_writable_map(self) -> None:
+        """Guard operations that mutate a New Map disc.
+
+        New Map writing — allocation (zone bitmap, FreeLink, zone checks) and
+        even in-place directory rewrites, which must preserve the directory's
+        Hugo/Nick signature and recompute the check byte — is not yet
+        implemented, so New Map discs are read-only at this rung.
+        """
+        if self._map is not None:
+            raise ADFSError("writing to New Map discs is not yet supported (read-only)")
+
     @property
     def _disc(self) -> UnifiedDisc:
         """The backing UnifiedDisc; raises if the handle is closed."""
@@ -1403,7 +1675,9 @@ class ADFS:
 
     @staticmethod
     @contextmanager
-    def from_file(filepath: Union[str, PathLike]) -> Iterator[ADFS]:
+    def from_file(
+        filepath: Union[str, PathLike], *, read_only: bool = False
+    ) -> Iterator[ADFS]:
         """Open an ADFS disc image file as a context manager.
 
         For floppy images (``.adf``, ``.adl``), auto-detects the format
@@ -1417,10 +1691,14 @@ class ADFS:
         The image is opened writable when host filesystem permissions
         allow, read-only otherwise. Mutations attempted against a
         read-only-backed image raise from the mmap layer at the point
-        of write.
+        of write. Pass ``read_only=True`` to force this even when the file
+        is writable — a caller that only reads a shared or committed image
+        uses it to guarantee the file cannot be modified.
 
         Args:
             filepath: Path to the disc image file.
+            read_only: Force a read-only mapping (default opens writable
+                when the host permits).
 
         Yields:
             ADFS instance backed by the file.
@@ -1433,6 +1711,7 @@ class ADFS:
 
         p = Path(filepath)
         ext = p.suffix.lower()
+        writable = not read_only
 
         if ext in (".dat", ".dsc"):
             dat_filepath = p.with_suffix(".dat")
@@ -1440,25 +1719,33 @@ class ADFS:
 
             if not dat_filepath.exists():
                 raise FileNotFoundError(f"Hard disc data file not found: {dat_filepath}")
-            if not dsc_filepath.exists():
-                raise FileNotFoundError(f"Hard disc geometry file not found: {dsc_filepath}")
 
-            geometry = _parse_dsc(dsc_filepath)
-            dat_size = dat_filepath.stat().st_size
-            fmt = _hard_disc_format(geometry, dat_size)
-
-            with open_image_mmap(dat_filepath) as (mm, _writable):
-                adfs = ADFS._from_buffer_with_format(memoryview(mm), fmt, geometry)
-                try:
-                    yield adfs
-                finally:
-                    adfs.close()
+            if dsc_filepath.exists():
+                # A .dsc sidecar carries the CHS geometry of an old-map hard disc.
+                geometry = _parse_dsc(dsc_filepath)
+                dat_size = dat_filepath.stat().st_size
+                fmt = _hard_disc_format(geometry, dat_size)
+                with open_image_mmap(dat_filepath, writable=writable) as (mm, _writable):
+                    adfs = ADFS._from_buffer_with_format(memoryview(mm), fmt, geometry)
+                    try:
+                        yield adfs
+                    finally:
+                        adfs.close()
+            else:
+                # New Map hard discs carry their geometry in the disc record, so
+                # no sidecar is needed; content detection handles them.
+                with open_image_mmap(dat_filepath, writable=writable) as (mm, _writable):
+                    adfs = ADFS.from_buffer(memoryview(mm))
+                    try:
+                        yield adfs
+                    finally:
+                        adfs.close()
         else:
             # The 640K layout is ambiguous; content decides, but where it
             # cannot, the extension breaks the tie — ``.adl`` is the
             # interleaved convention, so any other suffix leans linear.
             prefer_sequential = ext != ".adl"
-            with open_image_mmap(p) as (mm, _writable):
+            with open_image_mmap(p, writable=writable) as (mm, _writable):
                 adfs = ADFS.from_buffer(memoryview(mm), prefer_sequential=prefer_sequential)
                 try:
                     yield adfs
@@ -1539,14 +1826,30 @@ class ADFS:
         disc_image = DiscImage(buffer, fmt.surface_specs)
         unified = UnifiedDisc(disc_image)
 
-        # Read free space map from sectors 0-1
+        # New Map discs carry a FileCore disc record at 0x04 of zone 0 and a
+        # valid zone check; try that before falling back to the Old map.
+        new_map = _try_new_map(unified)
+        if new_map is not None:
+            dir_format = (
+                BigDirectoryFormat()
+                if new_map.disc_record.uses_big_directories
+                else NewDirectoryFormat()
+            )
+            return cls(
+                unified,
+                dir_format,
+                None,
+                geometry,
+                new_map.disc_record.root,
+                new_map=new_map,
+            )
+
+        # Old map: free-space map in sectors 0-1, root located by structure.
         map_data = unified.sector_range(0, 2)
         fsm = OldFreeSpaceMap(map_data)
+        dir_format, root_address = _detect_directory_layout(unified)
 
-        # Detect directory format from root signature
-        dir_format = _detect_directory_format(unified)
-
-        return cls(unified, dir_format, fsm, geometry)
+        return cls(unified, dir_format, fsm, geometry, root_address)
 
     @classmethod
     def create(
@@ -1570,6 +1873,32 @@ class ADFS:
         disc_image = DiscImage(buffer, adfs_format.surface_specs)
         unified = UnifiedDisc(disc_image)
 
+        if adfs_format.new_map:
+            disc_record = _initialise_new_map_blank(
+                unified,
+                adfs_format.total_sectors,
+                title,
+                boot_option,
+                big_directories=adfs_format.big_directories,
+            )
+            new_map = _new_map_over(unified, disc_record)
+            dir_format = (
+                BigDirectoryFormat() if adfs_format.big_directories else NewDirectoryFormat()
+            )
+            geom = ADFSGeometry(
+                cylinders=disc_record.disc_size
+                // (disc_record.heads * disc_record.sectors_per_track * disc_record.sector_size),
+                heads=disc_record.heads,
+                sectors_per_track=disc_record.sectors_per_track,
+            )
+            return cls(unified, dir_format, None, geom, disc_record.root, new_map=new_map)
+
+        if adfs_format.new_directory:
+            _initialise_d_blank(unified, adfs_format.total_sectors, title, boot_option)
+            fsm = OldFreeSpaceMap(unified.sector_range(0, 2))
+            geom = _FLOPPY_GEOMETRY.get(adfs_format.total_bytes)
+            return cls(unified, NewDirectoryFormat(), fsm, geom, _D_MAP_ROOT_SECTOR)
+
         _initialise_old_free_space_map(unified, adfs_format.total_sectors, boot_option)
         _initialise_old_root_directory(unified, title)
 
@@ -1588,6 +1917,59 @@ class ADFS:
             )
 
         return cls(unified, dir_format, fsm, geom)
+
+    @classmethod
+    def create_new_map_hard_disc(
+        cls,
+        capacity: "int | str",
+        *,
+        title: str = "",
+        big_directories: bool = False,
+        boot_option: int = 0,
+    ) -> ADFS:
+        """Create a new-map hard disc image in memory, sized to *capacity*.
+
+        FileCore parameters (zones, idlen, bytes-per-map-bit) are computed for
+        the size. Pass ``big_directories=True`` for the E+/F+-style Big directory
+        format. ``capacity`` may be an ``int`` (bytes) or a string like
+        ``"20MB"``.
+
+        Raises:
+            ADFSError: If the size cannot be represented as a New Map disc.
+        """
+        from oaknut.file.capacity import parse_capacity
+
+        size = parse_capacity(capacity) if isinstance(capacity, str) else capacity
+        size = (size // _ADFS_BYTES_PER_SECTOR) * _ADFS_BYTES_PER_SECTOR  # sector-align
+        disc_record = hdd_disc_record(
+            size, title, big_directories=big_directories, boot_option=boot_option
+        )
+
+        spec = _flat_spec(size // _ADFS_BYTES_PER_SECTOR)
+
+        # FileCore numbers sectors from ``low_sector``, so disc address 0 sits
+        # ``low_sector`` sectors into the image (0x200 for the IDE default). Build
+        # the disc at offset 0, then rotate it into that layout so the on-disc
+        # structures land where RISC OS and emulators look for them.
+        build = bytearray(size)
+        _lay_down_new_map(UnifiedDisc(DiscImage(memoryview(build), [spec])), disc_record, title)
+
+        base_offset = disc_record.low_sector * disc_record.sector_size
+        if base_offset:
+            build = build[size - base_offset :] + build[: size - base_offset]
+
+        unified = UnifiedDisc(DiscImage(memoryview(build), [spec]))
+        new_map = _new_map_over(unified, disc_record, base_offset)
+        dir_format = BigDirectoryFormat() if big_directories else NewDirectoryFormat()
+        bytes_per_cylinder = (
+            disc_record.heads * disc_record.sectors_per_track * disc_record.sector_size
+        )
+        geom = ADFSGeometry(
+            cylinders=size // bytes_per_cylinder,
+            heads=disc_record.heads,
+            sectors_per_track=disc_record.sectors_per_track,
+        )
+        return cls(unified, dir_format, None, geom, disc_record.root, new_map=new_map)
 
     @staticmethod
     @contextmanager
@@ -1701,20 +2083,37 @@ class ADFS:
 
     @property
     def title(self) -> str:
-        """Disc title (from root directory title field)."""
+        """Disc title.
+
+        For old-map and New-directory discs this is the 19-character title
+        stored in the root directory. Big-directory discs (E+/F+/G+) have no
+        directory title field, so their label is the disc record's disc name
+        (up to 10 characters) instead.
+        """
+        if self._big_directory_disc:
+            return self.disc_name
         return self.root.title
 
     @title.setter
     def title(self, value: str) -> None:
-        """Set disc title by rewriting the root directory."""
-        self.root.title = value
+        """Set the disc title (see :attr:`title` for where it is stored)."""
+        if self._big_directory_disc:
+            self._map.set_disc_name(value)
+        else:
+            self.root.title = value
+
+    @property
+    def _big_directory_disc(self) -> bool:
+        """True for New-map discs whose directories are the Big format."""
+        return self._map is not None and self._map.disc_record.uses_big_directories
 
     @property
     def boot_option(self) -> "BootOption":
         """Boot option as a :class:`oaknut.file.BootOption` enum."""
         from oaknut.file import BootOption
 
-        return BootOption(self._fsm.boot_option)
+        source = self._map if self._map is not None else self._fsm
+        return BootOption(source.boot_option)
 
     @boot_option.setter
     def boot_option(self, value: "BootOption | int") -> None:
@@ -1726,22 +2125,27 @@ class ADFS:
         """
         from oaknut.file import BootOption
 
+        if self._map is not None:
+            raise ADFSError("setting the boot option on New Map discs is not yet supported")
         self._fsm.set_boot_option(int(BootOption(value)))
 
     @property
     def free_space(self) -> int:
         """Free space in bytes."""
-        return self._fsm.free_space
+        source = self._map if self._map is not None else self._fsm
+        return source.free_space
 
     @property
     def total_size(self) -> int:
         """Total disc size in bytes."""
-        return self._fsm.total_size
+        source = self._map if self._map is not None else self._fsm
+        return source.total_size
 
     @property
     def disc_name(self) -> str:
-        """Disc name from the free space map."""
-        return self._fsm.disc_name
+        """Disc name (from the disc record on New Map, else the free space map)."""
+        source = self._map if self._map is not None else self._fsm
+        return source.disc_name
 
     @property
     def has_afs_partition(self) -> bool:
@@ -1754,6 +2158,9 @@ class ADFS:
         """
         from oaknut.afs.afs import AFS, AFSNotPresentError
 
+        if self._map is not None:
+            # AFS partitions are installed only on old-map BBC/Master discs.
+            return False
         sec1, sec2 = self._fsm.afs_info_pointers
         if sec1 == 0 and sec2 == 0:
             return False
@@ -1792,6 +2199,8 @@ class ADFS:
         # has been closed. The next caller wants a fresh handle.
         if self._afs_partition_cache is not None and self._afs_partition_cache.closed:
             self._afs_partition_cache = None
+        if self._map is not None:
+            raise AFSNotPresentError("New Map discs do not carry an AFS partition")
         if self._afs_partition_cache is None:
             sec1, sec2 = self._fsm.afs_info_pointers
             if sec1 == 0 and sec2 == 0:
@@ -1830,7 +2239,7 @@ class ADFS:
         list to present every defect rather than aborting on the first.
         """
         errors: list[ADFSValidationError] = []
-        errors.extend(self._fsm.validate())
+        errors.extend((self._map if self._map is not None else self._fsm).validate())
         errors.extend(self._directory_tree_errors())
         return errors
 
@@ -1850,7 +2259,7 @@ class ADFS:
             errors.append(ADFSValidationError(f"Root directory: {exc}"))
             return errors
 
-        seen: set[int] = {_OLD_MAP_ROOT_SECTOR}
+        seen: set[int] = {self._root_address}
 
         def walk(directory: _ADFSDirectory, path: str) -> None:
             for entry in directory.entries:
@@ -1887,6 +2296,7 @@ class ADFS:
         Returns:
             Number of objects (files and directories, excluding root) written.
         """
+        self._require_writable_map()
         # 1. Snapshot the current state
         title = self.title
         boot_option = self.boot_option
@@ -1950,9 +2360,11 @@ class ADFS:
 
         for item in items:
             if item["is_directory"]:
-                # Allocate sectors for the subdirectory
+                # Allocate sectors for the subdirectory, aligned for D format.
                 dir_sectors = self._dir_format.size_in_sectors
-                start_sector = self._fsm.allocate(dir_sectors)
+                start_sector = self._fsm.allocate(
+                    dir_sectors, alignment=self._old_map_dir_alignment
+                )
 
                 # Initialise the subdirectory block
                 subdir = _ADFSDirectory(
@@ -2086,31 +2498,311 @@ class ADFS:
 
     def _read_root_directory(self) -> _ADFSDirectory:
         """Read and parse the root directory."""
-        return self._read_directory_at(_OLD_MAP_ROOT_SECTOR)
+        return self._read_directory_at(self._root_address)
+
+    def _object_disc_sector(self, indirect: int) -> int:
+        """Resolve an object's disc address to a 256-byte sector number.
+
+        On old-map discs the directory entry's ``indirect_disc_address`` *is*
+        the start sector. On New Map discs it is a fragment reference that the
+        map resolves to a linear byte address; directories always sit on a
+        sector boundary, so dividing by 256 is exact.
+        """
+        if self._map is None:
+            return indirect
+        physical = self._map.physical_offset(self._map.object_start(indirect))
+        return physical // _ADFS_BYTES_PER_SECTOR
+
+    def _read_disc_bytes(self, byte_address: int, length: int) -> bytes:
+        """Read *length* bytes from a linear disc byte address.
+
+        Handles addresses that are not sector-aligned (New Map fragments are
+        granular to ``bytes_per_map_bit``) by reading the covering sectors and
+        slicing. Assumes a linear surface, as used by the floppy shapes.
+        """
+        if length == 0:
+            return b""
+        first_sector = byte_address // _ADFS_BYTES_PER_SECTOR
+        end_sector = (byte_address + length + _ADFS_BYTES_PER_SECTOR - 1) // _ADFS_BYTES_PER_SECTOR
+        data = self._disc.sector_range(first_sector, end_sector - first_sector)
+        start = byte_address - first_sector * _ADFS_BYTES_PER_SECTOR
+        return bytes(data[start : start + length])
 
     def _read_directory_at(self, disc_address: int) -> _ADFSDirectory:
-        """Read and parse a directory at the given sector address."""
-        num_sectors = self._dir_format.size_in_sectors
-        data = self._disc.sector_range(disc_address, num_sectors)
+        """Read and parse a directory at the given disc address.
+
+        *disc_address* is an old-map sector number or a New Map indirect
+        address; :meth:`_object_disc_sector` resolves both to a sector.
+        """
+        sector = self._object_disc_sector(disc_address)
+        # Peek the header to learn the size — Big directories vary; fixed
+        # directories ignore the peek and return their constant size.
+        header = self._disc.sector_range(sector, 1)
+        num_sectors = (
+            self._dir_format.directory_size(header) + _ADFS_BYTES_PER_SECTOR - 1
+        ) // _ADFS_BYTES_PER_SECTOR
+        data = self._disc.sector_range(sector, num_sectors)
         directory = self._dir_format.parse(data, disc_address)
         _assert_entries_sorted(directory.entries)
         return directory
 
     def _read_file_data(self, entry: _ADFSDirectoryEntry) -> bytes:
         """Read file data for a directory entry."""
+        if entry.length == 0:
+            return b""
+        if self._map is not None:
+            # New Map: gather the object's fragments via the allocation map.
+            return self._map.read_object(entry.indirect_disc_address, entry.length)
         start_sector = entry.start_sector
         num_sectors = (entry.length + _ADFS_BYTES_PER_SECTOR - 1) // _ADFS_BYTES_PER_SECTOR
-        if num_sectors == 0:
-            return b""
         data = self._disc.sector_range(start_sector, num_sectors)
         return data[: entry.length]
 
     def _write_directory_at(self, directory: _ADFSDirectory, disc_address: int) -> None:
-        """Serialize a directory back to its sectors on disc."""
+        """Serialize a directory back to its sectors on disc at its current size.
+
+        Callers that may change a Big directory's size go through
+        :meth:`_persist_directory`, which handles growth and moves first.
+        """
         _assert_entries_sorted(directory.entries)
-        num_sectors = self._dir_format.size_in_sectors
-        data = self._disc.sector_range(disc_address, num_sectors)
+        sector = self._object_disc_sector(disc_address)
+        num_sectors = (
+            self._dir_format.serialized_size(directory) + _ADFS_BYTES_PER_SECTOR - 1
+        ) // _ADFS_BYTES_PER_SECTOR
+        data = self._disc.sector_range(sector, num_sectors)
         self._dir_format.serialize(directory, data)
+
+    def _persist_directory(
+        self, directory: _ADFSDirectory, disc_address: int, dir_path_parts: list[str]
+    ) -> int:
+        """Write *directory*, growing or moving it first if it has outgrown its block.
+
+        Returns the directory's (possibly new) disc address. Fixed-size formats
+        write in place. Big directories that overflow their current block grow:
+        the root grows in place (its location is fixed); a non-root directory is
+        reallocated elsewhere, its old block freed and the parent entry that
+        points to it updated (which may cascade if the parent then grows too).
+        """
+        if not isinstance(self._dir_format, BigDirectoryFormat):
+            self._write_directory_at(directory, disc_address)
+            return disc_address
+
+        secsize = self._map.disc_record.sector_size
+        required = self._dir_format.required_size(directory, secsize)
+        current = directory.big_dir_size or self._dir_format.size_in_bytes
+
+        if required <= current:
+            self._write_directory_at(replace(directory, big_dir_size=current), disc_address)
+            return disc_address
+
+        is_root = disc_address == self._root_address
+
+        # Try to grow in place — the cheapest option when the space after the
+        # directory happens to be free (typical for a root on a fresh disc).
+        try:
+            self._map.grow_fragment(disc_address, required)
+        except ADFSDiscFullError:
+            pass
+        else:
+            self._write_directory_at(replace(directory, big_dir_size=required), disc_address)
+            return disc_address
+
+        # Otherwise move the directory to a larger fragment and free the old one.
+        new_address = self._map.allocate_object(required)
+        parent_address = new_address if is_root else directory.parent_address
+        self._write_directory_at(
+            replace(directory, big_dir_size=required, parent_address=parent_address), new_address
+        )
+        self._map.free_object(disc_address)
+        if is_root:
+            self._map.set_root_indirect(new_address)
+            self._root_address = new_address
+        else:
+            self._repoint_child(dir_path_parts, new_address)
+        return new_address
+
+    def _repoint_child(self, dir_path_parts: list[str], new_address: int) -> None:
+        """Update the parent entry for *dir_path_parts* to *new_address* (cascading)."""
+        child_name = dir_path_parts[-1]
+        grandparent, gp_address = self._resolve_parent(dir_path_parts)
+        new_entries = tuple(
+            replace(entry, indirect_disc_address=new_address)
+            if _name_key(entry.name) == _name_key(child_name)
+            else entry
+            for entry in grandparent.entries
+        )
+        new_seq = (grandparent.sequence_number + 1) & 0xFF
+        self._persist_directory(
+            self._with_entries(grandparent, new_entries, new_seq),
+            gp_address,
+            dir_path_parts[:-1],
+        )
+
+    # --- Map-agnostic allocation ---
+    #
+    # An object's "address" is a start sector on old-map discs and a fragment
+    # indirect address on New Map discs. These helpers hide that difference so
+    # the file/directory write paths are shared. The value stored in a
+    # directory entry's ``indirect_disc_address`` is whatever ``_allocate_object``
+    # returns, and ``_free_object`` / ``_write_object_data`` take the same value.
+
+    def _allocate_object(self, length_bytes: int, *, sector_aligned: bool = False) -> int:
+        """Allocate space for *length_bytes*; return its entry address.
+
+        *sector_aligned* requests a directory-aligned start on old-map discs (a
+        no-op on New Map discs, whose allocator already aligns directories, and
+        on S/M/L, whose alignment is 1).
+        """
+        if self._map is not None:
+            return self._map.allocate_object(length_bytes)
+        if length_bytes == 0:
+            return 0
+        num_sectors = (length_bytes + _ADFS_BYTES_PER_SECTOR - 1) // _ADFS_BYTES_PER_SECTOR
+        alignment = self._old_map_dir_alignment if sector_aligned else 1
+        return self._fsm.allocate(num_sectors, alignment=alignment)
+
+    def _free_object(self, address: int, length_bytes: int) -> None:
+        """Release the space previously allocated for an object."""
+        if self._map is not None:
+            self._map.free_object(address)
+            return
+        num_sectors = (length_bytes + _ADFS_BYTES_PER_SECTOR - 1) // _ADFS_BYTES_PER_SECTOR
+        if num_sectors > 0:
+            self._fsm.free(address, num_sectors)
+
+    def _write_object_data(self, address: int, data: bytes) -> None:
+        """Write an object's data at its allocated address."""
+        if len(data) == 0:
+            return
+        if self._map is not None:
+            self._map.write_object_data(address, data)
+            return
+        num_sectors = (len(data) + _ADFS_BYTES_PER_SECTOR - 1) // _ADFS_BYTES_PER_SECTOR
+        view = self._disc.sector_range(address, num_sectors)
+        view[:] = data + b"\x00" * (num_sectors * _ADFS_BYTES_PER_SECTOR - len(data))
+
+    # --- Fragment sharing (New Map) ---
+    #
+    # FileCore packs several small files into one fragment rather than giving
+    # each its own (minimum) fragment. A fragment with spare room is marked
+    # shareable (its owner's indirect address carries sector offset 1); a later
+    # small file in the same directory is placed in a spare sector of that
+    # fragment, its indirect address carrying the 1-based sector offset. The
+    # fragment is freed only when its last sharer is removed.
+
+    def _allocate_file_space(
+        self, parent_dir: _ADFSDirectory, parent_disc_address: int, data: bytes
+    ) -> int:
+        """Allocate space for a file, write its data, and return its address.
+
+        On New Map discs a small file is packed into a shareable sibling
+        fragment when one has room; otherwise a fresh fragment is allocated and
+        marked shareable if it has a spare sector.
+        """
+        length = len(data)
+        if self._map is None:
+            address = self._allocate_object(length)
+            self._write_object_data(address, data)
+            return address
+
+        secsize = self._map.disc_record.sector_size
+        if 0 < length < self._map.min_fragment_bytes - secsize:
+            shared = self._find_shareable_fragment(parent_dir, parent_disc_address, length)
+            if shared is not None:
+                self._map.write_object_data(shared, data)
+                return shared
+
+        address = self._map.allocate_object(length)
+        frag_id = address >> 8
+        if (
+            length < self._map.min_fragment_bytes
+            and self._map.fragment_capacity(frag_id) - length > secsize
+        ):
+            address = (frag_id << 8) | 1  # mark the fragment shareable
+        self._map.write_object_data(address, data)
+        return address
+
+    def _objects_sharing(
+        self, parent_dir: _ADFSDirectory, parent_disc_address: int, frag_id: int
+    ):
+        """Yield ``(indirect, length)`` for every object occupying *frag_id*."""
+        if (parent_disc_address >> 8) == frag_id:
+            yield parent_disc_address, self._dir_format.size_in_bytes
+        for entry in parent_dir.entries:
+            if (entry.indirect_disc_address >> 8) == frag_id:
+                yield entry.indirect_disc_address, entry.length
+
+    def _find_shareable_fragment(
+        self, parent_dir: _ADFSDirectory, parent_disc_address: int, length: int
+    ) -> "int | None":
+        """Return an indirect address to pack *length* bytes into, or ``None``.
+
+        Candidates are the parent directory's own fragment (when marked
+        shareable and not the root) and any sibling file whose fragment is
+        marked shareable; each must be a single fragment with enough spare
+        sectors after the objects already sharing it.
+        """
+        secsize = self._map.disc_record.sector_size
+        needed = -(-length // secsize)
+
+        candidates = []
+        if (parent_disc_address & 0xFF) == 1 and parent_disc_address != self._root_address:
+            candidates.append(parent_disc_address >> 8)
+        for entry in parent_dir.entries:
+            if not entry.is_directory and (entry.indirect_disc_address & 0xFF) == 1:
+                candidates.append(entry.indirect_disc_address >> 8)
+
+        for frag_id in candidates:
+            if self._map.fragment_count(frag_id) != 1:
+                continue
+            capacity_sectors = self._map.fragment_capacity(frag_id) // secsize
+            used_end = 0
+            for indirect, obj_len in self._objects_sharing(
+                parent_dir, parent_disc_address, frag_id
+            ):
+                start = (indirect & 0xFF) - 1 if (indirect & 0xFF) >= 1 else 0
+                used_end = max(used_end, start + max(1, -(-obj_len // secsize)))
+            if used_end + needed <= capacity_sectors:
+                return (frag_id << 8) | (used_end + 1)
+        return None
+
+    def _release_object(
+        self, parent_dir: _ADFSDirectory, parent_disc_address: int, entry: _ADFSDirectoryEntry
+    ) -> None:
+        """Free an object's fragment unless another object still shares it."""
+        if self._map is None:
+            self._free_object(entry.indirect_disc_address, entry.length)
+            return
+        frag_id = entry.indirect_disc_address >> 8
+        still_shared = (parent_disc_address >> 8) == frag_id
+        if not still_shared:
+            for other in parent_dir.entries:
+                if other.name != entry.name and (other.indirect_disc_address >> 8) == frag_id:
+                    still_shared = True
+                    break
+        if not still_shared:
+            self._map.free_object(entry.indirect_disc_address)
+
+    @staticmethod
+    def _with_entries(
+        directory: _ADFSDirectory,
+        new_entries: tuple,
+        new_sequence: int,
+    ) -> _ADFSDirectory:
+        """Copy *directory* with new entries and sequence, preserving the rest.
+
+        Notably preserves the Hugo/Nick signature so a New Map directory is not
+        rewritten as "Hugo" when its entries change.
+        """
+        return _ADFSDirectory(
+            name=directory.name,
+            title=directory.title,
+            parent_address=directory.parent_address,
+            disc_address=directory.disc_address,
+            entries=new_entries,
+            sequence_number=new_sequence,
+            signature=directory.signature,
+        )
 
     def _write_file(
         self,
@@ -2129,35 +2821,28 @@ class ADFS:
         filename = path_parts[-1]
         parent_dir, parent_disc_address = self._resolve_parent(path_parts)
 
-        # Check for existing file and free its sectors
         existing = parent_dir.find(filename)
+        if existing is not None and existing.is_directory:
+            raise ADFSPathError(f"Cannot overwrite directory '{filename}' with a file")
+
+        # Fail before allocating if a brand-new entry would overflow the directory.
+        if existing is None and len(parent_dir.entries) >= self._dir_format.max_entries:
+            raise ADFSDirectoryFullError(
+                f"Directory full: maximum {self._dir_format.max_entries} entries"
+            )
+
+        # Free the old data (honouring fragment sharing), then allocate and
+        # write the new — possibly sharing a small file into a sibling fragment.
         if existing is not None:
-            if existing.is_directory:
-                raise ADFSPathError(f"Cannot overwrite directory '{filename}' with a file")
-            old_sectors = (existing.length + _ADFS_BYTES_PER_SECTOR - 1) // _ADFS_BYTES_PER_SECTOR
-            if old_sectors > 0:
-                self._fsm.free(existing.start_sector, old_sectors)
+            self._release_object(parent_dir, parent_disc_address, existing)
+        address = self._allocate_file_space(parent_dir, parent_disc_address, data)
 
-        # Allocate sectors for the new data
-        num_sectors = (len(data) + _ADFS_BYTES_PER_SECTOR - 1) // _ADFS_BYTES_PER_SECTOR
-        if num_sectors > 0:
-            start_sector = self._fsm.allocate(num_sectors)
-        else:
-            start_sector = 0
-
-        # Write data to sectors (zero-padded to sector boundary)
-        if num_sectors > 0:
-            sector_data = self._disc.sector_range(start_sector, num_sectors)
-            padded = data + b"\x00" * (num_sectors * _ADFS_BYTES_PER_SECTOR - len(data))
-            sector_data[:] = padded
-
-        # Build the new directory entry
         new_entry = _ADFSDirectoryEntry(
             name=filename,
             load_address=load_address,
             exec_address=exec_address,
             length=len(data),
-            indirect_disc_address=start_sector,
+            indirect_disc_address=address,
             sequence_number=0,
             attributes=_ADFSRawAttributes(
                 owner_read=True,
@@ -2172,37 +2857,20 @@ class ADFS:
             ),
         )
 
-        # Update the directory entries
         if existing is not None:
-            # Replace the existing entry
             new_entries = tuple(
                 new_entry if _name_key(e.name) == _name_key(filename) else e
                 for e in parent_dir.entries
             )
         else:
-            # Add a new entry
-            if len(parent_dir.entries) >= self._dir_format.max_entries:
-                # Undo the allocation before raising
-                if num_sectors > 0:
-                    self._fsm.free(start_sector, num_sectors)
-                raise ADFSDirectoryFullError(
-                    f"Directory full: maximum {self._dir_format.max_entries} entries"
-                )
             new_entries = _insert_sorted(parent_dir.entries, new_entry)
 
-        # Increment sequence number
         new_seq = (parent_dir.sequence_number + 1) & 0xFF
-
-        updated_dir = _ADFSDirectory(
-            name=parent_dir.name,
-            title=parent_dir.title,
-            parent_address=parent_dir.parent_address,
-            disc_address=parent_dir.disc_address,
-            entries=new_entries,
-            sequence_number=new_seq,
+        self._persist_directory(
+            self._with_entries(parent_dir, new_entries, new_seq),
+            parent_disc_address,
+            path_parts[:-1],
         )
-
-        self._write_directory_at(updated_dir, parent_disc_address)
 
     def _resolve_parent(
         self,
@@ -2218,10 +2886,10 @@ class ADFS:
         """
         parent_parts = path_parts[:-1]
         if len(parent_parts) == 1:
-            return self._read_root_directory(), _OLD_MAP_ROOT_SECTOR
+            return self._read_root_directory(), self._root_address
 
         current_dir = self._read_root_directory()
-        parent_disc_address = _OLD_MAP_ROOT_SECTOR
+        parent_disc_address = self._root_address
         for component in parent_parts[1:]:
             entry = current_dir.find(component)
             if entry is None:
@@ -2245,26 +2913,17 @@ class ADFS:
         if existing.attributes.locked:
             raise ADFSFileLockedError(f"'{filename}' is locked")
 
-        # Free sectors
-        num_sectors = (existing.length + _ADFS_BYTES_PER_SECTOR - 1) // _ADFS_BYTES_PER_SECTOR
-        if num_sectors > 0:
-            self._fsm.free(existing.start_sector, num_sectors)
+        self._release_object(parent_dir, parent_disc_address, existing)
 
-        # Remove entry from directory
         new_entries = tuple(
             e for e in parent_dir.entries if _name_key(e.name) != _name_key(filename)
         )
         new_seq = (parent_dir.sequence_number + 1) & 0xFF
-
-        updated_dir = _ADFSDirectory(
-            name=parent_dir.name,
-            title=parent_dir.title,
-            parent_address=parent_dir.parent_address,
-            disc_address=parent_dir.disc_address,
-            entries=new_entries,
-            sequence_number=new_seq,
+        self._persist_directory(
+            self._with_entries(parent_dir, new_entries, new_seq),
+            parent_disc_address,
+            path_parts[:-1],
         )
-        self._write_directory_at(updated_dir, parent_disc_address)
 
     def _mkdir(self, path_parts: list[str]) -> None:
         """Create a new directory on the disc image."""
@@ -2282,21 +2941,20 @@ class ADFS:
                 f"Directory full: maximum {self._dir_format.max_entries} entries"
             )
 
-        # Allocate sectors for the new directory
-        dir_sectors = self._dir_format.size_in_sectors
-        start_sector = self._fsm.allocate(dir_sectors)
-
-        # Initialise the new directory block on disc
-        dir_data = self._disc.sector_range(start_sector, dir_sectors)
+        # Allocate space for the new directory and initialise its block. The
+        # child inherits the parent's Hugo/Nick signature. Directories must sit
+        # on a sector boundary — significant on the 1024-byte-sector D format.
+        address = self._allocate_object(self._dir_format.size_in_bytes, sector_aligned=True)
         new_directory = _ADFSDirectory(
             name=dirname,
             title=dirname,
             parent_address=parent_disc_address,
-            disc_address=start_sector,
+            disc_address=address,
             entries=(),
             sequence_number=0,
+            signature=parent_dir.signature,
         )
-        self._dir_format.serialize(new_directory, dir_data)
+        self._write_directory_at(new_directory, address)
 
         # Add directory entry to parent
         new_entry = _ADFSDirectoryEntry(
@@ -2304,7 +2962,7 @@ class ADFS:
             load_address=0,
             exec_address=0,
             length=self._dir_format.size_in_bytes,
-            indirect_disc_address=start_sector,
+            indirect_disc_address=address,
             sequence_number=0,
             attributes=_ADFSRawAttributes(
                 owner_read=True,
@@ -2321,16 +2979,11 @@ class ADFS:
 
         new_entries = _insert_sorted(parent_dir.entries, new_entry)
         new_seq = (parent_dir.sequence_number + 1) & 0xFF
-
-        updated_parent = _ADFSDirectory(
-            name=parent_dir.name,
-            title=parent_dir.title,
-            parent_address=parent_dir.parent_address,
-            disc_address=parent_dir.disc_address,
-            entries=new_entries,
-            sequence_number=new_seq,
+        self._persist_directory(
+            self._with_entries(parent_dir, new_entries, new_seq),
+            parent_disc_address,
+            path_parts[:-1],
         )
-        self._write_directory_at(updated_parent, parent_disc_address)
 
     def _rmdir(self, path_parts: list[str]) -> None:
         """Remove an empty directory from the disc image."""
@@ -2350,25 +3003,17 @@ class ADFS:
         if subdir.entries:
             raise ADFSDirectoryNotEmptyError(f"'{dirname}' is not empty")
 
-        # Free the directory's sectors
-        dir_sectors = self._dir_format.size_in_sectors
-        self._fsm.free(existing.indirect_disc_address, dir_sectors)
+        self._release_object(parent_dir, parent_disc_address, existing)
 
-        # Remove entry from parent
         new_entries = tuple(
             e for e in parent_dir.entries if _name_key(e.name) != _name_key(dirname)
         )
         new_seq = (parent_dir.sequence_number + 1) & 0xFF
-
-        updated_dir = _ADFSDirectory(
-            name=parent_dir.name,
-            title=parent_dir.title,
-            parent_address=parent_dir.parent_address,
-            disc_address=parent_dir.disc_address,
-            entries=new_entries,
-            sequence_number=new_seq,
+        self._persist_directory(
+            self._with_entries(parent_dir, new_entries, new_seq),
+            parent_disc_address,
+            path_parts[:-1],
         )
-        self._write_directory_at(updated_dir, parent_disc_address)
 
     def _rename(self, old_parts: list[str], new_parts: list[str]) -> None:
         """Rename or move a file or directory.
@@ -2410,15 +3055,9 @@ class ADFS:
             )
             new_entries = _insert_sorted(remaining, renamed)
             new_seq = (src_dir.sequence_number + 1) & 0xFF
-            updated = _ADFSDirectory(
-                name=src_dir.name,
-                title=src_dir.title,
-                parent_address=src_dir.parent_address,
-                disc_address=src_dir.disc_address,
-                entries=new_entries,
-                sequence_number=new_seq,
+            self._write_directory_at(
+                self._with_entries(src_dir, new_entries, new_seq), src_disc_address
             )
-            self._write_directory_at(updated, src_disc_address)
         else:
             # Cross-directory move: check capacity, remove from source, add to destination
             if len(dst_dir.entries) >= self._dir_format.max_entries:
@@ -2431,30 +3070,18 @@ class ADFS:
                 e for e in src_dir.entries if _name_key(e.name) != _name_key(old_name)
             )
             src_seq = (src_dir.sequence_number + 1) & 0xFF
-            updated_src = _ADFSDirectory(
-                name=src_dir.name,
-                title=src_dir.title,
-                parent_address=src_dir.parent_address,
-                disc_address=src_dir.disc_address,
-                entries=src_entries,
-                sequence_number=src_seq,
+            self._write_directory_at(
+                self._with_entries(src_dir, src_entries, src_seq), src_disc_address
             )
-            self._write_directory_at(updated_src, src_disc_address)
 
             # Add to destination (re-read since it may have changed if
             # nested), keeping the directory sorted.
             dst_dir = self._read_directory_at(dst_disc_address)
             dst_entries = _insert_sorted(dst_dir.entries, renamed)
             dst_seq = (dst_dir.sequence_number + 1) & 0xFF
-            updated_dst = _ADFSDirectory(
-                name=dst_dir.name,
-                title=dst_dir.title,
-                parent_address=dst_dir.parent_address,
-                disc_address=dst_dir.disc_address,
-                entries=dst_entries,
-                sequence_number=dst_seq,
+            self._write_directory_at(
+                self._with_entries(dst_dir, dst_entries, dst_seq), dst_disc_address
             )
-            self._write_directory_at(updated_dst, dst_disc_address)
 
     def _set_locked(self, path_parts: list[str], locked: bool) -> None:
         """Set or clear the locked attribute on a file."""
@@ -2493,16 +3120,11 @@ class ADFS:
             for e in parent_dir.entries
         )
         new_seq = (parent_dir.sequence_number + 1) & 0xFF
-
-        updated_dir = _ADFSDirectory(
-            name=parent_dir.name,
-            title=parent_dir.title,
-            parent_address=parent_dir.parent_address,
-            disc_address=parent_dir.disc_address,
-            entries=new_entries,
-            sequence_number=new_seq,
+        self._persist_directory(
+            self._with_entries(parent_dir, new_entries, new_seq),
+            parent_disc_address,
+            path_parts[:-1],
         )
-        self._write_directory_at(updated_dir, parent_disc_address)
 
     def _chmod(self, path_parts: list[str], access: int) -> None:
         """Set access attributes on a file or directory."""
@@ -2542,16 +3164,11 @@ class ADFS:
             for e in parent_dir.entries
         )
         new_seq = (parent_dir.sequence_number + 1) & 0xFF
-
-        updated_dir = _ADFSDirectory(
-            name=parent_dir.name,
-            title=parent_dir.title,
-            parent_address=parent_dir.parent_address,
-            disc_address=parent_dir.disc_address,
-            entries=new_entries,
-            sequence_number=new_seq,
+        self._persist_directory(
+            self._with_entries(parent_dir, new_entries, new_seq),
+            parent_disc_address,
+            path_parts[:-1],
         )
-        self._write_directory_at(updated_dir, parent_disc_address)
 
     def _set_load_address(self, path_parts: list[str], address: int) -> None:
         """Set load address on a file or directory."""
@@ -2577,16 +3194,11 @@ class ADFS:
             for e in parent_dir.entries
         )
         new_seq = (parent_dir.sequence_number + 1) & 0xFF
-
-        updated_dir = _ADFSDirectory(
-            name=parent_dir.name,
-            title=parent_dir.title,
-            parent_address=parent_dir.parent_address,
-            disc_address=parent_dir.disc_address,
-            entries=new_entries,
-            sequence_number=new_seq,
+        self._persist_directory(
+            self._with_entries(parent_dir, new_entries, new_seq),
+            parent_disc_address,
+            path_parts[:-1],
         )
-        self._write_directory_at(updated_dir, parent_disc_address)
 
     def _set_exec_address(self, path_parts: list[str], address: int) -> None:
         """Set exec address on a file or directory."""
@@ -2612,16 +3224,11 @@ class ADFS:
             for e in parent_dir.entries
         )
         new_seq = (parent_dir.sequence_number + 1) & 0xFF
-
-        updated_dir = _ADFSDirectory(
-            name=parent_dir.name,
-            title=parent_dir.title,
-            parent_address=parent_dir.parent_address,
-            disc_address=parent_dir.disc_address,
-            entries=new_entries,
-            sequence_number=new_seq,
+        self._persist_directory(
+            self._with_entries(parent_dir, new_entries, new_seq),
+            parent_disc_address,
+            path_parts[:-1],
         )
-        self._write_directory_at(updated_dir, parent_disc_address)
 
 
 def _assert_entries_sorted(entries: tuple[_ADFSDirectoryEntry, ...]) -> None:
@@ -2665,22 +3272,165 @@ def _insert_sorted(
     return tuple(items)
 
 
-def _detect_directory_format(unified: UnifiedDisc) -> ADFSDirectoryFormat:
-    """Detect the directory format by checking for known signatures.
+#: The emulator-header offset some hard disc images (``.hdf``/``.hd4``) prepend:
+#: the whole FileCore disc is shifted by this many bytes (modulo the disc size).
+_HDF_HEADER_OFFSET = 0x200
 
-    For old map discs, the root directory starts at sector 2 (offset 0x200).
-    Check for "Hugo" at offset 0x201 (old directory) or "Nick" at 0x401 (new directory).
+
+def _try_new_map(unified: UnifiedDisc) -> "NewMap | None":
+    """Return a :class:`NewMap` if this disc uses the New Map, else ``None``.
+
+    Probes for the FileCore disc record at the disc start and, failing that, at
+    the 0x200 emulator-header offset that some hard disc images prepend.
+    """
+    for base_offset in (0, _HDF_HEADER_OFFSET):
+        new_map = _try_new_map_at(unified, base_offset)
+        if new_map is not None:
+            return new_map
+    return None
+
+
+def _try_new_map_at(unified: UnifiedDisc, base_offset: int) -> "NewMap | None":
+    """Try to read a New Map whose disc starts *base_offset* bytes into the image.
+
+    Confirms a plausible disc record with the relevant zone check, so an Old-map
+    disc (whose leading sectors are a free-space map, not a disc record) or a
+    wrong header offset is not misread.
+    """
+    from oaknut.adfs.new_map import calculate_zone_check, compute_bootmap
+
+    base = base_offset // _ADFS_BYTES_PER_SECTOR
+    if unified.num_sectors < base + _bytes_to_sectors(0xE00):
+        return None
+
+    # Single-zone (E/E+): disc record at 0x04, zone 0 at the disc start.
+    single = DiscRecord.parse(unified.sector_range(base, 1), offset=0x04)
+    if single.looks_valid() and single.nzones == 1:
+        sectors = single.sector_size // _ADFS_BYTES_PER_SECTOR
+        zone0 = unified.sector_range(base, sectors)
+        if zone0[0x00] == calculate_zone_check(zone0, 0, single.log2_sector_size):
+            return _new_map_over(unified, single, base_offset)
+
+    # Multi-zone (F/F+/hard disc): a partial disc record in the boot block at
+    # 0xDC0 locates the mid-disc map and the full disc record.
+    boot = unified.sector_range(base, _bytes_to_sectors(0xE00))
+    partial = DiscRecord.parse(boot, offset=0xDC0)
+    if partial.looks_valid() and partial.nzones > 1:
+        bootmap = compute_bootmap(partial)
+        physical = bootmap + base_offset
+        first = physical // _ADFS_BYTES_PER_SECTOR
+        map_sectors = 2 * partial.nzones * partial.sector_size // _ADFS_BYTES_PER_SECTOR
+        if physical % _ADFS_BYTES_PER_SECTOR == 0 and first + map_sectors <= unified.num_sectors:
+            drview = unified.sector_range(first, _bytes_to_sectors(0x100))
+            full = DiscRecord.parse(drview, offset=0x04)
+            if full.looks_valid() and full.nzones == partial.nzones:
+                map_sectors = full.nzones * full.sector_size // _ADFS_BYTES_PER_SECTOR
+                map_view = unified.sector_range(first, map_sectors)
+                if all(
+                    map_view[zone * full.sector_size]
+                    == calculate_zone_check(map_view, zone, full.log2_sector_size)
+                    for zone in range(full.nzones)
+                ):
+                    return _new_map_over(unified, full, base_offset)
+
+    return None
+
+
+def _bytes_to_sectors(num_bytes: int) -> int:
+    """Number of 256-byte sectors needed to cover *num_bytes*."""
+    return (num_bytes + _ADFS_BYTES_PER_SECTOR - 1) // _ADFS_BYTES_PER_SECTOR
+
+
+def _new_map_over(
+    unified: UnifiedDisc, disc_record: DiscRecord, base_offset: int = 0
+) -> NewMap:
+    """Build a :class:`NewMap` over *unified* using *disc_record*.
+
+    Shared by New Map detection and blank-image creation. The map view spans
+    both zone-0 copies (primary + duplicate) so mutations can refresh the copy.
+    *base_offset* is the emulator-header shift (0 for a plain image, 0x200 for a
+    ``.hdf``): every disc address is translated to a physical image offset by
+    adding it modulo the disc size, so an object at the very end that wraps into
+    the header region is still read correctly. The read/write closures resolve
+    those physical offsets to the covering sectors, for any map granularity.
+    """
+    from oaknut.adfs.new_map import compute_bootmap
+
+    secsize = disc_record.sector_size
+    disc_size = disc_record.disc_size
+    bootmap = compute_bootmap(disc_record)
+    # Both map copies: nzones zones × 2 copies, starting at bootmap.
+    map_sectors = (2 * disc_record.nzones * secsize) // _ADFS_BYTES_PER_SECTOR
+    map_view = unified.sector_range((bootmap + base_offset) // _ADFS_BYTES_PER_SECTOR, map_sectors)
+
+    def _read_physical(physical: int, length: int) -> bytes:
+        first = physical // _ADFS_BYTES_PER_SECTOR
+        count = (physical + length + _ADFS_BYTES_PER_SECTOR - 1) // _ADFS_BYTES_PER_SECTOR - first
+        data = unified.sector_range(first, count)
+        start = physical - first * _ADFS_BYTES_PER_SECTOR
+        return bytes(data[start : start + length])
+
+    def read_bytes(disc_address: int, length: int) -> bytes:
+        physical = (disc_address + base_offset) % disc_size
+        if physical + length <= disc_size:
+            return _read_physical(physical, length)
+        head = disc_size - physical
+        return _read_physical(physical, head) + _read_physical(0, length - head)
+
+    def _write_physical(physical: int, data: bytes) -> None:
+        first = physical // _ADFS_BYTES_PER_SECTOR
+        end = physical + len(data) + _ADFS_BYTES_PER_SECTOR - 1
+        count = end // _ADFS_BYTES_PER_SECTOR - first
+        view = unified.sector_range(first, count)
+        start = physical - first * _ADFS_BYTES_PER_SECTOR
+        view[start : start + len(data)] = data
+
+    def write_bytes(disc_address: int, data: bytes) -> None:
+        physical = (disc_address + base_offset) % disc_size
+        if physical + len(data) <= disc_size:
+            _write_physical(physical, data)
+            return
+        head = disc_size - physical
+        _write_physical(physical, data[:head])
+        _write_physical(0, data[head:])
+
+    return NewMap(map_view, disc_record, read_bytes, write_bytes, base_offset=base_offset)
+
+
+def _detect_directory_layout(unified: UnifiedDisc) -> tuple[ADFSDirectoryFormat, int]:
+    """Detect the directory format and root sector for an old-map disc.
+
+    Returns ``(format, root_sector)``:
+
+      * Old directory (S/M/L) — root at sector 2 (0x200);
+      * New directory (D) — root at sector 4 (0x400).
+
+    Each candidate is confirmed by parsing it in full (signature, tail and,
+    for the New directory, the ROR-13 check byte), so a "Hugo"/"Nick" byte
+    pattern that is really file data cannot be mistaken for a root.
 
     Raises:
-        ADFSError: If no valid directory signature is found.
+        ADFSError: If neither layout yields a valid root directory.
     """
-    # Check for old directory: "Hugo" at 0x201
-    root_data = unified.sector_range(2, 5)
-    sig = root_data[1:5]
-    if sig == b"Hugo" or sig == b"Nick":
-        return OldDirectoryFormat()
+    old = OldDirectoryFormat()
+    try:
+        old_data = unified.sector_range(_OLD_MAP_ROOT_SECTOR, old.size_in_sectors)
+        old.parse(old_data, _OLD_MAP_ROOT_SECTOR)
+        return old, _OLD_MAP_ROOT_SECTOR
+    except ADFSDirectoryError:
+        pass
 
+    new = NewDirectoryFormat()
+    try:
+        new_data = unified.sector_range(_D_MAP_ROOT_SECTOR, new.size_in_sectors)
+        new.parse(new_data, _D_MAP_ROOT_SECTOR)
+        return new, _D_MAP_ROOT_SECTOR
+    except ADFSDirectoryError:
+        pass
+
+    sig2 = bytes(unified.sector_range(_OLD_MAP_ROOT_SECTOR, 1)[1:5])
+    sig4 = bytes(unified.sector_range(_D_MAP_ROOT_SECTOR, 1)[1:5])
     raise ADFSError(
-        f"Unrecognised ADFS directory format. "
-        f"Expected 'Hugo' or 'Nick' at offset 0x201, got {sig!r}"
+        "Unrecognised ADFS directory format. Expected a valid Old directory at "
+        f"0x200 (got signature {sig2!r}) or New directory at 0x400 (got {sig4!r})."
     )

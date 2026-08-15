@@ -50,6 +50,20 @@ def test_readonly_file_round_trips_unchanged(tmp_path: Path) -> None:
         filepath.chmod(stat.S_IRUSR | stat.S_IWUSR)
 
 
+def test_writable_false_forces_readonly_on_a_writable_file(tmp_path: Path) -> None:
+    # A writable file opened with writable=False must not be mutable, so a
+    # read-only caller (e.g. scanning committed fixtures) cannot alter it.
+    filepath = tmp_path / "rw.img"
+    original = bytes(range(256)) * 2
+    filepath.write_bytes(original)
+    assert os.access(filepath, os.W_OK)  # the file itself is writable
+    with open_image_mmap(filepath, writable=False) as (mm, writable):
+        assert not writable
+        with pytest.raises((TypeError, ValueError)):
+            mm[0] = 0x42
+    assert filepath.read_bytes() == original
+
+
 def test_missing_file_raises(tmp_path: Path) -> None:
     with pytest.raises(FileNotFoundError):
         with open_image_mmap(tmp_path / "nope.img"):

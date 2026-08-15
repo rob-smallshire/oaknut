@@ -45,8 +45,32 @@ _WORKSPACE_ROOT = Path(__file__).resolve().parents[3]
 #     encoding that decodes correctly but re-encodes to the canonical form.
 #   * tokens-after-REM — the program stores keyword tokens after a REM,
 #     which the ROM crunch (and ours) never produces from text.
+#   * BASIC V — the program is an Arthur / RISC OS BASIC V program (the ADFS
+#     specimens on D_Arthur_Welcome, D_RISCOS310_App1 and E_RISCOS310_NewLook).
+#     It carries BASIC V extended tokens (C6/C7/C8) and V-only constructs; the
+#     de-tokeniser reads them via the BASIC V dialect, but re-crunching the
+#     listing under BASIC II rules cannot reproduce the original bytes (one,
+#     FontDes, re-crunches to a statement line the II tokeniser reads as an
+#     out-of-range line number). This is the same class as the BASIC IV
+#     MasterWelcome entries — a property of the program, not our II codec.
+#     Tracked by issue #45 (tokenise/detokenise dialect asymmetry); when a
+#     dialect-aware tokeniser lands, remove the twelve BASIC V entries below
+#     so this test enforces byte-exact BASIC V round-tripping.
+#     https://github.com/rob-smallshire/oaknut/issues/45
 KNOWN_LIMITATIONS: frozenset[str] = frozenset(
     {
+        "D_Arthur_Welcome.adf:$.Apps.FontAlias",
+        "D_Arthur_Welcome.adf:$.Apps.FontDes",
+        "D_Arthur_Welcome.adf:$.Apps.MusicEd",
+        "D_Arthur_Welcome.adf:$.Apps.Painting",
+        "D_Arthur_Welcome.adf:$.Tutorials.KeyTutor",
+        "D_Arthur_Welcome.adf:$.Tutorials.ScreenDemo",
+        "D_Arthur_Welcome.adf:$.Utilities.SEdit",
+        "D_RISCOS310_App1.adf:$.!PrinterDM.!RunImage",
+        "D_RISCOS310_App1.adf:$.!PrinterDM.Library",
+        "D_RISCOS310_App1.adf:$.!PrinterPS.!RunImage",
+        "D_RISCOS310_App1.adf:$.!PrinterPS.Library",
+        "E_RISCOS310_NewLook.adf:$.!NewLook.!RunImage",
         "Disc999-SphinxAdventureFIN.ssd:$.SPHINX",
         "L3-Utils.dsd:U.Init",
         "L3FS-ISW.adl:$.COPYF",
@@ -116,16 +140,19 @@ def _programs() -> Iterator[tuple[str, bytes]]:
     )
     for image in images:
         suffix = image.suffix.lower()
+        # Open every committed image read-only: this sweep only reads, and a
+        # read-only mapping guarantees the corpus files on disc cannot be
+        # mutated (a stray write raises rather than silently persisting).
         try:
             if suffix in (".ssd", ".dsd"):
                 from oaknut.dfs import DFS
 
-                with DFS.from_file(image) as disc:
+                with DFS.from_file(image, read_only=True) as disc:
                     files = list(_walk(disc.root))
             else:
                 from oaknut.adfs import ADFS
 
-                with ADFS.from_file(image) as disc:
+                with ADFS.from_file(image, read_only=True) as disc:
                     files = list(_walk(disc.root))
         except Exception:  # noqa: BLE001 - image that won't open; skip
             continue

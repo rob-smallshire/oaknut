@@ -299,11 +299,16 @@ class OldFreeSpaceMap:
 
     # --- Mutation ---
 
-    def allocate(self, num_sectors: int) -> int:
+    def allocate(self, num_sectors: int, alignment: int = 1) -> int:
         """Allocate contiguous sectors using first-fit.
 
         Args:
             num_sectors: Number of sectors to allocate.
+            alignment: Required alignment of the start sector, in sectors.
+                Defaults to 1 (no alignment). The D format passes 4 so its New
+                directories land on a 1024-byte sector boundary, which RISC OS
+                requires; any non-aligned prefix of the chosen free region is
+                left free for files, which have no alignment requirement.
 
         Returns:
             Start sector of the allocated region.
@@ -321,19 +326,28 @@ class OldFreeSpaceMap:
             start = _read_24bit_le(self._data, _FREE_START_OFFSET + offset)
             length = _read_24bit_le(self._data, _FREE_LEN_OFFSET + offset)
 
-            if length >= num_sectors:
-                if length == num_sectors:
-                    # Exact fit — remove this entry by shifting subsequent ones down
-                    self._remove_entry(i, n)
-                else:
-                    # Partial fit — shrink this entry
-                    new_start = start + num_sectors
-                    new_length = length - num_sectors
-                    _write_24bit_le(self._data, _FREE_START_OFFSET + offset, new_start)
-                    _write_24bit_le(self._data, _FREE_LEN_OFFSET + offset, new_length)
+            aligned_start = ((start + alignment - 1) // alignment) * alignment
+            prefix = aligned_start - start
+            if prefix + num_sectors > length:
+                continue
 
-                self._recalculate_checksums()
-                return start
+            suffix_start = aligned_start + num_sectors
+            suffix_length = (start + length) - suffix_start
+
+            if prefix > 0:
+                # Keep the non-aligned prefix free in this entry...
+                _write_24bit_le(self._data, _FREE_LEN_OFFSET + offset, prefix)
+                if suffix_length > 0:
+                    # ...and re-insert the tail after it as a new entry.
+                    self._insert_entry(i + 1, self.num_entries, suffix_start, suffix_length)
+            elif suffix_length > 0:
+                _write_24bit_le(self._data, _FREE_START_OFFSET + offset, suffix_start)
+                _write_24bit_le(self._data, _FREE_LEN_OFFSET + offset, suffix_length)
+            else:
+                self._remove_entry(i, n)
+
+            self._recalculate_checksums()
+            return aligned_start
 
         raise ADFSDiscFullError(f"No free space region large enough for {num_sectors} sectors")
 

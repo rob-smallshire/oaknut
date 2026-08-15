@@ -45,6 +45,13 @@ class Geometry:
     layout was built from — a hard disc's, carried so a filesystem can
     *report* it (the surface specs themselves linearise CHS away). They
     are ``None`` when the source did not record CHS.
+
+    ``variant`` is an optional filesystem-specific format tag a geometry was
+    requested as, for the cases where several logical formats share one
+    physical size and so cannot be told apart by geometry alone (ADFS D, E
+    and E+ are all 800K; F and F+ are both 1.6M; G and G+ are both 3.2M).
+    A filesystem's ``create`` reads it to pick the on-disc layout. It is
+    ``None`` for geometries that are unambiguous by size.
     """
 
     surface_specs: tuple[SurfaceSpec, ...]
@@ -52,6 +59,7 @@ class Geometry:
     cylinders: int | None = None
     heads: int | None = None
     sectors_per_track: int | None = None
+    variant: str | None = None
 
     def __post_init__(self) -> None:
         if not self.surface_specs:
@@ -85,12 +93,14 @@ def floppy_geometry(
     bytes_per_sector: int = BYTES_PER_SECTOR,
     interleaved: bool = True,
     label: str = "",
+    variant: str | None = None,
 ) -> Geometry:
     """Build a floppy :class:`Geometry`.
 
     *sides* is 1 or 2; for double-sided, *interleaved* selects the
     Acorn-conventional interleaved layout (side 0/side 1 alternating per
-    track) over the sequential one.
+    track) over the sequential one. *variant* tags a format that shares its
+    physical size with a sibling (see :class:`Geometry`).
     """
     if sides == 1:
         specs = [single_sided_spec(tracks, sectors_per_track, bytes_per_sector)]
@@ -99,7 +109,7 @@ def floppy_geometry(
         specs = builder(tracks, sectors_per_track, bytes_per_sector)
     else:
         raise GeometryError(f"floppy sides must be 1 or 2, got {sides}")
-    return Geometry(tuple(specs), label=label)
+    return Geometry(tuple(specs), label=label, variant=variant)
 
 
 def winchester_geometry(

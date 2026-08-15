@@ -42,11 +42,33 @@ from oaknut.filesystem.wildcards import ACORN_WILDCARDS, AcornWildcards
 # The old free-space map occupies sectors 0–1.
 _MAP_BYTES = 512
 
-# ADFS floppy geometries use 16 sectors per track.
+# ADFS floppy geometries. The old-map S/M/L discs use 256-byte sectors (16
+# per track); the New-map/New-directory family (D onwards) uses 1024-byte
+# sectors. D, E and E+ share a physical size (800K), as do F/F+ (1.6M) and
+# G/G+ (3.2M), so each carries a ``variant`` tag that ``create`` reads to
+# pick the on-disc layout — geometry alone cannot tell them apart.
+def _adfs_new_floppy(variant: str, *, sectors_per_track: int, label: str) -> Geometry:
+    return floppy_geometry(
+        tracks=80,
+        sides=2,
+        sectors_per_track=sectors_per_track,
+        bytes_per_sector=1024,
+        label=label,
+        variant=variant,
+    )
+
+
 _ADFS_PRESETS = {
     "s": floppy_geometry(tracks=40, sides=1, sectors_per_track=16, label="ADFS S (40T SS)"),
     "m": floppy_geometry(tracks=80, sides=1, sectors_per_track=16, label="ADFS M (80T SS)"),
     "l": floppy_geometry(tracks=80, sides=2, sectors_per_track=16, label="ADFS L (80T DS)"),
+    "d": _adfs_new_floppy("d", sectors_per_track=5, label="ADFS D (800K, New dir)"),
+    "e": _adfs_new_floppy("e", sectors_per_track=5, label="ADFS E (800K, New map)"),
+    "e+": _adfs_new_floppy("e+", sectors_per_track=5, label="ADFS E+ (800K, Big dir)"),
+    "f": _adfs_new_floppy("f", sectors_per_track=10, label="ADFS F (1.6M, New map)"),
+    "f+": _adfs_new_floppy("f+", sectors_per_track=10, label="ADFS F+ (1.6M, Big dir)"),
+    "g": _adfs_new_floppy("g", sectors_per_track=20, label="ADFS G (3.2M, New map)"),
+    "g+": _adfs_new_floppy("g+", sectors_per_track=20, label="ADFS G+ (3.2M, Big dir)"),
 }
 
 
@@ -404,7 +426,18 @@ class ADFS(Filesystem):
         }.get(suffix.lower())
 
     def create(self, filepath, geometry: Geometry, *, title: str) -> None:
-        from oaknut.adfs import ADFS_L, ADFS_M, ADFS_S
+        from oaknut.adfs import (
+            ADFS_D,
+            ADFS_E,
+            ADFS_E_PLUS,
+            ADFS_F,
+            ADFS_F_PLUS,
+            ADFS_G,
+            ADFS_G_PLUS,
+            ADFS_L,
+            ADFS_M,
+            ADFS_S,
+        )
 
         if geometry.cylinders is not None:
             # Hard disc: create from the CHS the geometry carries.
@@ -417,10 +450,28 @@ class ADFS(Filesystem):
             ):
                 pass
             return
-        # Floppy: match the geometry's size to a named ADFS format.
-        by_size = {fmt.total_bytes: fmt for fmt in (ADFS_S, ADFS_M, ADFS_L)}
-        adfs_format = by_size.get(geometry.image_size)
-        if adfs_format is None:
-            raise FilesystemError(f"no ADFS floppy format for a {geometry.image_size}-byte image")
+        # Floppy. A variant tag names the exact format for the New-map/New-dir
+        # family (whose members share a size); otherwise the old-map S/M/L
+        # discs are unambiguous by size.
+        by_variant = {
+            "d": ADFS_D,
+            "e": ADFS_E,
+            "e+": ADFS_E_PLUS,
+            "f": ADFS_F,
+            "f+": ADFS_F_PLUS,
+            "g": ADFS_G,
+            "g+": ADFS_G_PLUS,
+        }
+        if geometry.variant is not None:
+            adfs_format = by_variant.get(geometry.variant)
+            if adfs_format is None:
+                raise FilesystemError(f"unknown ADFS format variant {geometry.variant!r}")
+        else:
+            by_size = {fmt.total_bytes: fmt for fmt in (ADFS_S, ADFS_M, ADFS_L)}
+            adfs_format = by_size.get(geometry.image_size)
+            if adfs_format is None:
+                raise FilesystemError(
+                    f"no ADFS floppy format for a {geometry.image_size}-byte image"
+                )
         with _ADFSDisc.create_file(filepath, adfs_format, title=title):
             pass

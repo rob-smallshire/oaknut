@@ -241,10 +241,16 @@ class TestADFSHardDiscSmallImages:
 
 
 class TestADFSHardDiscMissingCompanion:
-    def test_dat_without_dsc_raises(self, tmp_path):
+    def test_dat_without_dsc_reads_by_content(self, tmp_path):
+        # A .dsc is no longer required: New Map hard discs carry their geometry
+        # in the disc record, so a .dat without a sidecar is read by content.
+        # An image that is not valid ADFS raises an ADFS error, not a missing-
+        # sidecar error.
+        from oaknut.adfs.exceptions import ADFSError
+
         dat_filepath = tmp_path / "test.dat"
         dat_filepath.write_bytes(b"\x00" * 1024)
-        with pytest.raises(FileNotFoundError, match=r"\.dsc"):
+        with pytest.raises(ADFSError):
             with ADFS.from_file(dat_filepath):
                 pass
 

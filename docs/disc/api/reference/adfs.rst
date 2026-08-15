@@ -41,6 +41,20 @@ instead).
 
 .. autodata:: oaknut.adfs.ADFS_L
 
+.. autodata:: oaknut.adfs.ADFS_D
+
+.. autodata:: oaknut.adfs.ADFS_E
+
+.. autodata:: oaknut.adfs.ADFS_E_PLUS
+
+.. autodata:: oaknut.adfs.ADFS_F
+
+.. autodata:: oaknut.adfs.ADFS_F_PLUS
+
+.. autodata:: oaknut.adfs.ADFS_G
+
+.. autodata:: oaknut.adfs.ADFS_G_PLUS
+
 .. autodata:: oaknut.adfs.IMAGE_FORMAT_BY_EXTENSION
 
 
