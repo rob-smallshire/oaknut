@@ -747,3 +747,143 @@ def format_blank_single_zone(data: SectorsView, disc_record: DiscRecord, root_si
         data[secsize + i] = data[i]
 
     return secsize * 2  # root disc byte address
+
+
+# ADFS F: 1.6MB, four-zone New Map, boot block at 0xC00.
+_F_ZONE_SPARE = 1600
+_BOOT_BLOCK_OFFSET = 0xC00
+_BOOT_BLOCK_SIZE = 0x200
+_BOOT_CHECKSUM_OFFSET = 0xDFF
+_PARTIAL_DISC_RECORD_OFFSET = 0xDC0
+
+
+def f_disc_record(title: str, *, disc_id: int = 0, boot_option: int = 0) -> DiscRecord:
+    """Build the disc record for a blank 1.6MB four-zone ADFS F disc."""
+    return DiscRecord(
+        log2_sector_size=10,
+        sectors_per_track=10,
+        heads=2,
+        density=4,
+        idlen=15,
+        log2_bytes_per_map_bit=6,  # 64 bytes per map bit
+        skew=1,
+        boot_option=boot_option,
+        low_sector=0,
+        nzones=4,
+        zone_spare=_F_ZONE_SPARE,
+        root=0x209,
+        disc_size=1638400,
+        disc_id=disc_id,
+        disc_name=title[:10],
+        disc_type=_DISCTYPE_NON_PLUS,
+    )
+
+
+def _boot_block_checksum(data: SectorsView, offset: int, size: int) -> int:
+    """Additive-with-carry checksum (new-map accumulator 0), skipping the last byte."""
+    acc = 0
+    for p in range(size - 2, -1, -1):
+        carry = acc >> 8
+        acc &= 0xFF
+        acc += data[offset + p] + carry
+    return acc & 0xFF
+
+
+def _write_partial_disc_record(data: SectorsView, dr: DiscRecord) -> None:
+    o = _PARTIAL_DISC_RECORD_OFFSET
+    data[o + 0x00] = dr.log2_sector_size
+    data[o + 0x01] = dr.sectors_per_track
+    data[o + 0x02] = dr.heads
+    data[o + 0x03] = dr.density
+    data[o + 0x04] = dr.idlen
+    data[o + 0x05] = dr.log2_bytes_per_map_bit
+    data[o + 0x06] = dr.skew
+    data[o + 0x08] = dr.low_sector
+    data[o + 0x09] = dr.nzones
+    _write_le(data, o + 0x0A, dr.zone_spare, 2)
+    _write_le(data, o + 0x0C, dr.root, 4)
+    _write_le(data, o + 0x10, dr.disc_size, 4)
+
+
+def format_blank_f(data: SectorsView, disc_record: DiscRecord, root_size: int) -> int:
+    """Lay down a blank four-zone ADFS F disc; return the root's disc byte address.
+
+    *data* is the whole image. Writes the boot block (defect terminator, partial
+    disc record, checksum), then the map at ``bootmap`` (mid-disc): a full disc
+    record in zone 0, per-zone headers, the system fragment (id 2, split between
+    zone 0 and the middle zone, covering the two map copies plus the root), the
+    end-of-disc defect marker (id 1), per-zone free terminators and FreeLink
+    chains, every zone's check byte, and the duplicate map copy.
+    """
+    dr = disc_record
+    if dr.nzones <= 1:
+        raise ADFSMapError("format_blank_f is for multi-zone discs")
+    secsize = dr.sector_size
+    bpmb = dr.bytes_per_map_bit
+    idlen = dr.idlen
+    nzones = dr.nzones
+    zone_spare = dr.zone_spare
+    bootmap = compute_bootmap(dr)
+
+    # Boot block: defect-list terminator (0x20000000) and partial disc record.
+    data[_BOOT_BLOCK_OFFSET + 3] = 0x20
+    _write_partial_disc_record(data, dr)
+    data[_BOOT_CHECKSUM_OFFSET] = _boot_block_checksum(
+        data, _BOOT_BLOCK_OFFSET, _BOOT_BLOCK_SIZE
+    )
+
+    # Full disc record in zone 0, and per-zone cross-check bytes (0xFF marks the
+    # last zone; the others are zero — their XOR is the single-zone 0xFF marker).
+    dr.serialise(data, bootmap + 0x04)
+    for zone in range(nzones):
+        data[bootmap + zone * secsize + _ZONE_CROSSCHECK_OFFSET] = (
+            0xFF if zone == nzones - 1 else 0x00
+        )
+
+    map_bit = bootmap * 8  # image-bit base of the map
+
+    def alloc_start(zone: int) -> int:
+        return zone * secsize * 8 + (_ZONE0_MAP_START * 8 if zone == 0 else _ZONE_HEADER_SIZE * 8)
+
+    # System fragment (id 2): a part at the disc start (zone 0) and a part
+    # covering the map area itself (the middle zone).
+    middle = nzones // 2
+    zone0_frag_bits = 0x1000 // bpmb
+    middle_frag_bits = (secsize * nzones * 2 + root_size) // bpmb
+    free_start = {zone: alloc_start(zone) for zone in range(nzones)}
+    for zone, frag_bits in ((0, zone0_frag_bits), (middle, middle_frag_bits)):
+        start = alloc_start(zone)
+        write_bits(data, map_bit + start, idlen, 2)
+        write_bits(data, map_bit + start + frag_bits - 1, 1, 1)  # stop bit
+        free_start[zone] = start + frag_bits
+
+    # Per-zone free terminators (end of each zone's usable region). The
+    # position is measured from the end of the 4-byte zone header.
+    terminator_rel = _ZONE_HEADER_SIZE * 8 + (secsize * 8 - zone_spare - 1)
+    for zone in range(nzones):
+        write_bits(data, map_bit + zone * secsize * 8 + terminator_rel, 1, 1)
+
+    # End-of-disc marker: a terminator bit then a defect fragment (id 1).
+    eod_bit = (dr.disc_size // bpmb) + zone_spare * (nzones - 1) + 480 + 32
+    write_bits(data, map_bit + eod_bit - 1, 1, 1)
+    write_bits(data, map_bit + eod_bit, idlen, 1)
+
+    # FreeLink chains: each zone's header points to its single free area.
+    for zone in range(nzones):
+        header_bit = (zone * secsize + _ZONE_FREELINK_OFFSET) * 8
+        distance = free_start[zone] - header_bit
+        _write_le(data, bootmap + zone * secsize + _ZONE_FREELINK_OFFSET, 0x8000 | distance, 2)
+
+    # Every zone's check byte (computed over a copy of that zone), then
+    # duplicate the whole map into the second copy.
+    for zone in range(nzones):
+        zone_bytes = bytearray(
+            data[bootmap + zone * secsize + i] for i in range(secsize)
+        )
+        data[bootmap + zone * secsize + _ZONE_CHECK_OFFSET] = calculate_zone_check(
+            zone_bytes, 0, dr.log2_sector_size
+        )
+    for i in range(nzones * secsize):
+        data[bootmap + nzones * secsize + i] = data[bootmap + i]
+
+    return bootmap + nzones * secsize * 2  # root disc byte address

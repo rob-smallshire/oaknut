@@ -12,7 +12,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from oaknut.adfs.adfs import ADFS
+from oaknut.adfs.adfs import ADFS, ADFS_F
 from oaknut.adfs.new_map import DiscRecord, NewMap, compute_bootmap, write_bits
 
 _DIM_BLANK_F = (
@@ -93,6 +93,53 @@ def test_read_blank_f():
         assert list(adfs.root.iterdir()) == []
         assert adfs.validate() == []  # all four zone checks pass
         assert 0 < adfs.free_space < adfs.total_size
+
+
+def test_create_blank_f_validates_and_is_empty():
+    adfs = ADFS.create(ADFS_F, title="MadeF")
+    try:
+        assert adfs.is_new_map
+        assert adfs._map.disc_record.nzones == 4
+        assert adfs.total_size == 1638400
+        assert adfs.disc_name == "MadeF"
+        assert list(adfs.root.iterdir()) == []
+        assert adfs.validate() == []  # all four zone checks
+    finally:
+        adfs.close()
+
+
+def test_create_file_f_on_disk_reopens(tmp_path):
+    image = tmp_path / "blank.adf"
+    with ADFS.create_file(image, ADFS_F, title="DiscF") as adfs:
+        assert adfs.is_new_map
+    assert image.stat().st_size == 1638400
+    with ADFS.from_file(image) as adfs:
+        assert adfs.is_new_map
+        assert adfs._map.disc_record.nzones == 4
+        assert adfs.validate() == []
+        assert list(adfs.root.iterdir()) == []
+
+
+@pytest.mark.skipif(not _DIM_BLANK_F.exists(), reason="DIM reference blank not present")
+def test_created_f_matches_dim_structurally():
+    """Created blank F is byte-identical to DIM's except id and don't-care pads."""
+    dim = _DIM_BLANK_F.read_bytes()
+    adfs = ADFS.create(ADFS_F, title="ADFS\xa0F")
+    try:
+        raw = bytes(adfs._disc.sector_range(0, ADFS_F.total_sectors))
+    finally:
+        adfs.close()
+    bootmap = 0xC6800
+    # All four zone headers (FreeLink + CrossCheck) are byte-identical.
+    for zone in range(4):
+        zb = bootmap + zone * 1024
+        assert raw[zb + 1 : zb + 4] == dim[zb + 1 : zb + 4], f"zone {zone} header"
+    # The entire bitmap region (past zone 0's disc record) matches.
+    assert raw[bootmap + 0x40 : bootmap + 4 * 1024] == dim[bootmap + 0x40 : bootmap + 4 * 1024]
+    # Boot block: defect terminator, partial disc record and checksum.
+    assert raw[0xC00:0xC04] == dim[0xC00:0xC04]
+    assert raw[0xDC0:0xDD4] == dim[0xDC0:0xDD4]
+    assert raw[0xDFF] == dim[0xDFF]
 
 
 @pytest.mark.skipif(not _DIM_BLANK_F.exists(), reason="DIM reference blank not present")

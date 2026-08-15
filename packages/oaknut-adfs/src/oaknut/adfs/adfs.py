@@ -49,6 +49,8 @@ from oaknut.adfs.new_map import (
     DiscRecord,
     NewMap,
     e_disc_record,
+    f_disc_record,
+    format_blank_f,
     format_blank_single_zone,
 )
 from oaknut.discimage.surface import DiscImage, SurfaceSpec
@@ -242,6 +244,16 @@ ADFS_E = ADFSFormat(
     total_sectors=3200,
     total_bytes=819200,
     label="E",
+    new_map=True,
+)
+
+#: ADFS F — 1.6MB four-zone New Map with New directories. The map lives
+#: mid-disc, reached via a partial disc record in the boot block at 0xC00.
+ADFS_F = ADFSFormat(
+    surface_specs=[_flat_spec(6400)],
+    total_sectors=6400,
+    total_bytes=1638400,
+    label="F",
     new_map=True,
 )
 
@@ -1311,11 +1323,15 @@ def _initialise_new_map_blank(
     caller can build the :class:`NewMap` over the finished image. Currently
     ADFS E only (the single-zone shape).
     """
-    dr = e_disc_record(title, boot_option=boot_option)
     dir_format = NewDirectoryFormat()
-
     full = unified.sector_range(0, total_sectors)
-    root_address = format_blank_single_zone(full, dr, dir_format.size_in_bytes)
+    total_bytes = total_sectors * _ADFS_BYTES_PER_SECTOR
+    if total_bytes == ADFS_F.total_bytes:
+        dr = f_disc_record(title, boot_option=boot_option)
+        root_address = format_blank_f(full, dr, dir_format.size_in_bytes)
+    else:
+        dr = e_disc_record(title, boot_option=boot_option)
+        root_address = format_blank_single_zone(full, dr, dir_format.size_in_bytes)
 
     root_dir = _ADFSDirectory(
         name="$",
