@@ -11,7 +11,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from oaknut.adfs.adfs import ADFS
+from oaknut.adfs.adfs import ADFS, ADFS_E_PLUS, ADFS_F_PLUS
 from oaknut.adfs.directory import (
     BigDirectoryFormat,
     _ADFSDirectory,
@@ -110,6 +110,50 @@ def test_big_dir_check_byte_matches_real_blank():
     names_size = int.from_bytes(block[0x14:0x18], "little")
     got = _calculate_big_dir_check(block, dir_size, name_len, num_entries, names_size)
     assert got == block[dir_size - 1]
+
+
+@pytest.mark.parametrize(
+    "fmt,nzones,size", [(ADFS_E_PLUS, 1, 819200), (ADFS_F_PLUS, 4, 1638400)]
+)
+def test_create_blank_plus(fmt, nzones, size):
+    adfs = ADFS.create(fmt, title="MadePlus")
+    try:
+        assert adfs.is_new_map
+        assert isinstance(adfs._dir_format, BigDirectoryFormat)
+        assert adfs._map.disc_record.format_version == 1
+        assert adfs._map.disc_record.nzones == nzones
+        assert adfs.total_size == size
+        assert list(adfs.root.iterdir()) == []
+        assert adfs.validate() == []
+    finally:
+        adfs.close()
+
+
+def test_create_blank_e_plus_on_disk(tmp_path):
+    image = tmp_path / "eplus.adf"
+    with ADFS.create_file(image, ADFS_E_PLUS, title="DiscEPlus") as adfs:
+        assert isinstance(adfs._dir_format, BigDirectoryFormat)
+    assert image.stat().st_size == 819200
+    with ADFS.from_file(image) as adfs:
+        assert adfs.is_new_map
+        assert isinstance(adfs._dir_format, BigDirectoryFormat)
+        assert adfs.validate() == []
+        assert list(adfs.root.iterdir()) == []
+
+
+@pytest.mark.skipif(not (_DIM / "ADFS_E+.adf").exists(), reason="DIM E+ blank not present")
+def test_created_e_plus_matches_dim_structurally():
+    dim = (_DIM / "ADFS_E+.adf").read_bytes()
+    adfs = ADFS.create(ADFS_E_PLUS, title="ADFS\xa0E+")
+    try:
+        raw = bytes(adfs._disc.sector_range(0, ADFS_E_PLUS.total_sectors))
+    finally:
+        adfs.close()
+    # Bitmap (system fragment + separate root fragment) and root Big directory
+    # are byte-identical; only disc id, its zone-check effect and name padding
+    # differ (all within the handful of allowed offsets).
+    assert raw[0x40:0x400] == dim[0x40:0x400], "bitmap differs"
+    assert raw[0x800:0x1000] == dim[0x800:0x1000], "root Big directory differs"
 
 
 @pytest.mark.skipif(not (_DIM / "ADFS_E+.adf").exists(), reason="DIM E+ blank not present")

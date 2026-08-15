@@ -50,7 +50,9 @@ from oaknut.adfs.new_map import (
     DiscRecord,
     NewMap,
     e_disc_record,
+    e_plus_disc_record,
     f_disc_record,
+    f_plus_disc_record,
     format_blank_f,
     format_blank_single_zone,
 )
@@ -119,6 +121,8 @@ class ADFSFormat:
     #: The New Map shapes always do; the D format pairs New directories with
     #: the Old map, so this is set independently. S/M/L use Old directories.
     new_directory: bool = False
+    #: Whether this shape uses Big directories (the New Map ``+`` formats).
+    big_directories: bool = False
 
     def __post_init__(self):
         if not self.surface_specs:
@@ -257,6 +261,26 @@ ADFS_F = ADFSFormat(
     total_bytes=1638400,
     label="F",
     new_map=True,
+)
+
+#: ADFS E+ — 800K single-zone New Map with Big directories.
+ADFS_E_PLUS = ADFSFormat(
+    surface_specs=[_flat_spec(3200)],
+    total_sectors=3200,
+    total_bytes=819200,
+    label="E+",
+    new_map=True,
+    big_directories=True,
+)
+
+#: ADFS F+ — 1.6MB four-zone New Map with Big directories.
+ADFS_F_PLUS = ADFSFormat(
+    surface_specs=[_flat_spec(6400)],
+    total_sectors=6400,
+    total_bytes=1638400,
+    label="F+",
+    new_map=True,
+    big_directories=True,
 )
 
 _ADFS_FORMATS_BY_SIZE = {
@@ -1317,33 +1341,60 @@ def _initialise_new_map_blank(
     total_sectors: int,
     title: str,
     boot_option: int,
+    big_directories: bool = False,
 ) -> DiscRecord:
-    """Lay down a blank single-zone New Map and empty "Nick" root directory.
+    """Lay down a blank New Map disc and its empty root directory.
 
     The New Map counterpart of :func:`_initialise_old_free_space_map` plus
-    :func:`_initialise_old_root_directory`. Returns the disc record so the
-    caller can build the :class:`NewMap` over the finished image. Currently
-    ADFS E only (the single-zone shape).
+    :func:`_initialise_old_root_directory`. Handles the E/F (New directory) and
+    E+/F+ (Big directory) shapes; the ``+`` shapes give the root its own
+    fragment so it can grow. Returns the disc record so the caller can build the
+    :class:`NewMap` over the finished image.
     """
-    dir_format = NewDirectoryFormat()
     full = unified.sector_range(0, total_sectors)
-    total_bytes = total_sectors * _ADFS_BYTES_PER_SECTOR
-    if total_bytes == ADFS_F.total_bytes:
-        dr = f_disc_record(title, boot_option=boot_option)
-        root_address = format_blank_f(full, dr, dir_format.size_in_bytes)
-    else:
-        dr = e_disc_record(title, boot_option=boot_option)
-        root_address = format_blank_single_zone(full, dr, dir_format.size_in_bytes)
+    multizone = total_sectors * _ADFS_BYTES_PER_SECTOR == ADFS_F.total_bytes
 
-    root_dir = _ADFSDirectory(
-        name="$",
-        title=title,
-        parent_address=dr.root,
-        disc_address=dr.root,
-        entries=(),
-        sequence_number=0,
-        signature=b"Nick",
-    )
+    if big_directories:
+        dir_format: ADFSDirectoryFormat = BigDirectoryFormat()
+        dr = (f_plus_disc_record if multizone else e_plus_disc_record)(
+            title, boot_option=boot_option
+        )
+        root_fragment_id = dr.root >> 8
+        if multizone:
+            root_address = format_blank_f(
+                full, dr, dir_format.size_in_bytes, root_fragment_id=root_fragment_id
+            )
+        else:
+            root_address = format_blank_single_zone(
+                full, dr, dir_format.size_in_bytes, root_fragment_id=root_fragment_id
+            )
+        root_dir = _ADFSDirectory(
+            name="$",
+            title="",
+            parent_address=dr.root,
+            disc_address=dr.root,
+            entries=(),
+            sequence_number=0,
+            signature=b"SBPr",
+            big_dir_size=dir_format.size_in_bytes,
+        )
+    else:
+        dir_format = NewDirectoryFormat()
+        dr = (f_disc_record if multizone else e_disc_record)(title, boot_option=boot_option)
+        if multizone:
+            root_address = format_blank_f(full, dr, dir_format.size_in_bytes)
+        else:
+            root_address = format_blank_single_zone(full, dr, dir_format.size_in_bytes)
+        root_dir = _ADFSDirectory(
+            name="$",
+            title=title,
+            parent_address=dr.root,
+            disc_address=dr.root,
+            entries=(),
+            sequence_number=0,
+            signature=b"Nick",
+        )
+
     root_data = unified.sector_range(
         root_address // _ADFS_BYTES_PER_SECTOR, dir_format.size_in_sectors
     )
@@ -1371,12 +1422,12 @@ def _create_image_file(
 
         if fmt.new_map:
             disc_record = _initialise_new_map_blank(
-                unified, fmt.total_sectors, title, boot_option
+                unified, fmt.total_sectors, title, boot_option,
+                big_directories=fmt.big_directories,
             )
             new_map = _new_map_over(unified, disc_record)
-            adfs = ADFS(
-                unified, NewDirectoryFormat(), None, geometry, disc_record.root, new_map=new_map
-            )
+            dir_format = BigDirectoryFormat() if fmt.big_directories else NewDirectoryFormat()
+            adfs = ADFS(unified, dir_format, None, geometry, disc_record.root, new_map=new_map)
         elif fmt.new_directory:
             _initialise_d_blank(unified, fmt.total_sectors, title, boot_option)
             fsm = OldFreeSpaceMap(unified.sector_range(0, 2))
@@ -1776,16 +1827,23 @@ class ADFS:
 
         if adfs_format.new_map:
             disc_record = _initialise_new_map_blank(
-                unified, adfs_format.total_sectors, title, boot_option
+                unified,
+                adfs_format.total_sectors,
+                title,
+                boot_option,
+                big_directories=adfs_format.big_directories,
             )
             new_map = _new_map_over(unified, disc_record)
+            dir_format = (
+                BigDirectoryFormat() if adfs_format.big_directories else NewDirectoryFormat()
+            )
             geom = ADFSGeometry(
                 cylinders=disc_record.disc_size
                 // (disc_record.heads * disc_record.sectors_per_track * disc_record.sector_size),
                 heads=disc_record.heads,
                 sectors_per_track=disc_record.sectors_per_track,
             )
-            return cls(unified, NewDirectoryFormat(), None, geom, disc_record.root, new_map=new_map)
+            return cls(unified, dir_format, None, geom, disc_record.root, new_map=new_map)
 
         if adfs_format.new_directory:
             _initialise_d_blank(unified, adfs_format.total_sectors, title, boot_option)

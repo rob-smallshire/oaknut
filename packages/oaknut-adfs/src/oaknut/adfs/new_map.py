@@ -27,7 +27,7 @@ FileCore, RISC OS PRM vol. 2.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from oaknut.adfs.exceptions import ADFSDiscFullError, ADFSMapError, ADFSValidationError
 from oaknut.discimage.sectors_view import SectorsView
@@ -886,6 +886,11 @@ class NewMap:
 
 #: FileCore ``disctype`` word for the non-``+`` shapes (D/E/F).
 _DISCTYPE_NON_PLUS = 0x20158C78
+#: FileCore ``disctype`` word for the ``+`` shapes (E+/F+/G, Big directories).
+_DISCTYPE_PLUS = 0x20158318
+#: Default Big-directory root size, and E+'s root fragment id (first user id).
+_BIG_DIR_ROOT_SIZE = 2048
+_E_PLUS_ROOT_FRAGMENT = 3
 
 #: Spare (non-allocation) map bits per zone for the 800K E format.
 _E_ZONE_SPARE = 1312
@@ -913,13 +918,21 @@ def e_disc_record(title: str, *, disc_id: int = 0, boot_option: int = 0) -> Disc
     )
 
 
-def format_blank_single_zone(data: SectorsView, disc_record: DiscRecord, root_size: int) -> int:
+def format_blank_single_zone(
+    data: SectorsView,
+    disc_record: DiscRecord,
+    root_size: int,
+    root_fragment_id: "int | None" = None,
+) -> int:
     """Lay down a blank single-zone New Map; return the root's disc byte address.
 
     Writes, into *data* (the whole image), the zone header, disc record,
-    allocation bitmap and its duplicate copy. The bitmap holds one system
-    fragment (id 2) covering the two map copies plus the root, with the rest
-    free. The caller writes the empty root directory at the returned address.
+    allocation bitmap and its duplicate copy. By default the system fragment
+    (id 2) covers the two map copies plus the root. When *root_fragment_id* is
+    given (the E+ Big-directory case), the system fragment covers only the two
+    map copies and the root is laid down as its own fragment right after — so
+    it can later grow independently. The caller writes the empty root directory
+    at the returned address.
     """
     if disc_record.nzones != 1:
         raise ADFSMapError("format_blank_single_zone only supports single-zone maps")
@@ -928,10 +941,22 @@ def format_blank_single_zone(data: SectorsView, disc_record: DiscRecord, root_si
     idlen = disc_record.idlen
     map_start_bit = _ZONE0_MAP_START * 8  # 512 — the disc address origin
 
-    # System fragment (id 2): the two map copies (secsize*2) plus the root.
-    system_bits = (secsize * 2 + root_size) // bpmb
+    # System fragment (id 2): the two map copies, plus the root when it is not a
+    # separate fragment.
+    if root_fragment_id is None:
+        system_bits = (secsize * 2 + root_size) // bpmb
+    else:
+        system_bits = (secsize * 2) // bpmb
     write_bits(data, map_start_bit, idlen, 2)
     write_bits(data, map_start_bit + system_bits - 1, 1, 1)  # fragment stop bit
+    free_start_bit = map_start_bit + system_bits
+
+    # Separate root fragment (Big directories) directly after the map copies.
+    if root_fragment_id is not None:
+        root_bits = root_size // bpmb
+        write_bits(data, free_start_bit, idlen, root_fragment_id)
+        write_bits(data, free_start_bit + root_bits - 1, 1, 1)
+        free_start_bit += root_bits
 
     # Terminate the free region at the last usable map bit.
     eod_bit = disc_record.disc_size // bpmb
@@ -939,7 +964,6 @@ def format_blank_single_zone(data: SectorsView, disc_record: DiscRecord, root_si
 
     # FreeLink: 15-bit distance from the link (bit 8) to the sole free area,
     # with the terminator flag (0x8000) set.
-    free_start_bit = map_start_bit + system_bits
     _write_le(data, _ZONE_FREELINK_OFFSET, 0x8000 | (free_start_bit - 8), 2)
     data[_ZONE_CROSSCHECK_OFFSET] = 0xFF
 
@@ -983,6 +1007,33 @@ def f_disc_record(title: str, *, disc_id: int = 0, boot_option: int = 0) -> Disc
     )
 
 
+def e_plus_disc_record(title: str, *, disc_id: int = 0, boot_option: int = 0) -> DiscRecord:
+    """Disc record for a blank 800K single-zone ADFS E+ disc (Big directories)."""
+    dr = e_disc_record(title, disc_id=disc_id, boot_option=boot_option)
+    return replace(
+        dr,
+        root=(_E_PLUS_ROOT_FRAGMENT << 8) | 1,
+        disc_type=_DISCTYPE_PLUS,
+        format_version=1,
+        root_size=_BIG_DIR_ROOT_SIZE,
+    )
+
+
+def f_plus_disc_record(title: str, *, disc_id: int = 0, boot_option: int = 0) -> DiscRecord:
+    """Disc record for a blank 1.6MB four-zone ADFS F+ disc (Big directories)."""
+    dr = f_disc_record(title, disc_id=disc_id, boot_option=boot_option)
+    root_fragment = (dr.nzones // 2) * (
+        (dr.sector_size * 8 - dr.zone_spare) // (dr.idlen + 1)
+    )
+    return replace(
+        dr,
+        root=(root_fragment << 8) | 1,
+        disc_type=_DISCTYPE_PLUS,
+        format_version=1,
+        root_size=_BIG_DIR_ROOT_SIZE,
+    )
+
+
 def _boot_block_checksum(data: SectorsView, offset: int, size: int) -> int:
     """Additive-with-carry checksum (new-map accumulator 0), skipping the last byte."""
     acc = 0
@@ -1009,7 +1060,12 @@ def _write_partial_disc_record(data: SectorsView, dr: DiscRecord) -> None:
     _write_le(data, o + 0x10, dr.disc_size, 4)
 
 
-def format_blank_f(data: SectorsView, disc_record: DiscRecord, root_size: int) -> int:
+def format_blank_f(
+    data: SectorsView,
+    disc_record: DiscRecord,
+    root_size: int,
+    root_fragment_id: "int | None" = None,
+) -> int:
     """Lay down a blank four-zone ADFS F disc; return the root's disc byte address.
 
     *data* is the whole image. Writes the boot block (defect terminator, partial
@@ -1053,13 +1109,26 @@ def format_blank_f(data: SectorsView, disc_record: DiscRecord, root_size: int) -
     # covering the map area itself (the middle zone).
     middle = nzones // 2
     zone0_frag_bits = 0x1000 // bpmb
-    middle_frag_bits = (secsize * nzones * 2 + root_size) // bpmb
+    # The map copies always sit in the middle zone; the root joins them unless
+    # it is a separate fragment (Big directories).
+    if root_fragment_id is None:
+        middle_frag_bits = (secsize * nzones * 2 + root_size) // bpmb
+    else:
+        middle_frag_bits = (secsize * nzones * 2) // bpmb
     free_start = {zone: alloc_start(zone) for zone in range(nzones)}
     for zone, frag_bits in ((0, zone0_frag_bits), (middle, middle_frag_bits)):
         start = alloc_start(zone)
         write_bits(data, map_bit + start, idlen, 2)
         write_bits(data, map_bit + start + frag_bits - 1, 1, 1)  # stop bit
         free_start[zone] = start + frag_bits
+
+    # Separate root fragment (Big directories) directly after the map copies.
+    if root_fragment_id is not None:
+        root_bits = root_size // bpmb
+        start = free_start[middle]
+        write_bits(data, map_bit + start, idlen, root_fragment_id)
+        write_bits(data, map_bit + start + root_bits - 1, 1, 1)
+        free_start[middle] = start + root_bits
 
     # Per-zone free terminators (end of each zone's usable region). The
     # position is measured from the end of the 4-byte zone header.
