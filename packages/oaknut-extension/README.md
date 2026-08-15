@@ -1,5 +1,10 @@
 # oaknut-extension
 
+[![PyPI version](https://img.shields.io/pypi/v/oaknut-extension)](https://pypi.org/project/oaknut-extension/)
+[![CI](https://github.com/rob-smallshire/oaknut/actions/workflows/ci.yml/badge.svg)](https://github.com/rob-smallshire/oaknut/actions/workflows/ci.yml)
+[![Python versions](https://img.shields.io/pypi/pyversions/oaknut-extension)](https://pypi.org/project/oaknut-extension/)
+[![License: MIT](https://img.shields.io/pypi/l/oaknut-extension)](https://github.com/rob-smallshire/oaknut/blob/master/packages/oaknut-extension/LICENSE)
+
 The entry-point plug-in framework shared by every extensible *axis* of the
 `oaknut` package family.
 
@@ -27,3 +32,15 @@ appears automatically — no central registry to edit.
 This package is deliberately domain-agnostic: it knows nothing about discs,
 files, or formats. It depends only on `oaknut-exception` (for the shared error
 hierarchy) and `stevedore`.
+
+Part of the [oaknut](https://github.com/rob-smallshire/oaknut) monorepo.
+
+## Installation
+
+```sh
+uv add oaknut-extension    # or: pip install oaknut-extension
+```
+
+## License
+
+MIT — see [LICENSE](LICENSE).

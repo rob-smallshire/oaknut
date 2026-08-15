@@ -1,5 +1,10 @@
 # oaknut-exception
 
+[![PyPI version](https://img.shields.io/pypi/v/oaknut-exception)](https://pypi.org/project/oaknut-exception/)
+[![CI](https://github.com/rob-smallshire/oaknut/actions/workflows/ci.yml/badge.svg)](https://github.com/rob-smallshire/oaknut/actions/workflows/ci.yml)
+[![Python versions](https://img.shields.io/pypi/pyversions/oaknut-exception)](https://pypi.org/project/oaknut-exception/)
+[![License: MIT](https://img.shields.io/pypi/l/oaknut-exception)](https://github.com/rob-smallshire/oaknut/blob/master/packages/oaknut-exception/LICENSE)
+
 Categorised exceptions and a CLI error-reporting boundary for the
 `oaknut-*` family of packages.
 
@@ -33,3 +38,15 @@ command.
 
 See the [oaknut documentation](https://rob-smallshire.github.io/oaknut/)
 for the full API reference.
+
+Part of the [oaknut](https://github.com/rob-smallshire/oaknut) monorepo.
+
+## Installation
+
+```sh
+uv add oaknut-exception    # or: pip install oaknut-exception
+```
+
+## License
+
+MIT — see [LICENSE](LICENSE).

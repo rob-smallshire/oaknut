@@ -1,5 +1,10 @@
 # oaknut-codecs
 
+[![PyPI version](https://img.shields.io/pypi/v/oaknut-codecs)](https://pypi.org/project/oaknut-codecs/)
+[![CI](https://github.com/rob-smallshire/oaknut/actions/workflows/ci.yml/badge.svg)](https://github.com/rob-smallshire/oaknut/actions/workflows/ci.yml)
+[![Python versions](https://img.shields.io/pypi/pyversions/oaknut-codecs)](https://pypi.org/project/oaknut-codecs/)
+[![License: MIT](https://img.shields.io/pypi/l/oaknut-codecs)](https://github.com/rob-smallshire/oaknut/blob/master/packages/oaknut-codecs/LICENSE)
+
 Text codecs for Acorn computer character sets, part of the
 [oaknut](https://github.com/rob-smallshire/oaknut) family of packages for
 working with Acorn computer filesystems, files, and formats.
@@ -27,6 +32,6 @@ codec implementation without taking a dependency on each other.
 uv add oaknut-codecs
 ```
 
-## Licence
+## License
 
-MIT
+MIT — see [LICENSE](LICENSE).

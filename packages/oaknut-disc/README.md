@@ -5,6 +5,7 @@
 # oaknut-disc
 
 [![PyPI version](https://img.shields.io/pypi/v/oaknut-disc)](https://pypi.org/project/oaknut-disc/)
+[![CI](https://github.com/rob-smallshire/oaknut/actions/workflows/ci.yml/badge.svg)](https://github.com/rob-smallshire/oaknut/actions/workflows/ci.yml)
 [![Python versions](https://img.shields.io/pypi/pyversions/oaknut-disc)](https://pypi.org/project/oaknut-disc/)
 [![License: MIT](https://img.shields.io/pypi/l/oaknut-disc)](https://github.com/rob-smallshire/oaknut)
 [![Documentation](https://img.shields.io/badge/docs-online-blue)](https://rob-smallshire.github.io/oaknut/disc/)
@@ -68,6 +69,6 @@ disc afs init scsi0.dat --disc-name Server --user RJS:2MiB --emplace Library
 disc tree scsi0.dat
 ```
 
-## Licence
+## License
 
 MIT.

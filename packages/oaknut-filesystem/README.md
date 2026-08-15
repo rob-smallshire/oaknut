@@ -1,5 +1,10 @@
 # oaknut-filesystem
 
+[![PyPI version](https://img.shields.io/pypi/v/oaknut-filesystem)](https://pypi.org/project/oaknut-filesystem/)
+[![CI](https://github.com/rob-smallshire/oaknut/actions/workflows/ci.yml/badge.svg)](https://github.com/rob-smallshire/oaknut/actions/workflows/ci.yml)
+[![Python versions](https://img.shields.io/pypi/pyversions/oaknut-filesystem)](https://pypi.org/project/oaknut-filesystem/)
+[![License: MIT](https://img.shields.io/pypi/l/oaknut-filesystem)](https://github.com/rob-smallshire/oaknut/blob/master/packages/oaknut-filesystem/LICENSE)
+
 The pluggable **filesystem contract** for the oaknut family — the base every
 Acorn (and, in principle, foreign) filesystem plugs into.
 
@@ -34,3 +39,15 @@ the rest simply aren't handled.
 
 See `docs/dev/filesystem-extensions.md` (architecture) and
 `docs/dev/filesystem-extensions-plan.md` (implementation plan).
+
+Part of the [oaknut](https://github.com/rob-smallshire/oaknut) monorepo.
+
+## Installation
+
+```sh
+uv add oaknut-filesystem    # or: pip install oaknut-filesystem
+```
+
+## License
+
+MIT — see [LICENSE](LICENSE).

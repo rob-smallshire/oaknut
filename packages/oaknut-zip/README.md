@@ -593,3 +593,7 @@ including integration tests against six real-world ZIP fixtures:
   Discussion of the metadata-loss problem that motivated this tool.
 - [INF format discussion](https://www.stardot.org.uk/forums/viewtopic.php?t=31577) ---
   Community discussion on INF format variants and standardisation.
+
+## License
+
+MIT — see [LICENSE](LICENSE).

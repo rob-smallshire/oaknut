@@ -1,5 +1,10 @@
 # oaknut-romfs
 
+[![PyPI version](https://img.shields.io/pypi/v/oaknut-romfs)](https://pypi.org/project/oaknut-romfs/)
+[![CI](https://github.com/rob-smallshire/oaknut/actions/workflows/ci.yml/badge.svg)](https://github.com/rob-smallshire/oaknut/actions/workflows/ci.yml)
+[![Python versions](https://img.shields.io/pypi/pyversions/oaknut-romfs)](https://pypi.org/project/oaknut-romfs/)
+[![License: MIT](https://img.shields.io/pypi/l/oaknut-romfs)](https://github.com/rob-smallshire/oaknut/blob/master/packages/oaknut-romfs/LICENSE)
+
 Acorn ROM Filing System (ROMFS) support for the [oaknut](https://github.com/rob-smallshire/oaknut)
 family of packages.
 
@@ -32,6 +37,6 @@ package design and its mapping onto the `oaknut.filesystem` contract.
 uv add oaknut-romfs
 ```
 
-## Licence
+## License
 
 MIT — see [LICENSE](LICENSE).

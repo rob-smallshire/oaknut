@@ -1,5 +1,10 @@
 # oaknut-discimage
 
+[![PyPI version](https://img.shields.io/pypi/v/oaknut-discimage)](https://pypi.org/project/oaknut-discimage/)
+[![CI](https://github.com/rob-smallshire/oaknut/actions/workflows/ci.yml/badge.svg)](https://github.com/rob-smallshire/oaknut/actions/workflows/ci.yml)
+[![Python versions](https://img.shields.io/pypi/pyversions/oaknut-discimage)](https://pypi.org/project/oaknut-discimage/)
+[![License: MIT](https://img.shields.io/pypi/l/oaknut-discimage)](https://github.com/rob-smallshire/oaknut/blob/master/packages/oaknut-discimage/LICENSE)
+
 Sector-level disc-image abstractions shared by the oaknut filesystem
 packages. This is the **geometry layer**: it turns a flat image file into
 addressable sectors, and is deliberately blind to what those sectors
@@ -172,6 +177,12 @@ That separation mirrors `oaknut-filesystem`, whose `Geometry` /
 sectors and is blind to interleave, sidedness, and on-disc byte offsets —
 all of which live here.
 
-## Licence
+## Installation
 
-MIT.
+```sh
+uv add oaknut-discimage    # or: pip install oaknut-discimage
+```
+
+## License
+
+MIT — see [LICENSE](LICENSE).
