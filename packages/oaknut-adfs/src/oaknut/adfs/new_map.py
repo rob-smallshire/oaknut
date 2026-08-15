@@ -445,9 +445,19 @@ class NewMap:
         first = disc_size - physical
         return self._read_bytes(physical, first) + self._read_bytes(0, length - first)
 
+    def _is_system_root(self, indirect: int) -> bool:
+        """Whether *indirect* is a New-directory root packed in system fragment 2.
+
+        Such a root cannot be resolved through the ordinary bitmap scan (its id
+        is shared with the multi-part system fragment), so it is special-cased.
+        A Big-directory root is its own fragment and resolves normally, which is
+        also what lets it move when it grows.
+        """
+        return indirect == self._dr.root and (indirect >> 8) == 2
+
     def object_start(self, indirect: int) -> int:
         """Return the physical disc byte address an object begins at."""
-        if indirect == self._dr.root:
+        if self._is_system_root(indirect):
             return self._root_physical()
         frag_id, sector_offset = self._split_indirect(indirect)
         fragments = self._ordered_fragments(frag_id)
@@ -460,7 +470,7 @@ class NewMap:
 
     def read_object(self, indirect: int, length: int) -> bytes:
         """Read *length* bytes of an object, following its fragment chain."""
-        if indirect == self._dr.root:
+        if self._is_system_root(indirect):
             return self._read_physical(self._root_physical(), length)
         frag_id, sector_offset = self._split_indirect(indirect)
         fragments = self._ordered_fragments(frag_id)
@@ -634,6 +644,55 @@ class NewMap:
                     result.append([None, leftover])
                 remaining = 0
         return result
+
+    def grow_fragment(self, indirect: int, new_size_bytes: int) -> None:
+        """Extend a single-fragment object in place into the following free area.
+
+        Used to grow the root Big directory, whose location is fixed. Raises if
+        the object has more than one fragment or the following area is not free
+        and large enough.
+        """
+        frag_id = indirect >> 8
+        new_bits = new_size_bytes // self._dr.bytes_per_map_bit
+        idlen = self._dr.idlen
+
+        if self._multizone:
+            for zone in range(self._dr.nzones):
+                cells = self._parse_zone_cells(zone)
+                if any(fid == frag_id for fid, _ in cells):
+                    self._grow_in_cells(cells, frag_id, new_bits, idlen)
+                    self._rewrite_zone(zone, cells)
+                    return
+            raise ADFSMapError(f"No allocated fragment for id 0x{frag_id:X}")
+
+        cells = self._parse_cells()
+        self._grow_in_cells(cells, frag_id, new_bits, idlen)
+        self._rewrite_cells(cells)
+
+    @staticmethod
+    def _grow_in_cells(cells: list[list], frag_id: int, new_bits: int, idlen: int) -> None:
+        indices = [i for i, (fid, _) in enumerate(cells) if fid == frag_id]
+        if len(indices) != 1:
+            raise ADFSMapError(f"cannot grow fragment id 0x{frag_id:X}: not a single fragment")
+        idx = indices[0]
+        current_bits = cells[idx][1]
+        if current_bits >= new_bits:
+            return
+        grow_by = new_bits - current_bits
+        following = idx + 1
+        if (
+            following >= len(cells)
+            or cells[following][0] is not None
+            or cells[following][1] < grow_by
+        ):
+            raise ADFSDiscFullError("no free space to grow the directory in place")
+        cells[idx][1] = new_bits
+        remainder = cells[following][1] - grow_by
+        if remainder == 0 or remainder < idlen + 1:
+            cells[idx][1] += remainder  # absorb an unusable remainder
+            del cells[following]
+        else:
+            cells[following][1] = remainder
 
     def free_object(self, indirect: int) -> None:
         """Free every fragment of an object and merge adjacent free areas."""
@@ -830,6 +889,24 @@ class NewMap:
             self._rewrite_zone(zone, merged)
         if not found:
             raise ADFSMapError(f"No allocated fragment for id 0x{frag_id:X}")
+
+    def set_root_indirect(self, new_indirect: int) -> None:
+        """Record a moved root's new indirect address in the disc record."""
+        _write_le(self._map, _DISC_RECORD_OFFSET + 0x0C, new_indirect, 4)
+        self._dr = replace(self._dr, root=new_indirect)
+        self._refresh_zone(0)
+
+    def _refresh_zone(self, zone: int) -> None:
+        """Recompute a zone's check byte and re-duplicate it, without touching the bitmap."""
+        secsize = self._dr.sector_size
+        zone_bytes = bytearray(self._map[zone * secsize + i] for i in range(secsize))
+        self._map[zone * secsize + _ZONE_CHECK_OFFSET] = calculate_zone_check(
+            zone_bytes, 0, self._dr.log2_sector_size
+        )
+        for i in range(secsize):
+            self._map[self._dr.nzones * secsize + zone * secsize + i] = self._map[
+                zone * secsize + i
+            ]
 
     def fragment_capacity(self, frag_id: int) -> int:
         """Total allocated bytes of a fragment id (0 if unallocated)."""

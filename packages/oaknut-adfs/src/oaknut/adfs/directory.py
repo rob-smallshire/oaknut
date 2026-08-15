@@ -52,6 +52,24 @@ ADFS_NAME_GRAMMAR = NameGrammar(
 _name_key = ADFS_NAME_GRAMMAR.name_key
 
 
+#: What a **Big** directory (E+/F+/G) entry name can hold. Big directories keep
+#: names in a heap, lifting the ten-character limit (to 255) and freeing the
+#: top bit for eight-bit characters. The separators and CR are still reserved.
+ADFS_BIG_NAME_GRAMMAR = NameGrammar(
+    max_length=255,
+    forbidden=".:\r",
+    forbidden_reason="oaknut's . and : path separators, and CR (the field terminator)",
+    seven_bit=False,
+    allow_control=True,
+    case="insensitive",
+    codec="latin-1",
+    notes=(
+        "Big directories store filenames in a name heap, so names may be up to "
+        "255 characters and use the full eight-bit Acorn Latin-1 character set.",
+    ),
+)
+
+
 # --- Internal data types ---
 
 
@@ -934,6 +952,26 @@ class BigDirectoryFormat(ADFSDirectoryFormat):
 
     def serialized_size(self, directory: _ADFSDirectory) -> int:
         return directory.big_dir_size or _BIG_DIR_DEFAULT_SIZE
+
+    def required_size(self, directory: _ADFSDirectory, sector_size: int) -> int:
+        """Smallest block size that holds *directory*, rounded up to a sector.
+
+        The default (2048 bytes) is the floor; a directory that outgrows its
+        current block must be reallocated at this size.
+        """
+        name_len = len(directory.name.encode("latin-1"))
+        header_size = _big_dir_header_size(name_len)
+        names_size = _word_align(
+            sum(len(e.name.encode("latin-1")) + 1 for e in directory.entries)
+        )
+        needed = (
+            header_size
+            + len(directory.entries) * _BIG_DIR_ENTRY_SIZE
+            + names_size
+            + _BIG_DIR_TAIL_SIZE
+        )
+        rounded = ((needed + sector_size - 1) // sector_size) * sector_size
+        return max(_BIG_DIR_DEFAULT_SIZE, rounded)
 
     def parse(self, data: SectorsView, disc_address: int) -> _ADFSDirectory:
         start_mas_seq = data[0x00]

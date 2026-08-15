@@ -156,12 +156,54 @@ def test_created_e_plus_matches_dim_structurally():
     assert raw[0x800:0x1000] == dim[0x800:0x1000], "root Big directory differs"
 
 
-@pytest.mark.skipif(not (_DIM / "ADFS_E+.adf").exists(), reason="DIM E+ blank not present")
-def test_big_dir_write_is_refused():
-    buffer = memoryview(bytearray((_DIM / "ADFS_E+.adf").read_bytes()))
-    adfs = ADFS.from_buffer(buffer)
+@pytest.mark.parametrize("fmt", [ADFS_E_PLUS, ADFS_F_PLUS])
+def test_big_dir_write_long_names(fmt):
+    adfs = ADFS.create(fmt, title="WriteBig")
     try:
-        with pytest.raises(ADFSError, match="Big directory"):
-            (adfs.root / "Nope").write_bytes(b"x")
+        payloads = {
+            "A_File_With_A_Long_Name": b"hello big directory",
+            "another.long-name would be": b"x" * 5000,  # note: '.'/' ' still forbidden below
+        }
+        # '.' and ' ' are not valid in a leaf, so use underscores.
+        payloads = {f"Long_Name_Number_{i:03d}": bytes([i]) * (100 + i) for i in range(20)}
+        for name, data in payloads.items():
+            (adfs.root / name).write_bytes(data)
+        assert adfs.validate() == []
+        for name, data in payloads.items():
+            assert (adfs.root / name).read_bytes() == data
+    finally:
+        adfs.close()
+
+
+@pytest.mark.parametrize("fmt", [ADFS_E_PLUS, ADFS_F_PLUS])
+def test_big_dir_grows_and_persists(fmt, tmp_path):
+    """Enough entries to overflow the initial 2048-byte root, then reopen."""
+    image = tmp_path / "big.adf"
+    payloads = {f"Long_Directory_Entry_{i:03d}": bytes([i & 0xFF]) * (50 + i) for i in range(60)}
+    with ADFS.create_file(image, fmt, title="Grow") as adfs:
+        for name, data in payloads.items():
+            (adfs.root / name).write_bytes(data)
+        (adfs.root / "A_Sub_Directory").mkdir()
+        (adfs.root / "A_Sub_Directory" / "inner_long_name").write_bytes(b"inner")
+        assert adfs.validate() == []
+    with ADFS.from_file(image) as adfs:
+        assert adfs.validate() == []
+        assert {p.name for p in adfs.root.iterdir()} == set(payloads) | {"A_Sub_Directory"}
+        for name, data in payloads.items():
+            assert (adfs.root / name).read_bytes() == data
+        assert (adfs.root / "A_Sub_Directory" / "inner_long_name").read_bytes() == b"inner"
+
+
+@pytest.mark.parametrize("fmt", [ADFS_E_PLUS, ADFS_F_PLUS])
+def test_big_dir_delete(fmt):
+    adfs = ADFS.create(fmt, title="DelBig")
+    try:
+        for i in range(10):
+            (adfs.root / f"Entry_Number_{i:02d}").write_bytes(bytes([i]) * 500)
+        (adfs.root / "Entry_Number_05").unlink()
+        assert adfs.validate() == []
+        names = {p.name for p in adfs.root.iterdir()}
+        assert "Entry_Number_05" not in names
+        assert (adfs.root / "Entry_Number_09").read_bytes() == bytes([9]) * 500
     finally:
         adfs.close()

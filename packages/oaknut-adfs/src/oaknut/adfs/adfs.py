@@ -17,13 +17,14 @@ from __future__ import annotations
 import mmap
 from collections.abc import Sequence
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from os import PathLike
 from pathlib import Path
 from typing import TYPE_CHECKING, Iterator, Union
 
 import oaknut.basic as basic
 from oaknut.adfs.directory import (
+    ADFS_BIG_NAME_GRAMMAR,
     ADFS_NAME_GRAMMAR,
     Access,
     ADFSDirectoryFormat,
@@ -38,6 +39,7 @@ from oaknut.adfs.exceptions import (
     ADFSDirectoryError,
     ADFSDirectoryFullError,
     ADFSDirectoryNotEmptyError,
+    ADFSDiscFullError,
     ADFSEntryExistsError,
     ADFSError,
     ADFSFileLockedError,
@@ -75,16 +77,17 @@ if TYPE_CHECKING:
 _name_key = ADFS_NAME_GRAMMAR.name_key
 
 
-def _validate_adfs_leaf(name: str) -> None:
-    """Validate a *new* leaf name against :data:`ADFS_NAME_GRAMMAR`.
+def _validate_adfs_leaf(name: str, grammar=ADFS_NAME_GRAMMAR) -> None:
+    """Validate a *new* leaf name against *grammar*.
 
     Applied only when *creating* a name (write, mkdir, rename target) —
     never on navigation or read, so a byte-edited disc whose names break
-    these rules still lists and reads. The grammar raises
-    :class:`ValueError`; re-raise it as an :class:`ADFSPathError`.
+    these rules still lists and reads. Big directory discs pass the longer
+    :data:`ADFS_BIG_NAME_GRAMMAR`. The grammar raises :class:`ValueError`;
+    re-raise it as an :class:`ADFSPathError`.
     """
     try:
-        ADFS_NAME_GRAMMAR.validate(name)
+        grammar.validate(name)
     except ValueError as exc:
         raise ADFSPathError(str(exc)) from exc
 
@@ -803,7 +806,7 @@ class ADFSPath(AcornPath):
         parts = self._path.split(".")
         if len(parts) < 2 or parts[0] != "$":
             raise ADFSPathError(f"Invalid path: {self._path!r}")
-        _validate_adfs_leaf(parts[-1])
+        _validate_adfs_leaf(parts[-1], self._adfs._name_grammar)
 
         self._adfs._write_file(
             parts,
@@ -885,7 +888,7 @@ class ADFSPath(AcornPath):
         """
         if self._path == "$":
             raise ADFSPathError("Cannot mkdir root directory")
-        _validate_adfs_leaf(self._path.split(".")[-1])
+        _validate_adfs_leaf(self._path.split(".")[-1], self._adfs._name_grammar)
 
         if parents:
             parent = self.parent
@@ -936,7 +939,7 @@ class ADFSPath(AcornPath):
             target_path = target
 
         target_parts = target_path.split(".")
-        _validate_adfs_leaf(target_parts[-1])
+        _validate_adfs_leaf(target_parts[-1], self._adfs._name_grammar)
         self._adfs._rename(self._path.split("."), target_parts)
         return ADFSPath(self._adfs, target_path)
 
@@ -1579,6 +1582,12 @@ class ADFS:
         # and New Map discs need no old-map alignment.
         is_d_format = new_map is None and isinstance(dir_format, NewDirectoryFormat)
         self._old_map_dir_alignment = _D_SECTOR_SIZE // _ADFS_BYTES_PER_SECTOR if is_d_format else 1
+        # Big directories lift the ten-character name limit.
+        self._name_grammar = (
+            ADFS_BIG_NAME_GRAMMAR
+            if isinstance(dir_format, BigDirectoryFormat)
+            else ADFS_NAME_GRAMMAR
+        )
 
     @property
     def is_new_map(self) -> bool:
@@ -2441,9 +2450,11 @@ class ADFS:
         return data[: entry.length]
 
     def _write_directory_at(self, directory: _ADFSDirectory, disc_address: int) -> None:
-        """Serialize a directory back to its sectors on disc."""
-        if isinstance(self._dir_format, BigDirectoryFormat):
-            raise ADFSError("writing Big directory (E+/F+/G) discs is not yet supported")
+        """Serialize a directory back to its sectors on disc at its current size.
+
+        Callers that may change a Big directory's size go through
+        :meth:`_persist_directory`, which handles growth and moves first.
+        """
         _assert_entries_sorted(directory.entries)
         sector = self._object_disc_sector(disc_address)
         num_sectors = (
@@ -2451,6 +2462,72 @@ class ADFS:
         ) // _ADFS_BYTES_PER_SECTOR
         data = self._disc.sector_range(sector, num_sectors)
         self._dir_format.serialize(directory, data)
+
+    def _persist_directory(
+        self, directory: _ADFSDirectory, disc_address: int, dir_path_parts: list[str]
+    ) -> int:
+        """Write *directory*, growing or moving it first if it has outgrown its block.
+
+        Returns the directory's (possibly new) disc address. Fixed-size formats
+        write in place. Big directories that overflow their current block grow:
+        the root grows in place (its location is fixed); a non-root directory is
+        reallocated elsewhere, its old block freed and the parent entry that
+        points to it updated (which may cascade if the parent then grows too).
+        """
+        if not isinstance(self._dir_format, BigDirectoryFormat):
+            self._write_directory_at(directory, disc_address)
+            return disc_address
+
+        secsize = self._map.disc_record.sector_size
+        required = self._dir_format.required_size(directory, secsize)
+        current = directory.big_dir_size or self._dir_format.size_in_bytes
+
+        if required <= current:
+            self._write_directory_at(replace(directory, big_dir_size=current), disc_address)
+            return disc_address
+
+        is_root = disc_address == self._root_address
+
+        # Try to grow in place — the cheapest option when the space after the
+        # directory happens to be free (typical for a root on a fresh disc).
+        try:
+            self._map.grow_fragment(disc_address, required)
+        except ADFSDiscFullError:
+            pass
+        else:
+            self._write_directory_at(replace(directory, big_dir_size=required), disc_address)
+            return disc_address
+
+        # Otherwise move the directory to a larger fragment and free the old one.
+        new_address = self._map.allocate_object(required)
+        parent_address = new_address if is_root else directory.parent_address
+        self._write_directory_at(
+            replace(directory, big_dir_size=required, parent_address=parent_address), new_address
+        )
+        self._map.free_object(disc_address)
+        if is_root:
+            self._map.set_root_indirect(new_address)
+            self._root_address = new_address
+        else:
+            self._repoint_child(dir_path_parts, new_address)
+        return new_address
+
+    def _repoint_child(self, dir_path_parts: list[str], new_address: int) -> None:
+        """Update the parent entry for *dir_path_parts* to *new_address* (cascading)."""
+        child_name = dir_path_parts[-1]
+        grandparent, gp_address = self._resolve_parent(dir_path_parts)
+        new_entries = tuple(
+            replace(entry, indirect_disc_address=new_address)
+            if _name_key(entry.name) == _name_key(child_name)
+            else entry
+            for entry in grandparent.entries
+        )
+        new_seq = (grandparent.sequence_number + 1) & 0xFF
+        self._persist_directory(
+            self._with_entries(grandparent, new_entries, new_seq),
+            gp_address,
+            dir_path_parts[:-1],
+        )
 
     # --- Map-agnostic allocation ---
     #
@@ -2680,8 +2757,10 @@ class ADFS:
             new_entries = _insert_sorted(parent_dir.entries, new_entry)
 
         new_seq = (parent_dir.sequence_number + 1) & 0xFF
-        self._write_directory_at(
-            self._with_entries(parent_dir, new_entries, new_seq), parent_disc_address
+        self._persist_directory(
+            self._with_entries(parent_dir, new_entries, new_seq),
+            parent_disc_address,
+            path_parts[:-1],
         )
 
     def _resolve_parent(
@@ -2731,8 +2810,10 @@ class ADFS:
             e for e in parent_dir.entries if _name_key(e.name) != _name_key(filename)
         )
         new_seq = (parent_dir.sequence_number + 1) & 0xFF
-        self._write_directory_at(
-            self._with_entries(parent_dir, new_entries, new_seq), parent_disc_address
+        self._persist_directory(
+            self._with_entries(parent_dir, new_entries, new_seq),
+            parent_disc_address,
+            path_parts[:-1],
         )
 
     def _mkdir(self, path_parts: list[str]) -> None:
@@ -2789,8 +2870,10 @@ class ADFS:
 
         new_entries = _insert_sorted(parent_dir.entries, new_entry)
         new_seq = (parent_dir.sequence_number + 1) & 0xFF
-        self._write_directory_at(
-            self._with_entries(parent_dir, new_entries, new_seq), parent_disc_address
+        self._persist_directory(
+            self._with_entries(parent_dir, new_entries, new_seq),
+            parent_disc_address,
+            path_parts[:-1],
         )
 
     def _rmdir(self, path_parts: list[str]) -> None:
@@ -2817,8 +2900,10 @@ class ADFS:
             e for e in parent_dir.entries if _name_key(e.name) != _name_key(dirname)
         )
         new_seq = (parent_dir.sequence_number + 1) & 0xFF
-        self._write_directory_at(
-            self._with_entries(parent_dir, new_entries, new_seq), parent_disc_address
+        self._persist_directory(
+            self._with_entries(parent_dir, new_entries, new_seq),
+            parent_disc_address,
+            path_parts[:-1],
         )
 
     def _rename(self, old_parts: list[str], new_parts: list[str]) -> None:
@@ -2926,8 +3011,10 @@ class ADFS:
             for e in parent_dir.entries
         )
         new_seq = (parent_dir.sequence_number + 1) & 0xFF
-        self._write_directory_at(
-            self._with_entries(parent_dir, new_entries, new_seq), parent_disc_address
+        self._persist_directory(
+            self._with_entries(parent_dir, new_entries, new_seq),
+            parent_disc_address,
+            path_parts[:-1],
         )
 
     def _chmod(self, path_parts: list[str], access: int) -> None:
@@ -2968,8 +3055,10 @@ class ADFS:
             for e in parent_dir.entries
         )
         new_seq = (parent_dir.sequence_number + 1) & 0xFF
-        self._write_directory_at(
-            self._with_entries(parent_dir, new_entries, new_seq), parent_disc_address
+        self._persist_directory(
+            self._with_entries(parent_dir, new_entries, new_seq),
+            parent_disc_address,
+            path_parts[:-1],
         )
 
     def _set_load_address(self, path_parts: list[str], address: int) -> None:
@@ -2996,8 +3085,10 @@ class ADFS:
             for e in parent_dir.entries
         )
         new_seq = (parent_dir.sequence_number + 1) & 0xFF
-        self._write_directory_at(
-            self._with_entries(parent_dir, new_entries, new_seq), parent_disc_address
+        self._persist_directory(
+            self._with_entries(parent_dir, new_entries, new_seq),
+            parent_disc_address,
+            path_parts[:-1],
         )
 
     def _set_exec_address(self, path_parts: list[str], address: int) -> None:
@@ -3024,8 +3115,10 @@ class ADFS:
             for e in parent_dir.entries
         )
         new_seq = (parent_dir.sequence_number + 1) & 0xFF
-        self._write_directory_at(
-            self._with_entries(parent_dir, new_entries, new_seq), parent_disc_address
+        self._persist_directory(
+            self._with_entries(parent_dir, new_entries, new_seq),
+            parent_disc_address,
+            path_parts[:-1],
         )
 
 
