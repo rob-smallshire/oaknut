@@ -9,6 +9,13 @@ __version__ = "12.13.1"
 
 from oaknut.adfs.adfs import (
     ADFS,
+    ADFS_D,
+    ADFS_E,
+    ADFS_E_PLUS,
+    ADFS_F,
+    ADFS_F_PLUS,
+    ADFS_G,
+    ADFS_G_PLUS,
     ADFS_L,
     ADFS_M,
     ADFS_S,
@@ -23,6 +30,13 @@ from oaknut.adfs.adfs import (
 
 __all__ = [
     "ADFS",
+    "ADFS_D",
+    "ADFS_E",
+    "ADFS_E_PLUS",
+    "ADFS_F",
+    "ADFS_F_PLUS",
+    "ADFS_G",
+    "ADFS_G_PLUS",
     "ADFS_L",
     "ADFS_M",
     "ADFS_S",

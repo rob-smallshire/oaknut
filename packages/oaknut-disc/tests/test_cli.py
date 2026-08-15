@@ -2874,7 +2874,7 @@ class TestCreate:
         assert result.exit_code != 0
         # Not a cryptic "key=value" complaint — the accepted forms.
         assert "accepts:" in result.output
-        assert "presets l, m, s" in result.output
+        assert "presets d, e, e+, f, f+, g, g+, l, m, s" in result.output
 
     def test_help_is_plain_text_and_points_to_discovery(self, runner: CliRunner) -> None:
         result = runner.invoke(cli, ["create", "--help"])

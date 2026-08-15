@@ -1,5 +1,6 @@
 """Tests for the ADFS filesystem extension on the oaknut.filesystem axis."""
 
+import pytest
 from oaknut.adfs import ADFS, ADFS_S
 from oaknut.filesystem import (
     AcornMetadata,
@@ -117,8 +118,56 @@ class TestMount:
 class TestGeometryGrammar:
     def test_floppy_presets_and_winchester_param(self):
         grammar = create_filesystem("adfs").geometry_grammar()
-        assert set(grammar.preset_names()) == {"s", "m", "l"}
+        assert set(grammar.preset_names()) == {
+            "s", "m", "l", "d", "e", "e+", "f", "f+", "g", "g+",
+        }
         assert grammar.parse("l").image_size == 655360
         # ADFS also accepts open-ended hard-disc geometry.
         hd = grammar.parse("cylinders=200,heads=4,spt=33")
         assert hd.num_sectors == 200 * 4 * 33
+
+    def test_new_map_presets_carry_a_variant_and_size(self):
+        grammar = create_filesystem("adfs").geometry_grammar()
+        # D, E and E+ share a size; the variant tag is what tells them apart.
+        for name in ("d", "e", "e+"):
+            geo = grammar.parse(name)
+            assert geo.image_size == 819200
+            assert geo.variant == name
+        assert grammar.parse("f").image_size == 1638400
+        assert grammar.parse("g").image_size == 3276800
+
+
+class TestCreateVariants:
+    """Each ADFS floppy format is reachable through its ``--geometry`` preset."""
+
+    @pytest.mark.parametrize(
+        "preset,new_map,big_dir",
+        [
+            ("d", False, False),
+            ("e", True, False),
+            ("e+", True, True),
+            ("f", True, False),
+            ("f+", True, True),
+            ("g", True, False),
+            ("g+", True, True),
+        ],
+    )
+    def test_preset_creates_the_right_format(self, tmp_path, preset, new_map, big_dir):
+        from oaknut.adfs.directory import BigDirectoryFormat
+
+        filesystem = create_filesystem("adfs")
+        geometry = filesystem.geometry_grammar().parse(preset)
+        image_filepath = tmp_path / f"disc_{preset.replace('+', 'p')}.adf"
+        filesystem.create(image_filepath, geometry, title="VARIANT")
+
+        with ADFS.from_file(image_filepath) as adfs:
+            assert adfs.is_new_map is new_map
+            assert isinstance(adfs._dir_format, BigDirectoryFormat) is big_dir
+            # New-directory discs carry the title in the root directory; Big
+            # directories do not store one (a pre-existing limitation), so
+            # only assert the title where the format records it.
+            if not big_dir:
+                assert adfs.title == "VARIANT"
+            (adfs.root / "$.HELLO").write_bytes(b"hi" * 100)
+            assert (adfs.root / "$.HELLO").read_bytes() == b"hi" * 100
+            assert adfs.validate() == []
