@@ -111,6 +111,9 @@ class _ADFSDirectory:
     #: does not flip it. ``b"Hugo"`` for S/M/L (and the D discs seen so far);
     #: ``b"Nick"`` for the New Map E/F shapes.
     signature: bytes = b"Hugo"
+    #: For Big directories (E+/F+): the allocated byte size of the directory
+    #: block, preserved across a rewrite. Zero for Old/New directories.
+    big_dir_size: int = 0
 
     def find(self, name: str) -> _ADFSDirectoryEntry | None:
         """Find entry by name (per the grammar's case policy)."""
@@ -167,6 +170,18 @@ class ADFSDirectoryFormat(ABC):
     def max_entries(self) -> int:
         """Maximum number of entries this format supports."""
         ...
+
+    def directory_size(self, header: SectorsView) -> int:
+        """Byte size of the directory whose header is in *header*.
+
+        Fixed for Old/New directories; read from the header for Big
+        directories, which vary in size.
+        """
+        return self.size_in_bytes
+
+    def serialized_size(self, directory: _ADFSDirectory) -> int:
+        """Byte size to write *directory* as. Fixed except for Big directories."""
+        return self.size_in_bytes
 
 
 # --- Old directory format (ADFS S/M/L) ---
@@ -822,3 +837,234 @@ class NewDirectoryFormat(ADFSDirectoryFormat):
 
         # DirCheckByte last — it is computed over everything else.
         data[tail + _NEW_TAIL_CHECK_BYTE] = _calculate_new_dir_check(data)
+
+
+# --- Big directory format (ADFS E+/F+/G) ---
+#
+# Big directories lift the New directory's fixed size and 10-character name
+# limit. The block is variable length (from 2048 bytes, growing as needed): a
+# header (whose last field is the directory's own, arbitrarily long, name),
+# then fixed 0x1C-byte entries that point into a following *name heap* for their
+# filenames, then an 8-byte tail. Object indirect addresses are four bytes here.
+# Signatures are "SBPr" (start) and "oven" (end); the check byte is the ROR-13
+# accumulation with the Big-directory boundaries.
+
+_BIG_DIR_START_NAME = b"SBPr"
+_BIG_DIR_END_NAME = b"oven"
+_BIG_DIR_HEADER_FIXED = 0x1C  # up to (and excluding) the directory name
+_BIG_DIR_ENTRY_SIZE = 0x1C
+_BIG_DIR_TAIL_SIZE = 8
+_BIG_DIR_DEFAULT_SIZE = 2048
+
+
+def _word_align(value: int) -> int:
+    return (value + 3) & ~3
+
+
+def _big_dir_header_size(name_len: int) -> int:
+    """Word-aligned header size for a Big directory whose name is *name_len* long."""
+    return _word_align(_BIG_DIR_HEADER_FIXED + name_len + 1)  # +1 for the CR terminator
+
+
+def _calculate_big_dir_check(
+    data: SectorsView | bytes,
+    dir_size: int,
+    name_len: int,
+    num_entries: int,
+    names_size: int,
+) -> int:
+    """Compute a Big directory's check byte (ROR-13 accumulation).
+
+    The accumulated region is the header, entries and name heap; then, after
+    the whole tail's leading bytes, the tail's whole words and its final bytes
+    (all but the check byte itself).
+    """
+    header_size = _big_dir_header_size(name_len)
+    end_of_check = header_size + num_entries * _BIG_DIR_ENTRY_SIZE + names_size
+    tail = dir_size - _BIG_DIR_TAIL_SIZE
+
+    dircheck = 0
+    amt = 0
+    while amt + 3 < end_of_check:
+        dircheck = _read_32bit_le(data, amt) ^ _ror13(dircheck)
+        amt += 4
+    while amt < end_of_check:
+        dircheck = data[amt] ^ _ror13(dircheck)
+        amt += 1
+
+    amt = tail  # Big directories do not skip the first tail byte
+    while amt + 3 < dir_size - 4:
+        dircheck = _read_32bit_le(data, amt) ^ _ror13(dircheck)
+        amt += 4
+    while amt < dir_size - 1:
+        dircheck = data[amt] ^ _ror13(dircheck)
+        amt += 1
+
+    return (
+        (dircheck & 0xFF)
+        ^ ((dircheck >> 8) & 0xFF)
+        ^ ((dircheck >> 16) & 0xFF)
+        ^ ((dircheck >> 24) & 0xFF)
+    )
+
+
+class BigDirectoryFormat(ADFSDirectoryFormat):
+    """Big ADFS directory format (E+/F+/G): variable size, name heap.
+
+    ``size_in_bytes``/``size_in_sectors`` give the default size used when
+    creating a new directory; an existing directory's true size comes from its
+    ``BigDirSize`` header field via :meth:`directory_size`.
+    """
+
+    @property
+    def size_in_bytes(self) -> int:
+        return _BIG_DIR_DEFAULT_SIZE
+
+    @property
+    def size_in_sectors(self) -> int:
+        return _BIG_DIR_DEFAULT_SIZE // 256
+
+    @property
+    def max_entries(self) -> int:
+        # Effectively unbounded (limited by the directory's byte size).
+        return 0x7FFFFFFF
+
+    def directory_size(self, header: SectorsView) -> int:
+        return _read_32bit_le(header, 0x0C)
+
+    def serialized_size(self, directory: _ADFSDirectory) -> int:
+        return directory.big_dir_size or _BIG_DIR_DEFAULT_SIZE
+
+    def parse(self, data: SectorsView, disc_address: int) -> _ADFSDirectory:
+        start_mas_seq = data[0x00]
+        start_name = bytes(data[0x04:0x08])
+        if start_name != _BIG_DIR_START_NAME:
+            raise ADFSDirectoryError(
+                f"Invalid Big directory signature: {start_name!r} "
+                f"(expected {_BIG_DIR_START_NAME!r})"
+            )
+
+        name_len = _read_32bit_le(data, 0x08)
+        dir_size = _read_32bit_le(data, 0x0C)
+        num_entries = _read_32bit_le(data, 0x10)
+        names_size = _read_32bit_le(data, 0x14)
+        parent_address = _read_32bit_le(data, 0x18)
+        dir_name = _strip_name_8bit(bytes(data[0x1C : 0x1C + name_len]))
+
+        tail = dir_size - _BIG_DIR_TAIL_SIZE
+        end_name = bytes(data[tail : tail + 4])
+        if end_name != _BIG_DIR_END_NAME:
+            raise ADFSDirectoryError(
+                f"Big directory tail signature {end_name!r} does not match {_BIG_DIR_END_NAME!r}"
+            )
+        end_mas_seq = data[tail + 4]
+        if start_mas_seq != end_mas_seq:
+            raise ADFSDirectoryError(
+                f"Broken directory: StartMasSeq ({start_mas_seq}) != EndMasSeq ({end_mas_seq})"
+            )
+        expected_check = data[tail + 7]
+        calculated_check = _calculate_big_dir_check(
+            data, dir_size, name_len, num_entries, names_size
+        )
+        if expected_check != calculated_check:
+            raise ADFSDirectoryError(
+                f"Big directory check byte mismatch: stored 0x{expected_check:02X}, "
+                f"calculated 0x{calculated_check:02X}"
+            )
+
+        header_size = _big_dir_header_size(name_len)
+        heap_offset = header_size + num_entries * _BIG_DIR_ENTRY_SIZE
+
+        entries = []
+        for i in range(num_entries):
+            offset = header_size + i * _BIG_DIR_ENTRY_SIZE
+            load_address = _read_32bit_le(data, offset + 0x00)
+            exec_address = _read_32bit_le(data, offset + 0x04)
+            length = _read_32bit_le(data, offset + 0x08)
+            indirect = _read_32bit_le(data, offset + 0x0C)
+            atts = _read_32bit_le(data, offset + 0x10)
+            name_length = _read_32bit_le(data, offset + 0x14)
+            name_ptr = _read_32bit_le(data, offset + 0x18)
+            name = _strip_name_8bit(
+                bytes(data[heap_offset + name_ptr : heap_offset + name_ptr + name_length])
+            )
+            entries.append(
+                _ADFSDirectoryEntry(
+                    name=name,
+                    load_address=load_address,
+                    exec_address=exec_address,
+                    length=length,
+                    indirect_disc_address=indirect,
+                    sequence_number=0,
+                    attributes=_extract_new_attributes(atts),
+                )
+            )
+
+        return _ADFSDirectory(
+            name=dir_name,
+            title="",
+            parent_address=parent_address,
+            disc_address=disc_address,
+            entries=tuple(entries),
+            sequence_number=start_mas_seq,
+            signature=_BIG_DIR_START_NAME,
+            big_dir_size=dir_size,
+        )
+
+    def serialize(self, directory: _ADFSDirectory, data: SectorsView) -> None:
+        dir_size = directory.big_dir_size or _BIG_DIR_DEFAULT_SIZE
+        if len(data) < dir_size:
+            raise ADFSDirectoryError(
+                f"Output data too short: {len(data)} bytes, need {dir_size}"
+            )
+        for i in range(dir_size):
+            data[i] = 0
+
+        dir_name = directory.name.encode("latin-1")
+        name_len = len(dir_name)
+        header_size = _big_dir_header_size(name_len)
+
+        # Header.
+        data[0x00] = directory.sequence_number & 0xFF
+        data[0x04:0x08] = _BIG_DIR_START_NAME
+        _write_32bit_le(data, 0x08, name_len)
+        _write_32bit_le(data, 0x0C, dir_size)
+        _write_32bit_le(data, 0x10, len(directory.entries))
+        _write_32bit_le(data, 0x18, directory.parent_address)
+        for i, b in enumerate(dir_name):
+            data[0x1C + i] = b
+        data[0x1C + name_len] = 0x0D  # CR terminator
+
+        # Entries and name heap.
+        heap_offset = header_size + len(directory.entries) * _BIG_DIR_ENTRY_SIZE
+        name_ptr = 0
+        for i, entry in enumerate(directory.entries):
+            offset = header_size + i * _BIG_DIR_ENTRY_SIZE
+            _write_32bit_le(data, offset + 0x00, entry.load_address)
+            _write_32bit_le(data, offset + 0x04, entry.exec_address)
+            _write_32bit_le(data, offset + 0x08, entry.length)
+            _write_32bit_le(data, offset + 0x0C, entry.indirect_disc_address)
+            _write_32bit_le(data, offset + 0x10, _new_attributes_byte(entry.attributes))
+            name_bytes = entry.name.encode("latin-1")
+            _write_32bit_le(data, offset + 0x14, len(name_bytes))
+            _write_32bit_le(data, offset + 0x18, name_ptr)
+            for j, b in enumerate(name_bytes):
+                data[heap_offset + name_ptr + j] = b
+            data[heap_offset + name_ptr + len(name_bytes)] = 0x0D  # CR terminator
+            name_ptr += len(name_bytes) + 1
+
+        names_size = _word_align(name_ptr)
+        _write_32bit_le(data, 0x14, names_size)
+
+        # Tail.
+        tail = dir_size - _BIG_DIR_TAIL_SIZE
+        data[tail : tail + 4] = _BIG_DIR_END_NAME
+        data[tail + 4] = directory.sequence_number & 0xFF
+        data[tail + 7] = _calculate_big_dir_check(
+            data, dir_size, name_len, len(directory.entries), names_size
+        )
+
+
+def _write_32bit_le(data: SectorsView, offset: int, value: int) -> None:
+    for i in range(4):
+        data[offset + i] = (value >> (8 * i)) & 0xFF

@@ -91,6 +91,15 @@ class DiscRecord:
     disc_id: int
     disc_name: str
     disc_type: int
+    #: ``+`` extension: 1 on E+/F+/G discs, which use Big directories; 0 otherwise.
+    format_version: int = 0
+    #: ``+`` extension: byte size of the root directory (Big directories vary).
+    root_size: int = 0
+
+    @property
+    def uses_big_directories(self) -> bool:
+        """Whether this disc uses Big directories (the ``+`` formats)."""
+        return self.format_version >= 1
 
     @property
     def sector_size(self) -> int:
@@ -125,6 +134,9 @@ class DiscRecord:
         for i in range(10):
             data[offset + 0x16 + i] = name[i]
         _write_le(data, offset + 0x20, self.disc_type, 4)
+        if self.format_version:
+            _write_le(data, offset + 0x2C, self.format_version, 4)
+            _write_le(data, offset + 0x30, self.root_size, 4)
 
     @classmethod
     def parse(cls, data: SectorsView | bytes, offset: int = _DISC_RECORD_OFFSET) -> DiscRecord:
@@ -149,6 +161,8 @@ class DiscRecord:
             disc_id=_read_le(data, offset + 0x14, 2),
             disc_name=disc_name,
             disc_type=_read_le(data, offset + 0x20, 4),
+            format_version=_read_le(data, offset + 0x2C, 4),
+            root_size=_read_le(data, offset + 0x30, 4),
         )
 
     def looks_valid(self) -> bool:

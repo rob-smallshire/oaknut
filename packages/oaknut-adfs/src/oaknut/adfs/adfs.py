@@ -27,6 +27,7 @@ from oaknut.adfs.directory import (
     ADFS_NAME_GRAMMAR,
     Access,
     ADFSDirectoryFormat,
+    BigDirectoryFormat,
     NewDirectoryFormat,
     OldDirectoryFormat,
     _ADFSDirectory,
@@ -1730,9 +1731,14 @@ class ADFS:
         # valid zone check; try that before falling back to the Old map.
         new_map = _try_new_map(unified)
         if new_map is not None:
+            dir_format = (
+                BigDirectoryFormat()
+                if new_map.disc_record.uses_big_directories
+                else NewDirectoryFormat()
+            )
             return cls(
                 unified,
-                NewDirectoryFormat(),
+                dir_format,
                 None,
                 geometry,
                 new_map.disc_record.root,
@@ -2353,7 +2359,12 @@ class ADFS:
         address; :meth:`_object_disc_sector` resolves both to a sector.
         """
         sector = self._object_disc_sector(disc_address)
-        num_sectors = self._dir_format.size_in_sectors
+        # Peek the header to learn the size — Big directories vary; fixed
+        # directories ignore the peek and return their constant size.
+        header = self._disc.sector_range(sector, 1)
+        num_sectors = (
+            self._dir_format.directory_size(header) + _ADFS_BYTES_PER_SECTOR - 1
+        ) // _ADFS_BYTES_PER_SECTOR
         data = self._disc.sector_range(sector, num_sectors)
         directory = self._dir_format.parse(data, disc_address)
         _assert_entries_sorted(directory.entries)
@@ -2373,9 +2384,13 @@ class ADFS:
 
     def _write_directory_at(self, directory: _ADFSDirectory, disc_address: int) -> None:
         """Serialize a directory back to its sectors on disc."""
+        if isinstance(self._dir_format, BigDirectoryFormat):
+            raise ADFSError("writing Big directory (E+/F+/G) discs is not yet supported")
         _assert_entries_sorted(directory.entries)
         sector = self._object_disc_sector(disc_address)
-        num_sectors = self._dir_format.size_in_sectors
+        num_sectors = (
+            self._dir_format.serialized_size(directory) + _ADFS_BYTES_PER_SECTOR - 1
+        ) // _ADFS_BYTES_PER_SECTOR
         data = self._disc.sector_range(sector, num_sectors)
         self._dir_format.serialize(directory, data)
 
