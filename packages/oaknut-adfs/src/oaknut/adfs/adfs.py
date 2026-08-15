@@ -57,6 +57,8 @@ from oaknut.adfs.new_map import (
     f_plus_disc_record,
     format_blank_f,
     format_blank_single_zone,
+    g_disc_record,
+    g_plus_disc_record,
     hdd_disc_record,
 )
 from oaknut.discimage.surface import DiscImage, SurfaceSpec
@@ -283,6 +285,25 @@ ADFS_F_PLUS = ADFSFormat(
     total_sectors=6400,
     total_bytes=1638400,
     label="F+",
+    new_map=True,
+    big_directories=True,
+)
+
+#: ADFS G — 3.2MB eight-zone New Map with New directories (octal density).
+ADFS_G = ADFSFormat(
+    surface_specs=[_flat_spec(12800)],
+    total_sectors=12800,
+    total_bytes=3276800,
+    label="G",
+    new_map=True,
+)
+
+#: ADFS G+ — 3.2MB eight-zone New Map with Big directories.
+ADFS_G_PLUS = ADFSFormat(
+    surface_specs=[_flat_spec(12800)],
+    total_sectors=12800,
+    total_bytes=3276800,
+    label="G+",
     new_map=True,
     big_directories=True,
 )
@@ -1355,13 +1376,17 @@ def _initialise_new_map_blank(
     fragment so it can grow. Returns the disc record so the caller can build the
     :class:`NewMap` over the finished image.
     """
-    multizone = total_sectors * _ADFS_BYTES_PER_SECTOR == ADFS_F.total_bytes
-    if big_directories:
-        dr = (f_plus_disc_record if multizone else e_plus_disc_record)(
-            title, boot_option=boot_option
-        )
-    else:
-        dr = (f_disc_record if multizone else e_disc_record)(title, boot_option=boot_option)
+    # Pick the disc-record builder by total size: E (800K), F (1.6MB) or
+    # G (3.2MB), each with a Big-directory (``+``) variant.
+    total_bytes = total_sectors * _ADFS_BYTES_PER_SECTOR
+    builders = {
+        ADFS_E.total_bytes: (e_disc_record, e_plus_disc_record),
+        ADFS_F.total_bytes: (f_disc_record, f_plus_disc_record),
+        ADFS_G.total_bytes: (g_disc_record, g_plus_disc_record),
+    }
+    plain, plus = builders[total_bytes]
+    builder = plus if big_directories else plain
+    dr = builder(title, boot_option=boot_option)
     _lay_down_new_map(unified, dr, title)
     return dr
 

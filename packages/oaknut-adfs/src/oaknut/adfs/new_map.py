@@ -1118,6 +1118,52 @@ def f_plus_disc_record(title: str, *, disc_id: int = 0, boot_option: int = 0) ->
     )
 
 
+# ADFS G: 3.2MB, eight-zone New Map. The natural doubling of F — twice the
+# sectors per track and twice the zones — keeping F's 1024-byte sectors,
+# 64-byte map granularity and 15-bit ids. Octal density (8). No reference
+# formatter writes G, so these values follow FileCore's map invariant
+# (nzones*(8*secsize - zone_spare) - 480 >= disc_size/bpmb) and the New-dir
+# root convention root = 0x200 | (nzones*2 + 1); verified by round-trip.
+_G_ZONE_SPARE = _F_ZONE_SPARE  # 1600 bits, as F
+
+
+def g_disc_record(title: str, *, disc_id: int = 0, boot_option: int = 0) -> DiscRecord:
+    """Build the disc record for a blank 3.2MB eight-zone ADFS G disc."""
+    return DiscRecord(
+        log2_sector_size=10,
+        sectors_per_track=20,
+        heads=2,
+        density=8,
+        idlen=15,
+        log2_bytes_per_map_bit=6,  # 64 bytes per map bit
+        skew=1,
+        boot_option=boot_option,
+        low_sector=0,
+        nzones=8,
+        zone_spare=_G_ZONE_SPARE,
+        root=0x211,  # 0x200 | (nzones*2 + 1)
+        disc_size=3276800,
+        disc_id=disc_id,
+        disc_name=title[:10],
+        disc_type=_DISCTYPE_NON_PLUS,
+    )
+
+
+def g_plus_disc_record(title: str, *, disc_id: int = 0, boot_option: int = 0) -> DiscRecord:
+    """Disc record for a blank 3.2MB eight-zone ADFS G+ disc (Big directories)."""
+    dr = g_disc_record(title, disc_id=disc_id, boot_option=boot_option)
+    root_fragment = (dr.nzones // 2) * (
+        (dr.sector_size * 8 - dr.zone_spare) // (dr.idlen + 1)
+    )
+    return replace(
+        dr,
+        root=(root_fragment << 8) | 1,
+        disc_type=_DISCTYPE_PLUS,
+        format_version=1,
+        root_size=_BIG_DIR_ROOT_SIZE,
+    )
+
+
 def hard_drive_params(disc_size: int, *, big_map: bool = False, ide: bool = True) -> dict | None:
     """Compute New Map parameters for a hard disc of *disc_size* bytes.
 
@@ -1264,11 +1310,6 @@ def _boot_block_checksum(data: SectorsView, offset: int, size: int) -> int:
     return acc & 0xFF
 
 
-#: Largest floppy New Map disc; above this the boot block carries hard-disc
-#: hardware information (RISC OS/emulators expect it to mount the disc).
-_FLOPPY_MAX_SIZE = 1638400
-
-
 def _write_hard_disc_hardware_info(data: SectorsView, dr: DiscRecord) -> None:
     """Write the boot block's hard-disc hardware fields (matching FileCore/HForm).
 
@@ -1332,7 +1373,9 @@ def format_blank_f(
     # Boot block: defect-list terminator (0x20000000), hard-disc hardware info
     # (for hard discs), the partial disc record, and the checksum last.
     data[_BOOT_BLOCK_OFFSET + 3] = 0x20
-    if dr.disc_size > _FLOPPY_MAX_SIZE:
+    # Only actual hard discs (density 0) carry the hardware info; a G-format
+    # floppy is larger than an F floppy but is still a floppy (octal density).
+    if dr.density == 0:
         _write_hard_disc_hardware_info(data, dr)
     _write_partial_disc_record(data, dr)
     data[_BOOT_CHECKSUM_OFFSET] = _boot_block_checksum(
