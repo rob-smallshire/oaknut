@@ -1675,7 +1675,9 @@ class ADFS:
 
     @staticmethod
     @contextmanager
-    def from_file(filepath: Union[str, PathLike]) -> Iterator[ADFS]:
+    def from_file(
+        filepath: Union[str, PathLike], *, read_only: bool = False
+    ) -> Iterator[ADFS]:
         """Open an ADFS disc image file as a context manager.
 
         For floppy images (``.adf``, ``.adl``), auto-detects the format
@@ -1689,10 +1691,14 @@ class ADFS:
         The image is opened writable when host filesystem permissions
         allow, read-only otherwise. Mutations attempted against a
         read-only-backed image raise from the mmap layer at the point
-        of write.
+        of write. Pass ``read_only=True`` to force this even when the file
+        is writable — a caller that only reads a shared or committed image
+        uses it to guarantee the file cannot be modified.
 
         Args:
             filepath: Path to the disc image file.
+            read_only: Force a read-only mapping (default opens writable
+                when the host permits).
 
         Yields:
             ADFS instance backed by the file.
@@ -1705,6 +1711,7 @@ class ADFS:
 
         p = Path(filepath)
         ext = p.suffix.lower()
+        writable = not read_only
 
         if ext in (".dat", ".dsc"):
             dat_filepath = p.with_suffix(".dat")
@@ -1718,7 +1725,7 @@ class ADFS:
                 geometry = _parse_dsc(dsc_filepath)
                 dat_size = dat_filepath.stat().st_size
                 fmt = _hard_disc_format(geometry, dat_size)
-                with open_image_mmap(dat_filepath) as (mm, _writable):
+                with open_image_mmap(dat_filepath, writable=writable) as (mm, _writable):
                     adfs = ADFS._from_buffer_with_format(memoryview(mm), fmt, geometry)
                     try:
                         yield adfs
@@ -1727,7 +1734,7 @@ class ADFS:
             else:
                 # New Map hard discs carry their geometry in the disc record, so
                 # no sidecar is needed; content detection handles them.
-                with open_image_mmap(dat_filepath) as (mm, _writable):
+                with open_image_mmap(dat_filepath, writable=writable) as (mm, _writable):
                     adfs = ADFS.from_buffer(memoryview(mm))
                     try:
                         yield adfs
@@ -1738,7 +1745,7 @@ class ADFS:
             # cannot, the extension breaks the tie — ``.adl`` is the
             # interleaved convention, so any other suffix leans linear.
             prefer_sequential = ext != ".adl"
-            with open_image_mmap(p) as (mm, _writable):
+            with open_image_mmap(p, writable=writable) as (mm, _writable):
                 adfs = ADFS.from_buffer(memoryview(mm), prefer_sequential=prefer_sequential)
                 try:
                     yield adfs

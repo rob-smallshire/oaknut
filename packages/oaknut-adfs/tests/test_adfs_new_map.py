@@ -25,7 +25,7 @@ NEWLOOK = RISCOS_DIRPATH / "E_RISCOS310_NewLook.adf"
 
 
 def test_e_format_detected_as_new_map():
-    with ADFS.from_file(NEWLOOK) as adfs:
+    with ADFS.from_file(NEWLOOK, read_only=True) as adfs:
         assert adfs.is_new_map
         assert isinstance(adfs._dir_format, NewDirectoryFormat)
 
@@ -50,20 +50,20 @@ def test_zone_check_matches_stored():
 
 
 def test_disc_level_metadata_from_disc_record():
-    with ADFS.from_file(NEWLOOK) as adfs:
+    with ADFS.from_file(NEWLOOK, read_only=True) as adfs:
         assert adfs.total_size == 819200
         assert adfs.disc_name == "NewLook"
         assert 0 < adfs.free_space < adfs.total_size
 
 
 def test_root_listing():
-    with ADFS.from_file(NEWLOOK) as adfs:
+    with ADFS.from_file(NEWLOOK, read_only=True) as adfs:
         names = {p.name for p in adfs.root.iterdir()}
     assert {"!NewLook", "ReadMe", "OldTempl", "TemplApp1", "TemplApp2", "TemplSupp"} <= names
 
 
 def test_read_file_via_fragment():
-    with ADFS.from_file(NEWLOOK) as adfs:
+    with ADFS.from_file(NEWLOOK, read_only=True) as adfs:
         readme = adfs.root / "ReadMe"
         stat = readme.stat()
         assert not stat.is_directory
@@ -73,7 +73,7 @@ def test_read_file_via_fragment():
 
 
 def test_descend_subdirectory():
-    with ADFS.from_file(NEWLOOK) as adfs:
+    with ADFS.from_file(NEWLOOK, read_only=True) as adfs:
         newlook = adfs.root / "!NewLook"
         assert newlook.is_dir()
         # Every child resolves through the map and stats cleanly.
@@ -84,13 +84,13 @@ def test_descend_subdirectory():
 
 
 def test_whole_tree_validates():
-    with ADFS.from_file(NEWLOOK) as adfs:
+    with ADFS.from_file(NEWLOOK, read_only=True) as adfs:
         assert adfs.validate() == []
 
 
 def test_every_object_resolves_and_reads():
     """Walk the whole tree; read every file's full length via the map."""
-    with ADFS.from_file(NEWLOOK) as adfs:
+    with ADFS.from_file(NEWLOOK, read_only=True) as adfs:
 
         def walk(path):
             count = 0

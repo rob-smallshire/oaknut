@@ -31,7 +31,7 @@ WELCOME = RISCOS_DIRPATH / "D_Arthur_Welcome.adf"
 
 
 def test_d_format_detected_as_new_directory():
-    with ADFS.from_file(APP1) as adfs:
+    with ADFS.from_file(APP1, read_only=True) as adfs:
         assert isinstance(adfs._dir_format, NewDirectoryFormat)
         assert adfs._root_address == 4  # 0x400
         # 800K, addressed as a flat linear surface.
@@ -39,7 +39,7 @@ def test_d_format_detected_as_new_directory():
 
 
 def test_d_format_root_listing():
-    with ADFS.from_file(APP1) as adfs:
+    with ADFS.from_file(APP1, read_only=True) as adfs:
         names = [p.name for p in adfs.root.iterdir()]
     assert "!System" in names
     assert "ReadMe" in names
@@ -52,12 +52,12 @@ def test_d_format_root_listing():
 
 
 def test_d_format_root_title():
-    with ADFS.from_file(APP1) as adfs:
+    with ADFS.from_file(APP1, read_only=True) as adfs:
         assert adfs.root.title == "0283,019-01"
 
 
 def test_d_format_entry_attributes_from_atts_byte():
-    with ADFS.from_file(APP1) as adfs:
+    with ADFS.from_file(APP1, read_only=True) as adfs:
         system = adfs.root / "!System"
         assert system.is_dir()
         readme = adfs.root / "ReadMe"
@@ -68,7 +68,7 @@ def test_d_format_entry_attributes_from_atts_byte():
 
 
 def test_d_format_read_file_data():
-    with ADFS.from_file(APP1) as adfs:
+    with ADFS.from_file(APP1, read_only=True) as adfs:
         data = (adfs.root / "ReadMe").read_bytes()
     assert len(data) == 2290
     # The Acorn ReadMe is plain text.
@@ -77,7 +77,7 @@ def test_d_format_read_file_data():
 
 
 def test_d_format_descend_subdirectory():
-    with ADFS.from_file(APP1) as adfs:
+    with ADFS.from_file(APP1, read_only=True) as adfs:
         system = adfs.root / "!System"
         children = [p.name for p in system.iterdir()]
         # !System always carries a !Boot and a Modules directory.

@@ -670,12 +670,16 @@ class DFS:
         disc_format: DiscFormat | None = None,
         *,
         side: int = 0,
+        read_only: bool = False,
     ) -> Iterator["DFS"]:
         """Open a disc image file as a context manager.
 
         The image is opened writable when host filesystem permissions
         allow, read-only otherwise. Mutations against a read-only-backed
-        image raise from the mmap layer at the point of write.
+        image raise from the mmap layer at the point of write. Pass
+        ``read_only=True`` to force this even when the file is writable —
+        a caller that only reads a shared or committed image uses it to
+        guarantee the file cannot be modified.
 
         ``disc_format`` is optional — when omitted, the format is
         auto-detected from the file extension and size (see
@@ -728,7 +732,7 @@ class DFS:
                 dfs.close()
             return
 
-        with open_image_mmap(filepath) as (mm, _writable):
+        with open_image_mmap(filepath, writable=not read_only) as (mm, _writable):
             dfs = DFS.from_buffer(memoryview(mm), disc_format, side)
             try:
                 yield dfs

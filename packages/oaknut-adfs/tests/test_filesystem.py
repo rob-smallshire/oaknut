@@ -137,6 +137,22 @@ class TestGeometryGrammar:
         assert grammar.parse("g").image_size == 3276800
 
 
+class TestReadOnlyOpen:
+    """``read_only=True`` guarantees a committed image cannot be modified."""
+
+    def test_read_only_open_cannot_mutate_the_file(self, tmp_path):
+        filepath = tmp_path / "disc.ads"
+        with ADFS.create_file(str(filepath), ADFS_S, title="RO") as adfs:
+            (adfs.root / "$.KEEP").write_bytes(b"original")
+        before = filepath.read_bytes()
+
+        with ADFS.from_file(filepath, read_only=True) as adfs:
+            assert (adfs.root / "$.KEEP").read_bytes() == b"original"
+            with pytest.raises((TypeError, ValueError, BufferError)):
+                (adfs.root / "$.NEW").write_bytes(b"x")
+        assert filepath.read_bytes() == before
+
+
 class TestCreateVariants:
     """Each ADFS floppy format is reachable through its ``--geometry`` preset."""
 

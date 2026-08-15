@@ -21,32 +21,42 @@ from typing import Iterator
 
 
 @contextmanager
-def open_image_mmap(filepath: Path) -> Iterator[tuple[mmap.mmap, bool]]:
+def open_image_mmap(filepath: Path, *, writable: bool = True) -> Iterator[tuple[mmap.mmap, bool]]:
     """Open ``filepath`` as an mmap, writable when the host allows it.
 
-    Tries ``r+b`` first; on :class:`PermissionError` falls back to
-    ``rb``. The yielded tuple is ``(mm, writable)`` so callers know
-    whether to ``mm.flush()`` on clean exit.
+    With ``writable`` (the default) tries ``r+b`` first, falling back to
+    ``rb`` on :class:`PermissionError`. Pass ``writable=False`` to force a
+    read-only mmap — a caller that only reads (e.g. scanning committed test
+    fixtures) uses this so no accidental write can ever be flushed back to the
+    file; the read-only mapping makes any attempted mutation raise at once
+    rather than silently persist. The yielded tuple is ``(mm, writable)`` so
+    callers know whether to ``mm.flush()`` on clean exit.
 
     Args:
         filepath: Path to an existing disc-image file.
+        writable: Open for writing when the host permits (default); ``False``
+            forces a read-only mapping.
 
     Yields:
         ``(mmap, writable)`` — the mmap is sized to the whole file
         and held open for the duration of the ``with`` block.
     """
-    try:
-        f = open(filepath, "r+b")
-        writable = True
-    except PermissionError:
+    if writable:
+        try:
+            f = open(filepath, "r+b")
+            opened_writable = True
+        except PermissionError:
+            f = open(filepath, "rb")
+            opened_writable = False
+    else:
         f = open(filepath, "rb")
-        writable = False
+        opened_writable = False
 
     with f:
-        access = mmap.ACCESS_WRITE if writable else mmap.ACCESS_READ
+        access = mmap.ACCESS_WRITE if opened_writable else mmap.ACCESS_READ
         mm = mmap.mmap(f.fileno(), 0, access=access)
         try:
-            yield mm, writable
+            yield mm, opened_writable
         finally:
-            if writable:
+            if opened_writable:
                 mm.flush()

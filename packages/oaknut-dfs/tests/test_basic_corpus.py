@@ -136,16 +136,19 @@ def _programs() -> Iterator[tuple[str, bytes]]:
     )
     for image in images:
         suffix = image.suffix.lower()
+        # Open every committed image read-only: this sweep only reads, and a
+        # read-only mapping guarantees the corpus files on disc cannot be
+        # mutated (a stray write raises rather than silently persisting).
         try:
             if suffix in (".ssd", ".dsd"):
                 from oaknut.dfs import DFS
 
-                with DFS.from_file(image) as disc:
+                with DFS.from_file(image, read_only=True) as disc:
                     files = list(_walk(disc.root))
             else:
                 from oaknut.adfs import ADFS
 
-                with ADFS.from_file(image) as disc:
+                with ADFS.from_file(image, read_only=True) as disc:
                     files = list(_walk(disc.root))
         except Exception:  # noqa: BLE001 - image that won't open; skip
             continue

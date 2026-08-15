@@ -46,6 +46,24 @@ class TestCreateFileClosesMmap:
         assert all(m.closed for m in created), "create_file leaked its mmap"
 
 
+class TestReadOnlyOpen:
+    """``read_only=True`` guarantees a committed image cannot be modified."""
+
+    def test_read_only_open_cannot_mutate_the_file(self, tmp_path):
+        filepath = tmp_path / "disc.ssd"
+        with DFS.create_file(filepath, ACORN_DFS_80T_SINGLE_SIDED, title="RO") as dfs:
+            (dfs.root / "$.KEEP").write_bytes(b"original")
+        before = filepath.read_bytes()
+
+        # A read-only open can read, but a write attempt raises from the
+        # read-only mapping rather than silently persisting.
+        with DFS.from_file(filepath, read_only=True) as dfs:
+            assert (dfs.root / "$.KEEP").read_bytes() == b"original"
+            with pytest.raises((TypeError, ValueError, BufferError)):
+                (dfs.root / "$.NEW").write_bytes(b"x")
+        assert filepath.read_bytes() == before
+
+
 class TestDFSNamedConstructors:
     """Tests for from_ssd() and from_dsd()."""
 
