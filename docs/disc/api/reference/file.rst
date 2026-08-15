@@ -61,6 +61,8 @@ and hexadecimal representations used in INF sidecars and CLI output.
 
 .. autofunction:: oaknut.file.parse_access
 
+.. autofunction:: oaknut.file.parse_access_spec
+
 .. autofunction:: oaknut.file.format_access_text
 
 .. autofunction:: oaknut.file.format_access_hex

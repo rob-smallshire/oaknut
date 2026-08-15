@@ -2413,7 +2413,11 @@ def mkdir(compound_path: str, p: bool, dir_title: str | None) -> None:
 _alias("*CDIR", "mkdir")
 
 
-@cli.command()
+# ignore_unknown_options lets an incremental ACCESS that starts with '-'
+# (e.g. "-W" to remove owner write) reach the argument instead of being
+# parsed as an option; the command's real options (-r, --dry-run, wildcards)
+# still parse normally.
+@cli.command(context_settings={"ignore_unknown_options": True})
 @click.argument("compound_path", metavar="OUTER_PATH:INNER_PATH")
 @click.argument("access")
 @click.option("-r", "--recursive", is_flag=True, help="Recurse into directory matches.")
@@ -2432,25 +2436,31 @@ def chmod(
 
     Accepts a ``COMPOUND_PATH`` and an ``ACCESS``.
 
-    ACCESS is symbolic (e.g. LWR/R, WR/WR) or hex (0x0B, 33).
-    DFS only supports the L (locked) bit; other flags are ignored.
+    ACCESS is either absolute or incremental. An absolute value —
+    symbolic (LWR/R, WR/WR) or hex (0x0B, 33) — replaces the access
+    wholesale. An incremental value begins with ``+`` or ``-`` and edits
+    the current access: ``+L`` locks, ``-W`` removes owner write, ``+R/R``
+    adds owner and public read, and clauses combine (``+L-W``). DFS only
+    supports the L (locked) bit; other flags are ignored.
 
     PATH may contain the filesystem's wildcards (see ``disc
     describe-filesystem``) to apply the same access to every matching
     file, unless ``--no-wildcards`` is given.  ``-r`` recurses into any
     directory match.
     """
-    from oaknut.file import parse_access
+    from oaknut.file import parse_access_spec
 
-    flags = parse_access(access)
-    # chmod replaces the access wholesale; the mount maps it to its layout
-    # (DFS keeps only the lock bit, ADFS/AFS the full set).
+    # An absolute spec replaces the access wholesale; a ``+``/``-`` spec edits
+    # each file's current access. The mount maps the result to its own layout
+    # (DFS keeps only the lock bit, ADFS/AFS the full set). Parsing here
+    # validates the spec before any file is touched.
+    transform = parse_access_spec(access)
     _mutate_access(
         compound_path,
         recursive=recursive,
         dry_run=dry_run,
         verb=lambda target: f"would chmod {target} {access}",
-        transform=lambda _current: flags,
+        transform=transform,
         wildcards=wildcards,
     )
 

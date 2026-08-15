@@ -567,11 +567,55 @@ class TestLsAccessByteFlag:
         unsupported ``+L`` incremental syntax). It must exit non-zero with an
         informative message and no leaked exception instead.
         """
-        result = runner.invoke(cli, ["chmod", f"{adfs_image_filepath}:$.Hello", "+L"])
+        result = runner.invoke(cli, ["chmod", f"{adfs_image_filepath}:$.Hello", "+Q"])
         assert result.exit_code != 0
         # Handled by the boundary — not an uncaught exception dumping a traceback.
         assert not isinstance(result.exception, ValueError)
         assert "access letter" in result.output.lower(), result.output
+
+    def _attr(self, runner: CliRunner, target: str) -> str:
+        # Default (non-TTY) output is TSV: an "Attr\t<value>" row.
+        result = runner.invoke(cli, ["stat", target])
+        assert result.exit_code == 0, result.output
+        row = next(line for line in result.output.splitlines() if line.startswith("Attr"))
+        return row.split("\t", 1)[1].strip()
+
+    def test_chmod_plus_adds_a_flag_keeping_the_rest(
+        self, runner: CliRunner, adfs_image_filepath: Path
+    ) -> None:
+        target = f"{adfs_image_filepath}:$.Hello"
+        assert runner.invoke(cli, ["chmod", target, "WR/R"]).exit_code == 0
+        assert self._attr(runner, target) == "WR/R"
+        # +L adds the lock bit without disturbing the existing W, R, public R.
+        assert runner.invoke(cli, ["chmod", target, "+L"]).exit_code == 0
+        assert self._attr(runner, target) == "LWR/R"
+
+    def test_chmod_minus_removes_a_flag_keeping_the_rest(
+        self, runner: CliRunner, adfs_image_filepath: Path
+    ) -> None:
+        target = f"{adfs_image_filepath}:$.Hello"
+        assert runner.invoke(cli, ["chmod", target, "LWR/R"]).exit_code == 0
+        assert runner.invoke(cli, ["chmod", target, "-W"]).exit_code == 0
+        assert self._attr(runner, target) == "LR/R"
+
+    def test_chmod_combined_incremental_clauses(
+        self, runner: CliRunner, adfs_image_filepath: Path
+    ) -> None:
+        target = f"{adfs_image_filepath}:$.Hello"
+        assert runner.invoke(cli, ["chmod", target, "WR/"]).exit_code == 0
+        # Add the lock and public read, drop owner write, in one argument.
+        assert runner.invoke(cli, ["chmod", target, "+L-W+/R"]).exit_code == 0
+        assert self._attr(runner, target) == "LR/R"
+
+    def test_chmod_incremental_bad_flag_is_a_clean_error(
+        self, runner: CliRunner, adfs_image_filepath: Path
+    ) -> None:
+        result = runner.invoke(cli, ["chmod", f"{adfs_image_filepath}:$.Hello", "+L"])
+        assert result.exit_code == 0  # +L is valid; sanity that the good path works
+        bad = runner.invoke(cli, ["chmod", f"{adfs_image_filepath}:$.Hello", "+Z"])
+        assert bad.exit_code != 0
+        assert not isinstance(bad.exception, ValueError)
+        assert "access letter" in bad.output.lower()
 
     def test_default_ls_has_no_hex_column(
         self, runner: CliRunner, afs_image_with_access_bytes: Path

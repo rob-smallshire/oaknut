@@ -152,7 +152,7 @@ Each command's first positional is a **`COMPOUND_PATH`** — an `OUTER_PATH:INNE
 | `mv SRC DST` (alias `*rename`) | Rename / move within an image. `SRC` is a `COMPOUND_PATH`; `DST` is either a full `COMPOUND_PATH` naming the same OUTER_PATH or a bare `INNER_PATH` that inherits `SRC`'s image and partition. `-f` overwrite an existing destination. |
 | `cp SRC DST` (alias `*copy`) | Copy a file or tree. `SRC` and `DST` are `COMPOUND_PATH`s: the same OUTER_PATH on both sides copies within an image, different OUTER_PATHs copy across them. `-r` recurse, `-f` overwrite an existing destination. |
 | `mkdir COMPOUND_PATH` (alias `*cdir`) | Create a directory (ADFS only). `-p` no error if the directory already exists. |
-| `chmod COMPOUND_PATH ACCESS` (alias `*access`) | Set access (e.g. `LWR/R` or hex `0x1B`). |
+| `chmod COMPOUND_PATH ACCESS` (alias `*access`) | Set access. Absolute (e.g. `LWR/R` or hex `0x1B`) replaces it; incremental (`+L`, `-W`, `+R/R`, `+L-W`) edits the current value. |
 | `lock COMPOUND_PATH`, `unlock COMPOUND_PATH` | Convenience wrappers over `chmod`. |
 | `set-load COMPOUND_PATH ADDR`, `set-exec COMPOUND_PATH ADDR` | Edit load / exec addresses in place. |
 | `title COMPOUND_PATH [NEW_TITLE]` (alias `*title`) | Read or set disc title. With an INNER_PATH, reads/sets an ADFS directory title. |

@@ -6,6 +6,7 @@ from oaknut.file.access import (
     format_access_hex,
     format_access_text,
     parse_access,
+    parse_access_spec,
 )
 
 
@@ -197,3 +198,53 @@ class TestParseAccess:
                 parse_access(bad)
             assert isinstance(info.value, DataError)
             assert isinstance(info.value, ValueError)
+
+
+class TestParseAccessSpec:
+    """parse_access_spec compiles an absolute or incremental spec to a transform."""
+
+    def test_absolute_spec_replaces_ignoring_current(self):
+        transform = parse_access_spec("LWR/R")
+        expected = Access.L | Access.W | Access.R | Access.PR
+        assert transform(Access(0)) == expected
+        # Absolute replaces wholesale — a current public-write flag is dropped.
+        assert transform(Access.PW) == expected
+
+    def test_absolute_hex_spec(self):
+        assert parse_access_spec("0x0B")(Access.PW) == Access(0x0B)
+
+    def test_plus_adds_owner_flag(self):
+        assert parse_access_spec("+L")(Access.R) == Access.R | Access.L
+
+    def test_minus_removes_owner_flag(self):
+        assert parse_access_spec("-W")(Access.W | Access.R) == Access.R
+
+    def test_combined_clauses_apply_left_to_right(self):
+        assert parse_access_spec("+L-W")(Access.W | Access.R) == Access.R | Access.L
+
+    def test_public_flags_via_slash(self):
+        assert parse_access_spec("+R/R")(Access(0)) == Access.R | Access.PR
+        assert parse_access_spec("-/R")(Access.PR | Access.R) == Access.R
+        assert parse_access_spec("+/W")(Access.R) == Access.R | Access.PW
+
+    def test_incremental_is_case_insensitive(self):
+        assert parse_access_spec("+l")(Access(0)) == Access.L
+
+    def test_incremental_is_idempotent(self):
+        assert parse_access_spec("+L")(Access.L) == Access.L
+        assert parse_access_spec("-X")(Access.R) == Access.R
+
+    def test_unknown_letter_raises_immediately(self):
+        # Validated at compile time, before any file is touched.
+        from oaknut.file.exceptions import InvalidAccessError
+
+        with pytest.raises(InvalidAccessError):
+            parse_access_spec("+Q")
+
+    def test_empty_operation_raises(self):
+        from oaknut.file.exceptions import InvalidAccessError
+
+        with pytest.raises(InvalidAccessError):
+            parse_access_spec("+")
+        with pytest.raises(InvalidAccessError):
+            parse_access_spec("+L-")

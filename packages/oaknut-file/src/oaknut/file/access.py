@@ -8,6 +8,7 @@ ensuring compatibility with PiEconetBridge ``perm`` and the
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from enum import IntFlag
 
 from oaknut.file.exceptions import InvalidAccessError
@@ -92,11 +93,20 @@ def parse_access(text: str) -> Access:
             return Access(int(stripped, 16))
 
     # Symbolic: owner/public or owner-only.
-    if "/" in stripped:
-        owner_part, public_part = stripped.split("/", 1)
+    return _parse_letters(stripped)
+
+
+def _parse_letters(text: str) -> Access:
+    """Parse an ``owner/public`` (or owner-only) letter group into an ``Access``.
+
+    Shared by the symbolic branch of :func:`parse_access` and by each
+    ``+``/``-`` clause of :func:`parse_access_spec`. Letters before the slash
+    are owner flags (L, W, R, E, X); letters after are public flags (W, R).
+    """
+    if "/" in text:
+        owner_part, public_part = text.split("/", 1)
     else:
-        owner_part = stripped
-        public_part = ""
+        owner_part, public_part = text, ""
 
     result = Access(0)
     for ch in owner_part.upper():
@@ -108,6 +118,63 @@ def parse_access(text: str) -> Access:
             raise InvalidAccessError(f"unrecognised public access letter '{ch}'")
         result |= _PUBLIC_LETTERS[ch]
     return result
+
+
+def parse_access_spec(spec: str) -> Callable[[Access], Access]:
+    """Compile an access spec into a transform on a file's current access.
+
+    An **absolute** spec — ``"LWR/R"``, ``"WR/WR"``, ``"0x0B"``, ``"33"`` — is
+    parsed by :func:`parse_access` and *replaces* the access wholesale, ignoring
+    the current value.
+
+    An **incremental** spec begins with ``+`` or ``-`` and edits the current
+    value: a sequence of ``+letters`` / ``-letters`` clauses applied left to
+    right. Each clause uses the same owner/public slash convention as the
+    absolute form, so ``+L`` locks, ``-W`` removes owner write, ``+R/R`` adds
+    owner and public read, ``-/R`` removes public read, and ``+L-W`` combines
+    them. Incremental edits are idempotent (adding a set flag or removing a
+    clear one is a no-op).
+
+    The spec is validated *now*, so a malformed one raises
+    :class:`~oaknut.file.exceptions.InvalidAccessError` immediately — even when
+    the resulting transform is later applied to no files.
+    """
+    stripped = spec.strip()
+    if stripped[:1] not in ("+", "-"):
+        value = parse_access(stripped)
+        return lambda _current: value
+
+    operations = _parse_increments(stripped)
+
+    def transform(current: Access) -> Access:
+        result = current
+        for add, flags in operations:
+            result = (result | flags) if add else (result & ~flags)
+        return result
+
+    return transform
+
+
+def _parse_increments(spec: str) -> list[tuple[bool, Access]]:
+    """Split an incremental spec into ``(is_add, flags)`` clauses, validated.
+
+    *spec* is known to start with ``+`` or ``-``. Each clause runs from a
+    ``+``/``-`` sign up to the next sign; an empty clause (a bare sign) is an
+    error, as is any unrecognised letter.
+    """
+    operations: list[tuple[bool, Access]] = []
+    i, n = 0, len(spec)
+    while i < n:
+        add = spec[i] == "+"
+        j = i + 1
+        while j < n and spec[j] not in "+-":
+            j += 1
+        letters = spec[i + 1 : j]
+        if not letters:
+            raise InvalidAccessError(f"empty '{spec[i]}' operation in access spec {spec!r}")
+        operations.append((add, _parse_letters(letters)))
+        i = j
+    return operations
 
 
 def format_access_hex(attr: int | None) -> str:

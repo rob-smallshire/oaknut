@@ -9,7 +9,13 @@ __version__ = "12.13.1"
 
 # Side-effect import registers the 'acorn' text codec on package import.
 import oaknut.file.acorn_encoding  # noqa: F401
-from oaknut.file.access import Access, format_access_hex, format_access_text, parse_access
+from oaknut.file.access import (
+    Access,
+    format_access_hex,
+    format_access_text,
+    parse_access,
+    parse_access_spec,
+)
 from oaknut.file.address import parse_address
 from oaknut.file.boot_option import BootOption
 from oaknut.file.copy import copy_file
@@ -90,6 +96,7 @@ __all__ = [
     "format_access_hex",
     "format_access_text",
     "parse_access",
+    "parse_access_spec",
     "format_pieb_inf_line",
     "format_trad_inf_line",
     "parse_encoded_filename",
