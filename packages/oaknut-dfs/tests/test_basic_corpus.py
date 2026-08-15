@@ -53,6 +53,10 @@ _WORKSPACE_ROOT = Path(__file__).resolve().parents[3]
 #     FontDes, re-crunches to a statement line the II tokeniser reads as an
 #     out-of-range line number). This is the same class as the BASIC IV
 #     MasterWelcome entries — a property of the program, not our II codec.
+#     Tracked by issue #45 (tokenise/detokenise dialect asymmetry); when a
+#     dialect-aware tokeniser lands, remove the twelve BASIC V entries below
+#     so this test enforces byte-exact BASIC V round-tripping.
+#     https://github.com/rob-smallshire/oaknut/issues/45
 KNOWN_LIMITATIONS: frozenset[str] = frozenset(
     {
         "D_Arthur_Welcome.adf:$.Apps.FontAlias",
