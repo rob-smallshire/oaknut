@@ -81,6 +81,19 @@ class TestCreatedNewMapMetadata:
             assert adfs.validate() == []
 
 
+class TestNewMapStatGeometry:
+    def test_stat_reports_a_real_floppy_shape(self, runner: CliRunner, tmp_path: Path):
+        # Regression: `disc create disc.adf --geometry f` then `stat` reported a
+        # degenerate "1 cylinders x 1 heads x 6400 sectors/track" shape.
+        image = tmp_path / "disc.adf"
+        assert _run(runner, "create", str(image), "--geometry", "f").exit_code == 0
+        out = _run(runner, "stat", str(image))
+        assert out.exit_code == 0, out.output
+        geom_row = next(line for line in out.output.splitlines() if "Geometry" in line)
+        assert "1 cylinders" not in geom_row
+        assert "80 cylinders" in geom_row and "2 heads" in geom_row
+
+
 class TestRiscOsSpecimenMetadata:
     """Read-only verbs against the committed E-format RISC OS specimen."""
 

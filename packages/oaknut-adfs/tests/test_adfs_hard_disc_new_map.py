@@ -163,3 +163,26 @@ def test_created_hdd_is_emulator_mountable_structure():
     assert raw[boot + 0x1FF] == _boot_block_checksum(bytearray(raw[boot : boot + 0x200]), 0, 0x200)
     # The header region (the wrapped disc tail) is unused, as on real .hdf images.
     assert all(b == 0 for b in raw[: dr.low_sector * dr.sector_size])
+
+
+def test_created_hard_disc_geometry_is_not_degenerate(tmp_path):
+    # The New-map floppy geometry bug (a degenerate 1x1xN shape) had the same
+    # root cause on hard discs. A created HDD must report a real multi-cylinder,
+    # multi-head shape, and re-reading the image must agree with it.
+    image = tmp_path / "hd.adf"
+    adfs = ADFS.create_new_map_hard_disc("8MB", title="HD")
+    try:
+        created = adfs.geometry
+        raw = bytes(adfs._disc.sector_range(0, adfs._map.disc_record.disc_size // 256))
+    finally:
+        adfs.close()
+    assert created.cylinders > 1 and created.heads > 1 and created.sectors_per_track > 1
+
+    image.write_bytes(raw)
+    with ADFS.from_file(image, read_only=True) as reopened:
+        g = reopened.geometry
+    assert (g.cylinders, g.heads, g.sectors_per_track) == (
+        created.cylinders,
+        created.heads,
+        created.sectors_per_track,
+    )

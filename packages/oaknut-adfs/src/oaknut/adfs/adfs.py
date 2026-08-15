@@ -371,6 +371,26 @@ _FLOPPY_GEOMETRY = {
 }
 
 
+def _new_map_geometry(disc_record: DiscRecord) -> ADFSGeometry:
+    """Derive an :class:`ADFSGeometry` from a New-map disc record.
+
+    ADFSGeometry counts ADFS's 256-byte logical sectors (as the S/M/L/D floppy
+    entries do), while a New-map disc record's ``sectors_per_track`` counts its
+    larger physical sectors (1024 bytes on floppies, 512 on IDE hard discs). So
+    the physical count is scaled to 256-byte sectors and the cylinder count
+    derived from the total, giving ``total_sectors == disc_size / 256`` — e.g.
+    ADFS F becomes 80 × 2 × 40, not the degenerate 1 × 1 × 6400 the flat
+    hard-disc fallback produced.
+    """
+    logical_per_physical = disc_record.sector_size // _ADFS_BYTES_PER_SECTOR
+    logical_spt = disc_record.sectors_per_track * logical_per_physical
+    heads = disc_record.heads
+    sectors_per_cylinder = heads * logical_spt
+    total_logical = disc_record.disc_size // _ADFS_BYTES_PER_SECTOR
+    cylinders = total_logical // sectors_per_cylinder if sectors_per_cylinder else total_logical
+    return ADFSGeometry(cylinders=cylinders, heads=heads, sectors_per_track=logical_spt)
+
+
 def _parse_dsc(filepath: Union[str, PathLike]) -> ADFSGeometry:
     """Parse a 22-byte .dsc sidecar file.
 
@@ -1835,11 +1855,15 @@ class ADFS:
                 if new_map.disc_record.uses_big_directories
                 else NewDirectoryFormat()
             )
+            # The disc record is the authority for a New-map disc's own
+            # geometry; use it rather than the geometry synthesised from the
+            # raw image size (which is a degenerate 1 × 1 × N for the F/G
+            # floppies that are not in the fixed-size floppy table).
             return cls(
                 unified,
                 dir_format,
                 None,
-                geometry,
+                _new_map_geometry(new_map.disc_record),
                 new_map.disc_record.root,
                 new_map=new_map,
             )
@@ -1885,12 +1909,7 @@ class ADFS:
             dir_format = (
                 BigDirectoryFormat() if adfs_format.big_directories else NewDirectoryFormat()
             )
-            geom = ADFSGeometry(
-                cylinders=disc_record.disc_size
-                // (disc_record.heads * disc_record.sectors_per_track * disc_record.sector_size),
-                heads=disc_record.heads,
-                sectors_per_track=disc_record.sectors_per_track,
-            )
+            geom = _new_map_geometry(disc_record)
             return cls(unified, dir_format, None, geom, disc_record.root, new_map=new_map)
 
         if adfs_format.new_directory:
@@ -1961,14 +1980,7 @@ class ADFS:
         unified = UnifiedDisc(DiscImage(memoryview(build), [spec]))
         new_map = _new_map_over(unified, disc_record, base_offset)
         dir_format = BigDirectoryFormat() if big_directories else NewDirectoryFormat()
-        bytes_per_cylinder = (
-            disc_record.heads * disc_record.sectors_per_track * disc_record.sector_size
-        )
-        geom = ADFSGeometry(
-            cylinders=size // bytes_per_cylinder,
-            heads=disc_record.heads,
-            sectors_per_track=disc_record.sectors_per_track,
-        )
+        geom = _new_map_geometry(disc_record)
         return cls(unified, dir_format, None, geom, disc_record.root, new_map=new_map)
 
     @staticmethod

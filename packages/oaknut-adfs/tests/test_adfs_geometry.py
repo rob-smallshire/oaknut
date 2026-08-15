@@ -3,7 +3,17 @@
 from pathlib import Path
 
 import pytest
-from oaknut.adfs import ADFS, ADFS_L, ADFS_M, ADFS_S, ADFSGeometry
+from oaknut.adfs import (
+    ADFS,
+    ADFS_D,
+    ADFS_E,
+    ADFS_F,
+    ADFS_G,
+    ADFS_L,
+    ADFS_M,
+    ADFS_S,
+    ADFSGeometry,
+)
 
 
 class TestADFSGeometryDataclass:
@@ -41,6 +51,26 @@ class TestGeometryFromFloppyCreate:
         assert g.sectors_per_track == 16
         assert g.total_sectors == 2560
 
+    # New-directory and New-map floppies. Geometry is expressed in ADFS's
+    # 256-byte logical sectors (as S/M/L are), so sectors-per-track counts the
+    # 1024-byte physical sectors times four, and total_sectors == bytes / 256.
+    @pytest.mark.parametrize(
+        "fmt,heads,spt,total",
+        [
+            (ADFS_D, 2, 20, 3200),  # 800 KB
+            (ADFS_E, 2, 20, 3200),  # 800 KB
+            (ADFS_F, 2, 40, 6400),  # 1.6 MB, four zones
+            (ADFS_G, 2, 80, 12800),  # 3.2 MB, eight zones
+        ],
+    )
+    def test_new_floppy_geometry(self, fmt, heads, spt, total):
+        g = ADFS.create(fmt).geometry
+        assert g.cylinders == 80
+        assert g.heads == heads
+        assert g.sectors_per_track == spt
+        # The geometry must account for the whole disc.
+        assert g.total_sectors == total == fmt.total_bytes // 256
+
 
 class TestGeometryFromFloppyBuffer:
     def test_adfs_s_buffer(self):
@@ -48,6 +78,26 @@ class TestGeometryFromFloppyBuffer:
         g = adfs.geometry
         assert g.cylinders == 40
         assert g.sectors_per_track == 16
+
+    @pytest.mark.parametrize("fmt", [ADFS_D, ADFS_E, ADFS_F, ADFS_G])
+    def test_new_floppy_reopen_geometry_matches_create(self, fmt, tmp_path):
+        # Regression: reopening an F or G image reported a degenerate
+        # 1 cylinder x 1 head x N sectors/track shape, disagreeing with what
+        # create() produced. The reopened geometry must match create() and
+        # describe a real floppy (more than one cylinder and head).
+        image = tmp_path / "disc.adf"
+        with ADFS.create_file(str(image), fmt, title="T"):
+            pass
+        created = ADFS.create(fmt).geometry
+        with ADFS.from_file(image, read_only=True) as adfs:
+            reopened = adfs.geometry
+        assert (reopened.cylinders, reopened.heads, reopened.sectors_per_track) == (
+            created.cylinders,
+            created.heads,
+            created.sectors_per_track,
+        )
+        assert reopened.cylinders > 1 and reopened.heads > 1
+        assert reopened.total_sectors == fmt.total_bytes // 256
 
 
 class TestGeometryFromHardDiscCreate:
