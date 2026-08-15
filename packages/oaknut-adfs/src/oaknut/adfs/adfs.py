@@ -45,7 +45,12 @@ from oaknut.adfs.exceptions import (
     ADFSValidationError,
 )
 from oaknut.adfs.free_space_map import OldFreeSpaceMap
-from oaknut.adfs.new_map import DiscRecord, NewMap
+from oaknut.adfs.new_map import (
+    DiscRecord,
+    NewMap,
+    e_disc_record,
+    format_blank_single_zone,
+)
 from oaknut.discimage.surface import DiscImage, SurfaceSpec
 from oaknut.discimage.unified_disc import UnifiedDisc
 from oaknut.file import AcornMeta, AcornPath, MetaFormat, resolving_io
@@ -103,6 +108,9 @@ class ADFSFormat:
     total_sectors: int
     total_bytes: int
     label: str
+    #: Whether this shape uses the New Map (FileCore zoned allocation) rather
+    #: than the Old free-space map. Governs which structures ``create`` lays down.
+    new_map: bool = False
 
     def __post_init__(self):
         if not self.surface_specs:
@@ -220,6 +228,16 @@ ADFS_D = ADFSFormat(
     total_sectors=3200,
     total_bytes=819200,
     label="D",
+)
+
+#: ADFS E — 800K single-zone New Map with New directories. Same linear surface
+#: as D (they share a size); the map/directory structure distinguishes them.
+ADFS_E = ADFSFormat(
+    surface_specs=[_flat_spec(3200)],
+    total_sectors=3200,
+    total_bytes=819200,
+    label="E",
+    new_map=True,
 )
 
 _ADFS_FORMATS_BY_SIZE = {
@@ -1234,6 +1252,41 @@ def _initialise_old_root_directory(
     data[tail + 52] = 0x00
 
 
+def _initialise_new_map_blank(
+    unified: UnifiedDisc,
+    total_sectors: int,
+    title: str,
+    boot_option: int,
+) -> DiscRecord:
+    """Lay down a blank single-zone New Map and empty "Nick" root directory.
+
+    The New Map counterpart of :func:`_initialise_old_free_space_map` plus
+    :func:`_initialise_old_root_directory`. Returns the disc record so the
+    caller can build the :class:`NewMap` over the finished image. Currently
+    ADFS E only (the single-zone shape).
+    """
+    dr = e_disc_record(title, boot_option=boot_option)
+    dir_format = NewDirectoryFormat()
+
+    full = unified.sector_range(0, total_sectors)
+    root_address = format_blank_single_zone(full, dr, dir_format.size_in_bytes)
+
+    root_dir = _ADFSDirectory(
+        name="$",
+        title=title,
+        parent_address=dr.root,
+        disc_address=dr.root,
+        entries=(),
+        sequence_number=0,
+        signature=b"Nick",
+    )
+    root_data = unified.sector_range(
+        root_address // _ADFS_BYTES_PER_SECTOR, dir_format.size_in_sectors
+    )
+    dir_format.serialize(root_dir, root_data)
+    return dr
+
+
 @contextmanager
 def _create_image_file(
     filepath: Path,
@@ -1252,14 +1305,21 @@ def _create_image_file(
         disc_image = DiscImage(buffer, fmt.surface_specs)
         unified = UnifiedDisc(disc_image)
 
-        _initialise_old_free_space_map(unified, fmt.total_sectors, boot_option)
-        _initialise_old_root_directory(unified, title)
+        if fmt.new_map:
+            disc_record = _initialise_new_map_blank(
+                unified, fmt.total_sectors, title, boot_option
+            )
+            new_map = _new_map_over(unified, disc_record)
+            adfs = ADFS(
+                unified, NewDirectoryFormat(), None, geometry, disc_record.root, new_map=new_map
+            )
+        else:
+            _initialise_old_free_space_map(unified, fmt.total_sectors, boot_option)
+            _initialise_old_root_directory(unified, title)
 
-        map_data = unified.sector_range(0, 2)
-        fsm = OldFreeSpaceMap(map_data)
-        dir_format = OldDirectoryFormat()
-
-        adfs = ADFS(unified, dir_format, fsm, geometry)
+            map_data = unified.sector_range(0, 2)
+            fsm = OldFreeSpaceMap(map_data)
+            adfs = ADFS(unified, OldDirectoryFormat(), fsm, geometry)
         try:
             yield adfs
         finally:
@@ -1635,6 +1695,19 @@ class ADFS:
         buffer = memoryview(bytearray(adfs_format.total_bytes))
         disc_image = DiscImage(buffer, adfs_format.surface_specs)
         unified = UnifiedDisc(disc_image)
+
+        if adfs_format.new_map:
+            disc_record = _initialise_new_map_blank(
+                unified, adfs_format.total_sectors, title, boot_option
+            )
+            new_map = _new_map_over(unified, disc_record)
+            geom = ADFSGeometry(
+                cylinders=disc_record.disc_size
+                // (disc_record.heads * disc_record.sectors_per_track * disc_record.sector_size),
+                heads=disc_record.heads,
+                sectors_per_track=disc_record.sectors_per_track,
+            )
+            return cls(unified, NewDirectoryFormat(), None, geom, disc_record.root, new_map=new_map)
 
         _initialise_old_free_space_map(unified, adfs_format.total_sectors, boot_option)
         _initialise_old_root_directory(unified, title)
@@ -2804,6 +2877,19 @@ def _try_new_map(unified: UnifiedDisc) -> "NewMap | None":
     zone0 = unified.sector_range(0, sectors)
     if zone0[0x00] != calculate_zone_check(zone0, 0, disc_record.log2_sector_size):
         return None
+
+    return _new_map_over(unified, disc_record)
+
+
+def _new_map_over(unified: UnifiedDisc, disc_record: DiscRecord) -> NewMap:
+    """Build a :class:`NewMap` over *unified* using *disc_record*.
+
+    Shared by New Map detection and blank-image creation. The read-bytes
+    closure resolves linear disc addresses to the covering sectors, so it
+    works for any addressing granularity the map produces.
+    """
+    sectors = disc_record.sector_size // _ADFS_BYTES_PER_SECTOR
+    zone0 = unified.sector_range(0, sectors)
 
     def read_bytes(byte_address: int, length: int) -> bytes:
         first = byte_address // _ADFS_BYTES_PER_SECTOR

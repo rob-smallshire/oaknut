@@ -107,6 +107,10 @@ class _ADFSDirectory:
     disc_address: int
     entries: tuple[_ADFSDirectoryEntry, ...]
     sequence_number: int
+    #: The directory's Hugo/Nick signature, preserved so an in-place rewrite
+    #: does not flip it. ``b"Hugo"`` for S/M/L (and the D discs seen so far);
+    #: ``b"Nick"`` for the New Map E/F shapes.
+    signature: bytes = b"Hugo"
 
     def find(self, name: str) -> _ADFSDirectoryEntry | None:
         """Find entry by name (per the grammar's case policy)."""
@@ -423,6 +427,7 @@ class OldDirectoryFormat(ADFSDirectoryFormat):
             disc_address=disc_address,
             entries=tuple(entries),
             sequence_number=start_mas_seq,
+            signature=bytes(start_name),
         )
 
     def serialize(self, directory: _ADFSDirectory, data: SectorsView) -> None:
@@ -444,7 +449,8 @@ class OldDirectoryFormat(ADFSDirectoryFormat):
         for i in range(_OLD_DIR_SIZE):
             data[i] = 0
 
-        # Header
+        # Header. Old directories (S/M/L) are canonically "Hugo"; a "Nick"
+        # read on a byte-edited disc is normalised back to "Hugo" on write.
         data[0x00] = directory.sequence_number & 0xFF
         data[0x01:0x05] = _HUGO
 
@@ -770,6 +776,7 @@ class NewDirectoryFormat(ADFSDirectoryFormat):
             disc_address=disc_address,
             entries=tuple(entries),
             sequence_number=start_mas_seq,
+            signature=bytes(start_name),
         )
 
     def serialize(self, directory: _ADFSDirectory, data: SectorsView) -> None:
@@ -786,10 +793,10 @@ class NewDirectoryFormat(ADFSDirectoryFormat):
         for i in range(_NEW_DIR_SIZE):
             data[i] = 0
 
-        # Header. StartName is "Hugo" for D/E; a byte-preserving round-trip
-        # of a "Nick"-signed disc keeps whatever the tail carries, but we
-        # write the conventional "Hugo" here and mirror it in the tail.
-        signature = _HUGO
+        # Header. Preserve the directory's Hugo/Nick signature so an in-place
+        # rewrite of a "Nick"-signed disc does not flip it; fall back to the
+        # conventional "Hugo" for anything unexpected.
+        signature = directory.signature if directory.signature in (_HUGO, _NICK) else _HUGO
         data[0x00] = directory.sequence_number & 0xFF
         data[0x01:0x05] = signature
 

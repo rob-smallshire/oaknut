@@ -50,6 +50,22 @@ def _read_le(data: SectorsView | bytes, offset: int, length: int) -> int:
     return value
 
 
+def _write_le(data: SectorsView, offset: int, value: int, length: int) -> None:
+    for i in range(length):
+        data[offset + i] = (value >> (8 * i)) & 0xFF
+
+
+def write_bits(data: SectorsView, bit_position: int, num_bits: int, value: int) -> None:
+    """Write *num_bits* of *value* (LSB first) at an absolute bit position."""
+    for i in range(num_bits):
+        byte_index = (bit_position + i) >> 3
+        bit_index = (bit_position + i) & 7
+        if (value >> i) & 1:
+            data[byte_index] |= 1 << bit_index
+        else:
+            data[byte_index] &= ~(1 << bit_index) & 0xFF
+
+
 @dataclass(frozen=True)
 class DiscRecord:
     """A parsed 60-byte FileCore disc record (zone 0).
@@ -88,6 +104,27 @@ class DiscRecord:
     def sides_are_sequenced(self) -> bool:
         """Bit 6 of ``low_sector``: sides sequenced rather than interleaved."""
         return bool(self.low_sector & 0x40)
+
+    def serialise(self, data: SectorsView, offset: int = _DISC_RECORD_OFFSET) -> None:
+        """Write this 60-byte disc record into *data* at *offset* (0x04)."""
+        data[offset + 0x00] = self.log2_sector_size
+        data[offset + 0x01] = self.sectors_per_track
+        data[offset + 0x02] = self.heads
+        data[offset + 0x03] = self.density
+        data[offset + 0x04] = self.idlen
+        data[offset + 0x05] = self.log2_bytes_per_map_bit
+        data[offset + 0x06] = self.skew
+        data[offset + 0x07] = self.boot_option
+        data[offset + 0x08] = self.low_sector
+        data[offset + 0x09] = self.nzones
+        _write_le(data, offset + 0x0A, self.zone_spare, 2)
+        _write_le(data, offset + 0x0C, self.root, 4)
+        _write_le(data, offset + 0x10, self.disc_size, 4)
+        _write_le(data, offset + 0x14, self.disc_id, 2)
+        name = self.disc_name.encode("latin-1")[:10].ljust(10, b"\x00")
+        for i in range(10):
+            data[offset + 0x16 + i] = name[i]
+        _write_le(data, offset + 0x20, self.disc_type, 4)
 
     @classmethod
     def parse(cls, data: SectorsView | bytes, offset: int = _DISC_RECORD_OFFSET) -> DiscRecord:
@@ -303,3 +340,74 @@ class NewMap:
                 )
             )
         return errors
+
+
+# --- Blank New Map creation ---
+
+#: FileCore ``disctype`` word for the non-``+`` shapes (D/E/F).
+_DISCTYPE_NON_PLUS = 0x20158C78
+
+#: Spare (non-allocation) map bits per zone for the 800K E format.
+_E_ZONE_SPARE = 1312
+
+
+def e_disc_record(title: str, *, disc_id: int = 0, boot_option: int = 0) -> DiscRecord:
+    """Build the disc record for a blank 800K single-zone ADFS E disc."""
+    return DiscRecord(
+        log2_sector_size=10,
+        sectors_per_track=5,
+        heads=2,
+        density=2,
+        idlen=15,
+        log2_bytes_per_map_bit=7,
+        skew=1,
+        boot_option=boot_option,
+        low_sector=0,
+        nzones=1,
+        zone_spare=_E_ZONE_SPARE,
+        root=0x203,
+        disc_size=819200,
+        disc_id=disc_id,
+        disc_name=title[:10],
+        disc_type=_DISCTYPE_NON_PLUS,
+    )
+
+
+def format_blank_single_zone(data: SectorsView, disc_record: DiscRecord, root_size: int) -> int:
+    """Lay down a blank single-zone New Map; return the root's disc byte address.
+
+    Writes, into *data* (the whole image), the zone header, disc record,
+    allocation bitmap and its duplicate copy. The bitmap holds one system
+    fragment (id 2) covering the two map copies plus the root, with the rest
+    free. The caller writes the empty root directory at the returned address.
+    """
+    if disc_record.nzones != 1:
+        raise ADFSMapError("format_blank_single_zone only supports single-zone maps")
+    secsize = disc_record.sector_size
+    bpmb = disc_record.bytes_per_map_bit
+    idlen = disc_record.idlen
+    map_start_bit = _ZONE0_MAP_START * 8  # 512 — the disc address origin
+
+    # System fragment (id 2): the two map copies (secsize*2) plus the root.
+    system_bits = (secsize * 2 + root_size) // bpmb
+    write_bits(data, map_start_bit, idlen, 2)
+    write_bits(data, map_start_bit + system_bits - 1, 1, 1)  # fragment stop bit
+
+    # Terminate the free region at the last usable map bit.
+    eod_bit = disc_record.disc_size // bpmb
+    write_bits(data, map_start_bit + eod_bit - 1, 1, 1)
+
+    # FreeLink: 15-bit distance from the link (bit 8) to the sole free area,
+    # with the terminator flag (0x8000) set.
+    free_start_bit = map_start_bit + system_bits
+    _write_le(data, _ZONE_FREELINK_OFFSET, 0x8000 | (free_start_bit - 8), 2)
+    data[_ZONE_CROSSCHECK_OFFSET] = 0xFF
+
+    disc_record.serialise(data)
+
+    # Zone check over the finished zone, then duplicate the whole map.
+    data[_ZONE_CHECK_OFFSET] = calculate_zone_check(data, 0, disc_record.log2_sector_size)
+    for i in range(secsize):
+        data[secsize + i] = data[i]
+
+    return secsize * 2  # root disc byte address
