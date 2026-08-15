@@ -111,6 +111,10 @@ class ADFSFormat:
     #: Whether this shape uses the New Map (FileCore zoned allocation) rather
     #: than the Old free-space map. Governs which structures ``create`` lays down.
     new_map: bool = False
+    #: Whether this shape uses New directories (2048-byte, ROR-13 check byte).
+    #: The New Map shapes always do; the D format pairs New directories with
+    #: the Old map, so this is set independently. S/M/L use Old directories.
+    new_directory: bool = False
 
     def __post_init__(self):
         if not self.surface_specs:
@@ -228,6 +232,7 @@ ADFS_D = ADFSFormat(
     total_sectors=3200,
     total_bytes=819200,
     label="D",
+    new_directory=True,
 )
 
 #: ADFS E — 800K single-zone New Map with New directories. Same linear surface
@@ -1172,14 +1177,22 @@ def _initialise_old_free_space_map(
     unified: UnifiedDisc,
     total_sectors: int,
     boot_option: int = 0,
+    used_sectors: int | None = None,
 ) -> None:
-    """Write an empty old-format free space map to sectors 0–1."""
+    """Write an empty old-format free space map to sectors 0–1.
+
+    *used_sectors* is the count of sectors occupied by the map and root
+    directory before free space begins; it defaults to the S/M/L layout
+    (map + 5-sector Old directory). The D format passes a larger value
+    because its root is an 8-sector New directory placed at sector 4.
+    """
     from oaknut.adfs.free_space_map import _calculate_old_map_checksum
 
     data = unified.sector_range(0, 2)
 
     # Single free space entry: everything after the root directory
-    used_sectors = _OLD_FSM_SECTORS + _OLD_DIR_SECTORS  # 7
+    if used_sectors is None:
+        used_sectors = _OLD_FSM_SECTORS + _OLD_DIR_SECTORS  # 7
     free_start = used_sectors
     free_length = total_sectors - used_sectors
 
@@ -1253,6 +1266,38 @@ def _initialise_old_root_directory(
     data[tail + 52] = 0x00
 
 
+def _initialise_d_blank(
+    unified: UnifiedDisc,
+    total_sectors: int,
+    title: str,
+    boot_option: int,
+) -> None:
+    """Lay down a blank D format: Old map with a New directory root at sector 4.
+
+    The Old free-space map reserves the map (sectors 0–1), the 1024-byte-sector
+    padding (2–3) and the 8-sector New directory root (4–11), so free space
+    begins at sector 12. The root is a "Nick"-signed New directory.
+    """
+    dir_format = NewDirectoryFormat()
+    root_sector = _D_MAP_ROOT_SECTOR  # 4
+    used_sectors = root_sector + dir_format.size_in_sectors  # 12
+    _initialise_old_free_space_map(
+        unified, total_sectors, boot_option, used_sectors=used_sectors
+    )
+
+    root_dir = _ADFSDirectory(
+        name="$",
+        title=title,
+        parent_address=root_sector,
+        disc_address=root_sector,
+        entries=(),
+        sequence_number=0,
+        signature=b"Nick",
+    )
+    root_data = unified.sector_range(root_sector, dir_format.size_in_sectors)
+    dir_format.serialize(root_dir, root_data)
+
+
 def _initialise_new_map_blank(
     unified: UnifiedDisc,
     total_sectors: int,
@@ -1314,6 +1359,10 @@ def _create_image_file(
             adfs = ADFS(
                 unified, NewDirectoryFormat(), None, geometry, disc_record.root, new_map=new_map
             )
+        elif fmt.new_directory:
+            _initialise_d_blank(unified, fmt.total_sectors, title, boot_option)
+            fsm = OldFreeSpaceMap(unified.sector_range(0, 2))
+            adfs = ADFS(unified, NewDirectoryFormat(), fsm, geometry, _D_MAP_ROOT_SECTOR)
         else:
             _initialise_old_free_space_map(unified, fmt.total_sectors, boot_option)
             _initialise_old_root_directory(unified, title)
@@ -1709,6 +1758,12 @@ class ADFS:
                 sectors_per_track=disc_record.sectors_per_track,
             )
             return cls(unified, NewDirectoryFormat(), None, geom, disc_record.root, new_map=new_map)
+
+        if adfs_format.new_directory:
+            _initialise_d_blank(unified, adfs_format.total_sectors, title, boot_option)
+            fsm = OldFreeSpaceMap(unified.sector_range(0, 2))
+            geom = _FLOPPY_GEOMETRY.get(adfs_format.total_bytes)
+            return cls(unified, NewDirectoryFormat(), fsm, geom, _D_MAP_ROOT_SECTOR)
 
         _initialise_old_free_space_map(unified, adfs_format.total_sectors, boot_option)
         _initialise_old_root_directory(unified, title)

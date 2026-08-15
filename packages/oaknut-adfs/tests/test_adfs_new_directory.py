@@ -107,6 +107,36 @@ def test_new_dir_check_matches_stored_on_all_specimens():
         assert _calculate_new_dir_check(block) == block[0x7FF]
 
 
+def test_create_blank_d_is_old_map_new_directory():
+    """A created blank D disc: Old map, New directory root at sector 4."""
+    adfs = ADFS.create(ADFS_D, title="BlankD")
+    try:
+        assert not adfs.is_new_map
+        assert isinstance(adfs._dir_format, NewDirectoryFormat)
+        assert adfs._root_address == 4  # sector 4 = 0x400
+        assert list(adfs.root.iterdir()) == []
+        assert adfs.validate() == []
+        raw = bytes(adfs._disc.sector_range(0, ADFS_D.total_sectors))
+        assert raw[0x401:0x405] == b"Nick"  # New directory at 0x400
+        assert raw[0x201:0x205] != b"Hugo"  # not an Old directory at 0x200
+    finally:
+        adfs.close()
+
+
+def test_create_blank_d_write_and_reopen(tmp_path):
+    image = tmp_path / "blank.adf"
+    with ADFS.create_file(image, ADFS_D, title="DiscD") as adfs:
+        (adfs.root / "Prog").write_bytes(b"program data")
+        (adfs.root / "Sub").mkdir()
+        (adfs.root / "Sub" / "Leaf").write_bytes(b"leaf data")
+    with ADFS.from_file(image) as adfs:
+        assert isinstance(adfs._dir_format, NewDirectoryFormat)
+        assert not adfs.is_new_map
+        assert adfs.validate() == []
+        assert (adfs.root / "Prog").read_bytes() == b"program data"
+        assert (adfs.root / "Sub" / "Leaf").read_bytes() == b"leaf data"
+
+
 def test_sml_still_old_directory():
     """S/M/L discs keep the Old directory format and root at sector 2."""
     bcpl = REFERENCE_IMAGES_DIRPATH / "adfs-linear" / "BCPL.adf"
