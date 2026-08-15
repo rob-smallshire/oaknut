@@ -137,6 +137,34 @@ def test_create_blank_d_write_and_reopen(tmp_path):
         assert (adfs.root / "Sub" / "Leaf").read_bytes() == b"leaf data"
 
 
+def test_d_directories_stay_sector_aligned_after_file_writes():
+    """D uses 1024-byte sectors, so directories must land on a 4-sector boundary.
+
+    Odd-sized files push allocation off the boundary; a directory allocated
+    afterwards must still be 1024-byte aligned or RISC OS rejects it.
+    """
+    adfs = ADFS.create(ADFS_D, title="AlignD")
+    try:
+        for i in range(8):
+            (adfs.root / f"F{i}").write_bytes(bytes([i]) * (300 + i * 137))
+        dirs = []
+        for i in range(6):
+            (adfs.root / f"G{i}").write_bytes(bytes([i]) * 511)  # 2 sectors, odd boundary
+            (adfs.root / f"D{i}").mkdir()
+            dirs.append(f"D{i}")
+        assert adfs.validate() == []
+        for name in dirs:
+            _, entry = (adfs.root / name)._resolve()
+            start_sector = entry.indirect_disc_address
+            assert start_sector % 4 == 0, f"{name} at sector {start_sector} is not 1024-aligned"
+        # Nested objects round-trip.
+        (adfs.root / "D0" / "leaf").write_bytes(b"hi")
+        assert adfs.validate() == []
+        assert (adfs.root / "D0" / "leaf").read_bytes() == b"hi"
+    finally:
+        adfs.close()
+
+
 def test_sml_still_old_directory():
     """S/M/L discs keep the Old directory format and root at sector 2."""
     bcpl = REFERENCE_IMAGES_DIRPATH / "adfs-linear" / "BCPL.adf"

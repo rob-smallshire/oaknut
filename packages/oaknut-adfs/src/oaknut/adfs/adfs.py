@@ -95,6 +95,7 @@ _ADFS_BYTES_PER_SECTOR = 256
 # the post-map boundary to 0x400. Both address in 256-byte sector units.
 _OLD_MAP_ROOT_SECTOR = 2
 _D_MAP_ROOT_SECTOR = 4
+_D_SECTOR_SIZE = 1024  # D format's physical sector size (S/M/L use 256)
 _OLD_DIR_SECTORS = 5  # Old directory occupies 5 sectors
 _OLD_FSM_SECTORS = 2  # Old free space map occupies sectors 0-1
 
@@ -1521,6 +1522,11 @@ class ADFS:
         self._root_address = root_address
         self._map = new_map
         self._afs_partition_cache = None
+        # D format is old-map with a New directory in 1024-byte sectors, so its
+        # directories must align to 4 (256-byte) sectors. S/M/L (Old directory)
+        # and New Map discs need no old-map alignment.
+        is_d_format = new_map is None and isinstance(dir_format, NewDirectoryFormat)
+        self._old_map_dir_alignment = _D_SECTOR_SIZE // _ADFS_BYTES_PER_SECTOR if is_d_format else 1
 
     @property
     def is_new_map(self) -> bool:
@@ -2173,9 +2179,11 @@ class ADFS:
 
         for item in items:
             if item["is_directory"]:
-                # Allocate sectors for the subdirectory
+                # Allocate sectors for the subdirectory, aligned for D format.
                 dir_sectors = self._dir_format.size_in_sectors
-                start_sector = self._fsm.allocate(dir_sectors)
+                start_sector = self._fsm.allocate(
+                    dir_sectors, alignment=self._old_map_dir_alignment
+                )
 
                 # Initialise the subdirectory block
                 subdir = _ADFSDirectory(
@@ -2379,14 +2387,20 @@ class ADFS:
     # directory entry's ``indirect_disc_address`` is whatever ``_allocate_object``
     # returns, and ``_free_object`` / ``_write_object_data`` take the same value.
 
-    def _allocate_object(self, length_bytes: int) -> int:
-        """Allocate space for *length_bytes*; return its entry address."""
+    def _allocate_object(self, length_bytes: int, *, sector_aligned: bool = False) -> int:
+        """Allocate space for *length_bytes*; return its entry address.
+
+        *sector_aligned* requests a directory-aligned start on old-map discs (a
+        no-op on New Map discs, whose allocator already aligns directories, and
+        on S/M/L, whose alignment is 1).
+        """
         if self._map is not None:
             return self._map.allocate_object(length_bytes)
         if length_bytes == 0:
             return 0
         num_sectors = (length_bytes + _ADFS_BYTES_PER_SECTOR - 1) // _ADFS_BYTES_PER_SECTOR
-        return self._fsm.allocate(num_sectors)
+        alignment = self._old_map_dir_alignment if sector_aligned else 1
+        return self._fsm.allocate(num_sectors, alignment=alignment)
 
     def _free_object(self, address: int, length_bytes: int) -> None:
         """Release the space previously allocated for an object."""
@@ -2665,8 +2679,9 @@ class ADFS:
             )
 
         # Allocate space for the new directory and initialise its block. The
-        # child inherits the parent's Hugo/Nick signature.
-        address = self._allocate_object(self._dir_format.size_in_bytes)
+        # child inherits the parent's Hugo/Nick signature. Directories must sit
+        # on a sector boundary — significant on the 1024-byte-sector D format.
+        address = self._allocate_object(self._dir_format.size_in_bytes, sector_aligned=True)
         new_directory = _ADFSDirectory(
             name=dirname,
             title=dirname,
