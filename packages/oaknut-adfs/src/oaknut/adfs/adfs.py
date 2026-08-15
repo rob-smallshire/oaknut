@@ -1688,19 +1688,27 @@ class ADFS:
 
             if not dat_filepath.exists():
                 raise FileNotFoundError(f"Hard disc data file not found: {dat_filepath}")
-            if not dsc_filepath.exists():
-                raise FileNotFoundError(f"Hard disc geometry file not found: {dsc_filepath}")
 
-            geometry = _parse_dsc(dsc_filepath)
-            dat_size = dat_filepath.stat().st_size
-            fmt = _hard_disc_format(geometry, dat_size)
-
-            with open_image_mmap(dat_filepath) as (mm, _writable):
-                adfs = ADFS._from_buffer_with_format(memoryview(mm), fmt, geometry)
-                try:
-                    yield adfs
-                finally:
-                    adfs.close()
+            if dsc_filepath.exists():
+                # A .dsc sidecar carries the CHS geometry of an old-map hard disc.
+                geometry = _parse_dsc(dsc_filepath)
+                dat_size = dat_filepath.stat().st_size
+                fmt = _hard_disc_format(geometry, dat_size)
+                with open_image_mmap(dat_filepath) as (mm, _writable):
+                    adfs = ADFS._from_buffer_with_format(memoryview(mm), fmt, geometry)
+                    try:
+                        yield adfs
+                    finally:
+                        adfs.close()
+            else:
+                # New Map hard discs carry their geometry in the disc record, so
+                # no sidecar is needed; content detection handles them.
+                with open_image_mmap(dat_filepath) as (mm, _writable):
+                    adfs = ADFS.from_buffer(memoryview(mm))
+                    try:
+                        yield adfs
+                    finally:
+                        adfs.close()
         else:
             # The 640K layout is ambiguous; content decides, but where it
             # cannot, the extension breaks the tie — ``.adl`` is the
@@ -2402,7 +2410,8 @@ class ADFS:
         """
         if self._map is None:
             return indirect
-        return self._map.object_start(indirect) // _ADFS_BYTES_PER_SECTOR
+        physical = self._map.physical_offset(self._map.object_start(indirect))
+        return physical // _ADFS_BYTES_PER_SECTOR
 
     def _read_disc_bytes(self, byte_address: int, length: int) -> bytes:
         """Read *length* bytes from a linear disc byte address.
@@ -3163,40 +3172,55 @@ def _insert_sorted(
     return tuple(items)
 
 
+#: The emulator-header offset some hard disc images (``.hdf``/``.hd4``) prepend:
+#: the whole FileCore disc is shifted by this many bytes (modulo the disc size).
+_HDF_HEADER_OFFSET = 0x200
+
+
 def _try_new_map(unified: UnifiedDisc) -> "NewMap | None":
     """Return a :class:`NewMap` if this disc uses the New Map, else ``None``.
 
-    Parses the FileCore disc record at 0x04 of zone 0 and confirms it with a
-    plausibility gate and the zone-0 check byte, so an Old-map disc (whose
-    sectors 0-1 are a free-space map, not a disc record) is not misread. Only
-    single-zone maps are accepted at this rung; a valid multi-zone record is
-    surfaced as an error rather than silently mistaken for an Old map.
+    Probes for the FileCore disc record at the disc start and, failing that, at
+    the 0x200 emulator-header offset that some hard disc images prepend.
+    """
+    for base_offset in (0, _HDF_HEADER_OFFSET):
+        new_map = _try_new_map_at(unified, base_offset)
+        if new_map is not None:
+            return new_map
+    return None
+
+
+def _try_new_map_at(unified: UnifiedDisc, base_offset: int) -> "NewMap | None":
+    """Try to read a New Map whose disc starts *base_offset* bytes into the image.
+
+    Confirms a plausible disc record with the relevant zone check, so an Old-map
+    disc (whose leading sectors are a free-space map, not a disc record) or a
+    wrong header offset is not misread.
     """
     from oaknut.adfs.new_map import calculate_zone_check, compute_bootmap
 
-    # Single-zone (E): the disc record sits at 0x04 and zone 0 is at disc
-    # offset 0. Confirm with a plausibility gate and the zone-0 check.
-    single = DiscRecord.parse(unified.sector_range(0, 1))
+    base = base_offset // _ADFS_BYTES_PER_SECTOR
+    if unified.num_sectors < base + _bytes_to_sectors(0xE00):
+        return None
+
+    # Single-zone (E/E+): disc record at 0x04, zone 0 at the disc start.
+    single = DiscRecord.parse(unified.sector_range(base, 1), offset=0x04)
     if single.looks_valid() and single.nzones == 1:
         sectors = single.sector_size // _ADFS_BYTES_PER_SECTOR
-        zone0 = unified.sector_range(0, sectors)
+        zone0 = unified.sector_range(base, sectors)
         if zone0[0x00] == calculate_zone_check(zone0, 0, single.log2_sector_size):
-            return _new_map_over(unified, single)
+            return _new_map_over(unified, single, base_offset)
 
-    # Multi-zone (F): a partial disc record lives in the boot block at 0xDC0.
-    # Read it to locate the map (bootmap) and the full disc record, then
-    # confirm every zone's check byte. Only discs large enough to hold the boot
-    # block (and, ultimately, a mid-disc map) can be multi-zone.
-    boot_sectors = _bytes_to_sectors(0xE00)
-    if unified.num_sectors < boot_sectors:
-        return None
-    boot = unified.sector_range(0, boot_sectors)
+    # Multi-zone (F/F+/hard disc): a partial disc record in the boot block at
+    # 0xDC0 locates the mid-disc map and the full disc record.
+    boot = unified.sector_range(base, _bytes_to_sectors(0xE00))
     partial = DiscRecord.parse(boot, offset=0xDC0)
     if partial.looks_valid() and partial.nzones > 1:
         bootmap = compute_bootmap(partial)
-        first = bootmap // _ADFS_BYTES_PER_SECTOR
+        physical = bootmap + base_offset
+        first = physical // _ADFS_BYTES_PER_SECTOR
         map_sectors = 2 * partial.nzones * partial.sector_size // _ADFS_BYTES_PER_SECTOR
-        if bootmap % _ADFS_BYTES_PER_SECTOR == 0 and first + map_sectors <= unified.num_sectors:
+        if physical % _ADFS_BYTES_PER_SECTOR == 0 and first + map_sectors <= unified.num_sectors:
             drview = unified.sector_range(first, _bytes_to_sectors(0x100))
             full = DiscRecord.parse(drview, offset=0x04)
             if full.looks_valid() and full.nzones == partial.nzones:
@@ -3207,7 +3231,7 @@ def _try_new_map(unified: UnifiedDisc) -> "NewMap | None":
                     == calculate_zone_check(map_view, zone, full.log2_sector_size)
                     for zone in range(full.nzones)
                 ):
-                    return _new_map_over(unified, full)
+                    return _new_map_over(unified, full, base_offset)
 
     return None
 
@@ -3217,41 +3241,60 @@ def _bytes_to_sectors(num_bytes: int) -> int:
     return (num_bytes + _ADFS_BYTES_PER_SECTOR - 1) // _ADFS_BYTES_PER_SECTOR
 
 
-def _new_map_over(unified: UnifiedDisc, disc_record: DiscRecord) -> NewMap:
+def _new_map_over(
+    unified: UnifiedDisc, disc_record: DiscRecord, base_offset: int = 0
+) -> NewMap:
     """Build a :class:`NewMap` over *unified* using *disc_record*.
 
     Shared by New Map detection and blank-image creation. The map view spans
-    both zone-0 copies (primary + duplicate) so mutations can refresh the copy;
-    the read/write closures resolve linear disc addresses to the covering
-    sectors, so they work for any addressing granularity the map produces.
+    both zone-0 copies (primary + duplicate) so mutations can refresh the copy.
+    *base_offset* is the emulator-header shift (0 for a plain image, 0x200 for a
+    ``.hdf``): every disc address is translated to a physical image offset by
+    adding it modulo the disc size, so an object at the very end that wraps into
+    the header region is still read correctly. The read/write closures resolve
+    those physical offsets to the covering sectors, for any map granularity.
     """
     from oaknut.adfs.new_map import compute_bootmap
 
     secsize = disc_record.sector_size
+    disc_size = disc_record.disc_size
     bootmap = compute_bootmap(disc_record)
     # Both map copies: nzones zones × 2 copies, starting at bootmap.
     map_sectors = (2 * disc_record.nzones * secsize) // _ADFS_BYTES_PER_SECTOR
-    map_view = unified.sector_range(bootmap // _ADFS_BYTES_PER_SECTOR, map_sectors)
+    map_view = unified.sector_range((bootmap + base_offset) // _ADFS_BYTES_PER_SECTOR, map_sectors)
 
-    def read_bytes(byte_address: int, length: int) -> bytes:
-        first = byte_address // _ADFS_BYTES_PER_SECTOR
-        count = (
-            byte_address + length + _ADFS_BYTES_PER_SECTOR - 1
-        ) // _ADFS_BYTES_PER_SECTOR - first
+    def _read_physical(physical: int, length: int) -> bytes:
+        first = physical // _ADFS_BYTES_PER_SECTOR
+        count = (physical + length + _ADFS_BYTES_PER_SECTOR - 1) // _ADFS_BYTES_PER_SECTOR - first
         data = unified.sector_range(first, count)
-        start = byte_address - first * _ADFS_BYTES_PER_SECTOR
+        start = physical - first * _ADFS_BYTES_PER_SECTOR
         return bytes(data[start : start + length])
 
-    def write_bytes(byte_address: int, data: bytes) -> None:
-        first = byte_address // _ADFS_BYTES_PER_SECTOR
-        count = (
-            byte_address + len(data) + _ADFS_BYTES_PER_SECTOR - 1
-        ) // _ADFS_BYTES_PER_SECTOR - first
+    def read_bytes(disc_address: int, length: int) -> bytes:
+        physical = (disc_address + base_offset) % disc_size
+        if physical + length <= disc_size:
+            return _read_physical(physical, length)
+        head = disc_size - physical
+        return _read_physical(physical, head) + _read_physical(0, length - head)
+
+    def _write_physical(physical: int, data: bytes) -> None:
+        first = physical // _ADFS_BYTES_PER_SECTOR
+        end = physical + len(data) + _ADFS_BYTES_PER_SECTOR - 1
+        count = end // _ADFS_BYTES_PER_SECTOR - first
         view = unified.sector_range(first, count)
-        start = byte_address - first * _ADFS_BYTES_PER_SECTOR
+        start = physical - first * _ADFS_BYTES_PER_SECTOR
         view[start : start + len(data)] = data
 
-    return NewMap(map_view, disc_record, read_bytes, write_bytes)
+    def write_bytes(disc_address: int, data: bytes) -> None:
+        physical = (disc_address + base_offset) % disc_size
+        if physical + len(data) <= disc_size:
+            _write_physical(physical, data)
+            return
+        head = disc_size - physical
+        _write_physical(physical, data[:head])
+        _write_physical(0, data[head:])
+
+    return NewMap(map_view, disc_record, read_bytes, write_bytes, base_offset=base_offset)
 
 
 def _detect_directory_layout(unified: UnifiedDisc) -> tuple[ADFSDirectoryFormat, int]:

@@ -239,6 +239,7 @@ class NewMap:
         disc_record: DiscRecord,
         read_bytes,
         write_bytes=None,
+        base_offset: int = 0,
     ):
         # ``map_bytes`` starts at ``bootmap`` — the map's disc offset, which is
         # zero for the single-zone (E) format and mid-disc for multi-zone (F).
@@ -246,6 +247,8 @@ class NewMap:
         self._dr = disc_record
         self._read_bytes = read_bytes
         self._write_bytes = write_bytes
+        # Emulator-header shift: physical image offset = (disc addr + base) mod size.
+        self._base_offset = base_offset
         self._bootmap = compute_bootmap(disc_record)
         # fragment id -> list of (logical_disc_address, capacity_bytes) in scan order
         self._fragments: dict[int, list[tuple[int, int]]] = {}
@@ -255,6 +258,10 @@ class NewMap:
     @property
     def _multizone(self) -> bool:
         return self._dr.nzones > 1
+
+    def physical_offset(self, disc_address: int) -> int:
+        """Translate a disc address to its physical image offset (emulator shift)."""
+        return (disc_address + self._base_offset) % self._dr.disc_size
 
     def _root_physical(self) -> int:
         """Physical disc offset of the root directory.
