@@ -57,6 +57,7 @@ from oaknut.adfs.new_map import (
     f_plus_disc_record,
     format_blank_f,
     format_blank_single_zone,
+    hdd_disc_record,
 )
 from oaknut.discimage.surface import DiscImage, SurfaceSpec
 from oaknut.discimage.unified_disc import UnifiedDisc
@@ -1354,55 +1355,53 @@ def _initialise_new_map_blank(
     fragment so it can grow. Returns the disc record so the caller can build the
     :class:`NewMap` over the finished image.
     """
-    full = unified.sector_range(0, total_sectors)
     multizone = total_sectors * _ADFS_BYTES_PER_SECTOR == ADFS_F.total_bytes
-
     if big_directories:
-        dir_format: ADFSDirectoryFormat = BigDirectoryFormat()
         dr = (f_plus_disc_record if multizone else e_plus_disc_record)(
             title, boot_option=boot_option
         )
-        root_fragment_id = dr.root >> 8
-        if multizone:
-            root_address = format_blank_f(
-                full, dr, dir_format.size_in_bytes, root_fragment_id=root_fragment_id
-            )
-        else:
-            root_address = format_blank_single_zone(
-                full, dr, dir_format.size_in_bytes, root_fragment_id=root_fragment_id
-            )
-        root_dir = _ADFSDirectory(
-            name="$",
-            title="",
-            parent_address=dr.root,
-            disc_address=dr.root,
-            entries=(),
-            sequence_number=0,
-            signature=b"SBPr",
-            big_dir_size=dir_format.size_in_bytes,
+    else:
+        dr = (f_disc_record if multizone else e_disc_record)(title, boot_option=boot_option)
+    _lay_down_new_map(unified, dr, title)
+    return dr
+
+
+def _lay_down_new_map(unified: UnifiedDisc, dr: DiscRecord, title: str) -> None:
+    """Write the map, boot block and empty root for a New Map disc record.
+
+    Shared by every New Map create path (floppy and hard disc). The ``+`` shapes
+    (a disc record with ``format_version >= 1``) use Big directories and give
+    the root its own fragment so it can grow; the rest use New directories.
+    """
+    big = dr.uses_big_directories
+    dir_format: ADFSDirectoryFormat = BigDirectoryFormat() if big else NewDirectoryFormat()
+    total_sectors = dr.disc_size // _ADFS_BYTES_PER_SECTOR
+    full = unified.sector_range(0, total_sectors)
+    root_fragment_id = (dr.root >> 8) if big else None
+
+    if dr.nzones > 1:
+        root_address = format_blank_f(
+            full, dr, dir_format.size_in_bytes, root_fragment_id=root_fragment_id
         )
     else:
-        dir_format = NewDirectoryFormat()
-        dr = (f_disc_record if multizone else e_disc_record)(title, boot_option=boot_option)
-        if multizone:
-            root_address = format_blank_f(full, dr, dir_format.size_in_bytes)
-        else:
-            root_address = format_blank_single_zone(full, dr, dir_format.size_in_bytes)
-        root_dir = _ADFSDirectory(
-            name="$",
-            title=title,
-            parent_address=dr.root,
-            disc_address=dr.root,
-            entries=(),
-            sequence_number=0,
-            signature=b"Nick",
+        root_address = format_blank_single_zone(
+            full, dr, dir_format.size_in_bytes, root_fragment_id=root_fragment_id
         )
 
+    root_dir = _ADFSDirectory(
+        name="$",
+        title="" if big else title,
+        parent_address=dr.root,
+        disc_address=dr.root,
+        entries=(),
+        sequence_number=0,
+        signature=b"SBPr" if big else b"Nick",
+        big_dir_size=dir_format.size_in_bytes if big else 0,
+    )
     root_data = unified.sector_range(
         root_address // _ADFS_BYTES_PER_SECTOR, dir_format.size_in_sectors
     )
     dir_format.serialize(root_dir, root_data)
-    return dr
 
 
 @contextmanager
@@ -1886,6 +1885,50 @@ class ADFS:
             )
 
         return cls(unified, dir_format, fsm, geom)
+
+    @classmethod
+    def create_new_map_hard_disc(
+        cls,
+        capacity: "int | str",
+        *,
+        title: str = "",
+        big_directories: bool = False,
+        boot_option: int = 0,
+    ) -> ADFS:
+        """Create a new-map hard disc image in memory, sized to *capacity*.
+
+        FileCore parameters (zones, idlen, bytes-per-map-bit) are computed for
+        the size. Pass ``big_directories=True`` for the E+/F+-style Big directory
+        format. ``capacity`` may be an ``int`` (bytes) or a string like
+        ``"20MB"``.
+
+        Raises:
+            ADFSError: If the size cannot be represented as a New Map disc.
+        """
+        from oaknut.file.capacity import parse_capacity
+
+        size = parse_capacity(capacity) if isinstance(capacity, str) else capacity
+        size = (size // _ADFS_BYTES_PER_SECTOR) * _ADFS_BYTES_PER_SECTOR  # sector-align
+        disc_record = hdd_disc_record(
+            size, title, big_directories=big_directories, boot_option=boot_option
+        )
+
+        buffer = memoryview(bytearray(size))
+        spec = _flat_spec(size // _ADFS_BYTES_PER_SECTOR)
+        unified = UnifiedDisc(DiscImage(buffer, [spec]))
+        _lay_down_new_map(unified, disc_record, title)
+
+        new_map = _new_map_over(unified, disc_record)
+        dir_format = BigDirectoryFormat() if big_directories else NewDirectoryFormat()
+        bytes_per_cylinder = (
+            disc_record.heads * disc_record.sectors_per_track * disc_record.sector_size
+        )
+        geom = ADFSGeometry(
+            cylinders=size // bytes_per_cylinder,
+            heads=disc_record.heads,
+            sectors_per_track=disc_record.sectors_per_track,
+        )
+        return cls(unified, dir_format, None, geom, disc_record.root, new_map=new_map)
 
     @staticmethod
     @contextmanager

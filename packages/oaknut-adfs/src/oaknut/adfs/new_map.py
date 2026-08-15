@@ -1118,6 +1118,142 @@ def f_plus_disc_record(title: str, *, disc_id: int = 0, boot_option: int = 0) ->
     )
 
 
+def hard_drive_params(disc_size: int, *, big_map: bool = False, ide: bool = True) -> dict | None:
+    """Compute New Map parameters for a hard disc of *disc_size* bytes.
+
+    A faithful port of FileCore's ``InitDiscRec`` search (via DiscImageManager's
+    ``ADFSGetHardDriveParams``): it walks ``log2bpmb``, ``zone_spare`` and
+    ``idlen`` to find the smallest values that fit the disc, then derives the
+    root address. Returns the parameter dict, or ``None`` if the size cannot be
+    represented. The values are valid FileCore parameters; they need not match
+    any particular formatter's choices (e.g. RISC OS HForm).
+    """
+    max_idlen = 21
+    min_log2bpmb, max_log2bpmb = 8, 12
+    min_zone_spare, max_zone_spare = 32, 128
+    min_zones, max_zones = 1, 127
+    zone0_bits = 8 * 60
+    big_dir_min = 2048
+    new_dir_size = 0x500
+    log2secsize = 9 if ide else 8
+    low_sector = 1 if ide else 0
+    min_idlen = log2secsize + 3
+
+    log2bpmb = min_log2bpmb
+    while log2bpmb <= max_log2bpmb:
+        disc_bits = disc_size >> log2bpmb
+        zone_spare = min_zone_spare
+        restart = False
+        while zone_spare <= max_zone_spare:
+            zone_bits = (8 << log2secsize) - zone_spare
+            zones = min_zones
+            cumulative = zone_bits - zone0_bits
+            too_many = False
+            while not cumulative > disc_bits:
+                cumulative += zone_bits
+                zones += 1
+                if zones > max_zones:
+                    too_many = True
+                    break
+            if too_many:
+                restart = True
+                break
+            idlen = min_idlen
+            while idlen <= max_idlen:
+                ids_per_zone = zone_bits // (idlen + 1)
+                if ids_per_zone * zones > (1 << idlen):
+                    idlen += 1
+                    continue
+                spare_in_last = cumulative - disc_bits
+                if spare_in_last == 0:
+                    return _hd_result(idlen, zone_spare, zones, log2bpmb, log2secsize, low_sector)
+                if spare_in_last < idlen:
+                    idlen += 1
+                    continue
+                last_zone_bits = disc_bits - (cumulative - zone_bits)
+                if last_zone_bits < idlen:
+                    idlen += 1
+                    continue
+                if zones > 2:
+                    return _hd_result(idlen, zone_spare, zones, log2bpmb, log2secsize, low_sector)
+                # The last zone is the map zone: it must hold two map copies and
+                # the root directory.
+                map_bytes = zones * (2 << log2secsize)
+                lfau_minus_1 = (1 << log2bpmb) - 1
+                if not big_map:
+                    map_bytes += new_dir_size
+                else:
+                    dir_bits = (lfau_minus_1 + big_dir_min) >> log2bpmb
+                    if dir_bits <= idlen:
+                        dir_bits = idlen + 1
+                    last_zone_bits -= dir_bits
+                    if last_zone_bits < 0:
+                        idlen += 1
+                        continue
+                map_bits = (map_bytes + lfau_minus_1) >> log2bpmb
+                if map_bits <= idlen:
+                    map_bits = idlen + 1
+                if last_zone_bits < map_bits:
+                    idlen += 1
+                    continue
+                return _hd_result(idlen, zone_spare, zones, log2bpmb, log2secsize, low_sector)
+            zone_spare += 1
+        if restart:
+            log2bpmb += 1
+            continue
+        log2bpmb += 1
+    return None
+
+
+def _hd_result(idlen, zone_spare, zones, log2bpmb, log2secsize, low_sector) -> dict:
+    return {
+        "idlen": idlen,
+        "zone_spare": zone_spare,
+        "nzones": zones,
+        "log2_bytes_per_map_bit": log2bpmb,
+        "log2_sector_size": log2secsize,
+        "low_sector": low_sector,
+        "root": (zones << 1) + 0x201,
+    }
+
+
+def hdd_disc_record(
+    disc_size: int,
+    title: str,
+    *,
+    big_directories: bool = False,
+    disc_id: int = 0,
+    boot_option: int = 0,
+) -> DiscRecord:
+    """Build a New Map hard disc's disc record for *disc_size* bytes.
+
+    Raises ``ADFSMapError`` if the size cannot be represented as a New Map disc.
+    """
+    params = hard_drive_params(disc_size, big_map=big_directories)
+    if params is None:
+        raise ADFSMapError(f"cannot represent a {disc_size}-byte New Map hard disc")
+    return DiscRecord(
+        log2_sector_size=params["log2_sector_size"],
+        sectors_per_track=63,  # IDE
+        heads=16,  # IDE
+        density=0,
+        idlen=params["idlen"],
+        log2_bytes_per_map_bit=params["log2_bytes_per_map_bit"],
+        skew=0,
+        boot_option=boot_option,
+        low_sector=params["low_sector"],
+        nzones=params["nzones"],
+        zone_spare=params["zone_spare"],
+        root=params["root"] if not big_directories else (params["root"] & ~0xFF) | 1,
+        disc_size=disc_size,
+        disc_id=disc_id,
+        disc_name=title[:10],
+        disc_type=_DISCTYPE_PLUS if big_directories else _DISCTYPE_NON_PLUS,
+        format_version=1 if big_directories else 0,
+        root_size=_BIG_DIR_ROOT_SIZE if big_directories else 0,
+    )
+
+
 def _boot_block_checksum(data: SectorsView, offset: int, size: int) -> int:
     """Additive-with-carry checksum (new-map accumulator 0), skipping the last byte."""
     acc = 0
