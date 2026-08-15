@@ -27,6 +27,7 @@ from oaknut.adfs.directory import (
     ADFS_NAME_GRAMMAR,
     Access,
     ADFSDirectoryFormat,
+    NewDirectoryFormat,
     OldDirectoryFormat,
     _ADFSDirectory,
     _ADFSDirectoryEntry,
@@ -80,8 +81,12 @@ def _validate_adfs_leaf(name: str) -> None:
 _ADFS_SECTORS_PER_TRACK = 16
 _ADFS_BYTES_PER_SECTOR = 256
 
-# Root directory sector address for old map formats
+# Root directory sector address for old map formats. S/M/L place the root
+# (an Old directory) at sector 2 (0x200); the D format places its New
+# directory at sector 4 (0x400), because its 1024-byte physical sectors push
+# the post-map boundary to 0x400. Both address in 256-byte sector units.
 _OLD_MAP_ROOT_SECTOR = 2
+_D_MAP_ROOT_SECTOR = 4
 _OLD_DIR_SECTORS = 5  # Old directory occupies 5 sectors
 _OLD_FSM_SECTORS = 2  # Old free space map occupies sectors 0-1
 
@@ -193,10 +198,34 @@ ADFS_L_SEQUENTIAL = ADFSFormat(
     label="L",
 )
 
+
+def _flat_spec(total_sectors: int) -> SurfaceSpec:
+    """A single surface addressing the whole image as linear 256-byte sectors."""
+    return SurfaceSpec(
+        num_tracks=1,
+        sectors_per_track=total_sectors,
+        bytes_per_sector=_ADFS_BYTES_PER_SECTOR,
+        track_zero_offset_bytes=0,
+        track_stride_bytes=total_sectors * _ADFS_BYTES_PER_SECTOR,
+    )
+
+
+#: ADFS D — 800K, Old free-space map but a New directory rooted at sector 4.
+#: Modelled as a single linear surface (3200 × 256-byte sectors); the D-format
+#: images in circulation are not side-interleaved. Interleaved D layout, like
+#: the interleaved/linear split at 640K, is not yet disambiguated.
+ADFS_D = ADFSFormat(
+    surface_specs=[_flat_spec(3200)],
+    total_sectors=3200,
+    total_bytes=819200,
+    label="D",
+)
+
 _ADFS_FORMATS_BY_SIZE = {
     ADFS_S.total_bytes: ADFS_S,
     ADFS_M.total_bytes: ADFS_M,
     ADFS_L.total_bytes: ADFS_L,
+    ADFS_D.total_bytes: ADFS_D,
 }
 
 
@@ -250,6 +279,8 @@ _FLOPPY_GEOMETRY = {
     ADFS_S.total_bytes: ADFSGeometry(cylinders=40, heads=1, sectors_per_track=16),
     ADFS_M.total_bytes: ADFSGeometry(cylinders=80, heads=1, sectors_per_track=16),
     ADFS_L.total_bytes: ADFSGeometry(cylinders=80, heads=2, sectors_per_track=16),
+    # D: 5 × 1024-byte sectors/track = 20 × 256-byte sectors, 80 tracks, 2 sides.
+    ADFS_D.total_bytes: ADFSGeometry(cylinders=80, heads=2, sectors_per_track=20),
 }
 
 
@@ -604,7 +635,7 @@ class ADFSPath(AcornPath):
             ADFSPathError: If this path is a file, not a directory.
         """
         if self._path == "$":
-            disc_address = _OLD_MAP_ROOT_SECTOR
+            disc_address = self._adfs._root_address
         else:
             _, entry = self._resolve()
             if not entry.is_directory:
@@ -1347,6 +1378,7 @@ class ADFS:
         dir_format: ADFSDirectoryFormat,
         fsm: OldFreeSpaceMap,
         geometry: ADFSGeometry,
+        root_address: int = _OLD_MAP_ROOT_SECTOR,
     ):
         # _closed must be set before any attribute that property-gates
         # would touch via _require_open.
@@ -1355,6 +1387,7 @@ class ADFS:
         self._dir_format = dir_format
         self._fsm_ = fsm
         self._geometry = geometry
+        self._root_address = root_address
         self._afs_partition_cache = None
 
     @property
@@ -1543,10 +1576,10 @@ class ADFS:
         map_data = unified.sector_range(0, 2)
         fsm = OldFreeSpaceMap(map_data)
 
-        # Detect directory format from root signature
-        dir_format = _detect_directory_format(unified)
+        # Detect directory format and root location from the on-disc structure
+        dir_format, root_address = _detect_directory_layout(unified)
 
-        return cls(unified, dir_format, fsm, geometry)
+        return cls(unified, dir_format, fsm, geometry, root_address)
 
     @classmethod
     def create(
@@ -1850,7 +1883,7 @@ class ADFS:
             errors.append(ADFSValidationError(f"Root directory: {exc}"))
             return errors
 
-        seen: set[int] = {_OLD_MAP_ROOT_SECTOR}
+        seen: set[int] = {self._root_address}
 
         def walk(directory: _ADFSDirectory, path: str) -> None:
             for entry in directory.entries:
@@ -2086,7 +2119,7 @@ class ADFS:
 
     def _read_root_directory(self) -> _ADFSDirectory:
         """Read and parse the root directory."""
-        return self._read_directory_at(_OLD_MAP_ROOT_SECTOR)
+        return self._read_directory_at(self._root_address)
 
     def _read_directory_at(self, disc_address: int) -> _ADFSDirectory:
         """Read and parse a directory at the given sector address."""
@@ -2218,10 +2251,10 @@ class ADFS:
         """
         parent_parts = path_parts[:-1]
         if len(parent_parts) == 1:
-            return self._read_root_directory(), _OLD_MAP_ROOT_SECTOR
+            return self._read_root_directory(), self._root_address
 
         current_dir = self._read_root_directory()
-        parent_disc_address = _OLD_MAP_ROOT_SECTOR
+        parent_disc_address = self._root_address
         for component in parent_parts[1:]:
             entry = current_dir.find(component)
             if entry is None:
@@ -2665,22 +2698,40 @@ def _insert_sorted(
     return tuple(items)
 
 
-def _detect_directory_format(unified: UnifiedDisc) -> ADFSDirectoryFormat:
-    """Detect the directory format by checking for known signatures.
+def _detect_directory_layout(unified: UnifiedDisc) -> tuple[ADFSDirectoryFormat, int]:
+    """Detect the directory format and root sector for an old-map disc.
 
-    For old map discs, the root directory starts at sector 2 (offset 0x200).
-    Check for "Hugo" at offset 0x201 (old directory) or "Nick" at 0x401 (new directory).
+    Returns ``(format, root_sector)``:
+
+      * Old directory (S/M/L) — root at sector 2 (0x200);
+      * New directory (D) — root at sector 4 (0x400).
+
+    Each candidate is confirmed by parsing it in full (signature, tail and,
+    for the New directory, the ROR-13 check byte), so a "Hugo"/"Nick" byte
+    pattern that is really file data cannot be mistaken for a root.
 
     Raises:
-        ADFSError: If no valid directory signature is found.
+        ADFSError: If neither layout yields a valid root directory.
     """
-    # Check for old directory: "Hugo" at 0x201
-    root_data = unified.sector_range(2, 5)
-    sig = root_data[1:5]
-    if sig == b"Hugo" or sig == b"Nick":
-        return OldDirectoryFormat()
+    old = OldDirectoryFormat()
+    try:
+        old_data = unified.sector_range(_OLD_MAP_ROOT_SECTOR, old.size_in_sectors)
+        old.parse(old_data, _OLD_MAP_ROOT_SECTOR)
+        return old, _OLD_MAP_ROOT_SECTOR
+    except ADFSDirectoryError:
+        pass
 
+    new = NewDirectoryFormat()
+    try:
+        new_data = unified.sector_range(_D_MAP_ROOT_SECTOR, new.size_in_sectors)
+        new.parse(new_data, _D_MAP_ROOT_SECTOR)
+        return new, _D_MAP_ROOT_SECTOR
+    except ADFSDirectoryError:
+        pass
+
+    sig2 = bytes(unified.sector_range(_OLD_MAP_ROOT_SECTOR, 1)[1:5])
+    sig4 = bytes(unified.sector_range(_D_MAP_ROOT_SECTOR, 1)[1:5])
     raise ADFSError(
-        f"Unrecognised ADFS directory format. "
-        f"Expected 'Hugo' or 'Nick' at offset 0x201, got {sig!r}"
+        "Unrecognised ADFS directory format. Expected a valid Old directory at "
+        f"0x200 (got signature {sig2!r}) or New directory at 0x400 (got {sig4!r})."
     )

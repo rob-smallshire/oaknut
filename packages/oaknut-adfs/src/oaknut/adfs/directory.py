@@ -480,3 +480,338 @@ class OldDirectoryFormat(ADFSDirectoryFormat):
         data[tail + _OLD_TAIL_END_NAME : tail + _OLD_TAIL_END_NAME + 4] = _HUGO
         # DirCheckByte: reserved, must be zero
         data[tail + _OLD_TAIL_CHECK_BYTE] = 0x00
+
+
+# --- New directory format (ADFS D/E/F) ---
+#
+# The New directory (2048 bytes, up to 77 entries) is the FileCore directory
+# introduced with the D format and carried into the New Map E/F shapes. It
+# differs from the Old directory in three ways that matter here:
+#
+#   * object attributes live in a dedicated NewDirAtts byte (entry+0x19), not
+#     in the top bits of the name — so names may use all eight bits;
+#   * the tail is laid out differently and is 0x29 (41) bytes long; and
+#   * the DirCheckByte is a real ROR-13 checksum over the block, not a
+#     reserved zero.
+#
+# For the D format the map remains the Old free-space map and DirIndDiscAdd is
+# still a plain start sector, so file data is read contiguously exactly as for
+# S/M/L. The New Map shapes reinterpret DirIndDiscAdd as a fragment address;
+# that reinterpretation lives above this layer.
+
+_NEW_DIR_SIZE = 2048  # 8 sectors × 256 bytes
+_NEW_DIR_SECTORS = 8
+_NEW_DIR_MAX_ENTRIES = 77
+_NEW_DIR_ENTRY_SIZE = 26  # 0x1A — same entry shape as the Old directory
+_NEW_DIR_HEADER_SIZE = 5  # StartMasSeq (1) + StartName (4)
+_NEW_DIR_ENTRIES_OFFSET = _NEW_DIR_HEADER_SIZE  # 0x005
+
+# Tail is a fixed 0x29 bytes at the end of the block.
+_NEW_DIR_TAIL_SIZE = 0x29
+_NEW_DIR_TAIL_OFFSET = _NEW_DIR_SIZE - _NEW_DIR_TAIL_SIZE  # 0x7D7
+
+# Tail field offsets (relative to tail start)
+_NEW_TAIL_LAST_MARK = 0x00  # 1 byte, 0 to mark end of entries
+_NEW_TAIL_RESERVED = 0x01  # 2 bytes, must be zero
+_NEW_TAIL_PARENT = 0x03  # 3 bytes, indirect disc address of parent
+_NEW_TAIL_TITLE = 0x06  # 19 bytes, directory title
+_NEW_TAIL_DIR_NAME = 0x19  # 10 bytes, directory name
+_NEW_TAIL_END_MAS_SEQ = 0x23  # 1 byte, must match StartMasSeq
+_NEW_TAIL_END_NAME = 0x24  # 4 bytes, must match StartName
+_NEW_TAIL_CHECK_BYTE = 0x28  # 1 byte, ROR-13 directory checksum
+
+# NewDirAtts bit meanings (entry offset 0x19). Bits 6-7 are reserved.
+_NEW_ATT_OWNER_READ = 0x01
+_NEW_ATT_OWNER_WRITE = 0x02
+_NEW_ATT_LOCKED = 0x04
+_NEW_ATT_DIRECTORY = 0x08
+_NEW_ATT_PUBLIC_READ = 0x10
+_NEW_ATT_PUBLIC_WRITE = 0x20
+
+
+def _ror13(value: int) -> int:
+    """Rotate a 32-bit value right by 13 bits."""
+    return ((value >> 13) | (value << 19)) & 0xFFFFFFFF
+
+
+def _read_32bit_le(data: SectorsView | bytes, offset: int) -> int:
+    """Read a 32-bit little-endian value."""
+    return (
+        data[offset]
+        | (data[offset + 1] << 8)
+        | (data[offset + 2] << 16)
+        | (data[offset + 3] << 24)
+    )
+
+
+def _strip_name_8bit(name_bytes: bytes) -> str:
+    """Extract a New-directory name/title, preserving all eight bits.
+
+    Unlike :func:`_strip_name`, the top bit is *not* masked — in New
+    directories it is part of the character, not an attribute flag. The
+    field is terminated by the first CR (0x0D) or NUL (0x00). Decoded as
+    Latin-1 so no byte sequence can raise; real discs use 7-bit ASCII or
+    the Acorn Latin-1 character set, both of which round-trip through it.
+    """
+    for i, c in enumerate(name_bytes):
+        if c in (0x00, 0x0D):
+            name_bytes = name_bytes[:i]
+            break
+    return bytes(name_bytes).decode("latin-1")
+
+
+def _extract_new_attributes(atts: int) -> _ADFSRawAttributes:
+    """Decode a NewDirAtts byte into raw attributes.
+
+    New directories carry only R/W/L/D and public r/w; owner-execute,
+    public-execute and private have no bit in this byte and are always
+    reported as ``False``.
+    """
+    return _ADFSRawAttributes(
+        owner_read=bool(atts & _NEW_ATT_OWNER_READ),
+        owner_write=bool(atts & _NEW_ATT_OWNER_WRITE),
+        locked=bool(atts & _NEW_ATT_LOCKED),
+        directory=bool(atts & _NEW_ATT_DIRECTORY),
+        owner_execute=False,
+        public_read=bool(atts & _NEW_ATT_PUBLIC_READ),
+        public_write=bool(atts & _NEW_ATT_PUBLIC_WRITE),
+        public_execute=False,
+        private=False,
+    )
+
+
+def _new_attributes_byte(attributes: _ADFSRawAttributes) -> int:
+    """Encode raw attributes into a NewDirAtts byte."""
+    byte = 0
+    if attributes.owner_read:
+        byte |= _NEW_ATT_OWNER_READ
+    if attributes.owner_write:
+        byte |= _NEW_ATT_OWNER_WRITE
+    if attributes.locked:
+        byte |= _NEW_ATT_LOCKED
+    if attributes.directory:
+        byte |= _NEW_ATT_DIRECTORY
+    if attributes.public_read:
+        byte |= _NEW_ATT_PUBLIC_READ
+    if attributes.public_write:
+        byte |= _NEW_ATT_PUBLIC_WRITE
+    return byte
+
+
+def _calculate_new_dir_check(data: SectorsView | bytes) -> int:
+    """Compute the New-directory DirCheckByte (ROR-13 accumulation).
+
+    Mirrors FileCore's algorithm (as implemented in Gerald Holdsworth's
+    DiscImageManager ``CalculateADFSDirCheck``):
+
+      1. Accumulate whole 32-bit words from the start of the block up to
+         the end of the *used* entries (the first zero name-byte marks it).
+      2. Accumulate the trailing <4 bytes of that region individually.
+      3. Skip the first byte of the tail (to leave whole words), then
+         accumulate the tail's whole words except the final word, which
+         holds the check byte.
+      4. XOR the four bytes of the accumulated word together.
+
+    Each step folds a value in via ``dircheck = value XOR ROR13(dircheck)``.
+    The unused entry slots between the end marker and the tail are not
+    accumulated.
+    """
+    num_entries = 0
+    while data[_NEW_DIR_ENTRIES_OFFSET + num_entries * _NEW_DIR_ENTRY_SIZE] != 0:
+        num_entries += 1
+    end_of_check = _NEW_DIR_ENTRIES_OFFSET + num_entries * _NEW_DIR_ENTRY_SIZE
+
+    dircheck = 0
+    amt = 0
+    while amt + 3 < end_of_check:
+        dircheck = _read_32bit_le(data, amt) ^ _ror13(dircheck)
+        amt += 4
+    while amt < end_of_check:
+        dircheck = data[amt] ^ _ror13(dircheck)
+        amt += 1
+
+    amt = _NEW_DIR_TAIL_OFFSET + 1  # skip NewDirLastMark
+    while amt + 3 < _NEW_DIR_SIZE - 4:
+        dircheck = _read_32bit_le(data, amt) ^ _ror13(dircheck)
+        amt += 4
+
+    return (
+        (dircheck & 0xFF)
+        ^ ((dircheck >> 8) & 0xFF)
+        ^ ((dircheck >> 16) & 0xFF)
+        ^ ((dircheck >> 24) & 0xFF)
+    )
+
+
+def _parse_new_entry(data: SectorsView, entry_offset: int) -> _ADFSDirectoryEntry | None:
+    """Parse a single New-directory entry.
+
+    Returns None if this is the end-of-entries marker (first byte is 0).
+    """
+    if data[entry_offset] == 0:
+        return None
+
+    name_bytes = bytes(data[entry_offset : entry_offset + 10])
+    name = _strip_name_8bit(name_bytes)
+
+    load_address = _read_32bit_le(data, entry_offset + 0x0A)
+    exec_address = _read_32bit_le(data, entry_offset + 0x0E)
+    length = _read_32bit_le(data, entry_offset + 0x12)
+    indirect_disc_address = _read_24bit_le(data, entry_offset + 0x16)
+    atts_byte = data[entry_offset + 0x19]
+    attributes = _extract_new_attributes(atts_byte)
+
+    return _ADFSDirectoryEntry(
+        name=name,
+        load_address=load_address,
+        exec_address=exec_address,
+        length=length,
+        indirect_disc_address=indirect_disc_address,
+        sequence_number=0,
+        attributes=attributes,
+    )
+
+
+def _serialize_new_entry(
+    entry: _ADFSDirectoryEntry,
+    data: SectorsView,
+    entry_offset: int,
+) -> None:
+    """Serialize a single New-directory entry at the given offset."""
+    # Name (up to 10 bytes, CR-padded, no attribute bits in the top bit).
+    name_bytes = entry.name.encode("latin-1")[:10].ljust(10, b"\r")
+    for i in range(10):
+        data[entry_offset + i] = name_bytes[i]
+
+    for i in range(4):
+        data[entry_offset + 0x0A + i] = (entry.load_address >> (i * 8)) & 0xFF
+    for i in range(4):
+        data[entry_offset + 0x0E + i] = (entry.exec_address >> (i * 8)) & 0xFF
+    for i in range(4):
+        data[entry_offset + 0x12 + i] = (entry.length >> (i * 8)) & 0xFF
+    _write_24bit_le(data, entry_offset + 0x16, entry.indirect_disc_address)
+    data[entry_offset + 0x19] = _new_attributes_byte(entry.attributes)
+
+
+class NewDirectoryFormat(ADFSDirectoryFormat):
+    """New ADFS directory format (D/E/F): 77 entries, 2048 bytes (8 sectors).
+
+    Signature is "Hugo" or "Nick" at offset 0x01 and in the tail, and the
+    DirCheckByte is a real ROR-13 checksum.
+    """
+
+    @property
+    def size_in_bytes(self) -> int:
+        return _NEW_DIR_SIZE
+
+    @property
+    def size_in_sectors(self) -> int:
+        return _NEW_DIR_SECTORS
+
+    @property
+    def max_entries(self) -> int:
+        return _NEW_DIR_MAX_ENTRIES
+
+    def parse(self, data: SectorsView, disc_address: int) -> _ADFSDirectory:
+        """Parse a New-format directory from sector data."""
+        if len(data) < _NEW_DIR_SIZE:
+            raise ADFSDirectoryError(
+                f"Directory data too short: {len(data)} bytes, need {_NEW_DIR_SIZE}"
+            )
+
+        start_mas_seq = data[0x00]
+        start_name = bytes(data[0x01:0x05])
+        if start_name not in (_HUGO, _NICK):
+            raise ADFSDirectoryError(
+                f"Invalid directory signature: {start_name!r} (expected {_HUGO!r} or {_NICK!r})"
+            )
+
+        tail = _NEW_DIR_TAIL_OFFSET
+        end_mas_seq = data[tail + _NEW_TAIL_END_MAS_SEQ]
+        end_name = bytes(data[tail + _NEW_TAIL_END_NAME : tail + _NEW_TAIL_END_NAME + 4])
+        if end_name != start_name:
+            raise ADFSDirectoryError(
+                f"Directory tail signature {end_name!r} does not match "
+                f"header signature {start_name!r}"
+            )
+        if start_mas_seq != end_mas_seq:
+            raise ADFSDirectoryError(
+                f"Broken directory: StartMasSeq ({start_mas_seq}) != EndMasSeq ({end_mas_seq})"
+            )
+
+        expected_check = data[tail + _NEW_TAIL_CHECK_BYTE]
+        calculated_check = _calculate_new_dir_check(data)
+        if expected_check != calculated_check:
+            raise ADFSDirectoryError(
+                f"Directory check byte mismatch: stored 0x{expected_check:02X}, "
+                f"calculated 0x{calculated_check:02X}"
+            )
+
+        entries = []
+        for i in range(_NEW_DIR_MAX_ENTRIES):
+            entry_offset = _NEW_DIR_ENTRIES_OFFSET + i * _NEW_DIR_ENTRY_SIZE
+            entry = _parse_new_entry(data, entry_offset)
+            if entry is None:
+                break
+            entries.append(entry)
+
+        dir_name = _strip_name_8bit(
+            bytes(data[tail + _NEW_TAIL_DIR_NAME : tail + _NEW_TAIL_DIR_NAME + 10])
+        )
+        parent_address = _read_24bit_le(data, tail + _NEW_TAIL_PARENT)
+        title = _strip_name_8bit(
+            bytes(data[tail + _NEW_TAIL_TITLE : tail + _NEW_TAIL_TITLE + 19])
+        ).rstrip(" ")
+
+        return _ADFSDirectory(
+            name=dir_name,
+            title=title,
+            parent_address=parent_address,
+            disc_address=disc_address,
+            entries=tuple(entries),
+            sequence_number=start_mas_seq,
+        )
+
+    def serialize(self, directory: _ADFSDirectory, data: SectorsView) -> None:
+        """Serialize a New-format directory into *data* (2048 bytes)."""
+        if len(data) < _NEW_DIR_SIZE:
+            raise ADFSDirectoryError(
+                f"Output data too short: {len(data)} bytes, need {_NEW_DIR_SIZE}"
+            )
+        if len(directory.entries) > _NEW_DIR_MAX_ENTRIES:
+            raise ADFSDirectoryError(
+                f"Too many entries: {len(directory.entries)}, maximum is {_NEW_DIR_MAX_ENTRIES}"
+            )
+
+        for i in range(_NEW_DIR_SIZE):
+            data[i] = 0
+
+        # Header. StartName is "Hugo" for D/E; a byte-preserving round-trip
+        # of a "Nick"-signed disc keeps whatever the tail carries, but we
+        # write the conventional "Hugo" here and mirror it in the tail.
+        signature = _HUGO
+        data[0x00] = directory.sequence_number & 0xFF
+        data[0x01:0x05] = signature
+
+        for i, entry in enumerate(directory.entries):
+            offset = _NEW_DIR_ENTRIES_OFFSET + i * _NEW_DIR_ENTRY_SIZE
+            _serialize_new_entry(entry, data, offset)
+
+        tail = _NEW_DIR_TAIL_OFFSET
+        data[tail + _NEW_TAIL_LAST_MARK] = 0x00
+
+        dir_name_bytes = directory.name.encode("latin-1")[:10].ljust(10, b"\r")
+        for i, b in enumerate(dir_name_bytes):
+            data[tail + _NEW_TAIL_DIR_NAME + i] = b
+
+        _write_24bit_le(data, tail + _NEW_TAIL_PARENT, directory.parent_address)
+
+        title_bytes = directory.title.encode("latin-1")[:19].ljust(19, b"\r")
+        for i, b in enumerate(title_bytes):
+            data[tail + _NEW_TAIL_TITLE + i] = b
+
+        data[tail + _NEW_TAIL_END_MAS_SEQ] = directory.sequence_number & 0xFF
+        data[tail + _NEW_TAIL_END_NAME : tail + _NEW_TAIL_END_NAME + 4] = signature
+
+        # DirCheckByte last — it is computed over everything else.
+        data[tail + _NEW_TAIL_CHECK_BYTE] = _calculate_new_dir_check(data)
