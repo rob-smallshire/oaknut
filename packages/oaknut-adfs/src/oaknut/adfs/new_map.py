@@ -332,8 +332,23 @@ class NewMap:
                 self._free_bytes += length_bytes
             else:
                 frag_id = self._read_bits(self._map_start_bit + pos, self._dr.idlen)
-                self._fragments.setdefault(frag_id, []).append((pos * bpmb, length_bytes))
+                self._fragments.setdefault(frag_id, []).append((pos * bpmb, length_bytes, 0))
             pos += length_bits
+
+    def _ordered_fragments(self, frag_id: int) -> "list[tuple[int, int, int]] | None":
+        """An object's fragments as ``(disc_address, capacity, zone)``, in file order.
+
+        Within a zone the scan already yields disc-address order. Across zones,
+        FileCore joins fragments in the search order that starts at the id's
+        home zone and wraps, so multi-fragment objects spanning zones read back
+        in the right order.
+        """
+        fragments = self._fragments.get(frag_id)
+        if not fragments or not self._multizone or len(fragments) == 1:
+            return fragments
+        start_zone = frag_id // self._id_per_zone()
+        nzones = self._dr.nzones
+        return sorted(fragments, key=lambda f: (f[2] - start_zone) % nzones)
 
     # --- Multi-zone reading (F format) ---
     #
@@ -392,7 +407,7 @@ class NewMap:
                     off = b - _ZONE0_MAP_START * 8  # the "id offset" DIM subtracts from
                     disc_address = ((off - dr.zone_spare * zone) * bpmb) % dr.disc_size
                     self._fragments.setdefault(frag_id, []).append(
-                        (disc_address, length_bytes)
+                        (disc_address, length_bytes, zone)
                     )
             b = j + 1
 
@@ -421,7 +436,7 @@ class NewMap:
         if indirect == self._dr.root:
             return self._root_physical()
         frag_id, sector_offset = self._split_indirect(indirect)
-        fragments = self._fragments.get(frag_id)
+        fragments = self._ordered_fragments(frag_id)
         if not fragments:
             raise ADFSMapError(
                 f"No allocated fragment for id 0x{frag_id:X} (indirect 0x{indirect:X})"
@@ -434,7 +449,7 @@ class NewMap:
         if indirect == self._dr.root:
             return self._read_physical(self._root_physical(), length)
         frag_id, sector_offset = self._split_indirect(indirect)
-        fragments = self._fragments.get(frag_id)
+        fragments = self._ordered_fragments(frag_id)
         if not fragments:
             raise ADFSMapError(
                 f"No allocated fragment for id 0x{frag_id:X} (indirect 0x{indirect:X})"
@@ -442,7 +457,7 @@ class NewMap:
         skip = self._within_offset(sector_offset)
         out = bytearray()
         remaining = length
-        for physical_address, capacity in fragments:
+        for physical_address, capacity, _zone in fragments:
             if skip >= capacity:
                 skip -= capacity
                 continue
@@ -557,43 +572,54 @@ class NewMap:
         """
         if self._multizone:
             return self._allocate_multizone(length_bytes)
-        idlen = self._dr.idlen
-        bpmb = self._dr.bytes_per_map_bit
-        # Round each fragment up to a whole sector's worth of map bits. The free
-        # region starts sector-aligned, so keeping every fragment sector-aligned
-        # keeps all later fragments — and therefore every directory, which must
-        # sit on a sector boundary — aligned too.
-        align_bits = self._dr.sector_size // bpmb
-        need_bits = max(-(-length_bytes // bpmb), idlen + 1)
-        need_bits = -(-need_bits // align_bits) * align_bits
-
+        need_bits = self._need_bits(length_bytes)
         cells = self._parse_cells()
+        if sum(ln for fid, ln in cells if fid is None) < need_bits:
+            raise ADFSDiscFullError(f"not enough free space for {length_bytes} bytes")
         new_fid = self._next_fragment_id(cells)
-
-        index = None
-        for i, (fid, length_bits) in enumerate(cells):
-            if fid is None and length_bits >= need_bits:
-                index = i
-                break
-        if index is None:
-            raise ADFSDiscFullError(
-                f"no single free area large enough for {length_bytes} bytes"
-            )
-
-        _, length_bits = cells[index]
-        leftover = length_bits - need_bits
-        if 0 < leftover < idlen + 1:
-            # Too small to be its own free area — absorb it into the fragment.
-            need_bits = length_bits
-            leftover = 0
-
-        replacement = [[new_fid, need_bits]]
-        if leftover > 0:
-            replacement.append([None, leftover])
-        cells[index : index + 1] = replacement
-
-        self._rewrite_cells(cells)
+        self._rewrite_cells(self._fill_free_cells(cells, new_fid, need_bits))
         return new_fid << 8
+
+    def _need_bits(self, length_bytes: int) -> int:
+        """Map bits an object of *length_bytes* needs, rounded to a whole sector.
+
+        Rounding to a sector keeps every fragment sector-aligned, so directories
+        (which must sit on a sector boundary) stay aligned no matter what has
+        been allocated before them.
+        """
+        bpmb = self._dr.bytes_per_map_bit
+        align_bits = self._dr.sector_size // bpmb
+        need = max(-(-length_bytes // bpmb), self._dr.idlen + 1)
+        return -(-need // align_bits) * align_bits
+
+    def _fill_free_cells(self, cells: list[list], frag_id: int, need_bits: int) -> list[list]:
+        """Assign *frag_id* to enough leading free cells to cover *need_bits*.
+
+        Free cells are taken in disc order; the last one is split if it
+        overshoots. Every consumed span is a whole number of sectors, so each
+        resulting fragment is a valid, sector-aligned fragment. Produces a
+        multi-fragment object when no single free area is large enough.
+        """
+        idlen = self._dr.idlen
+        remaining = need_bits
+        result: list[list] = []
+        for fid, length_bits in cells:
+            if fid is not None or remaining <= 0:
+                result.append([fid, length_bits])
+                continue
+            if length_bits <= remaining:
+                result.append([frag_id, length_bits])
+                remaining -= length_bits
+            else:
+                take = remaining
+                leftover = length_bits - take
+                if 0 < leftover < idlen + 1:
+                    take, leftover = length_bits, 0
+                result.append([frag_id, take])
+                if leftover > 0:
+                    result.append([None, leftover])
+                remaining = 0
+        return result
 
     def free_object(self, indirect: int) -> None:
         """Free every fragment of an object and merge adjacent free areas."""
@@ -620,13 +646,13 @@ class NewMap:
         if self._write_bytes is None:
             raise ADFSMapError("this New Map was opened read-only")
         frag_id, sector_offset = self._split_indirect(indirect)
-        fragments = self._fragments.get(frag_id)
+        fragments = self._ordered_fragments(frag_id)
         if not fragments:
             raise ADFSMapError(f"No allocated fragment for id 0x{frag_id:X}")
         skip = self._within_offset(sector_offset)
         offset = 0
         remaining = len(data)
-        for physical_address, capacity in fragments:
+        for physical_address, capacity, _zone in fragments:
             if skip >= capacity:
                 skip -= capacity
                 continue
@@ -730,51 +756,54 @@ class NewMap:
         return (self._dr.sector_size * 8 - self._dr.zone_spare) // (self._dr.idlen + 1)
 
     def _allocate_multizone(self, length_bytes: int) -> int:
-        idlen = self._dr.idlen
-        bpmb = self._dr.bytes_per_map_bit
-        align_bits = self._dr.sector_size // bpmb
-        need_bits = max(-(-length_bytes // bpmb), idlen + 1)
-        need_bits = -(-need_bits // align_bits) * align_bits
-
+        need_bits = self._need_bits(length_bytes)
         id_per_zone = self._id_per_zone()
+        nzones = self._dr.nzones
         used = set(self._fragments) | {0, 1, 2}
 
-        for zone in range(self._dr.nzones):
-            cells = self._parse_zone_cells(zone)
-            index = next(
-                (i for i, (fid, ln) in enumerate(cells) if fid is None and ln >= need_bits),
-                None,
-            )
-            if index is None:
-                continue
-            low = max(zone * id_per_zone, 3)
+        for start_zone in range(nzones):
+            low = max(start_zone * id_per_zone, 3)
             new_fid = next(
-                (c for c in range(low, (zone + 1) * id_per_zone) if c not in used), None
+                (c for c in range(low, (start_zone + 1) * id_per_zone) if c not in used), None
             )
             if new_fid is None:
                 continue
 
-            _, length_bits = cells[index]
-            take = need_bits
-            leftover = length_bits - take
-            if 0 < leftover < idlen + 1:
-                take = length_bits
-                leftover = 0
-            replacement = [[new_fid, take]]
-            if leftover > 0:
-                replacement.append([None, leftover])
-            cells[index : index + 1] = replacement
-            self._rewrite_zone(zone, cells)
+            # Gather free space across zones in the search order that begins at
+            # the id's home zone and wraps — the order in which the fragments
+            # will later be read back.
+            zone_order = [(start_zone + k) % nzones for k in range(nzones)]
+            planned: dict[int, list[list]] = {}
+            remaining = need_bits
+            for zone in zone_order:
+                if remaining <= 0:
+                    break
+                cells = self._parse_zone_cells(zone)
+                if not any(fid is None for fid, _ in cells):
+                    continue
+                new_cells = self._fill_free_cells(cells, new_fid, remaining)
+                consumed = sum(ln for fid, ln in new_cells if fid == new_fid)
+                if consumed:
+                    planned[zone] = new_cells
+                    remaining -= consumed
+            if remaining > 0:
+                continue  # not enough free space starting from this zone
+
+            for zone, cells in planned.items():
+                self._rewrite_zone(zone, cells)
             return new_fid << 8
 
-        raise ADFSDiscFullError(f"no zone has room for {length_bytes} bytes")
+        raise ADFSDiscFullError(f"not enough free space for {length_bytes} bytes")
 
     def _free_multizone(self, indirect: int) -> None:
         frag_id = indirect >> 8
+        found = False
+        # A multi-fragment object may span zones; free it in every zone.
         for zone in range(self._dr.nzones):
             cells = self._parse_zone_cells(zone)
             if not any(fid == frag_id for fid, _ in cells):
                 continue
+            found = True
             for cell in cells:
                 if cell[0] == frag_id:
                     cell[0] = None
@@ -785,8 +814,8 @@ class NewMap:
                 else:
                     merged.append([fid, length_bits])
             self._rewrite_zone(zone, merged)
-            return
-        raise ADFSMapError(f"No allocated fragment for id 0x{frag_id:X}")
+        if not found:
+            raise ADFSMapError(f"No allocated fragment for id 0x{frag_id:X}")
 
     # --- Disc-level metadata ---
 
