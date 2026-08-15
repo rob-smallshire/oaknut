@@ -2076,13 +2076,29 @@ class ADFS:
 
     @property
     def title(self) -> str:
-        """Disc title (from root directory title field)."""
+        """Disc title.
+
+        For old-map and New-directory discs this is the 19-character title
+        stored in the root directory. Big-directory discs (E+/F+/G+) have no
+        directory title field, so their label is the disc record's disc name
+        (up to 10 characters) instead.
+        """
+        if self._big_directory_disc:
+            return self.disc_name
         return self.root.title
 
     @title.setter
     def title(self, value: str) -> None:
-        """Set disc title by rewriting the root directory."""
-        self.root.title = value
+        """Set the disc title (see :attr:`title` for where it is stored)."""
+        if self._big_directory_disc:
+            self._map.set_disc_name(value)
+        else:
+            self.root.title = value
+
+    @property
+    def _big_directory_disc(self) -> bool:
+        """True for New-map discs whose directories are the Big format."""
+        return self._map is not None and self._map.disc_record.uses_big_directories
 
     @property
     def boot_option(self) -> "BootOption":

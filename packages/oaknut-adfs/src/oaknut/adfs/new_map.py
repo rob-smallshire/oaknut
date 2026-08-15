@@ -903,6 +903,19 @@ class NewMap:
         self._dr = replace(self._dr, root=new_indirect)
         self._refresh_zone(0)
 
+    def set_disc_name(self, name: str) -> None:
+        """Rewrite the disc record's disc name (up to 10 characters).
+
+        The name lives only in the full disc record (the boot block's partial
+        copy omits it), so this writes the ten name bytes at offset 0x16 of the
+        record, refreshes zone 0's check byte and re-duplicates the map.
+        """
+        encoded = name.encode("latin-1")[:10].ljust(10, b"\x00")
+        for i in range(10):
+            self._map[_DISC_RECORD_OFFSET + 0x16 + i] = encoded[i]
+        self._dr = replace(self._dr, disc_name=encoded.rstrip(b"\x00").decode("latin-1"))
+        self._refresh_zone(0)
+
     def _refresh_zone(self, zone: int) -> None:
         """Recompute a zone's check byte and re-duplicate it, without touching the bitmap."""
         secsize = self._dr.sector_size

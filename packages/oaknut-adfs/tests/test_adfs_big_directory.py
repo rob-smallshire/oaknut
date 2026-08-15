@@ -129,6 +129,23 @@ def test_create_blank_plus(fmt, nzones, size):
         adfs.close()
 
 
+@pytest.mark.parametrize("fmt", [ADFS_E_PLUS, ADFS_F_PLUS])
+def test_disc_title_persists_via_disc_record(fmt, tmp_path):
+    # Big directories have no title field, so a Big-directory disc's title is
+    # the disc record's disc name. It must survive creation, a rename, and a
+    # reopen — and stay within the 10-character disc-name limit.
+    image = tmp_path / "titled.adf"
+    with ADFS.create_file(image, fmt, title="FirstName") as adfs:
+        assert adfs.title == "FirstName"
+        adfs.title = "SecondName"  # 10 chars
+        assert adfs.title == "SecondName"
+        assert adfs.disc_name == "SecondName"
+        assert adfs.validate() == []
+    with ADFS.from_file(image) as adfs:
+        assert adfs.title == "SecondName"
+        assert adfs.validate() == []
+
+
 def test_create_blank_e_plus_on_disk(tmp_path):
     image = tmp_path / "eplus.adf"
     with ADFS.create_file(image, ADFS_E_PLUS, title="DiscEPlus") as adfs:

@@ -163,11 +163,10 @@ class TestCreateVariants:
         with ADFS.from_file(image_filepath) as adfs:
             assert adfs.is_new_map is new_map
             assert isinstance(adfs._dir_format, BigDirectoryFormat) is big_dir
-            # New-directory discs carry the title in the root directory; Big
-            # directories do not store one (a pre-existing limitation), so
-            # only assert the title where the format records it.
-            if not big_dir:
-                assert adfs.title == "VARIANT"
+            # New-directory discs keep the title in the root directory; Big
+            # directories have no title field, so their label comes from the
+            # disc record's disc name — either way it round-trips.
+            assert adfs.title == "VARIANT"
             (adfs.root / "$.HELLO").write_bytes(b"hi" * 100)
             assert (adfs.root / "$.HELLO").read_bytes() == b"hi" * 100
             assert adfs.validate() == []
