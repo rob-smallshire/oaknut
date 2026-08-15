@@ -2408,6 +2408,108 @@ class ADFS:
         view = self._disc.sector_range(address, num_sectors)
         view[:] = data + b"\x00" * (num_sectors * _ADFS_BYTES_PER_SECTOR - len(data))
 
+    # --- Fragment sharing (New Map) ---
+    #
+    # FileCore packs several small files into one fragment rather than giving
+    # each its own (minimum) fragment. A fragment with spare room is marked
+    # shareable (its owner's indirect address carries sector offset 1); a later
+    # small file in the same directory is placed in a spare sector of that
+    # fragment, its indirect address carrying the 1-based sector offset. The
+    # fragment is freed only when its last sharer is removed.
+
+    def _allocate_file_space(
+        self, parent_dir: _ADFSDirectory, parent_disc_address: int, data: bytes
+    ) -> int:
+        """Allocate space for a file, write its data, and return its address.
+
+        On New Map discs a small file is packed into a shareable sibling
+        fragment when one has room; otherwise a fresh fragment is allocated and
+        marked shareable if it has a spare sector.
+        """
+        length = len(data)
+        if self._map is None:
+            address = self._allocate_object(length)
+            self._write_object_data(address, data)
+            return address
+
+        secsize = self._map.disc_record.sector_size
+        if 0 < length < self._map.min_fragment_bytes - secsize:
+            shared = self._find_shareable_fragment(parent_dir, parent_disc_address, length)
+            if shared is not None:
+                self._map.write_object_data(shared, data)
+                return shared
+
+        address = self._map.allocate_object(length)
+        frag_id = address >> 8
+        if (
+            length < self._map.min_fragment_bytes
+            and self._map.fragment_capacity(frag_id) - length > secsize
+        ):
+            address = (frag_id << 8) | 1  # mark the fragment shareable
+        self._map.write_object_data(address, data)
+        return address
+
+    def _objects_sharing(
+        self, parent_dir: _ADFSDirectory, parent_disc_address: int, frag_id: int
+    ):
+        """Yield ``(indirect, length)`` for every object occupying *frag_id*."""
+        if (parent_disc_address >> 8) == frag_id:
+            yield parent_disc_address, self._dir_format.size_in_bytes
+        for entry in parent_dir.entries:
+            if (entry.indirect_disc_address >> 8) == frag_id:
+                yield entry.indirect_disc_address, entry.length
+
+    def _find_shareable_fragment(
+        self, parent_dir: _ADFSDirectory, parent_disc_address: int, length: int
+    ) -> "int | None":
+        """Return an indirect address to pack *length* bytes into, or ``None``.
+
+        Candidates are the parent directory's own fragment (when marked
+        shareable and not the root) and any sibling file whose fragment is
+        marked shareable; each must be a single fragment with enough spare
+        sectors after the objects already sharing it.
+        """
+        secsize = self._map.disc_record.sector_size
+        needed = -(-length // secsize)
+
+        candidates = []
+        if (parent_disc_address & 0xFF) == 1 and parent_disc_address != self._root_address:
+            candidates.append(parent_disc_address >> 8)
+        for entry in parent_dir.entries:
+            if not entry.is_directory and (entry.indirect_disc_address & 0xFF) == 1:
+                candidates.append(entry.indirect_disc_address >> 8)
+
+        for frag_id in candidates:
+            if self._map.fragment_count(frag_id) != 1:
+                continue
+            capacity_sectors = self._map.fragment_capacity(frag_id) // secsize
+            used_end = 0
+            for indirect, obj_len in self._objects_sharing(
+                parent_dir, parent_disc_address, frag_id
+            ):
+                start = (indirect & 0xFF) - 1 if (indirect & 0xFF) >= 1 else 0
+                used_end = max(used_end, start + max(1, -(-obj_len // secsize)))
+            if used_end + needed <= capacity_sectors:
+                return (frag_id << 8) | (used_end + 1)
+        return None
+
+    def _release_object(
+        self, parent_dir: _ADFSDirectory, parent_disc_address: int, entry: _ADFSDirectoryEntry
+    ) -> None:
+        """Free an object's fragment unless another object still shares it."""
+        if self._map is None:
+            self._free_object(entry.indirect_disc_address, entry.length)
+            return
+        frag_id = entry.indirect_disc_address >> 8
+        still_shared = (parent_disc_address >> 8) == frag_id
+        if not still_shared:
+            for other in parent_dir.entries:
+                if other.name != entry.name and (other.indirect_disc_address >> 8) == frag_id:
+                    still_shared = True
+                    break
+        if not still_shared:
+            self._map.free_object(entry.indirect_disc_address)
+
     @staticmethod
     def _with_entries(
         directory: _ADFSDirectory,
@@ -2456,11 +2558,11 @@ class ADFS:
                 f"Directory full: maximum {self._dir_format.max_entries} entries"
             )
 
-        # Free the old data, then allocate and write the new.
+        # Free the old data (honouring fragment sharing), then allocate and
+        # write the new — possibly sharing a small file into a sibling fragment.
         if existing is not None:
-            self._free_object(existing.indirect_disc_address, existing.length)
-        address = self._allocate_object(len(data))
-        self._write_object_data(address, data)
+            self._release_object(parent_dir, parent_disc_address, existing)
+        address = self._allocate_file_space(parent_dir, parent_disc_address, data)
 
         new_entry = _ADFSDirectoryEntry(
             name=filename,
@@ -2536,7 +2638,7 @@ class ADFS:
         if existing.attributes.locked:
             raise ADFSFileLockedError(f"'{filename}' is locked")
 
-        self._free_object(existing.indirect_disc_address, existing.length)
+        self._release_object(parent_dir, parent_disc_address, existing)
 
         new_entries = tuple(
             e for e in parent_dir.entries if _name_key(e.name) != _name_key(filename)
@@ -2621,7 +2723,7 @@ class ADFS:
         if subdir.entries:
             raise ADFSDirectoryNotEmptyError(f"'{dirname}' is not empty")
 
-        self._free_object(existing.indirect_disc_address, self._dir_format.size_in_bytes)
+        self._release_object(parent_dir, parent_disc_address, existing)
 
         new_entries = tuple(
             e for e in parent_dir.entries if _name_key(e.name) != _name_key(dirname)

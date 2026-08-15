@@ -817,6 +817,22 @@ class NewMap:
         if not found:
             raise ADFSMapError(f"No allocated fragment for id 0x{frag_id:X}")
 
+    def fragment_capacity(self, frag_id: int) -> int:
+        """Total allocated bytes of a fragment id (0 if unallocated)."""
+        fragments = self._fragments.get(frag_id)
+        if not fragments:
+            return 0
+        return sum(capacity for _, capacity, _ in fragments)
+
+    def fragment_count(self, frag_id: int) -> int:
+        """Number of separate fragments an id occupies (sharing needs exactly one)."""
+        return len(self._fragments.get(frag_id, ()))
+
+    @property
+    def min_fragment_bytes(self) -> int:
+        """Smallest possible fragment: ``(idlen + 1)`` map bits."""
+        return (self._dr.idlen + 1) * self._dr.bytes_per_map_bit
+
     # --- Disc-level metadata ---
 
     @property
