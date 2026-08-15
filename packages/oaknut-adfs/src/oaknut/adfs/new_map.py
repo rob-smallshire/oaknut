@@ -29,7 +29,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from oaknut.adfs.exceptions import ADFSMapError, ADFSValidationError
+from oaknut.adfs.exceptions import ADFSDiscFullError, ADFSMapError, ADFSValidationError
 from oaknut.discimage.sectors_view import SectorsView
 
 # Byte offsets within a zone's leading structures.
@@ -209,6 +209,7 @@ class NewMap:
         map_bytes: SectorsView,
         disc_record: DiscRecord,
         read_bytes,
+        write_bytes=None,
     ):
         if disc_record.nzones != 1:
             raise ADFSMapError(
@@ -217,6 +218,7 @@ class NewMap:
         self._map = map_bytes
         self._dr = disc_record
         self._read_bytes = read_bytes
+        self._write_bytes = write_bytes
         # fragment id -> list of (disc_address_bytes, capacity_bytes) in scan order
         self._fragments: dict[int, list[tuple[int, int]]] = {}
         self._free_bytes = 0
@@ -226,35 +228,77 @@ class NewMap:
     def disc_record(self) -> DiscRecord:
         return self._dr
 
+    @property
+    def _map_start_bit(self) -> int:
+        return _ZONE0_MAP_START * 8
+
+    @property
+    def _usable_bits(self) -> int:
+        """Number of allocation-map bits the disc occupies (single zone)."""
+        return self._dr.disc_size // self._dr.bytes_per_map_bit
+
     def _bit(self, bit_pos: int) -> int:
         return (self._map[bit_pos >> 3] >> (bit_pos & 7)) & 1
 
+    def _read_bits(self, bit_pos: int, num_bits: int) -> int:
+        value = 0
+        for i in range(num_bits):
+            value |= self._bit(bit_pos + i) << i
+        return value
+
+    def _cell_length_bits(self, pos: int) -> int:
+        """Length of the map cell starting at *pos* (idlen field + zeros + stop)."""
+        idlen = self._dr.idlen
+        base = self._map_start_bit + pos
+        length_bits = idlen
+        j = idlen
+        while pos + length_bits < self._usable_bits:
+            stop = self._bit(base + j)
+            length_bits += 1
+            j += 1
+            if stop:
+                break
+        return length_bits
+
+    def _free_area_positions(self) -> set[int]:
+        """Positions (map-bit offsets) of free areas, walked via the FreeLink chain.
+
+        Free areas cannot be told apart from allocated fragments by their
+        leading bits — those bits are the link to the next free area, not a
+        zero id — so the chain is the authoritative source. The header link
+        (byte 1) has its top bit set as a marker; a link value of zero ends
+        the chain.
+        """
+        positions: set[int] = set()
+        header = self._read_bits(8, 16) & 0x7FFF
+        if header == 0:
+            return positions
+        freeptr = 8 + header
+        guard = 0
+        limit = self._usable_bits + 1
+        while guard <= limit:
+            positions.add(freeptr - self._map_start_bit)
+            link = self._read_bits(freeptr, self._dr.idlen)
+            if link == 0:
+                break
+            freeptr += link
+            guard += 1
+        return positions
+
     def _build_index(self) -> None:
-        dr = self._dr
-        idlen = dr.idlen
-        bpmb = dr.bytes_per_map_bit
-        map_start_bit = _ZONE0_MAP_START * 8
-        usable_bits = dr.disc_size // bpmb
+        self._fragments = {}
+        self._free_bytes = 0
+        bpmb = self._dr.bytes_per_map_bit
+        free_positions = self._free_area_positions()
 
         pos = 0
-        while pos < usable_bits:
-            base = map_start_bit + pos
-            frag_id = 0
-            for i in range(idlen):
-                frag_id |= self._bit(base + i) << i
-            # Length: idlen bits, then zeros, then a set stop bit (inclusive).
-            length_bits = idlen
-            j = idlen
-            while pos + length_bits < usable_bits:
-                stop = self._bit(base + j)
-                length_bits += 1
-                j += 1
-                if stop:
-                    break
+        while pos < self._usable_bits:
+            length_bits = self._cell_length_bits(pos)
             length_bytes = length_bits * bpmb
-            if frag_id == 0:
+            if pos in free_positions:
                 self._free_bytes += length_bytes
             else:
+                frag_id = self._read_bits(self._map_start_bit + pos, self._dr.idlen)
                 self._fragments.setdefault(frag_id, []).append((pos * bpmb, length_bytes))
             pos += length_bits
 
@@ -308,6 +352,185 @@ class NewMap:
                 f"than its catalogued length ({length} bytes)"
             )
         return bytes(out)
+
+    # --- Mutation ---
+    #
+    # Writes work by parsing the zone bitstream into a list of cells (each an
+    # allocated fragment or a free area), editing the list, then rewriting the
+    # whole bitstream and rebuilding the FreeLink chain. This is easier to keep
+    # correct than in-place bit surgery and produces the same valid structures.
+    # Allocation is single-fragment: it places an object in one contiguous free
+    # area. That always succeeds on a fresh disc (one big free area); a disc
+    # fragmented by deletions could refuse a large object even with enough total
+    # free space. Multi-fragment allocation is a later refinement.
+
+    def _parse_cells(self) -> list[list]:
+        """Tile the usable map into ``[fragment_id_or_None, length_bits]`` cells."""
+        free_positions = self._free_area_positions()
+        cells: list[list] = []
+        pos = 0
+        while pos < self._usable_bits:
+            length_bits = self._cell_length_bits(pos)
+            if pos in free_positions:
+                cells.append([None, length_bits])
+            else:
+                fid = self._read_bits(self._map_start_bit + pos, self._dr.idlen)
+                cells.append([fid, length_bits])
+            pos += length_bits
+        return cells
+
+    def _rewrite_cells(self, cells: list[list]) -> None:
+        """Rewrite the bitstream, FreeLink chain, zone check and map copy."""
+        idlen = self._dr.idlen
+        map_start = self._map_start_bit
+
+        end_byte = (map_start + self._usable_bits + 7) // 8
+        for b in range(_ZONE0_MAP_START, end_byte):
+            self._map[b] = 0
+
+        pos = 0
+        free_positions: list[int] = []
+        for fid, length_bits in cells:
+            base = map_start + pos
+            if fid is not None:
+                write_bits(self._map, base, idlen, fid)
+            else:
+                free_positions.append(pos)
+            write_bits(self._map, base + length_bits - 1, 1, 1)  # stop bit
+            pos += length_bits
+
+        self._write_free_chain(free_positions)
+        self._finalise_zone()
+        self._build_index()
+
+    def _write_free_chain(self, free_positions: list[int]) -> None:
+        """Rebuild the FreeLink chain over the free areas (ascending order)."""
+        idlen = self._dr.idlen
+        map_start = self._map_start_bit
+        if not free_positions:
+            _write_le(self._map, _ZONE_FREELINK_OFFSET, 0x8000, 2)
+            return
+        prev_ptr = 8  # the header FreeLink field, at byte 1
+        for i, pos in enumerate(free_positions):
+            target = map_start + pos
+            distance = target - prev_ptr
+            if i == 0:
+                # Header link: 16-bit, with the top-bit marker set.
+                _write_le(self._map, _ZONE_FREELINK_OFFSET, 0x8000 | distance, 2)
+            else:
+                write_bits(self._map, prev_ptr, idlen, distance)
+            prev_ptr = target
+        # The final free area's link stays zero (already cleared) — chain end.
+
+    def _finalise_zone(self) -> None:
+        """Recompute the zone-0 check byte and duplicate the map."""
+        secsize = self._dr.sector_size
+        self._map[_ZONE_CHECK_OFFSET] = calculate_zone_check(
+            self._map, 0, self._dr.log2_sector_size
+        )
+        for i in range(secsize):
+            self._map[secsize + i] = self._map[i]
+
+    def _next_fragment_id(self, cells: list[list]) -> int:
+        used = {0, 1} | {fid for fid, _ in cells if fid is not None}
+        candidate = 2
+        while candidate in used:
+            candidate += 1
+        if candidate >= (1 << self._dr.idlen):
+            raise ADFSDiscFullError("no free fragment id available")
+        return candidate
+
+    def allocate_object(self, length_bytes: int) -> int:
+        """Allocate a single-fragment object; return its indirect disc address.
+
+        The returned indirect address has sector offset 0 (the object owns its
+        fragment). The object's data is not written — use
+        :meth:`write_object_data`, or resolve the address via
+        :meth:`object_start` and write through the directory layer.
+        """
+        idlen = self._dr.idlen
+        bpmb = self._dr.bytes_per_map_bit
+        # Round each fragment up to a whole sector's worth of map bits. The free
+        # region starts sector-aligned, so keeping every fragment sector-aligned
+        # keeps all later fragments — and therefore every directory, which must
+        # sit on a sector boundary — aligned too.
+        align_bits = self._dr.sector_size // bpmb
+        need_bits = max(-(-length_bytes // bpmb), idlen + 1)
+        need_bits = -(-need_bits // align_bits) * align_bits
+
+        cells = self._parse_cells()
+        new_fid = self._next_fragment_id(cells)
+
+        index = None
+        for i, (fid, length_bits) in enumerate(cells):
+            if fid is None and length_bits >= need_bits:
+                index = i
+                break
+        if index is None:
+            raise ADFSDiscFullError(
+                f"no single free area large enough for {length_bytes} bytes"
+            )
+
+        _, length_bits = cells[index]
+        leftover = length_bits - need_bits
+        if 0 < leftover < idlen + 1:
+            # Too small to be its own free area — absorb it into the fragment.
+            need_bits = length_bits
+            leftover = 0
+
+        replacement = [[new_fid, need_bits]]
+        if leftover > 0:
+            replacement.append([None, leftover])
+        cells[index : index + 1] = replacement
+
+        self._rewrite_cells(cells)
+        return new_fid << 8
+
+    def free_object(self, indirect: int) -> None:
+        """Free every fragment of an object and merge adjacent free areas."""
+        frag_id = indirect >> 8
+        cells = self._parse_cells()
+        if not any(fid == frag_id for fid, _ in cells):
+            raise ADFSMapError(f"No allocated fragment for id 0x{frag_id:X}")
+        for cell in cells:
+            if cell[0] == frag_id:
+                cell[0] = None
+
+        merged: list[list] = []
+        for fid, length_bits in cells:
+            if fid is None and merged and merged[-1][0] is None:
+                merged[-1][1] += length_bits
+            else:
+                merged.append([fid, length_bits])
+        self._rewrite_cells(merged)
+
+    def write_object_data(self, indirect: int, data: bytes) -> None:
+        """Write *data* across an object's fragments."""
+        if self._write_bytes is None:
+            raise ADFSMapError("this New Map was opened read-only")
+        frag_id, sector_offset = self._split_indirect(indirect)
+        fragments = self._fragments.get(frag_id)
+        if not fragments:
+            raise ADFSMapError(f"No allocated fragment for id 0x{frag_id:X}")
+        skip = self._within_offset(sector_offset)
+        offset = 0
+        remaining = len(data)
+        for disc_address, capacity in fragments:
+            if skip >= capacity:
+                skip -= capacity
+                continue
+            available = capacity - skip
+            take = min(available, remaining)
+            self._write_bytes(disc_address + skip, data[offset : offset + take])
+            skip = 0
+            offset += take
+            remaining -= take
+            if remaining <= 0:
+                break
+        if remaining > 0:
+            raise ADFSMapError(
+                f"Object 0x{indirect:X} fragments hold too little for {len(data)} bytes"
+            )
 
     # --- Disc-level metadata ---
 

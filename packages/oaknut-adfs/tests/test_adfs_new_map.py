@@ -105,11 +105,15 @@ def test_every_object_resolves_and_reads():
         assert walk(adfs.root) > 10
 
 
-def test_new_map_is_read_only_for_now():
-    with ADFS.from_file(NEWLOOK) as adfs:
-        with pytest.raises(ADFSError, match="New Map"):
-            (adfs.root / "NewFile").write_bytes(b"hello")
-        with pytest.raises(ADFSError, match="New Map"):
-            (adfs.root / "NewDir").mkdir()
-        with pytest.raises(ADFSError, match="New Map"):
-            adfs.root.title = "Changed"
+def test_writing_into_a_real_new_map_disc():
+    """Write into a mutable copy of a real RISC OS E disc (not the corpus file)."""
+    buffer = memoryview(bytearray(NEWLOOK.read_bytes()))
+    adfs = ADFS.from_buffer(buffer)
+    try:
+        (adfs.root / "OaknutFile").write_bytes(b"added by oaknut")
+        assert adfs.validate() == []
+        assert (adfs.root / "OaknutFile").read_bytes() == b"added by oaknut"
+        # Pre-existing files are untouched.
+        assert (adfs.root / "ReadMe").stat().length == 1820
+    finally:
+        adfs.close()

@@ -669,6 +669,7 @@ class ADFSPath(AcornPath):
             disc_address=directory.disc_address,
             entries=directory.entries,
             sequence_number=directory.sequence_number,
+            signature=directory.signature,
         )
         self._adfs._write_directory_at(updated, disc_address)
 
@@ -2293,12 +2294,69 @@ class ADFS:
 
     def _write_directory_at(self, directory: _ADFSDirectory, disc_address: int) -> None:
         """Serialize a directory back to its sectors on disc."""
-        self._require_writable_map()
         _assert_entries_sorted(directory.entries)
         sector = self._object_disc_sector(disc_address)
         num_sectors = self._dir_format.size_in_sectors
         data = self._disc.sector_range(sector, num_sectors)
         self._dir_format.serialize(directory, data)
+
+    # --- Map-agnostic allocation ---
+    #
+    # An object's "address" is a start sector on old-map discs and a fragment
+    # indirect address on New Map discs. These helpers hide that difference so
+    # the file/directory write paths are shared. The value stored in a
+    # directory entry's ``indirect_disc_address`` is whatever ``_allocate_object``
+    # returns, and ``_free_object`` / ``_write_object_data`` take the same value.
+
+    def _allocate_object(self, length_bytes: int) -> int:
+        """Allocate space for *length_bytes*; return its entry address."""
+        if self._map is not None:
+            return self._map.allocate_object(length_bytes)
+        if length_bytes == 0:
+            return 0
+        num_sectors = (length_bytes + _ADFS_BYTES_PER_SECTOR - 1) // _ADFS_BYTES_PER_SECTOR
+        return self._fsm.allocate(num_sectors)
+
+    def _free_object(self, address: int, length_bytes: int) -> None:
+        """Release the space previously allocated for an object."""
+        if self._map is not None:
+            self._map.free_object(address)
+            return
+        num_sectors = (length_bytes + _ADFS_BYTES_PER_SECTOR - 1) // _ADFS_BYTES_PER_SECTOR
+        if num_sectors > 0:
+            self._fsm.free(address, num_sectors)
+
+    def _write_object_data(self, address: int, data: bytes) -> None:
+        """Write an object's data at its allocated address."""
+        if len(data) == 0:
+            return
+        if self._map is not None:
+            self._map.write_object_data(address, data)
+            return
+        num_sectors = (len(data) + _ADFS_BYTES_PER_SECTOR - 1) // _ADFS_BYTES_PER_SECTOR
+        view = self._disc.sector_range(address, num_sectors)
+        view[:] = data + b"\x00" * (num_sectors * _ADFS_BYTES_PER_SECTOR - len(data))
+
+    @staticmethod
+    def _with_entries(
+        directory: _ADFSDirectory,
+        new_entries: tuple,
+        new_sequence: int,
+    ) -> _ADFSDirectory:
+        """Copy *directory* with new entries and sequence, preserving the rest.
+
+        Notably preserves the Hugo/Nick signature so a New Map directory is not
+        rewritten as "Hugo" when its entries change.
+        """
+        return _ADFSDirectory(
+            name=directory.name,
+            title=directory.title,
+            parent_address=directory.parent_address,
+            disc_address=directory.disc_address,
+            entries=new_entries,
+            sequence_number=new_sequence,
+            signature=directory.signature,
+        )
 
     def _write_file(
         self,
@@ -2314,39 +2372,31 @@ class ADFS:
         If a file with the same name already exists, it is overwritten
         and its old sectors are freed.
         """
-        self._require_writable_map()
         filename = path_parts[-1]
         parent_dir, parent_disc_address = self._resolve_parent(path_parts)
 
-        # Check for existing file and free its sectors
         existing = parent_dir.find(filename)
+        if existing is not None and existing.is_directory:
+            raise ADFSPathError(f"Cannot overwrite directory '{filename}' with a file")
+
+        # Fail before allocating if a brand-new entry would overflow the directory.
+        if existing is None and len(parent_dir.entries) >= self._dir_format.max_entries:
+            raise ADFSDirectoryFullError(
+                f"Directory full: maximum {self._dir_format.max_entries} entries"
+            )
+
+        # Free the old data, then allocate and write the new.
         if existing is not None:
-            if existing.is_directory:
-                raise ADFSPathError(f"Cannot overwrite directory '{filename}' with a file")
-            old_sectors = (existing.length + _ADFS_BYTES_PER_SECTOR - 1) // _ADFS_BYTES_PER_SECTOR
-            if old_sectors > 0:
-                self._fsm.free(existing.start_sector, old_sectors)
+            self._free_object(existing.indirect_disc_address, existing.length)
+        address = self._allocate_object(len(data))
+        self._write_object_data(address, data)
 
-        # Allocate sectors for the new data
-        num_sectors = (len(data) + _ADFS_BYTES_PER_SECTOR - 1) // _ADFS_BYTES_PER_SECTOR
-        if num_sectors > 0:
-            start_sector = self._fsm.allocate(num_sectors)
-        else:
-            start_sector = 0
-
-        # Write data to sectors (zero-padded to sector boundary)
-        if num_sectors > 0:
-            sector_data = self._disc.sector_range(start_sector, num_sectors)
-            padded = data + b"\x00" * (num_sectors * _ADFS_BYTES_PER_SECTOR - len(data))
-            sector_data[:] = padded
-
-        # Build the new directory entry
         new_entry = _ADFSDirectoryEntry(
             name=filename,
             load_address=load_address,
             exec_address=exec_address,
             length=len(data),
-            indirect_disc_address=start_sector,
+            indirect_disc_address=address,
             sequence_number=0,
             attributes=_ADFSRawAttributes(
                 owner_read=True,
@@ -2361,37 +2411,18 @@ class ADFS:
             ),
         )
 
-        # Update the directory entries
         if existing is not None:
-            # Replace the existing entry
             new_entries = tuple(
                 new_entry if _name_key(e.name) == _name_key(filename) else e
                 for e in parent_dir.entries
             )
         else:
-            # Add a new entry
-            if len(parent_dir.entries) >= self._dir_format.max_entries:
-                # Undo the allocation before raising
-                if num_sectors > 0:
-                    self._fsm.free(start_sector, num_sectors)
-                raise ADFSDirectoryFullError(
-                    f"Directory full: maximum {self._dir_format.max_entries} entries"
-                )
             new_entries = _insert_sorted(parent_dir.entries, new_entry)
 
-        # Increment sequence number
         new_seq = (parent_dir.sequence_number + 1) & 0xFF
-
-        updated_dir = _ADFSDirectory(
-            name=parent_dir.name,
-            title=parent_dir.title,
-            parent_address=parent_dir.parent_address,
-            disc_address=parent_dir.disc_address,
-            entries=new_entries,
-            sequence_number=new_seq,
+        self._write_directory_at(
+            self._with_entries(parent_dir, new_entries, new_seq), parent_disc_address
         )
-
-        self._write_directory_at(updated_dir, parent_disc_address)
 
     def _resolve_parent(
         self,
@@ -2423,7 +2454,6 @@ class ADFS:
 
     def _unlink_file(self, path_parts: list[str]) -> None:
         """Delete a file from the disc image."""
-        self._require_writable_map()
         filename = path_parts[-1]
         parent_dir, parent_disc_address = self._resolve_parent(path_parts)
 
@@ -2435,30 +2465,18 @@ class ADFS:
         if existing.attributes.locked:
             raise ADFSFileLockedError(f"'{filename}' is locked")
 
-        # Free sectors
-        num_sectors = (existing.length + _ADFS_BYTES_PER_SECTOR - 1) // _ADFS_BYTES_PER_SECTOR
-        if num_sectors > 0:
-            self._fsm.free(existing.start_sector, num_sectors)
+        self._free_object(existing.indirect_disc_address, existing.length)
 
-        # Remove entry from directory
         new_entries = tuple(
             e for e in parent_dir.entries if _name_key(e.name) != _name_key(filename)
         )
         new_seq = (parent_dir.sequence_number + 1) & 0xFF
-
-        updated_dir = _ADFSDirectory(
-            name=parent_dir.name,
-            title=parent_dir.title,
-            parent_address=parent_dir.parent_address,
-            disc_address=parent_dir.disc_address,
-            entries=new_entries,
-            sequence_number=new_seq,
+        self._write_directory_at(
+            self._with_entries(parent_dir, new_entries, new_seq), parent_disc_address
         )
-        self._write_directory_at(updated_dir, parent_disc_address)
 
     def _mkdir(self, path_parts: list[str]) -> None:
         """Create a new directory on the disc image."""
-        self._require_writable_map()
         dirname = path_parts[-1]
         parent_dir, parent_disc_address = self._resolve_parent(path_parts)
 
@@ -2473,21 +2491,19 @@ class ADFS:
                 f"Directory full: maximum {self._dir_format.max_entries} entries"
             )
 
-        # Allocate sectors for the new directory
-        dir_sectors = self._dir_format.size_in_sectors
-        start_sector = self._fsm.allocate(dir_sectors)
-
-        # Initialise the new directory block on disc
-        dir_data = self._disc.sector_range(start_sector, dir_sectors)
+        # Allocate space for the new directory and initialise its block. The
+        # child inherits the parent's Hugo/Nick signature.
+        address = self._allocate_object(self._dir_format.size_in_bytes)
         new_directory = _ADFSDirectory(
             name=dirname,
             title=dirname,
             parent_address=parent_disc_address,
-            disc_address=start_sector,
+            disc_address=address,
             entries=(),
             sequence_number=0,
+            signature=parent_dir.signature,
         )
-        self._dir_format.serialize(new_directory, dir_data)
+        self._write_directory_at(new_directory, address)
 
         # Add directory entry to parent
         new_entry = _ADFSDirectoryEntry(
@@ -2495,7 +2511,7 @@ class ADFS:
             load_address=0,
             exec_address=0,
             length=self._dir_format.size_in_bytes,
-            indirect_disc_address=start_sector,
+            indirect_disc_address=address,
             sequence_number=0,
             attributes=_ADFSRawAttributes(
                 owner_read=True,
@@ -2512,20 +2528,12 @@ class ADFS:
 
         new_entries = _insert_sorted(parent_dir.entries, new_entry)
         new_seq = (parent_dir.sequence_number + 1) & 0xFF
-
-        updated_parent = _ADFSDirectory(
-            name=parent_dir.name,
-            title=parent_dir.title,
-            parent_address=parent_dir.parent_address,
-            disc_address=parent_dir.disc_address,
-            entries=new_entries,
-            sequence_number=new_seq,
+        self._write_directory_at(
+            self._with_entries(parent_dir, new_entries, new_seq), parent_disc_address
         )
-        self._write_directory_at(updated_parent, parent_disc_address)
 
     def _rmdir(self, path_parts: list[str]) -> None:
         """Remove an empty directory from the disc image."""
-        self._require_writable_map()
         dirname = path_parts[-1]
         parent_dir, parent_disc_address = self._resolve_parent(path_parts)
 
@@ -2542,25 +2550,15 @@ class ADFS:
         if subdir.entries:
             raise ADFSDirectoryNotEmptyError(f"'{dirname}' is not empty")
 
-        # Free the directory's sectors
-        dir_sectors = self._dir_format.size_in_sectors
-        self._fsm.free(existing.indirect_disc_address, dir_sectors)
+        self._free_object(existing.indirect_disc_address, self._dir_format.size_in_bytes)
 
-        # Remove entry from parent
         new_entries = tuple(
             e for e in parent_dir.entries if _name_key(e.name) != _name_key(dirname)
         )
         new_seq = (parent_dir.sequence_number + 1) & 0xFF
-
-        updated_dir = _ADFSDirectory(
-            name=parent_dir.name,
-            title=parent_dir.title,
-            parent_address=parent_dir.parent_address,
-            disc_address=parent_dir.disc_address,
-            entries=new_entries,
-            sequence_number=new_seq,
+        self._write_directory_at(
+            self._with_entries(parent_dir, new_entries, new_seq), parent_disc_address
         )
-        self._write_directory_at(updated_dir, parent_disc_address)
 
     def _rename(self, old_parts: list[str], new_parts: list[str]) -> None:
         """Rename or move a file or directory.
@@ -2602,15 +2600,9 @@ class ADFS:
             )
             new_entries = _insert_sorted(remaining, renamed)
             new_seq = (src_dir.sequence_number + 1) & 0xFF
-            updated = _ADFSDirectory(
-                name=src_dir.name,
-                title=src_dir.title,
-                parent_address=src_dir.parent_address,
-                disc_address=src_dir.disc_address,
-                entries=new_entries,
-                sequence_number=new_seq,
+            self._write_directory_at(
+                self._with_entries(src_dir, new_entries, new_seq), src_disc_address
             )
-            self._write_directory_at(updated, src_disc_address)
         else:
             # Cross-directory move: check capacity, remove from source, add to destination
             if len(dst_dir.entries) >= self._dir_format.max_entries:
@@ -2623,30 +2615,18 @@ class ADFS:
                 e for e in src_dir.entries if _name_key(e.name) != _name_key(old_name)
             )
             src_seq = (src_dir.sequence_number + 1) & 0xFF
-            updated_src = _ADFSDirectory(
-                name=src_dir.name,
-                title=src_dir.title,
-                parent_address=src_dir.parent_address,
-                disc_address=src_dir.disc_address,
-                entries=src_entries,
-                sequence_number=src_seq,
+            self._write_directory_at(
+                self._with_entries(src_dir, src_entries, src_seq), src_disc_address
             )
-            self._write_directory_at(updated_src, src_disc_address)
 
             # Add to destination (re-read since it may have changed if
             # nested), keeping the directory sorted.
             dst_dir = self._read_directory_at(dst_disc_address)
             dst_entries = _insert_sorted(dst_dir.entries, renamed)
             dst_seq = (dst_dir.sequence_number + 1) & 0xFF
-            updated_dst = _ADFSDirectory(
-                name=dst_dir.name,
-                title=dst_dir.title,
-                parent_address=dst_dir.parent_address,
-                disc_address=dst_dir.disc_address,
-                entries=dst_entries,
-                sequence_number=dst_seq,
+            self._write_directory_at(
+                self._with_entries(dst_dir, dst_entries, dst_seq), dst_disc_address
             )
-            self._write_directory_at(updated_dst, dst_disc_address)
 
     def _set_locked(self, path_parts: list[str], locked: bool) -> None:
         """Set or clear the locked attribute on a file."""
@@ -2685,16 +2665,9 @@ class ADFS:
             for e in parent_dir.entries
         )
         new_seq = (parent_dir.sequence_number + 1) & 0xFF
-
-        updated_dir = _ADFSDirectory(
-            name=parent_dir.name,
-            title=parent_dir.title,
-            parent_address=parent_dir.parent_address,
-            disc_address=parent_dir.disc_address,
-            entries=new_entries,
-            sequence_number=new_seq,
+        self._write_directory_at(
+            self._with_entries(parent_dir, new_entries, new_seq), parent_disc_address
         )
-        self._write_directory_at(updated_dir, parent_disc_address)
 
     def _chmod(self, path_parts: list[str], access: int) -> None:
         """Set access attributes on a file or directory."""
@@ -2734,16 +2707,9 @@ class ADFS:
             for e in parent_dir.entries
         )
         new_seq = (parent_dir.sequence_number + 1) & 0xFF
-
-        updated_dir = _ADFSDirectory(
-            name=parent_dir.name,
-            title=parent_dir.title,
-            parent_address=parent_dir.parent_address,
-            disc_address=parent_dir.disc_address,
-            entries=new_entries,
-            sequence_number=new_seq,
+        self._write_directory_at(
+            self._with_entries(parent_dir, new_entries, new_seq), parent_disc_address
         )
-        self._write_directory_at(updated_dir, parent_disc_address)
 
     def _set_load_address(self, path_parts: list[str], address: int) -> None:
         """Set load address on a file or directory."""
@@ -2769,16 +2735,9 @@ class ADFS:
             for e in parent_dir.entries
         )
         new_seq = (parent_dir.sequence_number + 1) & 0xFF
-
-        updated_dir = _ADFSDirectory(
-            name=parent_dir.name,
-            title=parent_dir.title,
-            parent_address=parent_dir.parent_address,
-            disc_address=parent_dir.disc_address,
-            entries=new_entries,
-            sequence_number=new_seq,
+        self._write_directory_at(
+            self._with_entries(parent_dir, new_entries, new_seq), parent_disc_address
         )
-        self._write_directory_at(updated_dir, parent_disc_address)
 
     def _set_exec_address(self, path_parts: list[str], address: int) -> None:
         """Set exec address on a file or directory."""
@@ -2804,16 +2763,9 @@ class ADFS:
             for e in parent_dir.entries
         )
         new_seq = (parent_dir.sequence_number + 1) & 0xFF
-
-        updated_dir = _ADFSDirectory(
-            name=parent_dir.name,
-            title=parent_dir.title,
-            parent_address=parent_dir.parent_address,
-            disc_address=parent_dir.disc_address,
-            entries=new_entries,
-            sequence_number=new_seq,
+        self._write_directory_at(
+            self._with_entries(parent_dir, new_entries, new_seq), parent_disc_address
         )
-        self._write_directory_at(updated_dir, parent_disc_address)
 
 
 def _assert_entries_sorted(entries: tuple[_ADFSDirectoryEntry, ...]) -> None:
@@ -2884,12 +2836,13 @@ def _try_new_map(unified: UnifiedDisc) -> "NewMap | None":
 def _new_map_over(unified: UnifiedDisc, disc_record: DiscRecord) -> NewMap:
     """Build a :class:`NewMap` over *unified* using *disc_record*.
 
-    Shared by New Map detection and blank-image creation. The read-bytes
-    closure resolves linear disc addresses to the covering sectors, so it
-    works for any addressing granularity the map produces.
+    Shared by New Map detection and blank-image creation. The map view spans
+    both zone-0 copies (primary + duplicate) so mutations can refresh the copy;
+    the read/write closures resolve linear disc addresses to the covering
+    sectors, so they work for any addressing granularity the map produces.
     """
     sectors = disc_record.sector_size // _ADFS_BYTES_PER_SECTOR
-    zone0 = unified.sector_range(0, sectors)
+    map_view = unified.sector_range(0, 2 * sectors)
 
     def read_bytes(byte_address: int, length: int) -> bytes:
         first = byte_address // _ADFS_BYTES_PER_SECTOR
@@ -2900,7 +2853,16 @@ def _new_map_over(unified: UnifiedDisc, disc_record: DiscRecord) -> NewMap:
         start = byte_address - first * _ADFS_BYTES_PER_SECTOR
         return bytes(data[start : start + length])
 
-    return NewMap(zone0, disc_record, read_bytes)
+    def write_bytes(byte_address: int, data: bytes) -> None:
+        first = byte_address // _ADFS_BYTES_PER_SECTOR
+        count = (
+            byte_address + len(data) + _ADFS_BYTES_PER_SECTOR - 1
+        ) // _ADFS_BYTES_PER_SECTOR - first
+        view = unified.sector_range(first, count)
+        start = byte_address - first * _ADFS_BYTES_PER_SECTOR
+        view[start : start + len(data)] = data
+
+    return NewMap(map_view, disc_record, read_bytes, write_bytes)
 
 
 def _detect_directory_layout(unified: UnifiedDisc) -> tuple[ADFSDirectoryFormat, int]:
