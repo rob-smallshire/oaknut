@@ -73,6 +73,19 @@ class InvalidAddressError(FSError):
     """
 
 
+class InvalidAccessError(FSError, ValueError):
+    """An access string could not be parsed.
+
+    Access is written symbolically (``LWR/R``, ``WR/WR``, ``R/``) or as
+    a hex byte (``0x0B``, ``33``); an unrecognised letter or malformed
+    string — such as the unsupported ``+``/``-`` incremental syntax —
+    raises this. As an :class:`FSError` it carries the data-error exit
+    code and the CLI boundary renders it without a traceback; it also
+    subclasses :class:`ValueError`, preserving the historical contract
+    of :func:`oaknut.file.parse_access`.
+    """
+
+
 class InvalidFiletypeError(FSError):
     """A RISC OS filetype could not be parsed.
 

@@ -10,6 +10,8 @@ from __future__ import annotations
 
 from enum import IntFlag
 
+from oaknut.file.exceptions import InvalidAccessError
+
 
 class Access(IntFlag):
     """Acorn file access attributes.
@@ -68,7 +70,10 @@ def parse_access(text: str) -> Access:
     - **Bare hex**: ``"0B"``, ``"33"`` — two hex digits without
       prefix.
 
-    Raises :class:`ValueError` on unrecognised input.
+    Raises :class:`~oaknut.file.exceptions.InvalidAccessError` on
+    unrecognised input (a subclass of :class:`ValueError`, so existing
+    ``except ValueError`` handlers keep working, while the CLI boundary
+    renders it cleanly without a traceback).
     """
     stripped = text.strip()
 
@@ -96,11 +101,11 @@ def parse_access(text: str) -> Access:
     result = Access(0)
     for ch in owner_part.upper():
         if ch not in _OWNER_LETTERS:
-            raise ValueError(f"unrecognised owner access letter '{ch}'")
+            raise InvalidAccessError(f"unrecognised owner access letter '{ch}'")
         result |= _OWNER_LETTERS[ch]
     for ch in public_part.upper():
         if ch not in _PUBLIC_LETTERS:
-            raise ValueError(f"unrecognised public access letter '{ch}'")
+            raise InvalidAccessError(f"unrecognised public access letter '{ch}'")
         result |= _PUBLIC_LETTERS[ch]
     return result
 

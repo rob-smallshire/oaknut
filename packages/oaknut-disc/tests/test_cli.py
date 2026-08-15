@@ -555,6 +555,24 @@ class TestLsAccessByteFlag:
         # Round-trip: parse_access must accept the ls output unchanged.
         assert int(parse_access(hex_token)) == 0x13
 
+    def test_chmod_bad_access_string_is_a_clean_error_not_a_traceback(
+        self,
+        runner: CliRunner,
+        adfs_image_filepath: Path,
+    ) -> None:
+        """A malformed ACCESS argument must be reported cleanly.
+
+        ``chmod`` used to let ``parse_access``'s ValueError escape the CLI
+        error boundary, dumping a raw Python traceback at the user (e.g. the
+        unsupported ``+L`` incremental syntax). It must exit non-zero with an
+        informative message and no leaked exception instead.
+        """
+        result = runner.invoke(cli, ["chmod", f"{adfs_image_filepath}:$.Hello", "+L"])
+        assert result.exit_code != 0
+        # Handled by the boundary — not an uncaught exception dumping a traceback.
+        assert not isinstance(result.exception, ValueError)
+        assert "access letter" in result.output.lower(), result.output
+
     def test_default_ls_has_no_hex_column(
         self, runner: CliRunner, afs_image_with_access_bytes: Path
     ) -> None:

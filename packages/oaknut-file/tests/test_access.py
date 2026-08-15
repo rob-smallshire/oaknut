@@ -184,3 +184,16 @@ class TestParseAccess:
     def test_invalid_letter_raises(self):
         with pytest.raises(ValueError, match="nrecogni"):
             parse_access("QWR/R")
+
+    def test_invalid_input_raises_a_domain_error_that_is_also_a_value_error(self):
+        # InvalidAccessError is a DataError (so the CLI boundary renders it
+        # without a traceback) and a ValueError (so historical
+        # ``except ValueError`` handlers keep working).
+        from oaknut.exception import DataError
+        from oaknut.file.exceptions import InvalidAccessError
+
+        for bad in ("QWR/R", "WR/Q", "+L", "not-access"):
+            with pytest.raises(InvalidAccessError) as info:
+                parse_access(bad)
+            assert isinstance(info.value, DataError)
+            assert isinstance(info.value, ValueError)
