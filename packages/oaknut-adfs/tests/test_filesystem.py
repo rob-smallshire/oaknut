@@ -55,6 +55,42 @@ class TestProbe:
         assert region.partition.start_sector == 264  # logical sector of the tail
         assert region.filesystem == "afs"
 
+    _RISCOS_DIRPATH = REFERENCE_IMAGES_DIRPATH / "adfs-riscos"
+
+    @pytest.mark.parametrize(
+        "image,evidence_fragment",
+        [
+            # Old map + New directory (root at sector 4, 'Hugo' signature).
+            ("D_Arthur_Welcome.adf", "New-directory root"),
+            ("D_RISCOS310_App1.adf", "New-directory root"),
+            # New map, single-zone (E) — no old-map signature at all.
+            ("E_RISCOS310_NewLook.adf", "New map FileCore disc record"),
+        ],
+    )
+    def test_identifies_risc_os_specimens_strong(self, image, evidence_fragment):
+        # Regression: the probe once recognised only the old-map old-directory
+        # signature, so every New-directory and New-map disc — the whole RISC OS
+        # family — failed identification and could not be opened by the CLI.
+        results = identify(self._RISCOS_DIRPATH / image)
+        adfs = next((r for r in results if r.filesystem == "adfs"), None)
+        assert adfs is not None, f"{image} not identified as ADFS"
+        assert adfs.confidence is Confidence.STRONG
+        assert any(evidence_fragment in e for e in adfs.evidence), adfs.evidence
+
+    @pytest.mark.parametrize(
+        "variant,zones_fragment",
+        [("f", "4-zone"), ("g", "8-zone"), ("e+", "Big directories"), ("f+", "Big directories")],
+    )
+    def test_identifies_created_new_map_variants_strong(self, variant, zones_fragment, tmp_path):
+        filesystem = create_filesystem("adfs")
+        geometry = filesystem.geometry_grammar().parse(variant)
+        image = tmp_path / f"disc_{variant.replace('+', 'p')}.adf"
+        filesystem.create(image, geometry, title="X")
+        results = identify(image)
+        adfs = next(r for r in results if r.filesystem == "adfs")
+        assert adfs.confidence is Confidence.STRONG
+        assert any(zones_fragment in e for e in adfs.evidence), adfs.evidence
+
 
 class TestMount:
     def test_open_lists_reads_and_mkdir(self, tmp_path):

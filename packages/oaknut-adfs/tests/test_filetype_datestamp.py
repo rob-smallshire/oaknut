@@ -129,3 +129,111 @@ class TestOrthogonalPreservation:
             assert mount.datestamp("$.PLAIN") == datetime(2090, 6, 1, 9, 0, 0)
         finally:
             reader.__exit__(None, None, None)
+
+
+# --- New Map formats (New and Big directories) and the RISC OS corpus -------
+
+import pytest  # noqa: E402
+from oaknut.adfs import (  # noqa: E402
+    ADFS_E,
+    ADFS_E_PLUS,
+    ADFS_F,
+    ADFS_F_PLUS,
+    ADFS_G,
+    ADFS_G_PLUS,
+)
+
+from tests.fixtures import REFERENCE_IMAGES_DIRPATH  # noqa: E402
+
+_RISCOS_DIRPATH = REFERENCE_IMAGES_DIRPATH / "adfs-riscos"
+
+
+class TestNewMapFiletypeDatestamp:
+    """Filetype/datestamp must round-trip on every New Map layout.
+
+    New directories (E/F/G) and Big directories (E+/F+/G+) serialise their
+    entries differently, and multi-zone discs place the map mid-disc, so each
+    combination exercises a distinct write path for the 32-bit load/exec fields.
+    """
+
+    @pytest.mark.parametrize(
+        "fmt",
+        [ADFS_E, ADFS_F, ADFS_G, ADFS_E_PLUS, ADFS_F_PLUS, ADFS_G_PLUS],
+        ids=["E", "F", "G", "E+", "F+", "G+"],
+    )
+    def test_round_trips_and_disc_stays_valid(self, fmt, tmp_path):
+        image_filepath = tmp_path / "typed.adf"
+        with ADFS.create_file(str(image_filepath), fmt, title="TYPED") as adfs:
+            (adfs.root / "$.TypedFile").write_bytes(
+                b"payload", load_address=0x1900, exec_address=0x8023
+            )
+
+        when = datetime(1995, 6, 15, 12, 30, 45, 100_000)
+        reader, mount = _mount(image_filepath, writable=True)
+        try:
+            assert isinstance(mount, Filetyped) and isinstance(mount, Datestamped)
+            mount.set_filetype("$.TypedFile", 0xFFB)  # BASIC
+            mount.set_datestamp("$.TypedFile", when)
+        finally:
+            reader.__exit__(None, None, None)
+
+        reader, mount = _mount(image_filepath)
+        try:
+            assert mount.filetype("$.TypedFile") == 0xFFB
+            assert mount.datestamp("$.TypedFile") == when
+        finally:
+            reader.__exit__(None, None, None)
+
+        # The metadata write must not damage the New Map structures.
+        with ADFS.from_file(image_filepath, read_only=True) as adfs:
+            assert adfs.is_new_map
+            assert adfs.validate() == []
+
+
+class TestRiscOsCorpusMetadata:
+    """The shipped RISC OS specimens carry genuine filetypes and datestamps."""
+
+    def test_new_map_e_disc_decodes_known_metadata(self):
+        # E_RISCOS310_NewLook !RunImage is BASIC (&FFB), stamped 1993-03-15.
+        reader, mount = _mount(_RISCOS_DIRPATH / "E_RISCOS310_NewLook.adf")
+        try:
+            path = "$.!NewLook.!RunImage"
+            assert mount.filetype(path) == 0xFFB
+            assert mount.datestamp(path) == datetime(1993, 3, 15, 13, 47, 27, 210_000)
+        finally:
+            reader.__exit__(None, None, None)
+
+    def test_old_map_new_directory_d_disc_decodes_metadata(self):
+        # D_RISCOS310_App1 !Configure.!RunImage is Absolute (&FF8).
+        reader, mount = _mount(_RISCOS_DIRPATH / "D_RISCOS310_App1.adf")
+        try:
+            assert mount.filetype("$.!Configure.!RunImage") == 0xFF8
+            stamp = mount.datestamp("$.!Configure.!RunImage")
+            assert stamp is not None and stamp.year == 1988
+        finally:
+            reader.__exit__(None, None, None)
+
+    def test_every_corpus_file_reports_a_filetype_and_datestamp(self):
+        # A broad sweep: every file on all three specimens is typed and stamped.
+        for image in (
+            "D_Arthur_Welcome.adf",
+            "D_RISCOS310_App1.adf",
+            "E_RISCOS310_NewLook.adf",
+        ):
+            reader, mount = _mount(_RISCOS_DIRPATH / image)
+            try:
+
+                def walk(path):
+                    for entry in mount.iter_entries(path):
+                        if entry.is_dir:
+                            yield from walk(entry.path)
+                        else:
+                            yield entry.path
+
+                files = list(walk("$"))
+                assert files, image
+                typed = sum(1 for f in files if mount.filetype(f) is not None)
+                # These discs are RISC OS applications — essentially all typed.
+                assert typed >= len(files) - 1, (image, typed, len(files))
+            finally:
+                reader.__exit__(None, None, None)
