@@ -210,27 +210,53 @@ the Filer applying a local-time conversion oaknut deliberately does
 not — not a disagreement about the bytes.
 
 
-Address or datestamp? ``--raw-addresses``
+Address or datestamp? ``--metadata-lens``
 -----------------------------------------
 
 On ADFS a file's load/exec fields hold *either* a real address pair
 *or* a filetype-and-datestamp — distinguished by the RISC OS marker
-"the top twelve bits of the load address are ``&FFF``". ``disc ls``
-and ``disc stat`` follow that marker: a marked file shows *Filetype*
-and *Datestamp* columns, and its raw load/exec are hidden from the
-human view (they are only the encoding). The raw values are never
-lost — they stay in ``--as json`` / ``--as tsv`` output, and ``disc
-get-load`` / ``disc get-exec`` always report them.
+"the top twelve bits of the load address are ``&FFF``". But that
+marker overlaps genuine addresses — the ``&FFFFxxxx`` host-address
+convention and the ``&FFFFFFFF`` "unset" sentinel both trip it — so
+the reading cannot be chosen reliably from a single file's bytes. It
+is a *format* question: on DFS and the 8-bit ADFS shapes (S/M/L) a
+load/exec pair is almost always a genuine address, while on the
+Arthur and RISC OS ADFS shapes (D, E, F and their successors) it is
+almost always a filetype and datestamp.
 
-That marker overlaps genuine addresses, though — the ``&FFFFxxxx``
-host-address convention and the ``&FFFFFFFF`` "unset" sentinel both
-trip it — so a file whose load/exec are genuinely more useful as an
-address can be shown as a filetype and a *coincidental* date. Pass
-**``--raw-addresses``** to ``disc ls`` or ``disc stat`` to force the
-address reading: the *Load* and *Exec* columns are shown for every
-file and the decode is suppressed. It changes the display only; the
-stored bytes are untouched. Set ``OAKNUT_DISC_RAW_ADDRESSES=1`` to
-make that the default across commands.
+``disc ls`` and ``disc stat`` therefore default to a **lens** each
+filing system declares. Under the *type-date* lens a marked file
+shows *Filetype* and *Datestamp* columns and its raw load/exec are
+hidden from the human view (they are only the encoding); under the
+*addresses* lens the *Load* and *Exec* columns are shown and the
+decode is suppressed. The raw values are never lost either way — they
+stay in ``--as json`` / ``--as tsv`` output, and ``disc get-load`` /
+``disc get-exec`` always report them.
+
+Override the default with **``--metadata-lens``**:
+
+- ``--metadata-lens=addresses`` forces the *Load*/*Exec* reading — use
+  it when a RISC OS disc holds a genuinely addressed file, or when a
+  coincidental ``&FFF`` shows a spurious date.
+- ``--metadata-lens=type-date`` forces the filetype/datestamp reading
+  — use it to see a filetype you set on an 8-bit ADFS disc, which
+  defaults to addresses.
+- ``--metadata-lens=auto`` (the default) follows the filing system.
+
+It changes the display only; the stored bytes are untouched. Set
+``OAKNUT_DISC_METADATA_LENS=addresses`` (or ``type-date``) to make a
+reading the default across commands.
+
+A filing system that keeps its datestamp *outside* load/exec — the
+Acorn File Server, with its native two-byte date — is unaffected by
+the lens: its *Datestamp* column shows under either reading, alongside
+the real load/exec addresses.
+
+.. note::
+
+   ``--raw-addresses`` (and ``OAKNUT_DISC_RAW_ADDRESSES``) is a
+   deprecated alias for ``--metadata-lens=addresses``, retained for
+   existing scripts.
 
 
 Cross-host gotchas

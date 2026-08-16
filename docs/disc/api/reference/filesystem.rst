@@ -59,6 +59,12 @@ protocol.
 .. autoclass:: oaknut.filesystem.Datestamped
    :members:
 
+.. autoclass:: oaknut.filesystem.Lens
+   :members:
+
+.. autoclass:: oaknut.filesystem.MetadataLensed
+   :members:
+
 .. autoclass:: oaknut.filesystem.Titled
    :members:
 

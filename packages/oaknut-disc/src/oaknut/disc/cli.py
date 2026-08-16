@@ -242,24 +242,73 @@ def force_options(func):
     return func
 
 
-#: Show the raw load/exec pair rather than decoding a RISC OS filetype and
-#: datestamp from it. The ``&FFF`` marker that triggers the decode overlaps
+#: How to read the 32-bit load/exec fields for display. On most Acorn
+#: filesystems they can double as a RISC OS filetype and datestamp (the
+#: ``&FFF`` marker in the top of the load address), but that marker overlaps
 #: genuine addresses (the ``&FFFFxxxx`` host convention, the ``&FFFFFFFF``
-#: sentinel), so a real address can be misread as a "coincidental" date;
-#: this forces the address reading. Display-only; the stored bytes are
-#: untouched, and machine formatters already carry the raw values. The
-#: ``OAKNUT_DISC_RAW_ADDRESSES`` environment variable sets the default
-#: across commands.
+#: sentinel), so the reading cannot be chosen per file from the bytes alone.
+#: ``auto`` (the default) follows the filing system's own preference — DFS and
+#: the 8-bit ADFS shapes present addresses, the Arthur/RISC OS ADFS shapes
+#: present a filetype and datestamp — while ``addresses`` and ``type-date``
+#: force one reading. Display-only; the stored bytes are untouched. The
+#: ``OAKNUT_DISC_METADATA_LENS`` environment variable sets the default across
+#: commands.
+_METADATA_LENS_CHOICES = ("auto", "addresses", "type-date")
+
+_metadata_lens_option = click.option(
+    "--metadata-lens",
+    type=click.Choice(_METADATA_LENS_CHOICES),
+    default="auto",
+    show_default=True,
+    envvar="OAKNUT_DISC_METADATA_LENS",
+    help=(
+        "How to read the load/exec fields: 'addresses' shows the raw load and "
+        "exec addresses; 'type-date' decodes a RISC OS filetype and datestamp "
+        "from them; 'auto' follows the filing system's own preference. "
+        "Settable via OAKNUT_DISC_METADATA_LENS."
+    ),
+)
+
+#: Deprecated alias, retained so existing scripts and the
+#: ``OAKNUT_DISC_RAW_ADDRESSES`` environment variable keep working. Superseded
+#: by ``--metadata-lens=addresses``; hidden from help.
 _raw_addresses_option = click.option(
     "--raw-addresses",
     is_flag=True,
+    default=False,
+    hidden=True,
     envvar="OAKNUT_DISC_RAW_ADDRESSES",
-    help=(
-        "Show the raw load/exec addresses instead of decoding a filetype and "
-        "datestamp from them. Useful when a genuine address is misread as a "
-        "datestamp by coincidence. Default settable via OAKNUT_DISC_RAW_ADDRESSES."
-    ),
+    help="Deprecated alias for --metadata-lens=addresses.",
 )
+
+
+def _resolve_metadata_lens(metadata_lens: str, raw_addresses: bool, mount):
+    """Resolve the effective display lens for a mount.
+
+    ``auto`` defers to the mount's declared :class:`~oaknut.filesystem.Lens`,
+    falling back to ``ADDRESSES`` when it declares none (or keeps its
+    datestamp outside load/exec, as AFS does). The deprecated
+    ``--raw-addresses`` maps to ``addresses`` and warns.
+    """
+    from oaknut.filesystem import Lens, MetadataLensed
+
+    if raw_addresses:
+        click.echo(
+            "warning: --raw-addresses (and OAKNUT_DISC_RAW_ADDRESSES) is deprecated; "
+            "use --metadata-lens=addresses.",
+            err=True,
+        )
+        if metadata_lens == "type-date":
+            raise click.UsageError(
+                "--raw-addresses conflicts with --metadata-lens=type-date."
+            )
+        return Lens.ADDRESSES
+    explicit = {"addresses": Lens.ADDRESSES, "type-date": Lens.TYPE_DATE}.get(metadata_lens)
+    if explicit is not None:
+        return explicit
+    # "auto": defer to the filing system, falling back to addresses when it
+    # declares no lens (or keeps its datestamp outside load/exec, as AFS does).
+    return mount.metadata_lens if isinstance(mount, MetadataLensed) else Lens.ADDRESSES
 
 
 # ---------------------------------------------------------------------------
@@ -276,12 +325,14 @@ _raw_addresses_option = click.option(
     is_flag=True,
     help="Show the raw access byte as two hex digits alongside the symbolic form.",
 )
+@_metadata_lens_option
 @_raw_addresses_option
 @force_options
 @report_output(reports={"entries": "Directory entries with load/exec/length/attributes."})
 def ls(
     compound_path: str,
     show_access_byte: bool,
+    metadata_lens: str,
     raw_addresses: bool,
     force_filesystem: str | None,
     force_geometry: str | None,
@@ -298,6 +349,8 @@ def ls(
         Datestamped,
         Filetyped,
         FreeSpace,
+        Lens,
+        MetadataLensed,
         Titled,
     )
 
@@ -305,6 +358,7 @@ def ls(
         compound_path, force_filesystem=force_filesystem, force_geometry=force_geometry
     )
     mount = resolved.mount
+    lens = _resolve_metadata_lens(metadata_lens, raw_addresses, mount)
     target = resolved.path or mount.path_root()
 
     if not mount.exists(target):
@@ -361,6 +415,13 @@ def ls(
     if show_access_byte:
         table.add_column("hex", "Hex")
 
+    # The type-date reading decodes a filetype/datestamp from load/exec and
+    # conceals the raw pair; the addresses reading shows the pair verbatim.
+    typed_view = lens is Lens.TYPE_DATE
+    # A mount is MetadataLensed exactly when its filetype/datestamp are folded
+    # into load/exec, so its datestamp follows the lens. AFS keeps a native
+    # datestamp outside load/exec, so it is not lensed and always shows.
+    derived_metadata = isinstance(mount, MetadataLensed)
     has_acorn = isinstance(mount, AcornMetadata)
     has_filetype = isinstance(mount, Filetyped)
     has_datestamp = isinstance(mount, Datestamped)
@@ -385,20 +446,24 @@ def ls(
         datestamp_str = ""
         if has_acorn:
             meta = mount.acorn_meta(child.path)
-            # A stamped file's load/exec hold an encoded filetype/date;
-            # conceal them from humans but keep the raw bytes for machines —
-            # unless --raw-addresses asks for the address reading throughout.
-            stamped = meta.is_filetype_stamped and not raw_addresses
-            load_cell = address_cell(meta.load_address, conceal=stamped)
-            exec_cell = address_cell(meta.exec_address, conceal=stamped)
+            # Under the type-date reading a stamped file's load/exec hold an
+            # encoded filetype/date; conceal them from humans but keep the raw
+            # bytes for machines. The addresses reading shows the pair.
+            conceal = typed_view and meta.is_filetype_stamped
+            load_cell = address_cell(meta.load_address, conceal=conceal)
+            exec_cell = address_cell(meta.exec_address, conceal=conceal)
             if meta.access is not None:
                 attr_str = _format_access(Access(meta.access))
                 hex_cell = f"0x{int(meta.access):02X}"
-        if has_filetype and not raw_addresses:
+        # Filetype is only ever load/exec-derived, so it belongs to the
+        # type-date reading.
+        if has_filetype and typed_view:
             filetype = mount.filetype(child.path)
             if filetype is not None:
                 filetype_str = filetype_cell(filetype)
-        if has_datestamp and not raw_addresses:
+        # A derived datestamp follows the lens; a native one (AFS) is shown
+        # under either reading.
+        if has_datestamp and (typed_view or not derived_metadata):
             when = mount.datestamp(child.path)
             if when is not None:
                 datestamp_str = datestamp_cell(when, mount.datestamp_resolution)
@@ -530,10 +595,12 @@ def _attach_children_mount(mount, path: str, parent_tree_node) -> None:
         "file": "Per-file metadata when the path denotes a file.",
     }
 )
+@_metadata_lens_option
 @_raw_addresses_option
 @force_options
 def stat(
     compound_path: str,
+    metadata_lens: str,
     raw_addresses: bool,
     force_filesystem: str | None,
     force_geometry: str | None,
@@ -550,7 +617,7 @@ def stat(
     from asyoulikeit import Audience
     from asyoulikeit.tabular_data import Report, Reports, TableContent
     from oaknut.file import Access
-    from oaknut.filesystem import AcornMetadata, Datestamped, Filetyped
+    from oaknut.filesystem import AcornMetadata, Datestamped, Filetyped, Lens, MetadataLensed
 
     from .mount import split_selector
 
@@ -572,11 +639,14 @@ def stat(
     tc.add_column("name", "Name", header=True)
     row: dict = {"name": text_cell(entry.name)}
     if isinstance(mount, AcornMetadata) and not entry.is_dir:
+        lens = _resolve_metadata_lens(metadata_lens, raw_addresses, mount)
+        typed_view = lens is Lens.TYPE_DATE
+        derived_metadata = isinstance(mount, MetadataLensed)
         meta = mount.acorn_meta(bare)
-        # --raw-addresses forces the address reading throughout; otherwise a
-        # stamped file's load/exec are concealed in favour of the decoded
-        # filetype/datestamp.
-        stamped = meta.is_filetype_stamped and not raw_addresses
+        # Under the type-date reading a stamped file's load/exec are concealed
+        # in favour of the decoded filetype/datestamp; the addresses reading
+        # shows the pair.
+        stamped = typed_view and meta.is_filetype_stamped
         # Declare every metadata field for a stable machine schema; the
         # human view drops whichever are empty for this file (a stamped
         # file's load/exec, or filetype/datestamp on a filesystem that has
@@ -587,15 +657,13 @@ def stat(
         tc.add_column("exec", "Exec", omit_if_empty_for=_omit)
         row["exec"] = address_cell(meta.exec_address, conceal=stamped)
         filetype = (
-            mount.filetype(bare)
-            if isinstance(mount, Filetyped) and not raw_addresses
-            else None
+            mount.filetype(bare) if isinstance(mount, Filetyped) and typed_view else None
         )
         tc.add_column("filetype", "Filetype", omit_if_empty_for=_omit)
         row["filetype"] = filetype_cell(filetype) if filetype is not None else ""
         when = (
             mount.datestamp(bare)
-            if isinstance(mount, Datestamped) and not raw_addresses
+            if isinstance(mount, Datestamped) and (typed_view or not derived_metadata)
             else None
         )
         tc.add_column("datestamp", "Datestamp", omit_if_empty_for=_omit)

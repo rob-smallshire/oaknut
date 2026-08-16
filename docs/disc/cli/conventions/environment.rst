@@ -8,13 +8,19 @@ variable only sets the *default*.
 oaknut's own variables
 ----------------------
 
+.. envvar:: OAKNUT_DISC_METADATA_LENS
+
+   Default for the ``--metadata-lens`` option of ``disc ls`` and ``disc
+   stat``. Set it to ``addresses`` to show the raw load/exec pair for every
+   file, or ``type-date`` to decode a RISC OS filetype and datestamp from it;
+   ``auto`` (unset) follows each filing system's own preference. See
+   :doc:`metadata`.
+
 .. envvar:: OAKNUT_DISC_RAW_ADDRESSES
 
-   Default for the ``--raw-addresses`` flag of ``disc ls`` and ``disc stat``.
-   Set it to ``1`` (or ``true`` / ``yes`` / ``on``) to show the raw load/exec
-   address pair for every file instead of decoding a RISC OS filetype and
-   datestamp from it. See :doc:`metadata`. Unset, or ``0``, keeps the default
-   (decode when the ``&FFF`` marker is present).
+   Deprecated alias for :envvar:`OAKNUT_DISC_METADATA_LENS`\ ``=addresses``,
+   retained for existing scripts. Set it to ``1`` (or ``true`` / ``yes`` /
+   ``on``) to force the raw address reading.
 
 Standard cross-tool variables
 -----------------------------

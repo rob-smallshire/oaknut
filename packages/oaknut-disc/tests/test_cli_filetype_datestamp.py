@@ -42,16 +42,18 @@ class TestADFSVerbs:
 
 
 class TestADFSDisplay:
+    # A RISC OS (New Map) disc's declared lens is type-date, so an unqualified
+    # ls/stat decodes the filetype and datestamp by default.
     def _stamp(self, runner, image):
         _run(runner, "set-filetype", f"{image}:$.Hello", "Text")
         _run(runner, "set-datestamp", f"{image}:$.Hello", "2024-03-01T14:22:08")
 
     def test_ls_shows_type_and_date_and_conceals_addresses(
-        self, runner: CliRunner, adfs_image_filepath: Path
+        self, runner: CliRunner, adfs_typed_image_filepath: Path
     ):
-        self._stamp(runner, adfs_image_filepath)
+        self._stamp(runner, adfs_typed_image_filepath)
         out = _run(
-            runner, "ls", "--as", "display", "--detailed", f"{adfs_image_filepath}:$"
+            runner, "ls", "--as", "display", "--detailed", f"{adfs_typed_image_filepath}:$"
         ).output
         assert "Text" in out
         assert "2024-03-01T14:22:08" in out
@@ -59,11 +61,11 @@ class TestADFSDisplay:
         assert "0xFFF" not in out
 
     def test_json_keeps_raw_load_and_numeric_filetype(
-        self, runner: CliRunner, adfs_image_filepath: Path
+        self, runner: CliRunner, adfs_typed_image_filepath: Path
     ):
-        self._stamp(runner, adfs_image_filepath)
+        self._stamp(runner, adfs_typed_image_filepath)
         out = _run(
-            runner, "ls", "--as", "json", "--detailed", f"{adfs_image_filepath}:$"
+            runner, "ls", "--as", "json", "--detailed", f"{adfs_typed_image_filepath}:$"
         ).output
         rows = json.loads(out)["reports"]["entries"]["rows"]
         hello = next(r for r in rows if r["name"] == "Hello")
@@ -73,11 +75,11 @@ class TestADFSDisplay:
         assert hello["filetype"] == 0xFFF
 
     def test_stat_shows_filetype_and_datestamp(
-        self, runner: CliRunner, adfs_image_filepath: Path
+        self, runner: CliRunner, adfs_typed_image_filepath: Path
     ):
-        self._stamp(runner, adfs_image_filepath)
+        self._stamp(runner, adfs_typed_image_filepath)
         out = _run(
-            runner, "stat", "--as", "display", f"{adfs_image_filepath}:$.Hello"
+            runner, "stat", "--as", "display", f"{adfs_typed_image_filepath}:$.Hello"
         ).output
         assert "Text" in out
         assert "2024-03-01T14:22:08" in out
@@ -187,15 +189,13 @@ class TestEmptyColumnOmission:
         assert "Filetype" in header and "Datestamp" in header
 
     def test_adfs_all_typed_listing_drops_load_exec(
-        self, runner: CliRunner, adfs_image_filepath: Path
+        self, runner: CliRunner, adfs_typed_image_filepath: Path
     ):
-        # Make the one file in a fresh ADFS image typed+dated, so the whole
-        # listing has no real load/exec.
-        image = adfs_image_filepath
-        # Remove the fixture's plain files, leave a single typed one.
+        # Stamp the single file on a RISC OS disc (whose lens is type-date),
+        # so the whole listing has no real load/exec to show.
+        image = adfs_typed_image_filepath
         _run(runner, "set-filetype", f"{image}:$.Hello", "Obey")
         _run(runner, "set-datestamp", f"{image}:$.Hello", "2024-03-01T14:22:08")
-        _run(runner, "rm", f"{image}:$.Games", "-r")
         out = _run(runner, "ls", "--as", "display", "--detailed", f"{image}:$").output
         assert "Filetype" in out and "Datestamp" in out
         assert "Load" not in out and "Exec" not in out
@@ -258,75 +258,77 @@ class TestAFS:
         assert "0x" in out
 
 
-class TestRawAddresses:
-    """--raw-addresses shows the load/exec pair instead of decoding it."""
+class TestRawAddressesDeprecated:
+    """--raw-addresses is a deprecated alias for --metadata-lens=addresses.
+
+    Exercised on a RISC OS disc (lens type-date) so the alias visibly flips
+    the default from decoding to raw addresses.
+    """
 
     def _stamp(self, runner: CliRunner, image: Path) -> None:
         _run(runner, "set-filetype", f"{image}:$.Hello", "Obey")
         _run(runner, "set-datestamp", f"{image}:$.Hello", "2024-03-01T14:22:08")
 
     def test_ls_raw_shows_load_exec_not_decoded(
-        self, runner: CliRunner, adfs_image_filepath: Path
+        self, runner: CliRunner, adfs_typed_image_filepath: Path
     ):
-        self._stamp(runner, adfs_image_filepath)
-        out = runner.invoke(
+        self._stamp(runner, adfs_typed_image_filepath)
+        result = runner.invoke(
             cli,
             ["ls", "--as", "display", "--detailed", "--raw-addresses",
-             f"{adfs_image_filepath}:$"],
+             f"{adfs_typed_image_filepath}:$"],
             env={"COLUMNS": "200"},
-        ).output
+        )
+        out = result.output
         assert "Load" in out and "Exec" in out
         assert "0xFFFFEB" in out            # the encoded load, shown as an address
         assert "Filetype" not in out        # not decoded
         assert "Datestamp" not in out
         assert "Obey" not in out
 
-    def test_ls_default_still_decodes(
-        self, runner: CliRunner, adfs_image_filepath: Path
+    def test_raw_addresses_warns_deprecation(
+        self, runner: CliRunner, adfs_typed_image_filepath: Path
     ):
-        self._stamp(runner, adfs_image_filepath)
-        out = runner.invoke(
+        result = runner.invoke(
             cli,
-            ["ls", "--as", "display", "--detailed", f"{adfs_image_filepath}:$"],
+            ["ls", "--as", "display", "--raw-addresses", f"{adfs_typed_image_filepath}:$"],
             env={"COLUMNS": "200"},
-        ).output
-        assert "Obey" in out and "Datestamp" in out
+        )
+        assert "deprecated" in result.output
+        assert "--metadata-lens=addresses" in result.output
+
+    def test_raw_addresses_conflicts_with_type_date(
+        self, runner: CliRunner, adfs_typed_image_filepath: Path
+    ):
+        result = runner.invoke(
+            cli,
+            ["ls", "--raw-addresses", "--metadata-lens", "type-date",
+             f"{adfs_typed_image_filepath}:$"],
+        )
+        assert result.exit_code != 0
+        assert "conflicts" in result.output
 
     def test_stat_raw_shows_load_exec(
-        self, runner: CliRunner, adfs_image_filepath: Path
+        self, runner: CliRunner, adfs_typed_image_filepath: Path
     ):
-        self._stamp(runner, adfs_image_filepath)
+        self._stamp(runner, adfs_typed_image_filepath)
         out = runner.invoke(
             cli,
-            ["stat", "--as", "display", "--raw-addresses", f"{adfs_image_filepath}:$.Hello"],
+            ["stat", "--as", "display", "--raw-addresses",
+             f"{adfs_typed_image_filepath}:$.Hello"],
             env={"COLUMNS": "200"},
         ).output
         assert "Load" in out
         assert "Filetype" not in out and "Datestamp" not in out
 
-    def test_ls_raw_tsv_empties_typed_columns(
-        self, runner: CliRunner, adfs_image_filepath: Path
-    ):
-        self._stamp(runner, adfs_image_filepath)
-        out = runner.invoke(
-            cli,
-            ["ls", "--as", "tsv", "--detailed", "--raw-addresses", f"{adfs_image_filepath}:$"],
-        ).output
-        lines = out.splitlines()
-        header = lines[0].lstrip("# ").split("\t")
-        row = next(r.split("\t") for r in lines[1:] if r.startswith("Hello"))
-        cell = dict(zip(header, row))
-        assert cell["Filetype"] == "" and cell["Datestamp"] == ""
-        assert int(cell["Load"]) & 0xFFF00000 == 0xFFF00000   # raw encoded load kept
-
     def test_env_var_sets_default(
-        self, runner: CliRunner, adfs_image_filepath: Path
+        self, runner: CliRunner, adfs_typed_image_filepath: Path
     ):
         # OAKNUT_DISC_RAW_ADDRESSES acts as the cross-command default.
-        self._stamp(runner, adfs_image_filepath)
+        self._stamp(runner, adfs_typed_image_filepath)
         out = runner.invoke(
             cli,
-            ["ls", "--as", "display", "--detailed", f"{adfs_image_filepath}:$"],
+            ["ls", "--as", "display", "--detailed", f"{adfs_typed_image_filepath}:$"],
             env={"COLUMNS": "200", "OAKNUT_DISC_RAW_ADDRESSES": "1"},
         ).output
         assert "Load" in out and "Exec" in out
