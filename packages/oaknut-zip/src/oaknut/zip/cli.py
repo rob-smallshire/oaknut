@@ -194,8 +194,8 @@ def list_cmd(zipfile_path: Path):
         attr = entry[ATTR_KEY] if has_meta else None
         table.add_row(
             filename=ByAudience(machine=raw_path, human=display_name),
-            load=address_cell(entry[LOAD_ADDR_KEY]) if has_meta else "",
-            exec=address_cell(entry[EXEC_ADDR_KEY]) if has_meta else "",
+            load=address_cell(entry[LOAD_ADDR_KEY], min_digits=8) if has_meta else "",
+            exec=address_cell(entry[EXEC_ADDR_KEY], min_digits=8) if has_meta else "",
             length="" if entry[IS_DIR_KEY] else entry[FILE_SIZE_KEY],
             filetype=filetype_cell(filetype) if filetype is not None else "",
             attr=format_access_text(attr) if attr is not None else "",

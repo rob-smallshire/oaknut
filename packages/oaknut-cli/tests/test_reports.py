@@ -60,3 +60,12 @@ class TestAddressCell:
         assert address_cell(0xFFFFFF).human == "0xFFFFFF"
         assert address_cell(0x1FF0000).human == "0x01FF0000"
         assert address_cell(0xFFFF0E00).human == "0xFFFF0E00"
+
+    def test_min_digits_pads_to_the_field_width(self):
+        # ADFS/AFS/ZIP pass min_digits=8 so a small 32-bit address still
+        # reads as the four-byte field it is, as RISC OS *Info shows it.
+        assert address_cell(0x1900, min_digits=8).human == "0x00001900"
+        assert address_cell(0x28929, min_digits=8).human == "0x00028929"
+        # A value wider than min_digits is never truncated.
+        assert address_cell(0x5C4EDB11, min_digits=8).human == "0x5C4EDB11"
+        assert address_cell(0x1FF0000, min_digits=6).human == "0x01FF0000"

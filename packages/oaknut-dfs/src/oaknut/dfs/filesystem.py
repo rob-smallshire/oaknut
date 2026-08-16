@@ -116,6 +116,9 @@ class _DFSMount(AcornWildcards):
     ``HierarchicalDirectories``.
     """
 
+    #: DFS load/exec are 18-bit; MOS ``*INFO`` shows six hex digits.
+    address_hex_digits = 6
+
     def __init__(self, dfs: DFS):
         self._dfs = dfs
 

@@ -121,6 +121,10 @@ class _ADFSMount(AcornWildcards):
     ``Titled``, ``Bootable``, ``FreeSpace`` and ``RegionHost``.
     """
 
+    #: ADFS load/exec are full 32-bit fields; display them as eight hex
+    #: digits, as RISC OS ``*Info`` does.
+    address_hex_digits = 8
+
     def __init__(
         self,
         adfs: _ADFSDisc,

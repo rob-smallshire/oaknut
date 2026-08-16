@@ -67,6 +67,10 @@ class _ZipMount(AcornWildcards):
     tree, synthesising directories the archive does not store explicitly.
     """
 
+    #: RISC OS files carry full 32-bit load/exec; display them as eight
+    #: hex digits, as RISC OS ``*Info`` does.
+    address_hex_digits = 8
+
     def __init__(self, archive: zipfile.ZipFile):
         self._archive = archive
         self._entry: dict[str, Entry] = {"": Entry(name="", is_dir=True, path="")}

@@ -82,6 +82,10 @@ class _AFSMount(AcornWildcards):
     ``AcornMetadata`` and ``UserDatabase``.
     """
 
+    #: AFS load/exec are full 32-bit fields; display them as eight hex
+    #: digits, as RISC OS ``*Info`` does.
+    address_hex_digits = 8
+
     def __init__(self, afs: _AFSRegion):
         self._afs = afs
 

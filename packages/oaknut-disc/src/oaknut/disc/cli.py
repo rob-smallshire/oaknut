@@ -425,6 +425,9 @@ def ls(
     # so its addresses stay real and its date shows under either lens.
     encodes_in_load_exec = isinstance(mount, Filetyped)
     has_datestamp = isinstance(mount, Datestamped)
+    # Load/exec field width: DFS shows six hex digits (MOS), ADFS/AFS/ZIP
+    # eight (the full 32-bit field, as RISC OS *Info does).
+    addr_digits = getattr(mount, "address_hex_digits", 6)
     for child in sorted(mount.iter_entries(target), key=lambda e: _natural_name_key(e.name)):
         if child.is_dir:
             row = {
@@ -452,8 +455,8 @@ def ls(
             # are ever an encoding, so a real address that merely trips the
             # marker (AFS) is never hidden. The addresses reading shows the pair.
             conceal = typed_view and encodes_in_load_exec and meta.is_filetype_stamped
-            load_cell = address_cell(meta.load_address, conceal=conceal)
-            exec_cell = address_cell(meta.exec_address, conceal=conceal)
+            load_cell = address_cell(meta.load_address, conceal=conceal, min_digits=addr_digits)
+            exec_cell = address_cell(meta.exec_address, conceal=conceal, min_digits=addr_digits)
             if meta.access is not None:
                 attr_str = _format_access(Access(meta.access))
                 hex_cell = f"0x{int(meta.access):02X}"
@@ -655,10 +658,11 @@ def stat(
         # file's load/exec, or filetype/datestamp on a filesystem that has
         # none), mirroring the ls listing.
         _omit = {Audience.HUMAN}
+        addr_digits = getattr(mount, "address_hex_digits", 6)
         tc.add_column("load", "Load", omit_if_empty_for=_omit)
-        row["load"] = address_cell(meta.load_address, conceal=stamped)
+        row["load"] = address_cell(meta.load_address, conceal=stamped, min_digits=addr_digits)
         tc.add_column("exec", "Exec", omit_if_empty_for=_omit)
-        row["exec"] = address_cell(meta.exec_address, conceal=stamped)
+        row["exec"] = address_cell(meta.exec_address, conceal=stamped, min_digits=addr_digits)
         filetype = mount.filetype(bare) if encodes_in_load_exec and typed_view else None
         tc.add_column("filetype", "Filetype", omit_if_empty_for=_omit)
         row["filetype"] = filetype_cell(filetype) if filetype is not None else ""
@@ -2716,11 +2720,12 @@ def set_exec(
 
 
 def _require_acorn_meta(compound_path: str):
-    """Resolve *compound_path* to an existing file and return its Acorn metadata.
+    """Resolve *compound_path* to an existing file, returning ``(meta, digits)``.
 
-    Raises if the path is missing, is a directory, or the filesystem does
-    not carry Acorn metadata (the capability the get-load/get-exec
-    commands gate on).
+    *digits* is the mount's load/exec display width (six for DFS, eight
+    for the 32-bit filing systems). Raises if the path is missing, is a
+    directory, or the filesystem does not carry Acorn metadata (the
+    capability the get-load/get-exec commands gate on).
     """
     from oaknut.filesystem import AcornMetadata
 
@@ -2737,7 +2742,7 @@ def _require_acorn_meta(compound_path: str):
             f"{resolved.filesystem} files carry no load/exec address",
             exit_code=ExitCode.OS_FILE,
         )
-    return mount.acorn_meta(target)
+    return mount.acorn_meta(target), getattr(mount, "address_hex_digits", 6)
 
 
 @cli.command(name="get-load")
@@ -2745,8 +2750,9 @@ def _require_acorn_meta(compound_path: str):
 @report_output(
     reports={
         "load": (
-            "File load address: a ``0x``-prefixed 8-hex-digit string for "
-            "humans, a raw integer for machine formatters."
+            "File load address: a ``0x``-prefixed hex string for humans (six "
+            "digits on DFS, eight on the 32-bit filing systems), a raw integer "
+            "for machine formatters."
         )
     }
 )
@@ -2758,10 +2764,12 @@ def get_load(compound_path: str):
     from asyoulikeit.scalar_data import ScalarContent
     from asyoulikeit.tabular_data import Report, Reports
 
-    meta = _require_acorn_meta(compound_path)
+    meta, addr_digits = _require_acorn_meta(compound_path)
     return Reports(
         load=Report(
-            data=ScalarContent(value=address_cell(meta.load_address), title="Load"),
+            data=ScalarContent(
+                value=address_cell(meta.load_address, min_digits=addr_digits), title="Load"
+            ),
         ),
     )
 
@@ -2771,8 +2779,9 @@ def get_load(compound_path: str):
 @report_output(
     reports={
         "exec": (
-            "File exec address: a ``0x``-prefixed 8-hex-digit string for "
-            "humans, a raw integer for machine formatters."
+            "File exec address: a ``0x``-prefixed hex string for humans (six "
+            "digits on DFS, eight on the 32-bit filing systems), a raw integer "
+            "for machine formatters."
         )
     }
 )
@@ -2784,10 +2793,12 @@ def get_exec(compound_path: str):
     from asyoulikeit.scalar_data import ScalarContent
     from asyoulikeit.tabular_data import Report, Reports
 
-    meta = _require_acorn_meta(compound_path)
+    meta, addr_digits = _require_acorn_meta(compound_path)
     return Reports(
         exec=Report(
-            data=ScalarContent(value=address_cell(meta.exec_address), title="Exec"),
+            data=ScalarContent(
+                value=address_cell(meta.exec_address, min_digits=addr_digits), title="Exec"
+            ),
         ),
     )
 

@@ -1853,8 +1853,9 @@ class TestCp:
         )
         result = runner.invoke(cli, ["stat", "--as", "display", f"{adfs_image_filepath}:$.Copied"])
         assert result.exit_code == 0
-        assert "0x001900" in result.output  # load address preserved
-        assert "0x008023" in result.output  # exec address preserved
+        # ADFS destination: 32-bit fields shown as eight hex digits.
+        assert "0x00001900" in result.output  # load address preserved
+        assert "0x00008023" in result.output  # exec address preserved
 
 
 # ---------------------------------------------------------------------------
@@ -2007,7 +2008,7 @@ class TestCpGlob:
         )
         assert result.exit_code == 0, result.output
         stat = runner.invoke(cli, ["stat", "--as", "display", f"{adfs_empty_filepath}:$.Hello"])
-        assert "0x001900" in stat.output  # load address
+        assert "0x00001900" in stat.output  # load address (ADFS: eight hex digits)
 
 
 class TestCpStorageOrder:
@@ -2771,10 +2772,11 @@ class TestBulkMutation:
             ],
         )
         assert result.exit_code == 0, result.output
-        # Every file descendant should have load_address 0x00CAFE.
+        # Every file descendant should have load_address 0xCAFE (ADFS shows
+        # the 32-bit field as eight hex digits).
         for bare in ("$.Dir.Inside", "$.Dir.Sub.Deep"):
             st = runner.invoke(cli, ["get-load", "--as", "display", f"{adfs_image_tree}:{bare}"])
-            assert "0x00CAFE" in st.output, f"{bare} not set: {st.output!r}"
+            assert "0x0000CAFE" in st.output, f"{bare} not set: {st.output!r}"
 
     def test_set_exec_glob(
         self,
@@ -2791,7 +2793,7 @@ class TestBulkMutation:
         )
         assert result.exit_code == 0, result.output
         st = runner.invoke(cli, ["get-exec", "--as", "display", f"{adfs_image_tree}:$.Dir.Inside"])
-        assert "0x00BEEF" in st.output
+        assert "0x0000BEEF" in st.output
 
     def test_rm_glob(
         self,

@@ -56,8 +56,9 @@ class TestSingleImageSinglePath:
             cli, ["get-load", "--as", "display", f"{adfs_image_filepath}:$.Hello"]
         )
         assert result.exit_code == 0, result.output
-        # The fixture writes Hello with load=0x1900 (hex for humans).
-        assert "0x001900" in result.output
+        # The fixture writes Hello with load=0x1900; ADFS fields are 32-bit,
+        # so the address shows as eight hex digits.
+        assert "0x00001900" in result.output
 
     def test_mkdir_fused(self, runner: CliRunner, adfs_image_filepath: Path):
         result = runner.invoke(cli, ["mkdir", f"{adfs_image_filepath}:$.Fused"])
@@ -82,7 +83,7 @@ class TestImagePathTrailing:
         result = runner.invoke(cli, ["set-load", f"{adfs_image_filepath}:$.Hello", "0x3B00"])
         assert result.exit_code == 0, result.output
         gl = runner.invoke(cli, ["get-load", "--as", "display", f"{adfs_image_filepath}:$.Hello"])
-        assert "0x003B00" in gl.output
+        assert "0x00003B00" in gl.output
 
     def test_get_fused(
         self,

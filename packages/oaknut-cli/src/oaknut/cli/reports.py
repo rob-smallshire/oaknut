@@ -74,16 +74,18 @@ def bytes_cell(num_bytes: int) -> ByAudience:
     return ByAudience(machine=num_bytes, human=format_capacity(num_bytes))
 
 
-def address_cell(address: int, *, conceal: bool = False) -> ByAudience:
+def address_cell(address: int, *, conceal: bool = False, min_digits: int = 6) -> ByAudience:
     """An Acorn load/exec address as an audience-aware cell.
 
-    Humans read the ``0x``-prefixed hex form, trimmed of leading zeros
-    to a whole number of bytes (an even count of hex digits) with a
-    minimum of six — the width Acorn MOS uses for a DFS address, so a
-    table stays narrow without diverging from ``*EX`` / ``*INFO``. A
-    larger address (an ADFS 32-bit value) grows in whole bytes. Machine
-    formatters (JSON, TSV) get the raw integer, so a consumer never has
-    to parse a base back out of a string.
+    Humans read the ``0x``-prefixed hex form, padded to a whole number
+    of bytes (an even count of hex digits) at *min_digits* or wider if
+    the value needs it. The default six matches the width Acorn MOS uses
+    for a DFS address, so a DFS table stays narrow without diverging
+    from ``*EX`` / ``*INFO``; a filing system whose load/exec are full
+    32-bit fields (ADFS, AFS, RISC OS ZIP) passes ``min_digits=8`` so
+    the pair always reads as the four-byte fields they are, matching
+    RISC OS ``*Info``. Machine formatters (JSON, TSV) get the raw
+    integer, so a consumer never has to parse a base back out of a string.
 
     When *conceal* is set the human form is blank but the machine form
     keeps the raw integer: a filetype-stamped file's load/exec hold an
@@ -92,7 +94,7 @@ def address_cell(address: int, *, conceal: bool = False) -> ByAudience:
     """
     if conceal:
         return ByAudience(machine=address, human="")
-    digits = max(6, len(f"{address:X}"))
+    digits = max(min_digits, len(f"{address:X}"))
     width = digits + (digits & 1)  # round up to a whole number of bytes
     return ByAudience(machine=address, human=f"0x{address:0{width}X}")
 
