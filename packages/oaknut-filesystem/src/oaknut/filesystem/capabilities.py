@@ -13,6 +13,7 @@ refined as the concrete filesystems are wrapped (Phase B).
 
 from __future__ import annotations
 
+import enum
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
@@ -181,6 +182,46 @@ class Datestamped(Protocol):
 
     def set_datestamp(self, path: str, when: "datetime") -> None:
         """Set the datestamp of the file at *path* (naive local time)."""
+        ...
+
+
+class Lens(enum.Enum):
+    """How a mount's load/exec fields should be read by default.
+
+    On practically every Acorn filesystem the 32-bit load and exec
+    addresses can double as a RISC OS filetype and datestamp (the
+    ``0xFFF`` marker in the top of the load address). Which reading a
+    user *wants* is format-dependent, and the ``0xFFF`` marker overlaps
+    genuine addresses (``&FFFF0E00`` and friends), so the choice cannot
+    be made per file from the bytes alone. A mount declares its
+    preference and the CLI honours it unless overridden.
+    """
+
+    #: Present the raw load and execution addresses. The default for
+    #: DFS and the 8-bit ADFS shapes (S/M/L, Old directories).
+    ADDRESSES = "addresses"
+    #: Decode a filetype and datestamp from the load/exec pair. The
+    #: default for the Arthur/RISC OS ADFS shapes (D and the New/Big
+    #: directory formats).
+    TYPE_DATE = "type-date"
+
+
+@runtime_checkable
+class MetadataLensed(Protocol):
+    """A mount that declares a default :class:`Lens` for its metadata.
+
+    Feature-detected by the CLI to resolve ``--metadata=auto``; a mount
+    that does not provide it is read as :attr:`Lens.ADDRESSES`. The lens
+    is presentational only — it selects which reading of the load/exec
+    fields is shown, never what is stored. Filesystems that keep a
+    datestamp *independently* of load/exec (AFS, with its native
+    ``AfsDate``) need not implement it: their datestamp shows under
+    either lens.
+    """
+
+    @property
+    def metadata_lens(self) -> Lens:
+        """The reading of load/exec this mount prefers by default."""
         ...
 
 
