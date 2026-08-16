@@ -8,6 +8,7 @@ default) follows each filing system's declared preference.
 from __future__ import annotations
 
 import json
+import zipfile
 from pathlib import Path
 
 from click.testing import CliRunner
@@ -141,6 +142,40 @@ class TestDFS:
         # Every file keeps a real integer load address; nothing is concealed.
         files = [r for r in rows if r["type"] == "file"]
         assert files and all(isinstance(r["load"], int) for r in files)
+
+
+class TestZip:
+    """A ZIP of RISC OS files decodes filetypes by default (type-date lens)."""
+
+    def _riscos_zip(self, tmp_path: Path) -> Path:
+        archive_filepath = tmp_path / "riscos.zip"
+        with zipfile.ZipFile(archive_filepath, "w") as archive:
+            archive.writestr("Sprites,ff9", b"sprite data")
+        return archive_filepath
+
+    def test_default_decodes_filetype_and_conceals_address(
+        self, runner: CliRunner, tmp_path: Path
+    ):
+        archive = self._riscos_zip(tmp_path)
+        out = _run(
+            runner, "ls", "--as", "display", "--detailed", str(archive),
+            env={"COLUMNS": "200"},
+        ).output
+        assert "Sprite" in out
+        assert "Filetype" in out
+        assert "0xFFFFF900" not in out  # the filetyped load address is concealed
+
+    def test_addresses_lens_reveals_raw_load(
+        self, runner: CliRunner, tmp_path: Path
+    ):
+        archive = self._riscos_zip(tmp_path)
+        out = _run(
+            runner, "ls", "--as", "display", "--detailed",
+            "--metadata-lens", "addresses", str(archive),
+            env={"COLUMNS": "200"},
+        ).output
+        assert "0xFFFFF900" in out
+        assert "Filetype" not in out  # the decode is suppressed under addresses
 
 
 class TestAFSDatestampIsLensIndependent:

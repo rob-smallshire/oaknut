@@ -54,6 +54,50 @@ class TestMount:
             assert mount.exists("dir/inner.dat")
 
 
+def _make_filetyped_zip(tmp_path):
+    archive_filepath = tmp_path / "riscos.zip"
+    with zipfile.ZipFile(archive_filepath, "w") as archive:
+        archive.writestr("Sprites,ff9", b"sprite data")
+        archive.writestr("plain", b"no type here")
+    return archive_filepath
+
+
+class TestFiletypedLens:
+    """A ZIP of RISC OS files is filetyped and prefers the type-date lens."""
+
+    def _mount(self, tmp_path):
+        filesystem = create_filesystem("zip")
+        reader = reader_for(_make_filetyped_zip(tmp_path)).__enter__()
+        return reader, filesystem.open(reader)
+
+    def test_mount_is_filetyped_and_lensed(self, tmp_path):
+        from oaknut.filesystem import Filetyped, Lens, MetadataLensed
+
+        reader, mount = self._mount(tmp_path)
+        try:
+            assert isinstance(mount, Filetyped)
+            assert isinstance(mount, MetadataLensed)
+            assert mount.metadata_lens is Lens.TYPE_DATE
+        finally:
+            reader.__exit__(None, None, None)
+
+    def test_filetype_decoded_from_metadata(self, tmp_path):
+        reader, mount = self._mount(tmp_path)
+        try:
+            assert mount.filetype("Sprites") == 0xFF9
+            assert mount.filetype("plain") is None
+        finally:
+            reader.__exit__(None, None, None)
+
+    def test_set_filetype_is_read_only(self, tmp_path):
+        reader, mount = self._mount(tmp_path)
+        try:
+            with pytest.raises(ReadOnlyFilesystemError):
+                mount.set_filetype("Sprites", 0xFFF)
+        finally:
+            reader.__exit__(None, None, None)
+
+
 class TestHierarchy:
     """iter_entries honours its path argument and the flat ZIP namespace is
     presented as a directory tree (synthesising directories the archive does
