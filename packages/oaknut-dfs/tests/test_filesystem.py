@@ -7,6 +7,8 @@ from oaknut.filesystem import (
     Bootable,
     Confidence,
     HierarchicalDirectories,
+    Lens,
+    MetadataLensed,
     Mount,
     Titled,
     Volume,
@@ -428,3 +430,14 @@ class TestIdentificationEvidence:
         assert any("extension bit" in item for item in evidence)
         # Stale wording gone — counts and sequence numbers are NOT synced.
         assert "synced metadata" not in joined
+
+
+class TestMetadataLens:
+    """DFS load/exec are genuine addresses, never a folded filetype/date."""
+
+    def test_dfs_prefers_addresses(self, tmp_path):
+        filesystem = create_filesystem("acorn-dfs")
+        with reader_for(_make_dfs_image(tmp_path)) as reader:
+            mount = filesystem.open(reader, filesystem.probe(reader).geometry)
+            assert isinstance(mount, MetadataLensed)
+            assert mount.metadata_lens is Lens.ADDRESSES
