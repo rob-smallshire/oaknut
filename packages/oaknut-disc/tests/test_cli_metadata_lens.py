@@ -113,6 +113,36 @@ class TestExplicitOverride:
         assert "Obey" not in out
 
 
+class TestDFS:
+    """DFS defaults to addresses and tolerates the lens option gracefully."""
+
+    def test_type_date_lens_still_shows_addresses(
+        self, runner: CliRunner, dfs_image_filepath: Path
+    ):
+        # DFS carries no filetype/datestamp, so even when the type-date lens
+        # is forced there is nothing to decode and the load/exec pair must
+        # still be shown — the row is never blanked.
+        out = _run(
+            runner, "ls", "--as", "display", "--detailed",
+            "--metadata-lens", "type-date", f"{dfs_image_filepath}:$",
+            env={"COLUMNS": "200"},
+        ).output
+        assert "Load" in out and "Exec" in out
+        assert "Filetype" not in out and "Datestamp" not in out
+
+    def test_type_date_lens_keeps_raw_load_in_json(
+        self, runner: CliRunner, dfs_image_filepath: Path
+    ):
+        out = _run(
+            runner, "ls", "--as", "json", "--detailed",
+            "--metadata-lens", "type-date", f"{dfs_image_filepath}:$",
+        ).output
+        rows = json.loads(out)["reports"]["entries"]["rows"]
+        # Every file keeps a real integer load address; nothing is concealed.
+        files = [r for r in rows if r["type"] == "file"]
+        assert files and all(isinstance(r["load"], int) for r in files)
+
+
 class TestAFSDatestampIsLensIndependent:
     """AFS keeps a native datestamp, shown under either lens."""
 
@@ -142,3 +172,20 @@ class TestAFSDatestampIsLensIndependent:
         rows = json.loads(out)["reports"]["entries"]["rows"]
         afsa = next(r for r in rows if r["name"] == "afsA")
         assert afsa["datestamp"]
+
+    def test_type_date_lens_does_not_conceal_real_addresses(
+        self, runner: CliRunner, partitioned_image_with_files: Path
+    ):
+        # AFS load/exec are genuine 32-bit addresses that may land in the
+        # 0xFFF00000 range that trips the filetype marker. AFS is not
+        # Filetyped, so those addresses are not an encoding of a filetype and
+        # must stay visible in the human view even when type-date is forced.
+        image = partitioned_image_with_files
+        _run(runner, "set-load", f"{image}:afs:$.afsA", "0xFFF00000")
+        out = _run(
+            runner, "ls", "--as", "display", "--detailed",
+            "--metadata-lens", "type-date", f"{image}:afs:$",
+            env={"COLUMNS": "240"},
+        ).output
+        # The real address is shown, not blanked out as a filetype encoding.
+        assert "0xFFF00000" in out

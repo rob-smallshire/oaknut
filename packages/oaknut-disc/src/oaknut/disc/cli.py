@@ -350,7 +350,6 @@ def ls(
         Filetyped,
         FreeSpace,
         Lens,
-        MetadataLensed,
         Titled,
     )
 
@@ -418,12 +417,13 @@ def ls(
     # The type-date reading decodes a filetype/datestamp from load/exec and
     # conceals the raw pair; the addresses reading shows the pair verbatim.
     typed_view = lens is Lens.TYPE_DATE
-    # A mount is MetadataLensed exactly when its filetype/datestamp are folded
-    # into load/exec, so its datestamp follows the lens. AFS keeps a native
-    # datestamp outside load/exec, so it is not lensed and always shows.
-    derived_metadata = isinstance(mount, MetadataLensed)
     has_acorn = isinstance(mount, AcornMetadata)
-    has_filetype = isinstance(mount, Filetyped)
+    # A filetype is only ever an encoding *in* the load/exec pair, so being
+    # Filetyped is exactly what makes those addresses concealable and marks a
+    # datestamp as load/exec-derived (and thus lens-governed). A mount whose
+    # datestamp lives outside load/exec (AFS's native date) is not Filetyped,
+    # so its addresses stay real and its date shows under either lens.
+    encodes_in_load_exec = isinstance(mount, Filetyped)
     has_datestamp = isinstance(mount, Datestamped)
     for child in sorted(mount.iter_entries(target), key=lambda e: _natural_name_key(e.name)):
         if child.is_dir:
@@ -446,10 +446,12 @@ def ls(
         datestamp_str = ""
         if has_acorn:
             meta = mount.acorn_meta(child.path)
-            # Under the type-date reading a stamped file's load/exec hold an
-            # encoded filetype/date; conceal them from humans but keep the raw
-            # bytes for machines. The addresses reading shows the pair.
-            conceal = typed_view and meta.is_filetype_stamped
+            # Under the type-date reading a filetype-stamped file's load/exec
+            # hold an encoded filetype/date; conceal them from humans but keep
+            # the raw bytes for machines. Only a Filetyped mount's addresses
+            # are ever an encoding, so a real address that merely trips the
+            # marker (AFS) is never hidden. The addresses reading shows the pair.
+            conceal = typed_view and encodes_in_load_exec and meta.is_filetype_stamped
             load_cell = address_cell(meta.load_address, conceal=conceal)
             exec_cell = address_cell(meta.exec_address, conceal=conceal)
             if meta.access is not None:
@@ -457,13 +459,13 @@ def ls(
                 hex_cell = f"0x{int(meta.access):02X}"
         # Filetype is only ever load/exec-derived, so it belongs to the
         # type-date reading.
-        if has_filetype and typed_view:
+        if encodes_in_load_exec and typed_view:
             filetype = mount.filetype(child.path)
             if filetype is not None:
                 filetype_str = filetype_cell(filetype)
-        # A derived datestamp follows the lens; a native one (AFS) is shown
-        # under either reading.
-        if has_datestamp and (typed_view or not derived_metadata):
+        # A load/exec-derived datestamp follows the lens; a native one (AFS)
+        # is shown under either reading.
+        if has_datestamp and (typed_view or not encodes_in_load_exec):
             when = mount.datestamp(child.path)
             if when is not None:
                 datestamp_str = datestamp_cell(when, mount.datestamp_resolution)
@@ -617,7 +619,7 @@ def stat(
     from asyoulikeit import Audience
     from asyoulikeit.tabular_data import Report, Reports, TableContent
     from oaknut.file import Access
-    from oaknut.filesystem import AcornMetadata, Datestamped, Filetyped, Lens, MetadataLensed
+    from oaknut.filesystem import AcornMetadata, Datestamped, Filetyped, Lens
 
     from .mount import split_selector
 
@@ -641,12 +643,13 @@ def stat(
     if isinstance(mount, AcornMetadata) and not entry.is_dir:
         lens = _resolve_metadata_lens(metadata_lens, raw_addresses, mount)
         typed_view = lens is Lens.TYPE_DATE
-        derived_metadata = isinstance(mount, MetadataLensed)
+        # Only a Filetyped mount's load/exec are ever an encoding to conceal;
+        # its datestamp is load/exec-derived and lens-governed. A native
+        # datestamp (AFS) belongs to a non-Filetyped mount and always shows,
+        # alongside the real addresses. Mirrors the ls listing.
+        encodes_in_load_exec = isinstance(mount, Filetyped)
         meta = mount.acorn_meta(bare)
-        # Under the type-date reading a stamped file's load/exec are concealed
-        # in favour of the decoded filetype/datestamp; the addresses reading
-        # shows the pair.
-        stamped = typed_view and meta.is_filetype_stamped
+        stamped = typed_view and encodes_in_load_exec and meta.is_filetype_stamped
         # Declare every metadata field for a stable machine schema; the
         # human view drops whichever are empty for this file (a stamped
         # file's load/exec, or filetype/datestamp on a filesystem that has
@@ -656,14 +659,12 @@ def stat(
         row["load"] = address_cell(meta.load_address, conceal=stamped)
         tc.add_column("exec", "Exec", omit_if_empty_for=_omit)
         row["exec"] = address_cell(meta.exec_address, conceal=stamped)
-        filetype = (
-            mount.filetype(bare) if isinstance(mount, Filetyped) and typed_view else None
-        )
+        filetype = mount.filetype(bare) if encodes_in_load_exec and typed_view else None
         tc.add_column("filetype", "Filetype", omit_if_empty_for=_omit)
         row["filetype"] = filetype_cell(filetype) if filetype is not None else ""
         when = (
             mount.datestamp(bare)
-            if isinstance(mount, Datestamped) and (typed_view or not derived_metadata)
+            if isinstance(mount, Datestamped) and (typed_view or not encodes_in_load_exec)
             else None
         )
         tc.add_column("datestamp", "Datestamp", omit_if_empty_for=_omit)
