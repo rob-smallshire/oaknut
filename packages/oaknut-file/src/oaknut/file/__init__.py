@@ -5,7 +5,7 @@ parsing/formatting, filename encoding schemes, extended attributes,
 and access flag management.
 """
 
-__version__ = "12.14.1"
+__version__ = "12.15.0"
 
 # Side-effect import registers the 'acorn' text codec on package import.
 import oaknut.file.acorn_encoding  # noqa: F401
