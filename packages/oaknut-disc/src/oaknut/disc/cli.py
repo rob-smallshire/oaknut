@@ -447,31 +447,37 @@ def ls(
         load_cell = exec_cell = attr_str = hex_cell = ""
         filetype_str: object = ""
         datestamp_str = ""
-        if has_acorn:
-            meta = mount.acorn_meta(child.path)
-            # Under the type-date reading a filetype-stamped file's load/exec
-            # hold an encoded filetype/date; conceal them from humans but keep
-            # the raw bytes for machines. Only a Filetyped mount's addresses
-            # are ever an encoding, so a real address that merely trips the
-            # marker (AFS) is never hidden. The addresses reading shows the pair.
-            conceal = typed_view and encodes_in_load_exec and meta.is_filetype_stamped
+        meta = mount.acorn_meta(child.path) if has_acorn else None
+        # Decode filetype/datestamp first, so the load/exec concealment can
+        # key off whether we actually decoded one to show in their place.
+        # Filetype is only ever load/exec-derived, so it belongs to the
+        # type-date reading.
+        filetype = mount.filetype(child.path) if encodes_in_load_exec and typed_view else None
+        if filetype is not None:
+            filetype_str = filetype_cell(filetype)
+        # A load/exec-derived datestamp follows the lens; a native one (AFS)
+        # is shown under either reading, and never conceals the real address.
+        derived_when = None
+        if has_datestamp and (typed_view or not encodes_in_load_exec):
+            when = mount.datestamp(child.path)
+            if when is not None:
+                datestamp_str = datestamp_cell(when, mount.datestamp_resolution)
+                if encodes_in_load_exec:
+                    derived_when = when
+        if meta is not None:
+            # Conceal the pair only when a filetype or a load/exec-derived
+            # datestamp was decoded to replace it. A coincidental marker on a
+            # plain address (a load == exec module address, which RISC OS
+            # FileSwitch reads as an address) decodes to neither, so its real
+            # load/exec stay visible rather than blanking the row.
+            conceal = typed_view and encodes_in_load_exec and (
+                filetype is not None or derived_when is not None
+            )
             load_cell = address_cell(meta.load_address, conceal=conceal, min_digits=addr_digits)
             exec_cell = address_cell(meta.exec_address, conceal=conceal, min_digits=addr_digits)
             if meta.access is not None:
                 attr_str = _format_access(Access(meta.access))
                 hex_cell = f"0x{int(meta.access):02X}"
-        # Filetype is only ever load/exec-derived, so it belongs to the
-        # type-date reading.
-        if encodes_in_load_exec and typed_view:
-            filetype = mount.filetype(child.path)
-            if filetype is not None:
-                filetype_str = filetype_cell(filetype)
-        # A load/exec-derived datestamp follows the lens; a native one (AFS)
-        # is shown under either reading.
-        if has_datestamp and (typed_view or not encodes_in_load_exec):
-            when = mount.datestamp(child.path)
-            if when is not None:
-                datestamp_str = datestamp_cell(when, mount.datestamp_resolution)
         row = {
             "name": text_cell(child.name),
             "type": "file",
@@ -652,7 +658,21 @@ def stat(
         # alongside the real addresses. Mirrors the ls listing.
         encodes_in_load_exec = isinstance(mount, Filetyped)
         meta = mount.acorn_meta(bare)
-        stamped = typed_view and encodes_in_load_exec and meta.is_filetype_stamped
+        # Decode filetype/datestamp first, so concealment can key off whether
+        # one was decoded to replace the addresses (mirrors the ls listing).
+        filetype = mount.filetype(bare) if encodes_in_load_exec and typed_view else None
+        when = (
+            mount.datestamp(bare)
+            if isinstance(mount, Datestamped) and (typed_view or not encodes_in_load_exec)
+            else None
+        )
+        derived_when = when if (when is not None and encodes_in_load_exec) else None
+        # Conceal the pair only when we have a filetype or load/exec-derived
+        # datestamp to show instead — a coincidental marker on a plain address
+        # (load == exec) decodes to neither and keeps its addresses visible.
+        stamped = typed_view and encodes_in_load_exec and (
+            filetype is not None or derived_when is not None
+        )
         # Declare every metadata field for a stable machine schema; the
         # human view drops whichever are empty for this file (a stamped
         # file's load/exec, or filetype/datestamp on a filesystem that has
@@ -663,14 +683,8 @@ def stat(
         row["load"] = address_cell(meta.load_address, conceal=stamped, min_digits=addr_digits)
         tc.add_column("exec", "Exec", omit_if_empty_for=_omit)
         row["exec"] = address_cell(meta.exec_address, conceal=stamped, min_digits=addr_digits)
-        filetype = mount.filetype(bare) if encodes_in_load_exec and typed_view else None
         tc.add_column("filetype", "Filetype", omit_if_empty_for=_omit)
         row["filetype"] = filetype_cell(filetype) if filetype is not None else ""
-        when = (
-            mount.datestamp(bare)
-            if isinstance(mount, Datestamped) and (typed_view or not encodes_in_load_exec)
-            else None
-        )
         tc.add_column("datestamp", "Datestamp", omit_if_empty_for=_omit)
         row["datestamp"] = (
             datestamp_cell(when, mount.datestamp_resolution) if when is not None else ""

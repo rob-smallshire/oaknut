@@ -54,6 +54,29 @@ class TestCapabilities:
             reader.__exit__(None, None, None)
 
 
+class TestEqualLoadExecIsAddressPair:
+    """A marker-bearing file whose load equals its exec is a plain address,
+    per RISC OS FileSwitch — not a filetype/datestamp (the case that would
+    otherwise decode to a spurious 1900–1901 date)."""
+
+    def _make_equal_pair_image(self, tmp_path):
+        image_filepath = tmp_path / "pair.ads"
+        with ADFS.create_file(str(image_filepath), ADFS_S, title="PAIR") as adfs:
+            # A module load address, top twelve bits 0xFFF, load == exec.
+            (adfs.root / "$.MODULE").write_bytes(
+                b"module", load_address=0xFFFFFA00, exec_address=0xFFFFFA00
+            )
+        return image_filepath
+
+    def test_filetype_and_datestamp_read_none(self, tmp_path):
+        reader, mount = _mount(self._make_equal_pair_image(tmp_path))
+        try:
+            assert mount.filetype("$.MODULE") is None
+            assert mount.datestamp("$.MODULE") is None
+        finally:
+            reader.__exit__(None, None, None)
+
+
 class TestPlainFile:
     def test_unstamped_reads_none(self, tmp_path):
         reader, mount = _mount(_make_image(tmp_path))
@@ -213,8 +236,13 @@ class TestRiscOsCorpusMetadata:
         finally:
             reader.__exit__(None, None, None)
 
-    def test_every_corpus_file_reports_a_filetype_and_datestamp(self):
-        # A broad sweep: every file on all three specimens is typed and stamped.
+    def test_corpus_filetype_follows_the_fileswitch_rule(self):
+        # A broad sweep: a file is typed exactly when it carries the marker
+        # AND load != exec. These are RISC OS application discs, so the vast
+        # majority are typed; the exceptions are load == exec address pairs
+        # (e.g. a module load address like &FFFFFA00/&FFFFFA00).
+        from oaknut.file.datestamp import is_datestamped
+
         for image in (
             "D_Arthur_Welcome.adf",
             "D_RISCOS310_App1.adf",
@@ -232,8 +260,12 @@ class TestRiscOsCorpusMetadata:
 
                 files = list(walk("$"))
                 assert files, image
+                for path in files:
+                    meta = mount.acorn_meta(path)
+                    expected = is_datestamped(meta.load_address, meta.exec_address)
+                    assert (mount.filetype(path) is not None) == expected, (image, path)
+                    assert (mount.datestamp(path) is not None) == expected, (image, path)
                 typed = sum(1 for f in files if mount.filetype(f) is not None)
-                # These discs are RISC OS applications — essentially all typed.
-                assert typed >= len(files) - 1, (image, typed, len(files))
+                assert typed >= len(files) * 3 // 4, (image, typed, len(files))
             finally:
                 reader.__exit__(None, None, None)

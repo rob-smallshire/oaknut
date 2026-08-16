@@ -14,6 +14,8 @@ from pathlib import Path
 from click.testing import CliRunner
 from oaknut.disc.cli import cli
 
+from tests.fixtures import REFERENCE_IMAGES_DIRPATH
+
 
 def _run(runner, *args, env=None):
     return runner.invoke(cli, list(args), env=env)
@@ -112,6 +114,32 @@ class TestExplicitOverride:
         ).output
         assert "Load" in out and "Exec" in out
         assert "Obey" not in out
+
+
+class TestEqualLoadExec:
+    """RISC OS FileSwitch: a marker-bearing pair with load == exec is a plain
+    address, not a datestamp. Exercised on the Arthur Welcome disc, where
+    FPEmulator (&FFFFFA00/&FFFFFA00) sat next to genuinely dated modules.
+    """
+
+    _D_ARTHUR = (
+        REFERENCE_IMAGES_DIRPATH / "adfs-riscos" / "D_Arthur_Welcome.adf"
+    )
+
+    def test_equal_pair_shows_addresses_dated_neighbours_keep_dates(
+        self, runner: CliRunner
+    ):
+        out = _run(
+            runner, "ls", "--as", "json", "--detailed", f"{self._D_ARTHUR}:$.Modules"
+        ).output
+        rows = {r["name"]: r for r in json.loads(out)["reports"]["entries"]["rows"]}
+        # load == exec -> address pair, no filetype/datestamp decoded.
+        fp = rows["FPEmulator"]
+        assert fp["load"] == 0xFFFFFA00 and fp["exec"] == 0xFFFFFA00
+        assert fp["filetype"] == "" and fp["datestamp"] == ""
+        # load != exec -> a genuine 1987 datestamp is still decoded.
+        assert rows["RAM_Basic"]["datestamp"]
+        assert rows["RAM_Basic"]["filetype"] == 0xFFA
 
 
 class TestDFS:

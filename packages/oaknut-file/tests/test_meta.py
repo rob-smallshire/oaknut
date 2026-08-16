@@ -40,6 +40,14 @@ class TestFiletypeStamping:
         meta = AcornMeta()
         assert meta.is_filetype_stamped is False
 
+    def test_marker_is_structural_even_when_load_equals_exec(self):
+        # The archival filetype marker is the pure top-12-bits test; the
+        # load == exec (FileSwitch datestamp) rule is applied by the live
+        # filesystem display, not by this structural predicate.
+        meta = AcornMeta(load_address=0xFFFFFA00, exec_address=0xFFFFFA00)
+        assert meta.is_filetype_stamped is True
+        assert meta.infer_filetype() == 0xFFA
+
     def test_infer_filetype_from_load(self):
         meta = AcornMeta(load_address=0xFFFF0E10)
         assert meta.infer_filetype() == 0xF0E

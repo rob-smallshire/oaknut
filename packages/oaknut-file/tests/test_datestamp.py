@@ -23,17 +23,37 @@ def _load(filetype: int, high_byte: int) -> int:
 
 class TestIsDatestamped:
     def test_marker_present(self):
-        assert is_datestamped(_load(0xFFD, 0x00))
+        assert is_datestamped(_load(0xFFD, 0x00), 0x00000000)
 
     def test_marker_absent(self):
         # A real load address (BBC default &1900) is not stamped.
-        assert not is_datestamped(0x00001900)
-        assert not is_datestamped(0xFFE00000)  # only 11 of the top 12 bits
+        assert not is_datestamped(0x00001900, 0x00008023)
+        assert not is_datestamped(0xFFE00000, 0x00000000)  # only 11 of the top 12 bits
+
+    def test_equal_load_exec_is_an_address_pair(self):
+        # RISC OS FileSwitch: a pair whose load equals its exec is a plain
+        # address even when the marker is set (a BBC &FFFF0900/&FFFF0900, or
+        # a module load address like &FFFFFA00/&FFFFFA00), never a datestamp.
+        assert not is_datestamped(0xFFFFFA00, 0xFFFFFA00)
+        assert not is_datestamped(0xFFFFFFFF, 0xFFFFFFFF)  # command file
+        # A genuine typed+dated file has load != exec.
+        assert is_datestamped(0xFFFFFA40, 0x5C4EDB11)
+
+    def test_unknown_exec_checks_marker_only(self):
+        # When the exec is unknown the equal-pair test cannot apply, so only
+        # the marker is checked.
+        assert is_datestamped(_load(0xFFD, 0x00), None)
+        assert not is_datestamped(0x00001900, None)
 
 
 class TestDecode:
     def test_unstamped_returns_none(self):
         assert decode_datestamp(0x00001900, 0x00008023) is None
+
+    def test_equal_load_exec_returns_none(self):
+        # &FFFFFA00/&FFFFFA00 is an address pair, not the 1901 date the raw
+        # centisecond arithmetic would otherwise produce.
+        assert decode_datestamp(0xFFFFFA00, 0xFFFFFA00) is None
 
     def test_epoch(self):
         # All date bits zero -> 1900-01-01 00:00:00.

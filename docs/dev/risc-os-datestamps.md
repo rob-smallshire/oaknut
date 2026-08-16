@@ -91,6 +91,45 @@ capability gains a `datestamp_reference` (FLOATING vs UTC) so each filesystem
 declares its frame; same-frame copies stay passthrough; cross-frame conversion
 lives in the boundary layer and applies the naive-is-UTC default above.
 
+## When a load/exec pair *is* a datestamp
+
+Separate from what the instant means is the prior question of whether the
+load/exec pair should be read as a filetype + datestamp at all. The `&FFF`
+marker (top twelve bits of the load address set) is necessary but **not
+sufficient**: it overlaps genuine addresses. RISC OS FileSwitch treats a
+pair as *not* datestamped when any of these hold (from the FileSwitch source,
+quoted by Gerald Holdsworth on Stardot):
+
+| load | exec | meaning |
+|---|---|---|
+| `&00000000` | `&FFFFFFFF` | command file |
+| `&FFFFFFFF` | `&FFFFFFFF` | command file |
+| `< &FFF00000` | any | load/exec address pair (no marker) |
+| `nnnnnnnn` | `nnnnnnnn` (load == exec) | address pair (e.g. a BBC `&FFFF0900`) |
+
+All four collapse to one condition: **datestamped iff the marker is set *and*
+`load != exec`.** oaknut encodes exactly this in
+`oaknut.file.datestamp.is_datestamped(load, exec)`, used by `decode_datestamp`
+and by the ADFS/AFS filesystem mounts. Without the `load != exec` clause a
+module load address such as `&FFFFFA00/&FFFFFA00` decodes to a spurious date
+in the 1900–1901 window (the only range a 32-bit exec word reaches when the
+load's low byte — the datestamp's top eight bits — is zero); genuine Acorn
+dates cannot fall there, since the hardware postdates the 1980s.
+
+oaknut deliberately does **not** adopt J.G.Harston's stricter, size-dependent
+heuristics (rejecting `exec == &FFFFFFFF`, or `load == &FFFFxxxx` with `exec`
+inside the loaded image, or `load` in `&FFFF3000..&FFFF7FFF`). They exceed what
+FileSwitch does and can hide genuine early dates; the `--metadata-lens=addresses`
+override already covers any residual coincidence.
+
+Note this rule is the **display / interpretation** rule for a live filesystem.
+The archival conventions (SparkFS extra fields, INF sidecars, RISC OS filename
+suffixes) record a filetype from the bare marker even for a `load == exec`
+pair — real archives (e.g. the SJ Research NetUtils Econet commands, all
+`&FFFF0Exx/&FFFF0Exx`) depend on it for a faithful round-trip — so
+`AcornMeta.is_filetype_stamped` stays the pure structural marker and the
+`load != exec` rule lives in the datestamp/mount layer.
+
 ## Sources
 
 - Stardot thread "oaknut-disc : DFS, ADFS and AFS0 (L3FS) tools", June 2026 —
@@ -98,3 +137,6 @@ lives in the boundary layer and applies the naive-is-UTC default above.
   applies the prevailing (proleptic) timezone + DST on display; and Stuart
   Swales's clarification that RISC OS 2 and earlier used the uncorrected,
   usually local-time, system clock.
+- Same thread, July 2026 — Gerald Holdsworth quoting the RISC OS FileSwitch
+  source for the "not date stamped" cases, and J.G.Harston's stricter
+  heuristic, prompted by acheton1984's Disc Image Manager (DIM) report.

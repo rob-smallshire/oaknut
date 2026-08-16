@@ -229,15 +229,15 @@ class _ADFSMount(AcornWildcards):
         return timedelta(milliseconds=10)  # ADFS keeps centiseconds
 
     def filetype(self, path: str) -> int | None:
-        load_address = self._navigate(path).stat().load_address
-        if not is_datestamped(load_address):
+        stat = self._navigate(path).stat()
+        if not is_datestamped(stat.load_address, stat.exec_address):
             return None
-        return (load_address >> 8) & 0xFFF
+        return (stat.load_address >> 8) & 0xFFF
 
     def set_filetype(self, path: str, filetype: int) -> None:
         target = self._navigate(path)
         stat = target.stat()
-        if is_datestamped(stat.load_address):
+        if is_datestamped(stat.load_address, stat.exec_address):
             date_high = stat.load_address & 0xFF  # preserve the existing date
         else:
             date_high = 0x00  # plain file: deterministic epoch date
@@ -251,7 +251,7 @@ class _ADFSMount(AcornWildcards):
     def set_datestamp(self, path: str, when: datetime) -> None:
         target = self._navigate(path)
         stat = target.stat()
-        if is_datestamped(stat.load_address):
+        if is_datestamped(stat.load_address, stat.exec_address):
             filetype = (stat.load_address >> 8) & 0xFFF  # preserve the type
         else:
             filetype = 0xFFD  # plain file: default to Data

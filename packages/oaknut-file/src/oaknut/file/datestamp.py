@@ -31,9 +31,26 @@ _MAX_CENTISECONDS = (1 << 40) - 1
 _MICROSECONDS_PER_CENTISECOND = 10_000
 
 
-def is_datestamped(load_address: int) -> bool:
-    """True if a load address carries a RISC OS filetype and datestamp."""
-    return (load_address & _FILETYPE_MARKER) == _FILETYPE_MARKER
+def is_datestamped(load_address: int, exec_address: int | None) -> bool:
+    """True if a load/exec pair carries a RISC OS filetype and datestamp.
+
+    Two conditions must hold, both taken from RISC OS FileSwitch (which
+    is what the Filer itself applies):
+
+    1. The top twelve bits of the load address are ``0xFFF`` — the marker.
+    2. The load and exec addresses differ. An equal pair is a plain
+       load/exec address even when the marker is set: a BBC
+       ``&FFFF0900/&FFFF0900``, a module load address like
+       ``&FFFFFA00/&FFFFFA00``, or the ``&FFFFFFFF/&FFFFFFFF`` command
+       file. This is the case whose raw centisecond arithmetic would
+       otherwise invent a date in the first months of 1900–1901.
+
+    *exec_address* may be ``None`` when it is unknown, in which case only
+    the marker (condition 1) can be checked.
+    """
+    if (load_address & _FILETYPE_MARKER) != _FILETYPE_MARKER:
+        return False
+    return exec_address is None or load_address != exec_address
 
 
 def decode_datestamp(load_address: int, exec_address: int) -> datetime | None:
@@ -43,7 +60,7 @@ def decode_datestamp(load_address: int, exec_address: int) -> datetime | None:
     centisecond resolution, or ``None`` when the load address holds a
     real address rather than a filetype/datestamp.
     """
-    if not is_datestamped(load_address):
+    if not is_datestamped(load_address, exec_address):
         return None
     centiseconds = ((load_address & 0xFF) << 32) | (exec_address & 0xFFFFFFFF)
     return RISCOS_EPOCH + timedelta(

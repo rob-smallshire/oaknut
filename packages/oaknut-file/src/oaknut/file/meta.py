@@ -33,10 +33,16 @@ class AcornMeta:
 
     @property
     def is_filetype_stamped(self) -> bool:
-        """True if the load address encodes a RISC OS filetype.
+        """True if the load address carries the RISC OS filetype marker.
 
-        When the top 12 bits of the load address are 0xFFF, bits
-        8–19 encode a filetype and bits 0–7 encode a date component.
+        When the top 12 bits of the load address are 0xFFF, bits 8–19
+        encode a filetype and bits 0–7 encode a date component. This is
+        the pure structural marker used by the archival filename/INF/
+        SparkFS conventions, which record a filetype from the marker even
+        for a ``load == exec`` pair. The *display* of a live filesystem
+        additionally applies the FileSwitch ``load != exec`` rule (see
+        :func:`~oaknut.file.datestamp.is_datestamped`) to decide whether
+        the pair is really a datestamp or a plain address.
         """
         if self.load_address is None:
             return False
