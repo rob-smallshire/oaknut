@@ -1639,6 +1639,19 @@ class ADFS:
         return self._map is not None
 
     @property
+    def uses_typed_metadata(self) -> bool:
+        """Whether load/exec default to a RISC OS filetype and datestamp.
+
+        Follows the *directory* format, not the map: the Arthur/RISC OS
+        shapes (New and Big directories — including D format, which pairs
+        a New directory with the Old map) fold a filetype and datestamp
+        into load/exec, whereas the 8-bit S/M/L shapes (Old directories)
+        keep genuine load and execution addresses there. Presentation
+        layers use this to decide which reading to show by default.
+        """
+        return not isinstance(self._dir_format, OldDirectoryFormat)
+
+    @property
     def closed(self) -> bool:
         """Whether this handle has been closed.
 

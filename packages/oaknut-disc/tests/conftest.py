@@ -17,7 +17,7 @@ for _path in (_TESTS_DIRPATH, _WORKSPACE_ROOT):
 
 import pytest  # noqa: E402
 from click.testing import CliRunner  # noqa: E402
-from oaknut.adfs import ADFS, ADFS_L  # noqa: E402
+from oaknut.adfs import ADFS, ADFS_E, ADFS_L  # noqa: E402
 from oaknut.afs.wfsinit import AFSSizeSpec, InitSpec, UserSpec, initialise  # noqa: E402
 from oaknut.dfs import ACORN_DFS_80T_SINGLE_SIDED, DFS  # noqa: E402
 from oaknut.disc.cli import cli  # noqa: E402
@@ -54,6 +54,24 @@ def adfs_image_filepath(tmp_path: Path) -> Path:
             b"Elite data",
             load_address=0x1100,
             exec_address=0x1100,
+        )
+    return filepath
+
+
+@pytest.fixture
+def adfs_typed_image_filepath(tmp_path: Path) -> Path:
+    """Create an ADFS-E (RISC OS, New Map) floppy with one file.
+
+    E format uses New directories, so its declared metadata lens is
+    ``type-date``: an unqualified ``ls``/``stat`` decodes the filetype
+    and datestamp rather than showing raw load/exec.
+    """
+    filepath = tmp_path / "typed.adf"
+    with ADFS.create_file(filepath, ADFS_E, title="TypedADFS") as adfs:
+        (adfs.root / "Hello").write_bytes(
+            b"Hello ADFS",
+            load_address=0x1900,
+            exec_address=0x8023,
         )
     return filepath
 

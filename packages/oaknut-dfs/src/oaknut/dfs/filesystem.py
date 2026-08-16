@@ -32,6 +32,7 @@ from oaknut.filesystem import (
     GeometryGrammar,
     Identification,
     ImageReader,
+    Lens,
     Volume,
     floppy_geometry,
 )
@@ -184,6 +185,12 @@ class _DFSMount(AcornWildcards):
 
     def rename(self, old_path: str, new_path: str) -> None:
         self._navigate(old_path).rename(new_path)
+
+    @property
+    def metadata_lens(self) -> Lens:
+        # DFS load/exec are always genuine addresses — the filing system
+        # has no RISC OS filetype/datestamp encoding.
+        return Lens.ADDRESSES
 
     # -- AcornMetadata --
     def acorn_meta(self, path: str) -> AcornMeta:

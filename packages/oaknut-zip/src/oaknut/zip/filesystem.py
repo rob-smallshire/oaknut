@@ -6,7 +6,11 @@ rather than an Acorn disc, so it has no geometry and is read-only. But it
 so the mount presents one: ``disc ls`` / ``tree`` / ``cat`` / ``get``
 work, and the Acorn metadata recovered from SparkFS extras, ``.inf``
 sidecars, and filename encoding surfaces through the
-:class:`~oaknut.filesystem.AcornMetadata` capability.
+:class:`~oaknut.filesystem.AcornMetadata` and
+:class:`~oaknut.filesystem.Filetyped` capabilities. Because those files
+are RISC OS types, the mount declares the ``type-date``
+:class:`~oaknut.filesystem.Lens`, so an unqualified listing decodes the
+filetype rather than showing the raw filetyped load address.
 
 The mount is a thin adapter over this package's archive API: member
 enumeration and metadata resolution are :func:`oaknut.zip.api.resolved_entries`;
@@ -30,6 +34,7 @@ from oaknut.filesystem import (
     GeometryGrammar,
     Identification,
     ImageReader,
+    Lens,
     ReadOnlyFilesystemError,
 )
 from oaknut.filesystem.wildcards import ACORN_WILDCARDS, AcornWildcards
@@ -128,6 +133,22 @@ class _ZipMount(AcornWildcards):
 
     def set_acorn_meta(self, path: str, meta: AcornMeta) -> None:
         _read_only("change metadata")
+
+    @property
+    def metadata_lens(self) -> Lens:
+        # A ZIP holds RISC OS files whose load/exec carry a filetype, so the
+        # type-date reading is the useful default — the raw filetyped load
+        # address is only an encoding.
+        return Lens.TYPE_DATE
+
+    def filetype(self, path: str) -> int | None:
+        # The filetype rides in the load address (the 0xFFF marker) or a
+        # separate field recovered from the ,xxx suffix / .inf; infer_filetype
+        # reads whichever is present.
+        return self.acorn_meta(path).infer_filetype()
+
+    def set_filetype(self, path: str, filetype: int) -> None:
+        _read_only("set a filetype")
 
     def write_bytes(self, path: str, data: bytes) -> None:
         _read_only("write files")

@@ -27,7 +27,7 @@ with in_tmp_dir():
     show("disc identify riscos.zip")
 
     section("ls")
-    show("disc ls riscos.zip")
+    show("disc ls --detailed riscos.zip")
 
     section("tree")
     show("disc tree riscos.zip")

@@ -34,6 +34,7 @@ from oaknut.filesystem import (
     GeometryGrammar,
     Identification,
     ImageReader,
+    Lens,
     Partition,
     floppy_geometry,
 )
@@ -210,6 +211,12 @@ class _ADFSMount(AcornWildcards):
 
     # -- Filetyped / Datestamped --
     #
+    @property
+    def metadata_lens(self) -> Lens:
+        # The Arthur/RISC OS shapes fold a filetype and datestamp into
+        # load/exec by default; the 8-bit S/M/L shapes keep addresses there.
+        return Lens.TYPE_DATE if self._adfs.uses_typed_metadata else Lens.ADDRESSES
+
     # Both are encoded in the load/exec fields under the 0xFFF marker, so
     # setting one preserves the other; adopting the marker on a plain
     # addressed file uses deterministic defaults (epoch date, Data type).

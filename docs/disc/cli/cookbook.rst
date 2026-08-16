@@ -145,7 +145,10 @@ without unpacking it first.
 The archive here holds RISC OS files whose filetype is carried in the
 ``,xxx`` filename suffix. ``disc`` presents the flat ZIP namespace as a
 directory tree — synthesising the ``Docs`` directory the archive only
-implies — and decodes the suffix into the filetyped load address:
+implies — and, because the files are RISC OS types, decodes the suffix
+into a *Filetype* column rather than showing the raw filetyped load
+address (its ``type-date`` lens; pass ``--metadata-lens=addresses`` to
+see the encoding instead):
 
 .. cli-example:: browse_zip
    :section: ls
