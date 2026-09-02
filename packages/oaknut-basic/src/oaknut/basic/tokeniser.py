@@ -27,6 +27,8 @@ the CLI does it at its I/O boundary.
 
 from __future__ import annotations
 
+from typing import Literal
+
 from oaknut.basic.exceptions import (
     AlreadyNumberedError,
     LineNumberOrderError,
@@ -59,6 +61,13 @@ from oaknut.basic.tokens import (
 _CR = 0x0D
 _END_MARKER = 0xFF
 
+# The crunch dialect. ``"rom"`` is byte-exact to the BBC BASIC ROM's
+# line-input crunch (the default). ``"greedy"`` reproduces a greedier
+# third-party tokeniser found in early-1980s commercial programs, whose
+# keyword recognition differs from the ROM in three localised ways (see
+# :func:`tokenise`); everything else is identical to the ROM crunch.
+Crunch = Literal["rom", "greedy"]
+
 
 def _split_source_lines(source: str) -> list[str]:
     return LINE_SEPARATOR_RE.split(source)
@@ -70,7 +79,13 @@ for _keyword, _token, _flags in KEYWORDS:
     _KEYWORDS_BY_FIRST.setdefault(_keyword[0], []).append((_keyword, _token, _flags))
 
 
-def tokenise(source: str, *, start: int | None = None, step: int | None = None) -> bytes:
+def tokenise(
+    source: str,
+    *,
+    start: int | None = None,
+    step: int | None = None,
+    crunch: Crunch = "rom",
+) -> bytes:
     """Tokenise BBC BASIC II source text into a stored program.
 
     Args:
@@ -82,6 +97,24 @@ def tokenise(source: str, *, start: int | None = None, step: int | None = None) 
             numbers. Defaults to 10 when only *step* is given.
         step: Increment for auto-numbering. Defaults to 10 when only
             *start* is given.
+        crunch: Which tokeniser to emulate. ``"rom"`` (the default) is
+            byte-exact to the BBC BASIC ROM's line-input crunch.
+            ``"greedy"`` reproduces a greedier third-party tokeniser used
+            by a class of early-1980s commercial programs, so their
+            de-tokenised source re-tokenises byte-identically. It differs
+            from the ROM in three ways only:
+
+            1. A keyword interrupts a ``&`` hex constant, ending the hex
+               run where the keyword begins (``&FE60AND`` becomes ``&FE60``
+               then ``AND``, not the literal run ``&FE60A`` then ``NDROW``).
+            2. An ``FN``/``PROC`` name terminates at a following ``THEN``
+               or ``ELSE`` (the ``FLAG_START`` keywords), keeping the first
+               name character but ending the name there. Other embedded
+               keywords (``READ`` in ``PROCREADKP``) are left intact.
+            3. A conditional keyword before a name character is suppressed
+               only when that character does not itself begin a keyword, so
+               ``STOP`` before ``ELSE`` tokenises while ``NEW`` in
+               ``NEWKEY%`` stays literal.
 
     Returns:
         The tokenised program bytes, terminated by ``&0D &FF``.
@@ -118,7 +151,7 @@ def tokenise(source: str, *, start: int | None = None, step: int | None = None) 
             raise LineNumberOrderError(line_index, line_number, previous_number, line)
         previous_number = line_number
 
-        body = _tokenise_body(body_text, line_index=line_index, line_text=line)
+        body = _tokenise_body(body_text, line_index=line_index, line_text=line, crunch=crunch)
         if len(body) > MAX_BODY_LENGTH:
             raise LineTooLongError(line_index, line_number, len(body), line)
 
@@ -174,13 +207,18 @@ def _is_hex_digit(c: str) -> bool:
     return ("0" <= c <= "9") or ("A" <= c <= "F")
 
 
-def _try_keyword(text: str, i: int) -> tuple[int, int, int] | None:
+def _try_keyword(text: str, i: int, *, crunch: Crunch) -> tuple[int, int, int] | None:
     """Match a keyword at ``text[i]``.
 
     Returns ``(token, consumed, flags)`` for the first full or
     ``.``-abbreviated match in ROM order, or ``None`` if the cursor does
     not begin a keyword (including a conditional keyword suppressed by a
     following name character).
+
+    Conditional suppression depends on *crunch*: the ``"rom"`` crunch
+    suppresses whenever a name character follows; ``"greedy"`` suppresses
+    only when that character does not itself begin a keyword, so a
+    conditional keyword is still recognised before ``ELSE`` and the like.
     """
     group = _KEYWORDS_BY_FIRST.get(text[i])
     if group is None:
@@ -209,14 +247,59 @@ def _try_keyword(text: str, i: int) -> tuple[int, int, int] | None:
         if abbreviated:
             return token, p + 1, flags
         # Full match. A conditional keyword is suppressed when a name
-        # character follows, so it stays part of an identifier.
+        # character follows, so it stays part of an identifier — unless
+        # the greedy crunch sees that character begin its own keyword.
         if flags & FLAG_CONDITIONAL and i + klen < n and _is_name_char(text[i + klen]):
-            return None
+            if crunch == "rom" or not _starts_keyword(text, i + klen):
+                return None
         return token, klen, flags
     return None
 
 
-def _tokenise_body(text: str, *, line_index: int, line_text: str) -> bytearray:
+def _starts_keyword(text: str, i: int) -> bool:
+    """True if a keyword (full or ``.``-abbreviated) begins at ``text[i]``.
+
+    A plain prefix test with no conditional suppression, used by the
+    greedy crunch to decide where a hex run or a suppressed conditional
+    keyword should yield to a fresh keyword match.
+    """
+    group = _KEYWORDS_BY_FIRST.get(text[i])
+    if group is None:
+        return False
+    n = len(text)
+    for keyword, _token, _flags in group:
+        for p, keyword_char in enumerate(keyword):
+            if i + p >= n:
+                break
+            source_char = text[i + p]
+            if source_char == keyword_char:
+                continue
+            if source_char == ".":
+                return True
+            break
+        else:
+            return True  # ran the whole keyword: a full match
+    return False
+
+
+def _starts_flag_start_keyword(text: str, i: int) -> bool:
+    """True if a ``FLAG_START`` keyword (``THEN``/``ELSE``/...) begins here.
+
+    A full-match-only test (no abbreviation): the greedy crunch breaks an
+    ``FN``/``PROC`` name at such a keyword.
+    """
+    group = _KEYWORDS_BY_FIRST.get(text[i])
+    if group is None:
+        return False
+    for keyword, _token, flags in group:
+        if flags & FLAG_START and text[i : i + len(keyword)] == keyword:
+            return True
+    return False
+
+
+def _tokenise_body(
+    text: str, *, line_index: int, line_text: str, crunch: Crunch = "rom"
+) -> bytearray:
     """Crunch one statement-text body into tokenised bytes."""
     out = bytearray()
     i = 0
@@ -250,6 +333,10 @@ def _tokenise_body(text: str, *, line_index: int, line_text: str) -> bytearray:
             out.append(ord("&"))
             i += 1
             while i < n and _is_hex_digit(text[i]):
+                # Greedy crunch (rule 1): a keyword beginning inside the run
+                # ends the hex constant, so `&FE60AND` -> `&FE60`, `AND`.
+                if crunch == "greedy" and _is_letter(text[i]) and _starts_keyword(text, i):
+                    break
                 out.append(ord(text[i]))
                 i += 1
             mid = True  # a value, but does not disarm (`&FF 1` encodes the 1)
@@ -304,7 +391,7 @@ def _tokenise_body(text: str, *, line_index: int, line_text: str) -> bytearray:
             continue
 
         if "A" <= c <= "W":  # potential keyword
-            match = _try_keyword(text, i)
+            match = _try_keyword(text, i, crunch=crunch)
             if match is not None:
                 token, consumed, flags = match
                 emit = token
@@ -328,6 +415,15 @@ def _tokenise_body(text: str, *, line_index: int, line_text: str) -> bytearray:
                 if flags & FLAG_FN_PROC:
                     name_start = i
                     while i < n and _is_name_char(text[i]):
+                        # Greedy crunch (rule 2): the name breaks at a
+                        # following THEN/ELSE, but the first char is always
+                        # kept (`PROCWTKEYELSE...` -> name `WTKEY`, `ELSE`).
+                        if (
+                            crunch == "greedy"
+                            and i > name_start
+                            and _starts_flag_start_keyword(text, i)
+                        ):
+                            break
                         out.append(ord(text[i]))
                         i += 1
                     if i > name_start:  # consumed an identifier -> read a name
