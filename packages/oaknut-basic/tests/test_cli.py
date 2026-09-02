@@ -252,6 +252,26 @@ class TestTokeniseCommand:
         assert result.exit_code != 0
         assert "no line number" in result.output
 
+    def test_default_crunch_is_rom(self):
+        runner = CliRunner()
+        result = runner.invoke(cli, ["tokenise"], input=b"10 A=?&FE60ANDROW%\n")
+        assert result.exit_code == 0
+        assert result.stdout_bytes == basic.tokenise("10 A=?&FE60ANDROW%\n", crunch="rom")
+
+    def test_greedy_crunch_selects_the_greedier_tokeniser(self):
+        runner = CliRunner()
+        source = b"10 A=?&FE60ANDROW%\n"
+        result = runner.invoke(cli, ["tokenise", "--crunch", "greedy"], input=source)
+        assert result.exit_code == 0
+        assert result.stdout_bytes == basic.tokenise(source.decode(), crunch="greedy")
+        # The greedy result genuinely differs from the ROM default.
+        assert result.stdout_bytes != basic.tokenise(source.decode(), crunch="rom")
+
+    def test_unknown_crunch_is_rejected(self):
+        runner = CliRunner()
+        result = runner.invoke(cli, ["tokenise", "--crunch", "nope"], input=b"10 END\n")
+        assert result.exit_code != 0
+
 
 class TestTokeniseEncoding:
     def test_default_decodes_host_utf8_pound_sign(self):

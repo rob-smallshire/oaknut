@@ -212,8 +212,23 @@ def _listing_to_bytes(listing: str, encoding: str) -> bytes:
     default=None,
     help="Auto-numbering increment. Defaults to 10 when only --start is given.",
 )
+@click.option(
+    "--crunch",
+    type=click.Choice(["rom", "greedy"]),
+    default="rom",
+    show_default=True,
+    help="Which tokeniser to emulate. \"rom\" is byte-exact to the BBC BASIC "
+    "ROM. Use \"greedy\" to reproduce the greedier third-party tokeniser "
+    "behind some early-1980s commercial programs, so their de-tokenised "
+    "source re-tokenises byte-identically.",
+)
 def tokenise(
-    input_stream, output_stream, encoding: str, start: int | None, step: int | None
+    input_stream,
+    output_stream,
+    encoding: str,
+    start: int | None,
+    step: int | None,
+    crunch: str,
 ) -> None:
     """Tokenise BBC BASIC source text into a stored program.
 
@@ -232,6 +247,11 @@ def tokenise(
     \b
         oaknut-basic tokenise --start 10 unnumbered.bas MENU
 
+    Pass ``--crunch greedy`` to reproduce a greedier third-party tokeniser
+    used by a class of early-1980s commercial programs; the default
+    ``rom`` is byte-exact to the BBC BASIC ROM. Use it only to regenerate
+    such a program byte-for-byte from its de-tokenised source.
+
     INPUT is read in --encoding (``utf-8`` by default, for source authored
     in a modern editor; pass ``acorn`` for the BBC character set, e.g.
     source taken straight off a disc image).
@@ -239,7 +259,7 @@ def tokenise(
     from oaknut.basic import tokenise as tokenise_source
 
     source = _source_to_code_points(input_stream.read(), encoding)
-    output_stream.write(tokenise_source(source, start=start, step=step))
+    output_stream.write(tokenise_source(source, start=start, step=step, crunch=crunch))
 
 
 @cli.command()
