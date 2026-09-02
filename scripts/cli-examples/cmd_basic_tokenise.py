@@ -7,6 +7,8 @@ Sections:
   auto             Auto-number unnumbered source with --start, proven by
                    de-tokenising the result back to a numbered listing.
   roundtrip        tokenise then detokenise reproduces the source.
+  greedy           --crunch greedy reproduces a greedier third-party
+                   tokeniser (differs from the ROM default).
   already-numbered Auto-numbering already-numbered source is an error.
 """
 
@@ -37,6 +39,14 @@ with in_tmp_dir():
         "printf '10 PRINT\\n20 GOTO 10\\n' "
         "| oaknut-basic tokenise "
         "| oaknut-basic detokenise"
+    )
+
+    section("greedy")
+    # A keyword interrupting a hex constant: the ROM default keeps &FE60A
+    # as one hex run, while --crunch greedy ends it at AND. Shown as bytes.
+    show(
+        "printf '10 A=?&FE60ANDROW%%\\n' "
+        "| oaknut-basic tokenise --crunch greedy | od -An -tx1"
     )
 
     section("already-numbered")

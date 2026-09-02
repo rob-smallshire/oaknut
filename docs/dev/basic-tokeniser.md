@@ -247,6 +247,46 @@ Tokenising is turned off and bytes copied verbatim:
 - across an `&` hex-digit run and a decimal/`.` number run.
 
 
+### The greedy crunch (`crunch="greedy"`)
+
+The ROM was not the only tokeniser to produce tokenised BBC BASIC. A
+class of early-1980s commercial programs (the Voltmace Delta 14B drivers
+`KEYPAD` and `JOYSTIK`, © Custom Video Productions, are the worked
+examples) was crunched by a **greedier** third-party tool. Its output
+de-tokenises fine — the byte format is the same — but re-tokenising that
+source under the ROM crunch does not reproduce the original bytes,
+because the greedy tool recognises keywords in three places the ROM does
+not. `tokenise(..., crunch="greedy")` selects it; `"rom"` (the default)
+is unchanged and stays byte-exact to the ROM.
+
+The greedy crunch **is** the ROM crunch plus three localised rules — the
+`_tokenise_body` state machine, keyword table, and every other rule above
+are shared:
+
+1. **A keyword interrupts a hex constant.** The ROM's hex loop copies
+   every `0`–`9` / `A`–`F` unconditionally, so `&FE60ANDROW%` is the run
+   `&FE60A` then the name `NDROW%`. The greedy loop breaks the run where a
+   keyword begins (`_starts_keyword`), giving `&FE60`, `[AND]`, `ROW%`.
+2. **An `FN`/`PROC` name breaks at a `FLAG_START` keyword.** The ROM's
+   name-skip swallows every alphanumeric. The greedy skip keeps the first
+   name character but ends the name at a following `THEN`/`ELSE`
+   (`_starts_flag_start_keyword`) — and *only* those, so a function
+   keyword embedded in a name (`READ` in `PROCREADKP`) is left intact:
+   `PROCWTKEYELSEPROCBKKEY` → `[PROC]WTKEY`, `[ELSE]`, `[PROC]BKKEY`.
+3. **Refined conditional suppression.** Rule B suppresses a conditional
+   keyword whenever a name character follows; the greedy crunch suppresses
+   it only when that character does not *itself* begin a keyword. So
+   `STOPELSE` → `[STOP][ELSE]` (E begins `ELSE`), while `NEWKEY%` stays
+   the literal `NEWKEY%` (K begins nothing).
+
+This is a **distinct** tokeniser, greedier than *both* oaknut's default
+and the ROM — the cross-referenced ROM routines (`.tok_hex_loop`,
+`.tok_kw_found`, `.tok_skip_fnproc_loop`) do none of this. The two
+commercial programs are the differential oracle: their own `detokenise`
+output re-tokenises byte-for-byte under `crunch="greedy"`
+(`tests/data/greedy/`, `tests/test_greedy_crunch.py`).
+
+
 ## The de-tokeniser
 
 `detokenise(data)` mirrors the ROM's `LIST`: walk the program on its

@@ -40,6 +40,14 @@ Tokenising
    .. cli-example:: cmd_basic_tokenise
       :section: auto
 
+   ``--crunch greedy`` reproduces a greedier third-party tokeniser used by
+   some early-1980s commercial programs, so their de-tokenised source
+   re-tokenises byte-identically; the default ``rom`` is byte-exact to the
+   BBC BASIC ROM:
+
+   .. cli-example:: cmd_basic_tokenise
+      :section: greedy
+
 
 De-tokenising
 -------------
