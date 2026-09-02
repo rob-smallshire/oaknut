@@ -67,7 +67,7 @@ from oaknut.basic.scanner import (
     scan,
     scan_program,
 )
-from oaknut.basic.tokeniser import tokenise
+from oaknut.basic.tokeniser import Crunch, tokenise
 from oaknut.basic.tokens import (
     FLAG_CONDITIONAL,
     FLAG_FN_PROC,
@@ -111,6 +111,7 @@ __all__ = [
     "BbcBasicDataFileBase",
     "BbcBasicDataReader",
     "BbcBasicDataWriter",
+    "Crunch",
     "DataFileError",
     "DataFileTypeMismatchError",
     "Detection",

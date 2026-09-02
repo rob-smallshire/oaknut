@@ -11,6 +11,14 @@ Conversion functions
 
 .. autofunction:: oaknut.basic.tokenise
 
+.. py:data:: Crunch
+
+   The type of :func:`tokenise`'s ``crunch`` argument:
+   ``Literal["rom", "greedy"]``. ``"rom"`` is byte-exact to the BBC BASIC
+   ROM (the default); ``"greedy"`` reproduces a greedier third-party
+   tokeniser used by some early-1980s commercial programs. Exported so a
+   caller can annotate its own code that forwards the argument.
+
 .. autofunction:: oaknut.basic.detokenise
 
 .. autofunction:: oaknut.basic.detokenise_body
