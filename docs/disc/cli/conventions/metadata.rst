@@ -169,6 +169,36 @@ These override whatever the chosen ``--meta-format`` would have
 read.
 
 
+Where the in-image name comes from
+----------------------------------
+
+An Acorn filename can hold characters a host filename cannot — a
+``/`` is legal on DFS but not on a host, so an exporter stores
+``test8/3`` on disc as ``test8_3`` on the host and records the true
+name in the sidecar. On import, ``disc`` chooses the in-image leaf
+name highest-priority first from:
+
+1. ``--name`` — an explicit override (``disc put`` only), for a leaf
+   the path syntax cannot express: one containing ``.`` (the Acorn
+   separator), a leading space, or a file under a non-``$`` root.
+2. the destination leaf, when ``disc put`` is given one that names a
+   file (``disc put img:$.PROG file`` names it ``PROG``).
+3. the Acorn name the metadata source carries — a traditional INF's
+   filename field, or a filename-encoded name — recovering the name
+   the host filename transliterated.
+4. the host filename, with any encoded suffix stripped.
+
+A ``disc put`` destination that names a *directory* — the root
+``$``, or an existing directory — puts the file *into* it under the
+derived name, so the sidecar name is used::
+
+    disc put tube.ssd:$ original/test8_3 --meta-format inf-trad
+    # -> in-image file  test8/3   (from the INF, not the host's test8_3)
+
+``disc import`` always targets a directory, so every file it imports
+uses its sidecar name where one is present, else the host filename.
+
+
 Mixing formats in one direction
 -------------------------------
 
