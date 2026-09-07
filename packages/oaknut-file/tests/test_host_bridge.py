@@ -107,6 +107,23 @@ def test_inf_sidecar_name_is_fixed(tmp_path: Path):
     assert not (tmp_path / "PROG.inf").exists()
 
 
+def test_import_reads_uppercase_inf_with_symbolic_access(tmp_path: Path):
+    # An analogue of a real-world export: an uppercase .INF extension and a
+    # symbolic DFS access string (WR) in the attribute field. Neither must
+    # cause the valid load/exec to be lost. (On a case-insensitive host the
+    # canonical .inf lookup already matches; on a case-sensitive host the
+    # case-insensitive fallback finds the .INF.)
+    target = tmp_path / "TEST8_3"
+    target.write_bytes(b"x" * 16)
+    (tmp_path / "TEST8_3.INF").write_text("TEST8_3    00000800 0000B82B 0000353C WR\r\n")
+
+    clean, source, meta = import_with_metadata(target, meta_formats=(MetaFormat.INF_TRAD,))
+    assert source == "inf-trad"
+    assert meta.load_address == 0x800
+    assert meta.exec_address == 0xB82B
+    assert meta.access == int(Access.WR)
+
+
 def test_inf_pieb_on_import_accepts_trad_sidecar(tmp_path: Path):
     """INF_PIEB in the cascade still picks up a traditional .inf, because
     oaknut-file's parser auto-detects the dialect."""

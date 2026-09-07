@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from oaknut.file.access import Access
+from oaknut.file.access import Access, parse_access
 from oaknut.file.formats import SOURCE_INF_PIEB, SOURCE_INF_TRAD
 from oaknut.file.meta import AcornMeta
 
@@ -77,9 +77,18 @@ def _parse_trad_inf(parts: list[str]) -> tuple[str, AcornMeta] | None:
     if len(parts) > 4:
         token = parts[4]
         if token == "L" or token == "Locked":
-            attr = int(Access.R | Access.W | Access.L)
+            # A bare lock marker means a locked-but-normal file (LWR), not
+            # a file with only the lock bit and no read/write.
+            attr = int(Access.LWR)
         else:
-            attr = int(token, 16)
+            # The attribute may be a hex byte (03) or a symbolic access
+            # string (WR, LWR/R). parse_access handles both; an attr we
+            # cannot read must not discard the valid load/exec, so on
+            # failure we keep the addresses and leave the access unset.
+            try:
+                attr = int(parse_access(token))
+            except ValueError:
+                attr = None
 
     meta = AcornMeta(load_address=load_address, exec_address=exec_address, access=attr)
     meta.filetype = meta.infer_filetype()

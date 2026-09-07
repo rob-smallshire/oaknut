@@ -1,6 +1,7 @@
 """Tests for INF sidecar file parsing and formatting."""
 
 import pytest
+from oaknut.file.access import Access
 from oaknut.file.inf import (
     format_pieb_inf_line,
     format_trad_inf_line,
@@ -33,6 +34,27 @@ class TestParseInfLineTraditional:
         source, meta = parse_inf_line("$.HELLO 00001900 00008023 00000100 Locked")
         assert meta.access is not None
         assert meta.access & 0x08  # L bit set
+
+    def test_with_symbolic_access_wr(self):
+        # DFS-style symbolic access in the attribute field. The valid
+        # load/exec must not be discarded because the attr is not hex.
+        source, meta = parse_inf_line("HELLO    00000800 0000B82B 0000353C WR")
+        assert source == "inf-trad"
+        assert meta.load_address == 0x800
+        assert meta.exec_address == 0xB82B
+        assert meta.access == int(Access.WR)
+
+    def test_with_symbolic_access_owner_public(self):
+        source, meta = parse_inf_line("HELLO    00001900 00008023 00000100 LWR/R")
+        assert meta.access == int(Access.L | Access.W | Access.R | Access.PR)
+
+    def test_unparseable_access_keeps_addresses(self):
+        # A garbage attribute must not throw away the load/exec — the
+        # addresses are the payload; only the unparseable attr is dropped.
+        source, meta = parse_inf_line("HELLO    00000800 0000B82B 0000353C ZZ")
+        assert meta.load_address == 0x800
+        assert meta.exec_address == 0xB82B
+        assert meta.access is None
 
     def test_large_addresses(self):
         source, meta = parse_inf_line("FILE     FFFF0E10 FFFF0E10 00000200")

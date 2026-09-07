@@ -74,9 +74,32 @@ def _sidecar_filepath(data_filepath: Path) -> Path:
 
     Convention: append ``.inf`` to the full data filename. So
     ``foo.bin`` → ``foo.bin.inf``. Matches the existing oaknut-dfs
-    convention and oaknut-zip's ``.inf`` resolution.
+    convention and oaknut-zip's ``.inf`` resolution. This is the path
+    oaknut *writes*; reads resolve the extension case-insensitively via
+    :func:`_find_sidecar_filepath`.
     """
     return data_filepath.with_suffix(data_filepath.suffix + ".inf")
+
+
+def _find_sidecar_filepath(data_filepath: Path) -> Path | None:
+    """Locate an existing INF sidecar for *data_filepath*, or ``None``.
+
+    Prefers the canonical lowercase ``.inf`` name; failing that, matches
+    the sidecar filename case-insensitively so a ``.INF`` (or mixed-case)
+    sidecar is still found on a case-sensitive filesystem — the case a
+    case-insensitive host would silently paper over.
+    """
+    canonical = _sidecar_filepath(data_filepath)
+    if canonical.exists():
+        return canonical
+    wanted = canonical.name.casefold()
+    try:
+        for entry in data_filepath.parent.iterdir():
+            if entry.name.casefold() == wanted and entry.is_file():
+                return entry
+    except OSError:
+        return None
+    return None
 
 
 def _attr_of(meta: AcornMeta) -> int | None:
@@ -199,7 +222,9 @@ def export_with_metadata(
 
 
 def _try_inf(source_filepath: Path) -> tuple[Path, str, AcornMeta] | None:
-    sidecar = _sidecar_filepath(source_filepath)
+    sidecar = _find_sidecar_filepath(source_filepath)
+    if sidecar is None:
+        return None
     result = read_inf_file(sidecar)
     if result is None:
         return None
