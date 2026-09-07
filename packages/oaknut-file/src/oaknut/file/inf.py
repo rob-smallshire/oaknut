@@ -90,7 +90,9 @@ def _parse_trad_inf(parts: list[str]) -> tuple[str, AcornMeta] | None:
             except ValueError:
                 attr = None
 
-    meta = AcornMeta(load_address=load_address, exec_address=exec_address, access=attr)
+    meta = AcornMeta(
+        load_address=load_address, exec_address=exec_address, access=attr, name=parts[0]
+    )
     meta.filetype = meta.infer_filetype()
     return SOURCE_INF_TRAD, meta
 

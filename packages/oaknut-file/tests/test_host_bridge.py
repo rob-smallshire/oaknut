@@ -124,6 +124,26 @@ def test_import_reads_uppercase_inf_with_symbolic_access(tmp_path: Path):
     assert meta.access == int(Access.WR)
 
 
+def test_import_surfaces_inf_name(tmp_path: Path):
+    # The INF's Acorn name is surfaced so an importer can prefer it over a
+    # lossy host filename (here the '/' the host had to store as '_').
+    target = tmp_path / "test8_3"
+    target.write_bytes(b"x" * 8)
+    (tmp_path / "test8_3.inf").write_text("test8/3    00000800 0000B82B 0000353C WR\n")
+    _clean, _label, meta = import_with_metadata(target, meta_formats=(MetaFormat.INF_TRAD,))
+    assert meta.name == "test8/3"
+
+
+def test_import_surfaces_filename_encoded_name(tmp_path: Path):
+    target = tmp_path / "DATA"
+    export_with_metadata(b"x", target, SAMPLE_META, meta_format=MetaFormat.FILENAME_RISCOS)
+    written = next(p for p in tmp_path.iterdir() if p.name.startswith("DATA"))
+    _clean, _label, meta = import_with_metadata(
+        written, meta_formats=(MetaFormat.FILENAME_RISCOS,)
+    )
+    assert meta.name == "DATA"
+
+
 def test_inf_pieb_on_import_accepts_trad_sidecar(tmp_path: Path):
     """INF_PIEB in the cascade still picks up a traditional .inf, because
     oaknut-file's parser auto-detects the dialect."""

@@ -60,11 +60,15 @@ class TestParseInfLineTraditional:
         source, meta = parse_inf_line("FILE     FFFF0E10 FFFF0E10 00000200")
         assert meta.load_address == 0xFFFF0E10
 
-    def test_returns_filename(self):
-        source, meta = parse_inf_line("MyFile   00001900 00008023 00000100")
-        # The first field is the filename — returned as part of the tuple
-        # Implementation detail: parse_inf_line returns (source, meta)
-        # where the filename is accessible from the line itself
+    def test_carries_the_inf_filename(self):
+        # The traditional INF's first field is the Acorn name; it must be
+        # recoverable so an importer can prefer it over a lossy host filename.
+        source, meta = parse_inf_line("test8/3    00000800 0000B82B 0000353C WR")
+        assert meta.name == "test8/3"
+
+    def test_pieb_has_no_name(self):
+        source, meta = parse_inf_line("0 ffffdd00 ffffdd00 17")
+        assert meta.name is None
 
 
 class TestParseInfLinePiEconetBridge:

@@ -256,6 +256,9 @@ def _try_filename(source_filepath: Path) -> tuple[Path, str, AcornMeta] | None:
     clean_name, meta = parse_encoded_filename(source_filepath.name)
     if meta is None:
         return None
+    # The decoded (suffix-stripped) name is the Acorn name this source
+    # carries, so surface it the way the INF reader surfaces its filename.
+    meta.name = clean_name
     clean_filepath = source_filepath.with_name(clean_name)
     return clean_filepath, SOURCE_FILENAME, meta
 

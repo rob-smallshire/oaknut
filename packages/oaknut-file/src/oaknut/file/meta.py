@@ -19,12 +19,18 @@ class AcornMeta:
         exec_address: 32-bit execution address, or None if unknown.
         access: Access byte (OSFILE convention), or None if unknown.
         filetype: RISC OS filetype (0x000–0xFFF), or None if unknown.
+        name: The Acorn name a host metadata source carried (a traditional
+            INF's filename field, or a filename-encoded name), or None when
+            the source has no name. Populated by the import readers so an
+            importer can recover a name the host filename may have
+            transliterated; filesystem writes ignore it.
     """
 
     load_address: int | None = None
     exec_address: int | None = None
     access: int | None = None
     filetype: int | None = None
+    name: str | None = None
 
     @property
     def has_metadata(self) -> bool:
