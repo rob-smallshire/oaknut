@@ -1558,6 +1558,48 @@ def _parse_typestamp_options(filetype: str | None, datestamp: str | None):
     return filetype_number, when
 
 
+def _put_target(
+    mount,
+    inner_path: str,
+    *,
+    name_option: str | None,
+    sidecar_name: str | None,
+    host_leaf: str | None,
+) -> str:
+    """Resolve the in-image path ``put`` writes to.
+
+    A destination that names a *directory* (the root ``$``/empty, or an
+    existing directory) derives the leaf from ``--name`` → the sidecar's
+    Acorn name → the host filename. A destination that names a *file* uses
+    that name, unless ``--name`` overrides it. The Acorn path separator is
+    ``.``; a sidecar name is reduced to its leaf so a stored ``$.NAME``
+    still lands as ``NAME`` in the chosen directory.
+    """
+    root = mount.path_root()
+    root_dest = inner_path in ("", "$") or inner_path == root
+    existing_dir = bool(inner_path) and not root_dest and (
+        mount.exists(inner_path) and mount.stat(inner_path).is_dir
+    )
+
+    if root_dest or existing_dir:
+        directory = root if root_dest else inner_path
+        sidecar_leaf = sidecar_name.rsplit(".", 1)[-1] if sidecar_name else None
+        leaf = name_option or sidecar_leaf or host_leaf
+        if not leaf:
+            raise click.UsageError(
+                "a directory destination needs a name — pass --name, or import "
+                "from a host file whose name (or INF sidecar) supplies one"
+            )
+        return mount.join(directory, leaf)
+
+    # The destination names a file. Its leaf is the name, unless --name wins.
+    if name_option:
+        parent = inner_path.rpartition(".")[0]
+        parent = root if parent in ("", "$") else parent
+        return mount.join(parent, name_option)
+    return inner_path
+
+
 def _apply_typestamp(mount, filesystem_name: str, target: str, filetype, when) -> None:
     """Apply parsed filetype / datestamp overrides to a written file.
 
@@ -1616,6 +1658,16 @@ def _apply_typestamp(mount, filesystem_name: str, target: str, filetype, when) -
     default=None,
     help="Metadata format to read from host file.",
 )
+@click.option(
+    "--name",
+    "name_option",
+    default=None,
+    help=(
+        "In-image leaf name to use, overriding the destination leaf, the "
+        "sidecar's Acorn name and the host filename. Needed for names the "
+        "path syntax cannot express (a leaf containing '.', a leading space)."
+    ),
+)
 @_typestamp_options
 def put(
     compound_path: str,
@@ -1623,6 +1675,7 @@ def put(
     load_address: str | None,
     exec_address: str | None,
     meta_format: str | None,
+    name_option: str | None,
     filetype: str | None,
     datestamp: str | None,
 ) -> None:
@@ -1630,6 +1683,18 @@ def put(
 
     Accepts a ``COMPOUND_PATH`` (the in-image destination) and a
     ``HOST_PATH``.
+
+    The in-image leaf name is chosen, highest priority first, from:
+    ``--name``; the destination leaf when it names a file; the Acorn name
+    the metadata source carries (a traditional INF's filename field, or a
+    filename-encoded name — which recovers a name the host filename had to
+    transliterate, such as a ``/`` stored as ``_``); then the host
+    filename. A destination that names a *directory* (the root ``$``, or an
+    existing directory) puts the file *into* it under the derived leaf;
+    ``put img:$ file`` and ``put img:$.LIB file`` are directory
+    destinations, ``put img:$.NAME file`` names the file ``NAME``. Use
+    ``--name`` for a leaf the path syntax cannot express (one containing
+    ``.``, a leading space, or under a non-``$`` root).
 
     When ``HOST_PATH`` is ``-``, or is omitted while stdin is piped,
     the raw bytes are read from stdin with no metadata-sidecar lookup;
@@ -1680,6 +1745,11 @@ def put(
     read_stdin = (host_path is not None and str(host_path) == "-") or (
         host_path is None and not _stdin_is_interactive()
     )
+    # Candidate leaf names for a directory destination, lowest priority last:
+    # the sidecar's Acorn name (a host filename may have transliterated it),
+    # then the host filename (with any filename-encoded suffix stripped).
+    sidecar_name: str | None = None
+    host_leaf: str | None = None
     if read_stdin:
         data = sys.stdin.buffer.read()
         resolved_load = parse_address(load_address) if load_address else _DEFAULT_ADDR
@@ -1700,12 +1770,17 @@ def put(
         data = host_path.read_bytes()
         resolved_load = parse_address(load_address) if load_address else (meta.load_address or 0)
         resolved_exec = parse_address(exec_address) if exec_address else (meta.exec_address or 0)
+        sidecar_name = meta.name
+        host_leaf = host_path.name.split(",", 1)[0]
     else:
         raise click.ClickException("HOST_PATH is required (or use - for stdin)")
 
     with resolve_mount(compound_path, writable=True) as resolved:
         mount = resolved.mount
-        target = resolved.path or mount.path_root()
+        target = _put_target(
+            mount, resolved.path, name_option=name_option,
+            sidecar_name=sidecar_name, host_leaf=host_leaf,
+        )
         # The generic write carries no addresses; set them after, when the
         # filesystem records Acorn metadata (DFS/ADFS/AFS), preserving the
         # access the write established.
