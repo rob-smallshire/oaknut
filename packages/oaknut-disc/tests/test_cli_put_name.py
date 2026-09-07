@@ -113,6 +113,27 @@ class TestAdfsSubdirectoryDest:
         assert "prog/1" in names
 
 
+class TestBulkImportUsesSidecarName:
+    def test_import_prefers_inf_name_over_host_name(self, runner: CliRunner, tmp_path: Path):
+        image = _make_dfs(runner, tmp_path)
+        host_dir = tmp_path / "tree"
+        host_dir.mkdir()
+        _host_file_with_inf(host_dir, "test8_3", "test8/3")
+        r = _run(runner, "import", str(image), str(host_dir))
+        assert r.exit_code == 0, r.output
+        names = _names(runner, image)
+        assert "test8/3" in names and "test8_3" not in names
+
+    def test_import_falls_back_to_host_name(self, runner: CliRunner, tmp_path: Path):
+        image = _make_dfs(runner, tmp_path)
+        host_dir = tmp_path / "tree"
+        host_dir.mkdir()
+        (host_dir / "PLAIN").write_bytes(b"data")
+        r = _run(runner, "import", str(image), str(host_dir))
+        assert r.exit_code == 0, r.output
+        assert "PLAIN" in _names(runner, image)
+
+
 class TestStdinDirDest:
     def test_stdin_into_dir_requires_name(self, runner: CliRunner, tmp_path: Path):
         image = _make_dfs(runner, tmp_path)

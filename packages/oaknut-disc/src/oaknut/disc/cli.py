@@ -3507,11 +3507,15 @@ def _import_host_dir(
         if entry.suffix.lower() == ".inf":
             continue  # Skip INF sidecar files.
         if entry.is_file():
-            # Derive the in-image name from the host filename, stripping
-            # any filename-encoded metadata suffix (,xxx or ,load,exec).
-            leaf = entry.name.split(",", 1)[0]
-            target = mount.join(parent_path, leaf)
             _clean, _label, meta = import_with_metadata(entry, meta_formats=meta_formats)
+            # Prefer the Acorn name the metadata source carries (an INF
+            # filename field, or a filename-encoded name) — it recovers a
+            # name the host filename may have transliterated — falling back
+            # to the host filename with any encoded suffix stripped.
+            host_leaf = entry.name.split(",", 1)[0]
+            sidecar_leaf = meta.name.rsplit(".", 1)[-1] if meta.name else None
+            leaf = sidecar_leaf or host_leaf
+            target = mount.join(parent_path, leaf)
             mount.write_bytes(target, entry.read_bytes())
             if isinstance(mount, AcornMetadata):
                 mount.set_acorn_meta(
