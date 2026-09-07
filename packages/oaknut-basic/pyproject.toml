@@ -20,16 +20,22 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
 ]
-# The tokeniser and de-tokeniser raise categorised errors from the shared
-# oaknut-exception hierarchy, so the CLI boundary can render them without a
-# traceback. That is the package's only runtime dependency.
-dependencies = ["oaknut-exception>=10.0", "oaknut-codecs>=12.7"]
-
-# The `cli` extra pulls the shared CLI toolkit (Click, asyoulikeit, the
-# Acorn text codec and the categorised-error boundary) so this package
-# can offer the standalone `oaknut-basic` command.
-[project.optional-dependencies]
-cli = ["oaknut-cli>=10.0"]
+# This package ships the standalone `oaknut-basic` console script (see
+# [project.scripts] below), and that script's module imports Click,
+# asyoulikeit and oaknut.cli at load time. A console script is installed
+# unconditionally, so those must be unconditional dependencies too —
+# otherwise `pip install oaknut-basic` / `uvx oaknut-basic` yields an
+# executable that dies with ModuleNotFoundError before it runs. The
+# tokeniser and de-tokeniser also raise categorised errors from the
+# shared oaknut-exception hierarchy so the CLI boundary can render them
+# without a traceback.
+dependencies = [
+    "oaknut-exception>=10.0",
+    "oaknut-codecs>=12.7",
+    "click>=8.1.7",
+    "asyoulikeit>=1.5.1",
+    "oaknut-cli>=10.0",
+]
 
 [project.scripts]
 oaknut-basic = "oaknut.basic.cli:cli"

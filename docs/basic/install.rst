@@ -25,23 +25,22 @@ management.
 The command-line tool
 ---------------------
 
-Installing the ``[cli]`` extra puts an ``oaknut-basic`` executable on
-``PATH``:
+Installing the package puts an ``oaknut-basic`` executable on ``PATH``:
 
 .. code-block:: sh
 
-   uv tool install "oaknut-basic[cli]"
+   uv tool install oaknut-basic
    oaknut-basic --help
 
 Or run it once, without installing, via ``uvx``:
 
 .. code-block:: sh
 
-   uvx --from "oaknut-basic[cli]" oaknut-basic number menu.bas
+   uvx oaknut-basic number menu.bas
 
-The bare ``oaknut-basic`` distribution (no extra) is the importable
-library only; the CLI's Click and rendering dependencies arrive with the
-``[cli]`` extra so a program that just imports the codec stays lean.
+The same distribution is also the importable library; installing it with
+``uv add`` or ``pip install`` (below) gives you both the codec and the
+command.
 
 
 The library

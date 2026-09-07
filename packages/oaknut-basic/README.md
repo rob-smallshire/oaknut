@@ -44,12 +44,12 @@ and a data file round-trips through Python values **byte-for-byte**.
 
 ## Installation
 
-Install with the `[cli]` extra for the `oaknut-basic` command, or bare for the
-library only:
+Install as a tool for the `oaknut-basic` command, or add it to a project for
+the library:
 
 ```
-uv tool install "oaknut-basic[cli]"     # the command-line tool
-uv add oaknut-basic                       # the importable library
+uv tool install oaknut-basic     # the command-line tool
+uv add oaknut-basic              # the importable library
 ```
 
 `pip` works identically with the same names. `oaknut-basic` requires Python
