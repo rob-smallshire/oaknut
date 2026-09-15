@@ -2534,6 +2534,180 @@ def _write_copy_item(dst_mount, dst_path: str, item: dict, force: bool) -> None:
 _alias("*COPY", "cp")
 
 
+# ---------------------------------------------------------------------------
+# gather — collate many disc images into one, a directory per source
+# ---------------------------------------------------------------------------
+
+
+def _name_key(grammar, name: str) -> str:
+    """The grammar's equivalence key for *name* (case-fold fallback)."""
+    return grammar.name_key(name) if grammar is not None else name.casefold()
+
+
+def _sanitise_dir_name(raw: str, grammar) -> str:
+    """Reduce *raw* to a directory name the destination grammar can store.
+
+    Keeps alphanumerics plus ``-``/``_`` (a safe subset across DFS, ADFS
+    and AFS), drops everything else, then truncates to the grammar's
+    length limit. An empty result falls back to ``DISC``.
+    """
+    cleaned = "".join(ch for ch in raw if ch.isalnum() or ch in "-_") or "DISC"
+    if grammar is not None:
+        cleaned = cleaned[: grammar.max_length]
+    return cleaned
+
+
+def _dedupe_dir_name(name: str, grammar, used: set[str]) -> str:
+    """Return *name*, or a suffixed variant, not already in *used*.
+
+    Collisions get ``_1``, ``_2`` … with the base truncated so the whole
+    name still fits the grammar's length limit. Registers the result.
+    """
+    if _name_key(grammar, name) not in used:
+        used.add(_name_key(grammar, name))
+        return name
+    limit = grammar.max_length if grammar is not None else None
+    counter = 1
+    while True:
+        suffix = f"_{counter}"
+        base = name if limit is None else name[: max(1, limit - len(suffix))]
+        candidate = f"{base}{suffix}"
+        if _name_key(grammar, candidate) not in used:
+            used.add(_name_key(grammar, candidate))
+            return candidate
+        counter += 1
+
+
+def _gather_dir_name(image: Path, title: str, name_from: str, grammar, used: set[str]) -> str:
+    """Choose the destination directory name for one source.
+
+    ``name_from="title"`` uses the source's on-disc title, falling back to
+    the host filename stem when the title is blank; ``"stem"`` always uses
+    the stem. The chosen name is sanitised and de-duplicated.
+    """
+    raw = title if (name_from == "title" and title.strip()) else image.stem
+    return _dedupe_dir_name(_sanitise_dir_name(raw, grammar), grammar, used)
+
+
+def gather(
+    destination: str,
+    sources,
+    *,
+    into: str | None = None,
+    name_from: str = "stem",
+    force: bool = False,
+) -> list[tuple[str, str]]:
+    """Copy each source disc image's tree into its own directory in *destination*.
+
+    *destination* is a compound path to a writable image whose filesystem
+    holds directories (ADFS or AFS — not flat DFS). Each entry in
+    *sources* is a path to a disc image whose whole tree is copied into a
+    directory of *destination*, named from the source (see *name_from*)
+    and placed under *into* (default: the destination root). The
+    destination is opened once for the whole run.
+
+    Returns a list of ``(source, directory)`` pairs recording where each
+    source landed. Raises :class:`click.ClickException` if the destination
+    is flat.
+    """
+    from oaknut.filesystem import HierarchicalDirectories, Titled, create_filesystem
+
+    results: list[tuple[str, str]] = []
+    with resolve_mount(str(destination), writable=True) as dst_resolved:
+        dst_mount = dst_resolved.mount
+        if not isinstance(dst_mount, HierarchicalDirectories):
+            raise click.ClickException(
+                f"{dst_resolved.filesystem} images are flat and cannot hold a "
+                "directory per source; gather needs a hierarchical destination "
+                "(e.g. an ADFS or AFS image)"
+            )
+        grammar = create_filesystem(dst_resolved.filesystem).name_grammar
+        base = into or dst_resolved.path or dst_mount.path_root()
+        _ensure_dir_chain(dst_mount, base)
+        used: set[str] = set()
+        for source in sources:
+            with resolve_mount(str(source)) as src_resolved:
+                src_mount = src_resolved.mount
+                title = src_mount.title if isinstance(src_mount, Titled) else ""
+                name = _gather_dir_name(src_resolved.image, title, name_from, grammar, used)
+                dst_dir = _join(base, name)
+                src_root = src_resolved.path or src_mount.path_root()
+                items = _collect_copy_items(
+                    src_mount,
+                    src_root,
+                    dst_mount=dst_mount,
+                    dst_bare=dst_dir,
+                    dst_slash=False,
+                    recursive=True,
+                    wildcards=False,
+                )
+                items = _in_global_storage_order(src_mount, items)
+                for item in items:
+                    if item["kind"] == "mkdir":
+                        _ensure_dir_chain(dst_mount, item["dst"])
+                    elif item["kind"] == "file":
+                        _write_copy_item(dst_mount, item["dst"], item, force)
+            results.append((str(source), dst_dir))
+    return results
+
+
+@cli.command(name="gather")
+@click.argument("destination")
+@click.argument("sources", nargs=-1, required=True, type=click.Path(exists=True, path_type=Path))
+@click.option(
+    "--into",
+    metavar="DIR",
+    default=None,
+    help="Destination directory to gather into (default: the image root).",
+)
+@click.option(
+    "--name-from",
+    "name_from",
+    type=click.Choice(["stem", "title"]),
+    default="stem",
+    show_default=True,
+    help="Where each source's directory name comes from: its host filename "
+    "(stem) or its on-disc title (falling back to the filename when blank).",
+)
+@click.option(
+    "-f",
+    "--force",
+    is_flag=True,
+    help="Overwrite files that already exist in the destination.",
+)
+@report_output(reports={"gathered": "Each source and the directory it was copied into."})
+def gather_cmd(destination, sources, into, name_from, force):
+    """Gather many disc images into one, each under its own directory.
+
+    Copies every SOURCE image's files into its own directory of
+    DESTINATION — an existing image whose filesystem holds directories
+    (ADFS or AFS; a flat DFS destination is refused). Directory names come
+    from each source's host filename by default, or its on-disc title with
+    ``--name-from title``; either way names are sanitised to the
+    destination filesystem's rules and de-duplicated.
+
+    Create the destination first with ``disc create`` (which also writes
+    the ``.dsc``/``.cfg`` sidecars a BeebSCSI/Pi1MHz hard disc wants), then
+    gather a shelf of floppies onto it in one command::
+
+        disc create archive.dat --geometry capacity=50MB --sidecar cfg
+        disc gather archive.dat discs/*.ssd
+
+    Sources may mix DFS and ADFS images; metadata is mapped across formats
+    exactly as ``disc cp`` does.
+    """
+    from asyoulikeit.tabular_data import Report, Reports, TableContent
+
+    mapping = gather(destination, list(sources), into=into, name_from=name_from, force=force)
+
+    table = TableContent(title="gathered")
+    table.add_column("source", "Source", header=True)
+    table.add_column("directory", "Directory")
+    for source, directory in mapping:
+        table.add_row(source=Path(source).name, directory=directory)
+    return Reports(gathered=Report(data=table))
+
+
 @cli.command()
 @click.argument("compound_path", metavar="OUTER_PATH:INNER_PATH")
 @click.option(
