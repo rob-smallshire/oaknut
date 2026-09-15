@@ -363,7 +363,10 @@ class _BaseDFS(Filesystem):
             ".dsd": _GEOMETRY_PRESETS["80t-ds"],
         }.get(suffix.lower())
 
-    def create(self, filepath, geometry: Geometry, *, title: str) -> None:
+    def create(
+        self, filepath, geometry: Geometry, *, title: str, sidecars: tuple[str, ...] = ("dsc",)
+    ) -> None:
+        # DFS floppies have no hard-disc geometry sidecar; *sidecars* is ignored.
         disc_format = DiscFormat(
             surface_specs=list(geometry.surface_specs),
             catalogue_name=self._catalogue.CATALOGUE_NAME,

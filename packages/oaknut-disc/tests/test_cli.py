@@ -2913,6 +2913,44 @@ class TestCreate:
         assert result.exit_code == 0
         assert out.stat().st_size == 100 * 4 * 33 * 256
 
+    def test_create_hard_writes_dsc_by_default(self, runner: CliRunner, tmp_path: Path) -> None:
+        out = tmp_path / "def.dat"
+        result = runner.invoke(cli, ["create", str(out), "--geometry", "cylinders=50,heads=4,spt=33"])
+        assert result.exit_code == 0, result.output
+        assert out.with_suffix(".dsc").exists()
+        assert not out.with_suffix(".cfg").exists()
+
+    def test_create_hard_sidecar_cfg_only(self, runner: CliRunner, tmp_path: Path) -> None:
+        from oaknut.filesystem import geometry_from_cfg
+
+        out = tmp_path / "cfg.dat"
+        result = runner.invoke(
+            cli,
+            ["create", str(out), "--geometry", "cylinders=50,heads=4,spt=33", "--sidecar", "cfg"],
+        )
+        assert result.exit_code == 0, result.output
+        assert out.with_suffix(".cfg").exists()
+        assert not out.with_suffix(".dsc").exists()
+        geom = geometry_from_cfg(out.with_suffix(".cfg").read_text())
+        assert (geom.cylinders, geom.heads, geom.sectors_per_track) == (50, 4, 33)
+
+    def test_create_hard_sidecar_both(self, runner: CliRunner, tmp_path: Path) -> None:
+        out = tmp_path / "both.dat"
+        result = runner.invoke(
+            cli,
+            ["create", str(out), "--geometry", "cylinders=50,heads=4,spt=33", "--sidecar", "both"],
+        )
+        assert result.exit_code == 0, result.output
+        assert out.with_suffix(".dsc").exists()
+        assert out.with_suffix(".cfg").exists()
+
+    def test_create_floppy_ignores_sidecar(self, runner: CliRunner, tmp_path: Path) -> None:
+        # A floppy has no hard-disc geometry sidecar; --sidecar is accepted but inert.
+        out = tmp_path / "flop.ssd"
+        result = runner.invoke(cli, ["create", str(out), "--sidecar", "both"])
+        assert result.exit_code == 0, result.output
+        assert not out.with_suffix(".cfg").exists()
+
     def test_create_adfs_hard_requires_geometry(self, runner: CliRunner, tmp_path: Path) -> None:
         # A hard disc is open-ended — no default geometry.
         out = tmp_path / "new.dat"

@@ -1558,6 +1558,13 @@ def _create_floppy_file(
         yield adfs
 
 
+#: The geometry sidecars ``create_file`` can emit next to a hard-disc
+#: ``.dat``: the 22-byte binary ``.dsc``, and the BeebSCSI/Pi1MHz ``.cfg``.
+SIDECAR_DSC = "dsc"
+SIDECAR_CFG = "cfg"
+_DEFAULT_SIDECARS = (SIDECAR_DSC,)
+
+
 @contextmanager
 def _create_hard_disc_file(
     filepath: Path,
@@ -1569,8 +1576,14 @@ def _create_hard_disc_file(
     sectors_per_track: int,
     title: str,
     boot_option: int,
+    sidecars: tuple[str, ...] = _DEFAULT_SIDECARS,
 ) -> Iterator[ADFS]:
-    """Create a hard disc image file with .dsc sidecar."""
+    """Create a hard disc image file with geometry sidecar(s).
+
+    *sidecars* selects which geometry sidecars are written next to the
+    ``.dat``: ``"dsc"`` (the default 22-byte binary descriptor) and/or
+    ``"cfg"`` (the BeebSCSI/Pi1MHz extended-attributes file).
+    """
     if adfs_format is not None:
         raise ValueError(
             "Cannot specify adfs_format for hard disc images; "
@@ -1602,8 +1615,10 @@ def _create_hard_disc_file(
     fmt = _hard_disc_format(geometry, total_bytes)
 
     dat_filepath = filepath.with_suffix(".dat")
-    dsc_filepath = filepath.with_suffix(".dsc")
-    _write_dsc(dsc_filepath, geometry)
+    if SIDECAR_DSC in sidecars:
+        _write_dsc(filepath.with_suffix(".dsc"), geometry)
+    if SIDECAR_CFG in sidecars:
+        write_cfg(filepath.with_suffix(".cfg"), geometry, title=title)
 
     with _create_image_file(dat_filepath, fmt, geometry, title, boot_option) as adfs:
         yield adfs
@@ -2034,6 +2049,7 @@ class ADFS:
         sectors_per_track: int = _SCSI_SECTORS_PER_TRACK,
         title: str = "",
         boot_option: int = 0,
+        sidecars: tuple[str, ...] = _DEFAULT_SIDECARS,
     ) -> Iterator[ADFS]:
         """Create a new ADFS disc image file with an empty root directory.
 
@@ -2068,6 +2084,8 @@ class ADFS:
             sectors_per_track: Sectors per track (default 33, hard disc only).
             title: Disc title (default empty).
             boot_option: Boot option 0–3 (default 0).
+            sidecars: Geometry sidecars to write beside a hard-disc ``.dat``
+                (``"dsc"`` and/or ``"cfg"``; default ``("dsc",)``).
 
         Yields:
             ADFS instance backed by the file.
@@ -2092,6 +2110,7 @@ class ADFS:
                 sectors_per_track=sectors_per_track,
                 title=title,
                 boot_option=boot_option,
+                sidecars=sidecars,
             )
         else:
             if adfs_format is None:

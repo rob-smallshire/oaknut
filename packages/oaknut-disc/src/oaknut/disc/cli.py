@@ -3259,11 +3259,22 @@ _alias("*OPT4", "opt")
     ),
 )
 @click.option("--title", "disc_title", default="", help="Disc title.")
+@click.option(
+    "--sidecar",
+    type=click.Choice(["dsc", "cfg", "both"]),
+    default="dsc",
+    show_default=True,
+    metavar="KIND",
+    help="Geometry sidecar(s) to write beside a hard-disc .dat: dsc (the "
+    "22-byte binary descriptor), cfg (the BeebSCSI/Pi1MHz .cfg), or both. "
+    "Ignored for floppies.",
+)
 def create(
     host_path: Path,
     filesystem_name: str | None,
     geometry_spec: str | None,
     disc_title: str,
+    sidecar: str,
 ) -> None:
     """Create a new empty disc image.
 
@@ -3302,7 +3313,8 @@ def create(
             f"({hint}run `disc describe-filesystem {name}` for all options)"
         )
 
-    filesystem.create(host_path, geometry, title=disc_title)
+    sidecars = ("dsc", "cfg") if sidecar == "both" else (sidecar,)
+    filesystem.create(host_path, geometry, title=disc_title, sidecars=sidecars)
 
 
 @cli.command()

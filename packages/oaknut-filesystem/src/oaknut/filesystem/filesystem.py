@@ -153,10 +153,20 @@ class Filesystem(Extension):
         """
         return None
 
-    def create(self, filepath: Path, geometry: Geometry, *, title: str) -> None:
+    def create(
+        self,
+        filepath: Path,
+        geometry: Geometry,
+        *,
+        title: str,
+        sidecars: tuple[str, ...] = ("dsc",),
+    ) -> None:
         """Create a new empty image of this filesystem at *filepath*.
 
-        Filesystems that are not created standalone (AFS lives inside an
-        ADFS disc; archives) do not override this and decline.
+        *sidecars* names the geometry sidecars to write beside a hard-disc
+        image (``"dsc"`` and/or ``"cfg"``); filesystems without hard-disc
+        geometry ignore it. Filesystems that are not created standalone
+        (AFS lives inside an ADFS disc; archives) do not override this and
+        decline.
         """
         raise FilesystemError(f"{self.name} images cannot be created with `disc create`")

@@ -447,7 +447,9 @@ class ADFS(Filesystem):
             ".adl": _ADFS_PRESETS["l"],
         }.get(suffix.lower())
 
-    def create(self, filepath, geometry: Geometry, *, title: str) -> None:
+    def create(
+        self, filepath, geometry: Geometry, *, title: str, sidecars: tuple[str, ...] = ("dsc",)
+    ) -> None:
         from oaknut.adfs import (
             ADFS_D,
             ADFS_E,
@@ -469,6 +471,7 @@ class ADFS(Filesystem):
                 heads=geometry.heads,
                 sectors_per_track=geometry.sectors_per_track,
                 title=title,
+                sidecars=tuple(sidecars),
             ):
                 pass
             return

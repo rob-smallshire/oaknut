@@ -352,7 +352,10 @@ class AcornROMFS(Filesystem):
         # A paged ROM is conventionally 16 KiB; 8 KiB is offered as a preset.
         return _GEOMETRY_PRESETS["16k"] if suffix.lower() == ".rom" else None
 
-    def create(self, filepath, geometry: Geometry, *, title: str) -> None:
+    def create(
+        self, filepath, geometry: Geometry, *, title: str, sidecars: tuple[str, ...] = ("dsc",)
+    ) -> None:
+        # ROMFS images have no hard-disc geometry sidecar; *sidecars* is ignored.
         # The title block is stored as `*title*`, so it is capped shorter than
         # a full CFS name; fall back to the file's stem, and truncate.
         name = (title or filepath.stem)[:MAX_TITLE_LENGTH] or "ROMFS"
