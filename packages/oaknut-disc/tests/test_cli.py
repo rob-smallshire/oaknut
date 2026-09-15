@@ -664,6 +664,27 @@ class TestTree:
         assert "Sub" in names
         assert "Deep" in names
 
+    def test_tree_depth_1_shows_top_level_with_ellipsis(
+        self, runner: CliRunner, adfs_image_tree: Path
+    ) -> None:
+        # Fixture: $ -> Root1, $ -> Dir -> Inside, $ -> Dir -> Sub -> Deep.
+        result = runner.invoke(cli, ["tree", str(adfs_image_tree), "--depth", "1"])
+        assert result.exit_code == 0, result.output
+        assert "Root1" in result.output  # top-level entries shown
+        assert "Dir" in result.output
+        assert "…" in result.output  # Dir's contents elided
+        assert "Inside" not in result.output  # second level not shown
+        assert "Deep" not in result.output
+
+    def test_tree_depth_2_expands_one_more_level(
+        self, runner: CliRunner, adfs_image_tree: Path
+    ) -> None:
+        result = runner.invoke(cli, ["tree", str(adfs_image_tree), "--depth", "2"])
+        assert result.exit_code == 0, result.output
+        assert "Inside" in result.output  # second level now shown
+        assert "…" in result.output  # Sub's contents (Deep) elided
+        assert "Deep" not in result.output  # third level still hidden
+
     def test_tree_multi_partition_json(
         self,
         runner: CliRunner,

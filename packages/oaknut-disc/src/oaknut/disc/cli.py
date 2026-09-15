@@ -498,9 +498,21 @@ _alias("*CAT", "ls")
 
 @cli.command()
 @click.argument("compound_path", metavar="OUTER_PATH:INNER_PATH")
+@click.option(
+    "--depth",
+    type=click.IntRange(1),
+    default=None,
+    help="Limit the tree to DEPTH levels below the root; a directory whose "
+    "contents fall beyond the limit is shown with an ellipsis.",
+)
 @force_options
 @report_output(reports={"tree": "Hierarchical directory listing."})
-def tree(compound_path: str, force_filesystem: str | None, force_geometry: str | None):
+def tree(
+    compound_path: str,
+    depth: int | None,
+    force_filesystem: str | None,
+    force_geometry: str | None,
+):
     """Display recursive directory tree.
 
     Accepts a ``COMPOUND_PATH`` (the in-image ``INNER_PATH`` is optional and defaults to the root).
@@ -531,15 +543,20 @@ def tree(compound_path: str, force_filesystem: str | None, force_geometry: str |
         entry = mount.stat(target)
         root = tc.add_root(name=text_cell(entry.name or resolved.image.name))
         if entry.is_dir:
-            _attach_children_mount(mount, target, root)
+            _attach_children_mount(mount, target, root, remaining=depth)
     else:
-        _build_tree_whole_image(compound_path, tc, force_filesystem, force_geometry)
+        _build_tree_whole_image(compound_path, tc, force_filesystem, force_geometry, depth=depth)
 
     return Reports(tree=Report(data=tc))
 
 
 def _build_tree_whole_image(
-    compound_path: str, tc, force_filesystem: str | None, force_geometry: str | None
+    compound_path: str,
+    tc,
+    force_filesystem: str | None,
+    force_geometry: str | None,
+    *,
+    depth: int | None = None,
 ) -> None:
     """Populate *tc* with one root per image, labelled partitions beneath.
 
@@ -555,7 +572,9 @@ def _build_tree_whole_image(
         resolved = resolve_mount(
             compound_path, force_filesystem=force_filesystem, force_geometry=force_geometry
         )
-        _attach_children_mount(resolved.mount, resolved.mount.path_root(), image_root)
+        _attach_children_mount(
+            resolved.mount, resolved.mount.path_root(), image_root, remaining=depth
+        )
         return
     selectors = partition_selectors(outer_filepath)
     multi = len(selectors) > 1
@@ -563,18 +582,29 @@ def _build_tree_whole_image(
         resolved = resolve_mount(f"{outer_filepath}:{selector}:")
         mount = resolved.mount
         parent = image_root.add_child(name=selector) if multi else image_root
-        _attach_children_mount(mount, mount.path_root(), parent)
+        _attach_children_mount(mount, mount.path_root(), parent, remaining=depth)
 
 
-def _attach_children_mount(mount, path: str, parent_tree_node) -> None:
+def _attach_children_mount(
+    mount, path: str, parent_tree_node, *, remaining: int | None = None
+) -> None:
     """Attach every entry under *path* in *mount*, recursing into directories.
 
     Siblings are shown in natural, case-insensitive order, matching ``ls``.
+    *remaining* caps how many more levels are expanded (``None`` is
+    unlimited); a directory whose contents fall beyond the limit gets a
+    single ``…`` child so the truncation is visible.
     """
     for child in sorted(mount.iter_entries(path), key=lambda e: _natural_name_key(e.name)):
         node = parent_tree_node.add_child(name=text_cell(child.name))
-        if child.is_dir:
-            _attach_children_mount(mount, child.path, node)
+        if not child.is_dir:
+            continue
+        if remaining is None:
+            _attach_children_mount(mount, child.path, node, remaining=None)
+        elif remaining > 1:
+            _attach_children_mount(mount, child.path, node, remaining=remaining - 1)
+        elif any(True for _ in mount.iter_entries(child.path)):
+            node.add_child(name=text_cell("…"))
 
 
 @cli.command()
