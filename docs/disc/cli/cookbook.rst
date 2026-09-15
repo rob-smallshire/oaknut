@@ -191,28 +191,21 @@ is refused). The same operation is available from Python as
 needs no shell at all — handy on Windows.
 
 BeebSCSI keeps each virtual drive ("LUN") on its SD card as
-``BeebSCSI<n>/scsiN.dat`` — a raw ADFS FileCore image, precisely
-what ``disc create`` writes — beside a geometry sidecar. So the
-whole job is three moves: create the LUN image with its sidecars,
-gather the cover discs onto it, and drop it into the card's
-``BeebSCSI0`` directory.
+``BeebSCSI<n>/scsiN.dat`` — a raw ADFS image, precisely what
+``disc create`` writes — beside a geometry sidecar. So the whole job
+is three moves: create the LUN image with its sidecar, gather the
+cover discs onto it, and drop it into the card's ``BeebSCSI0``
+directory.
 
-**1. Create the LUN image with both sidecars.**
+**1. Create the LUN image with its sidecar.**
 
 .. cli-example:: pi1mhz_beebscsi
    :section: create
 
-Naming the image ``scsi0.dat`` from the outset means its sidecars
-come out as ``scsi0.dsc`` and ``scsi0.cfg`` — the exact filenames
-BeebSCSI reads for LUN 0. ``--sidecar`` is repeatable; passing both
-``dsc`` and ``cfg`` writes each. The 22-byte ``.dsc`` is the legacy
-binary descriptor; the ``.cfg`` is BeebSCSI's richer "extended
-attributes" file, and the one to prefer because it records
-**sectors-per-track**, which the ``.dsc`` cannot. (A ``.dsc``-only
-image is always read back at the Acorn default of 33 SPT — fine for
-a stock SCSI geometry, wrong for anything else.) To synthesise a
-``.cfg`` for a ``.dat`` you already have, use
-``disc adfs generate-cfg``.
+Naming the image ``scsi0.dat`` from the outset means its sidecar
+comes out as ``scsi0.cfg`` — the name BeebSCSI reads for LUN 0.
+``--sidecar cfg`` writes the ``.cfg`` alongside, carrying the disc
+geometry BeebSCSI needs.
 
 **2. Gather the cover discs onto it.**
 
@@ -226,16 +219,14 @@ each landed; names are sanitised to ADFS's ten-character limit and
 de-duplicated. Here the filenames are already tidy; when a disc's
 own title would read better, add ``--name-from title``.
 
-**3. Check the result and the recorded geometry.**
+**3. See the assembled collection.**
 
 .. cli-example:: pi1mhz_beebscsi
-   :section: inspect
+   :section: tree
 
-Each cover disc is now a sibling directory at the root. ``disc
-stat`` resolves the geometry from the sidecar, preferring the
-``.cfg`` over the ``.dsc`` exactly as the firmware does — here 33
-sectors per track, read from the ``.cfg``'s mode pages rather than
-assumed.
+Each cover disc is now a sibling directory at the root. ``--depth 1``
+keeps the view to the top level; the ellipsis under each directory
+marks the files the gather step copied in.
 
 **4. Lay the LUN out for the SD card.**
 
@@ -244,7 +235,7 @@ assumed.
 
 BeebSCSI reads LUN 0 of the first drive from ``BeebSCSI0/scsi0.dat``
 (plus ``scsi0.cfg``), so the whole deployment is copying the image
-and its sidecars into that directory on the card. Further LUNs are
+and its sidecar into that directory on the card. Further LUNs are
 ``scsi1.dat``, ``scsi2.dat``, … in the same directory; a second
 BeebSCSI directory (``BeebSCSI1/``) holds the next four drives.
 Copy the ``BeebSCSI0`` directory to the root of a FAT-formatted SD

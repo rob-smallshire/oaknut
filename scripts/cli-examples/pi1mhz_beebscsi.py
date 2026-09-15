@@ -2,20 +2,20 @@
 
 The end-to-end answer to "consolidate my cover-disc collection onto one
 virtual hard drive for a real BBC Micro": create an ADFS hard-disc image
-with the BeebSCSI geometry sidecars, ``disc gather`` a mix of DFS and
-ADFS cover discs onto it (one directory each), and lay the result out
-under the SD-card directory the firmware reads.
+with the BeebSCSI geometry sidecar, ``disc gather`` a mix of DFS and ADFS
+cover discs onto it (one directory each), and lay the result out under
+the SD-card directory the firmware reads.
 
 Sections:
 
-  create   ``disc create`` with ``--sidecar dsc --sidecar cfg`` — the
-           empty ADFS LUN image plus both geometry sidecars.
+  create   ``disc create`` with ``--sidecar cfg`` — the empty ADFS LUN
+           image plus its geometry sidecar.
   gather   ``disc gather`` — copy every cover disc into its own
            directory in one command.
-  inspect  the gathered directories, and the geometry read back from
-           the ``.cfg`` sidecar.
-  deploy   drop the image and its sidecars into ``BeebSCSI0/`` on the
-           SD card, under the ``scsiN`` LUN names the firmware reads.
+  tree     ``disc tree --depth 1`` — the collection, one directory per
+           source disc.
+  deploy   drop the image and its sidecar into ``BeebSCSI0/`` on the SD
+           card, under the ``scsiN`` LUN name the firmware reads.
 """
 
 from __future__ import annotations
@@ -43,21 +43,16 @@ with in_tmp_dir():
         shutil.copy(source, "discs")
 
     section("create")
-    # The LUN image is named scsiN.dat from the outset, so its sidecars
-    # come out as scsi0.dsc / scsi0.cfg — exactly the names BeebSCSI reads.
-    show(
-        "disc create scsi0.dat --geometry capacity=20MB "
-        "--sidecar dsc --sidecar cfg --title CoverDisc"
-    )
-    show("ls scsi0.*")
+    # The LUN image is named scsi0.dat from the outset, so its sidecar
+    # comes out as scsi0.cfg — exactly the name BeebSCSI reads for LUN 0.
+    show("disc create scsi0.dat --geometry capacity=20MB --sidecar cfg --title CoverDisc")
 
     section("gather")
     show("disc gather scsi0.dat discs/*.ssd discs/*.adl")
 
-    section("inspect")
-    show("disc ls 'scsi0.dat:$'")
-    show("disc stat scsi0.dat")
+    section("tree")
+    show("disc tree scsi0.dat --depth 1")
 
     section("deploy")
-    show("mkdir -p SDCARD/BeebSCSI0\ncp scsi0.dat scsi0.dsc scsi0.cfg SDCARD/BeebSCSI0/")
+    show("mkdir -p SDCARD/BeebSCSI0\ncp scsi0.dat scsi0.cfg SDCARD/BeebSCSI0/")
     show("ls SDCARD/BeebSCSI0")
