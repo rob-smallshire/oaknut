@@ -10,8 +10,9 @@ You almost certainly want one of:
 |---|---|
 | [`oaknut-adfs`](https://pypi.org/project/oaknut-adfs/) | Acorn ADFS disc image support for Archimedes, RISC OS, and BBC Master |
 | [`oaknut-afs`](https://pypi.org/project/oaknut-afs/) | Acorn Level 3 File Server (AFS) filesystem support — the private on-disc format WFSINIT prepares in the tail of an old-map ADFS disc |
-| [`oaknut-basic`](https://pypi.org/project/oaknut-basic/) | BBC BASIC tokeniser and detokeniser for Acorn 8-bit and 32-bit BASIC source files |
+| [`oaknut-basic`](https://pypi.org/project/oaknut-basic/) | BBC BASIC tools: program tokeniser/de-tokeniser and PRINT#/INPUT# data-file reader/writer |
 | [`oaknut-cli`](https://pypi.org/project/oaknut-cli/) | Shared CLI toolkit for the oaknut family: the contributed-command axis and report-rendering helpers a disc command needs, below the filesystem packages |
+| [`oaknut-codecs`](https://pypi.org/project/oaknut-codecs/) | Text codecs for Acorn computer character sets (BBC Micro / Electron) |
 | [`oaknut-dfs`](https://pypi.org/project/oaknut-dfs/) | Python library for handling Acorn DFS disc images (SSD/DSD format) |
 | [`oaknut-disc`](https://pypi.org/project/oaknut-disc/) | CLI for working with Acorn DFS, ADFS, and AFS disc images |
 | [`oaknut-discimage`](https://pypi.org/project/oaknut-discimage/) | Disc image sector abstractions shared by Acorn filesystem packages |

@@ -19,12 +19,13 @@ from oaknut.zip import extract_archive
 |---|---|---|
 | [`oaknut-file`](packages/oaknut-file/) | `oaknut.file` | Acorn file metadata handling: INF sidecars, filename encoding, xattrs, and access flags |
 | [`oaknut-discimage`](packages/oaknut-discimage/) | `oaknut.discimage` | Disc image sector abstractions shared by Acorn filesystem packages |
-| [`oaknut-basic`](packages/oaknut-basic/) | `oaknut.basic` | BBC BASIC tokeniser and detokeniser for Acorn 8-bit and 32-bit BASIC source files |
+| [`oaknut-basic`](packages/oaknut-basic/) | `oaknut.basic` | BBC BASIC tools: program tokeniser/de-tokeniser and PRINT#/INPUT# data-file reader/writer |
 | [`oaknut-dfs`](packages/oaknut-dfs/) | `oaknut.dfs` | Python library for handling Acorn DFS disc images (SSD/DSD format) |
 | [`oaknut-adfs`](packages/oaknut-adfs/) | `oaknut.adfs` | Acorn ADFS disc image support for Archimedes, RISC OS, and BBC Master |
 | [`oaknut-zip`](packages/oaknut-zip/) | `oaknut.zip` | Work with ZIP files containing Acorn computer metadata |
 | [`oaknut-afs`](packages/oaknut-afs/) | `oaknut.afs` | Acorn Level 3 File Server (AFS) filesystem support — the private on-disc format WFSINIT prepares in the tail of an old-map ADFS disc |
 | [`oaknut-cli`](packages/oaknut-cli/) | `oaknut.cli` | Shared CLI toolkit for the oaknut family: the contributed-command axis and report-rendering helpers a disc command needs, below the filesystem packages |
+| [`oaknut-codecs`](packages/oaknut-codecs/) | `oaknut.codecs` | Text codecs for Acorn computer character sets (BBC Micro / Electron) |
 | [`oaknut-disc`](packages/oaknut-disc/) | `oaknut.disc` | CLI for working with Acorn DFS, ADFS, and AFS disc images |
 | [`oaknut-exception`](packages/oaknut-exception/) | `oaknut.exception` | Categorised exceptions and CLI error-reporting boundary for the oaknut package family |
 | [`oaknut-extension`](packages/oaknut-extension/) | `oaknut.extension` | Entry-point plug-in framework shared by every extensible axis of the oaknut package family |
@@ -155,10 +156,10 @@ instead.
 oaknut stands on decades of Acorn documentation and preservation work. In particular:
 
 - The **New Advanced User Guide** (Acorn Computers) — the primary published reference for the ROM Filing System's on-ROM format and its `&0D`/`&0E` service handler. Note that the service-handler example it prints loops `*CAT` indefinitely when the ROM is fitted in sideways socket 0; oaknut's generated handler corrects this with the `CMP #&10` guard that the genuine Acornsoft ROMs carry (see [`packages/oaknut-romfs/docs/romfs-format-spec.md`](packages/oaknut-romfs/docs/romfs-format-spec.md)).
-- **Dominic Beesley** — for the friendly cross-project collaboration on the ROM filing system, including confirming and fixing the socket-0 `*CAT` defect.
+- **Dominic Beesley**'s [`mkromfs`](https://github.com/dominicbeesley/mkromfs) — the reference ROMFS writer that oaknut's service handler is based on.
 - **J.G. Harston**'s [MakeRFS and the mdfs.net documentation](https://mdfs.net/) — a second ROMFS writer and an extensive, careful reference for Acorn filing-system internals.
 - **tobylobster**'s [annotated disassembly of Acorn MOS 1.20](https://tobylobster.github.io/mos/) — the authoritative reader-side reference for the ROM filing system's service-call behaviour.
-- **`dasmos`** — the tracing disassembler used to compare service handlers byte for byte.
+- **`dasmos`** — the tracing disassembler used to compare the genuine Acornsoft and mkromfs service handlers byte for byte.
 
 ## Licence
 
