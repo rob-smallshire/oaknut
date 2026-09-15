@@ -372,13 +372,13 @@ class WatfordDDFSCatalogue(Catalogue):
    ```python
    # Extract title, clear high bits
    title_raw = bytes(sector0[0:8] + sector1[0:4])
-   title = bytes(b & 0x7F for b in title_raw).decode('acorn')
+   title = bytes(b & 0x7F for b in title_raw).decode("acorn")
    ```
 
    When writing:
    ```python
    # Encode title, then set high bits for length extension
-   title_bytes = title.encode('acorn')
+   title_bytes = title.encode("acorn")
    if file_length_bit_18:
        title_bytes[0] |= 0x80  # Store length bit 18
    sector0[0:8] = title_bytes[0:8]
@@ -613,9 +613,11 @@ class SolidiskDDFSCatalogue(Catalogue):
    ```python
    def _decode_length(self, length_low, extra_byte):
        """Decode 19-bit file length using Solidisk scheme."""
-       return (length_low |
-               ((extra_byte & 0x30) << 12) |  # Standard b17-b16
-               ((extra_byte & 0x08) << 15))    # Solidisk b18 (bit 3)
+       return (
+           length_low
+           | ((extra_byte & 0x30) << 12)  # Standard b17-b16
+           | ((extra_byte & 0x08) << 15)
+       )  # Solidisk b18 (bit 3)
    ```
 
 3. **Load Address Reconstruction:**
@@ -646,16 +648,14 @@ class SolidiskDDFSCatalogue(Catalogue):
            active_files = [f for f in files if ord(f.directory) != 0xFF]
 
            # Filter out invisible placeholders (0x3F, 0xBF in directory)
-           visible_files = [f for f in active_files
-                           if ord(f.directory) not in (0x3F, 0xBF)]
+           visible_files = [f for f in active_files if ord(f.directory) not in (0x3F, 0xBF)]
 
            all_files.extend(visible_files)
 
            # Check for next catalog in chain
            sector0 = self._surface.sector_range(catalog_sector, 1)
            if (sector0[0x02] & 0xC0) == 0xC0:
-               catalog_sector = ((sector0[0x02] & 0x0F) |
-                                ((sector0[0x03] & 0x0F) << 4))
+               catalog_sector = (sector0[0x02] & 0x0F) | ((sector0[0x03] & 0x0F) << 4)
            else:
                catalog_sector = None
 
@@ -665,8 +665,9 @@ class SolidiskDDFSCatalogue(Catalogue):
 5. **Adding Files to Chained Catalogs:**
 
    ```python
-   def add_file_entry(self, filename, directory, load_address, exec_address,
-                      length, start_sector, locked=False):
+   def add_file_entry(
+       self, filename, directory, load_address, exec_address, length, start_sector, locked=False
+   ):
        """Add file, creating new catalog if current full."""
        # Find catalog with space (traverse chain)
        catalog_sector = self._find_catalog_with_space()
@@ -763,7 +764,7 @@ May want to add `max_files` property handling:
 def max_files(self) -> int | None:
     """Maximum files (None if unlimited)."""
     max_files = self._catalogued_surface.catalogue.max_files
-    return max_files if max_files != float('inf') else None
+    return max_files if max_files != float("inf") else None
 ```
 
 ### Complexity Assessment
@@ -942,6 +943,7 @@ class OpusDDOSVolumeCatalogue(Catalogue):
 
     Represents one volume (A-H) on an Opus DDOS disc.
     """
+
     CATALOGUE_NAME = "opus-ddos-volume"
     MAX_FILES = 31
 
@@ -959,7 +961,7 @@ class OpusDDOSVolumeCatalogue(Catalogue):
         self._volume_start_track = volume_start_track
 
         # Calculate catalog sectors for this volume
-        volume_index = ord(volume_letter) - ord('A')  # 0-7
+        volume_index = ord(volume_letter) - ord("A")  # 0-7
         self.CATALOG_START_SECTOR = volume_index * 2  # 0,2,4,...,14
         self.CATALOG_NUM_SECTORS = 2
 
@@ -996,6 +998,7 @@ class OpusDDOSDiscCatalogue(Catalogue):
 
     Manages all 8 volumes (A-H) on a disc surface.
     """
+
     CATALOGUE_NAME = "opus-ddos"
     MAX_FILES = 248  # 31 files × 8 volumes
     CATALOG_START_SECTOR = 0
@@ -1016,11 +1019,9 @@ class OpusDDOSDiscCatalogue(Catalogue):
         self.density = sector16[4]
 
         # Read volume start tracks
-        for i, letter in enumerate('ABCDEFGH'):
+        for i, letter in enumerate("ABCDEFGH"):
             start_track = sector16[0x08 + i]
-            self._volumes[letter] = OpusDDOSVolumeCatalogue(
-                self._surface, letter, start_track
-            )
+            self._volumes[letter] = OpusDDOSVolumeCatalogue(self._surface, letter, start_track)
 
     @classmethod
     def matches(cls, surface: Surface) -> bool:
@@ -1067,7 +1068,7 @@ class OpusDDOSDiscCatalogue(Catalogue):
 
         # List all files from all volumes
         all_files = []
-        for letter in 'ABCDEFGH':
+        for letter in "ABCDEFGH":
             vol_files = self._volumes[letter].list_files()
             # Prefix filenames with volume letter
             for entry in vol_files:
@@ -1078,8 +1079,8 @@ class OpusDDOSDiscCatalogue(Catalogue):
     # Delegate operations to specific volume
     def find_file(self, filename: str) -> Optional[FileEntry]:
         """Find file (must specify volume prefix like 'A:$.FILE')."""
-        if ':' in filename:
-            volume, path = filename.split(':', 1)
+        if ":" in filename:
+            volume, path = filename.split(":", 1)
             return self.get_volume(volume).find_file(path)
         else:
             # Search all volumes
@@ -1103,10 +1104,10 @@ File operations require volume context:
 
 ```python
 # Read file from specific volume
-data = opus_catalog.get_volume('A').read_file('$.HELLO')
+data = opus_catalog.get_volume("A").read_file("$.HELLO")
 
 # Or use volume prefix
-data = opus_catalog.read_file('A:$.HELLO')
+data = opus_catalog.read_file("A:$.HELLO")
 ```
 
 #### Format Layer
@@ -1150,16 +1151,16 @@ class DFS:
 
 ```python
 # User includes volume in filename
-data = dfs.load('A:$.HELLO')  # Load from volume A
-data = dfs.load('B:$.DATA')   # Load from volume B
+data = dfs.load("A:$.HELLO")  # Load from volume A
+data = dfs.load("B:$.DATA")  # Load from volume B
 ```
 
 **Option 3: Separate DFS Instance Per Volume**
 
 ```python
 # Create DFS for specific volume
-dfs_a = DFS.from_buffer(buffer, OPUS_DDOS_80T_SINGLE_SIDED, volume='A')
-dfs_b = DFS.from_buffer(buffer, OPUS_DDOS_80T_SINGLE_SIDED, volume='B')
+dfs_a = DFS.from_buffer(buffer, OPUS_DDOS_80T_SINGLE_SIDED, volume="A")
+dfs_b = DFS.from_buffer(buffer, OPUS_DDOS_80T_SINGLE_SIDED, volume="B")
 ```
 
 **Recommendation: Option 2 (Volume Prefix)**

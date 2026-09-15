@@ -1259,9 +1259,7 @@ def _directory_tree_traverses(buffer: memoryview, fmt: ADFSFormat) -> bool:
     return not adfs._directory_tree_errors()
 
 
-def _disambiguate_640k_layout(
-    buffer: memoryview, *, prefer_sequential: bool = False
-) -> ADFSFormat:
+def _disambiguate_640k_layout(buffer: memoryview, *, prefer_sequential: bool = False) -> ADFSFormat:
     """Choose the interleaved or linear 640K layout by content.
 
     Both candidates are tried; the one whose directory tree traverses
@@ -1271,9 +1269,7 @@ def _disambiguate_640k_layout(
     from the image's extension as a tiebreak — decides. The interleaved
     ``.adl`` layout remains the default.
     """
-    ordered = (
-        (ADFS_L_SEQUENTIAL, ADFS_L) if prefer_sequential else (ADFS_L, ADFS_L_SEQUENTIAL)
-    )
+    ordered = (ADFS_L_SEQUENTIAL, ADFS_L) if prefer_sequential else (ADFS_L, ADFS_L_SEQUENTIAL)
     for fmt in ordered:
         if _directory_tree_traverses(buffer, fmt):
             return fmt
@@ -1390,9 +1386,7 @@ def _initialise_d_blank(
     dir_format = NewDirectoryFormat()
     root_sector = _D_MAP_ROOT_SECTOR  # 4
     used_sectors = root_sector + dir_format.size_in_sectors  # 12
-    _initialise_old_free_space_map(
-        unified, total_sectors, boot_option, used_sectors=used_sectors
-    )
+    _initialise_old_free_space_map(unified, total_sectors, boot_option, used_sectors=used_sectors)
 
     root_dir = _ADFSDirectory(
         name="$",
@@ -1495,7 +1489,10 @@ def _create_image_file(
 
         if fmt.new_map:
             disc_record = _initialise_new_map_blank(
-                unified, fmt.total_sectors, title, boot_option,
+                unified,
+                fmt.total_sectors,
+                title,
+                boot_option,
                 big_directories=fmt.big_directories,
             )
             new_map = _new_map_over(unified, disc_record)
@@ -1749,9 +1746,7 @@ class ADFS:
 
     @staticmethod
     @contextmanager
-    def from_file(
-        filepath: Union[str, PathLike], *, read_only: bool = False
-    ) -> Iterator[ADFS]:
+    def from_file(filepath: Union[str, PathLike], *, read_only: bool = False) -> Iterator[ADFS]:
         """Open an ADFS disc image file as a context manager.
 
         For floppy images (``.adf``, ``.adl``), auto-detects the format
@@ -2339,9 +2334,7 @@ class ADFS:
                 address = entry.indirect_disc_address
                 if address in seen:
                     errors.append(
-                        ADFSValidationError(
-                            f"{child_path}: directory cycle to sector {address}"
-                        )
+                        ADFSValidationError(f"{child_path}: directory cycle to sector {address}")
                     )
                     continue
                 seen.add(address)
@@ -2792,9 +2785,7 @@ class ADFS:
         self._map.write_object_data(address, data)
         return address
 
-    def _objects_sharing(
-        self, parent_dir: _ADFSDirectory, parent_disc_address: int, frag_id: int
-    ):
+    def _objects_sharing(self, parent_dir: _ADFSDirectory, parent_disc_address: int, frag_id: int):
         """Yield ``(indirect, length)`` for every object occupying *frag_id*."""
         if (parent_disc_address >> 8) == frag_id:
             yield parent_disc_address, self._dir_format.size_in_bytes
@@ -3411,9 +3402,7 @@ def _bytes_to_sectors(num_bytes: int) -> int:
     return (num_bytes + _ADFS_BYTES_PER_SECTOR - 1) // _ADFS_BYTES_PER_SECTOR
 
 
-def _new_map_over(
-    unified: UnifiedDisc, disc_record: DiscRecord, base_offset: int = 0
-) -> NewMap:
+def _new_map_over(unified: UnifiedDisc, disc_record: DiscRecord, base_offset: int = 0) -> NewMap:
     """Build a :class:`NewMap` over *unified* using *disc_record*.
 
     Shared by New Map detection and blank-image creation. The map view spans

@@ -74,7 +74,9 @@ class TestConsolidateTelemetryOntoWatford:
 
     def test_disc_is_watford_and_valid(self, runner: CliRunner, telemetry_dir: Path) -> None:
         telem = telemetry_dir / "telem.dsd"
-        assert runner.invoke(cli, ["create", str(telem), "--filesystem", "watford-dfs"]).exit_code == 0
+        assert (
+            runner.invoke(cli, ["create", str(telem), "--filesystem", "watford-dfs"]).exit_code == 0
+        )
         src = telemetry_dir / "telem-8401.ssd"
         assert runner.invoke(cli, ["cp", f"{src}:$.*", f"{telem}::0.$."]).exit_code == 0
 

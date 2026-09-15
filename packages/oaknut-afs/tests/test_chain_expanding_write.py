@@ -113,9 +113,7 @@ class TestChainOnDiscByteShape:
         adfs, afs = self._fragment_and_write_chained_file()
         _, entry = afs._resolve(afs.root / "Huge")
         chain = afs._read_map_chain(entry.sin)
-        assert len(chain.blocks) >= 2, (
-            f"expected a chained file; got {len(chain.blocks)} block(s)"
-        )
+        assert len(chain.blocks) >= 2, f"expected a chained file; got {len(chain.blocks)} block(s)"
 
         head_raw = afs._read_sector(int(chain.blocks[0].sin))
         assert head_raw[0:6] == MAGIC, (

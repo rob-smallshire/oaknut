@@ -180,8 +180,8 @@ def test_real_programs_round_trip_byte_exactly():
         f"only {checked} programs found; expected >= {_MIN_PROGRAMS_EXPECTED} "
         f"(are the disc images present and opening?)"
     )
-    assert not regressions, (
-        "programs that used to round-trip now do not:\n  " + "\n  ".join(sorted(regressions))
+    assert not regressions, "programs that used to round-trip now do not:\n  " + "\n  ".join(
+        sorted(regressions)
     )
     # Not a failure, but flag known limitations that now pass so the list
     # can be trimmed (e.g. after a crunch fix lands).

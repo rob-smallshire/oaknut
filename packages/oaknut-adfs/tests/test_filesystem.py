@@ -155,7 +155,16 @@ class TestGeometryGrammar:
     def test_floppy_presets_and_winchester_param(self):
         grammar = create_filesystem("adfs").geometry_grammar()
         assert set(grammar.preset_names()) == {
-            "s", "m", "l", "d", "e", "e+", "f", "f+", "g", "g+",
+            "s",
+            "m",
+            "l",
+            "d",
+            "e",
+            "e+",
+            "f",
+            "f+",
+            "g",
+            "g+",
         }
         assert grammar.parse("l").image_size == 655360
         # ADFS also accepts open-ended hard-disc geometry.

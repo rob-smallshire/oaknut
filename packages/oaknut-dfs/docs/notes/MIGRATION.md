@@ -87,12 +87,14 @@ modified = bytes(disk._buffer)
 **Old:**
 ```python
 from oaknut_dfs import ACORN_SSD, ACORN_DSD
+
 disk = DFSImage.create("new.ssd", format=ACORN_SSD)
 ```
 
 **New:**
 ```python
 from oaknut_dfs import FORMAT_SSD, FORMAT_DSD_INTERLEAVED
+
 disk = DFSImage.create("new.ssd", format=FORMAT_SSD)
 # But usually you can use format="auto" (the default)
 ```
@@ -101,18 +103,24 @@ disk = DFSImage.create("new.ssd", format=FORMAT_SSD)
 
 **Old:**
 ```python
-disk = DFSImage.create_from_files("game.ssd", {
-    "$.BOOT": b"*RUN $.MAIN",
-    "$.MAIN": Path("main.bin"),
-})
+disk = DFSImage.create_from_files(
+    "game.ssd",
+    {
+        "$.BOOT": b"*RUN $.MAIN",
+        "$.MAIN": Path("main.bin"),
+    },
+)
 ```
 
 **New:**
 ```python
-with DFSImage.create_from_files("game.ssd", {
-    "$.BOOT": b"*RUN $.MAIN",
-    "$.MAIN": Path("main.bin"),
-}) as disk:
+with DFSImage.create_from_files(
+    "game.ssd",
+    {
+        "$.BOOT": b"*RUN $.MAIN",
+        "$.MAIN": Path("main.bin"),
+    },
+) as disk:
     print(f"Created with {len(disk.files)} files")
 ```
 
@@ -146,7 +154,7 @@ modified = bytes(disk._buffer)
 with open("container.mmb", "r+b") as f:
     mm = mmap.mmap(f.fileno(), 0)
     # Extract disk 5
-    disk_view = memoryview(mm)[disk_num * 204800:(disk_num + 1) * 204800]
+    disk_view = memoryview(mm)[disk_num * 204800 : (disk_num + 1) * 204800]
     disk = DFSImage(disk_view, format="ssd")
     # Writes go directly to MMB file!
 ```

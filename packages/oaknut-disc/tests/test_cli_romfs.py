@@ -159,9 +159,7 @@ class TestRomfsCreate:
         cart = tmp_path / "SNAPPER.rom"
         assert runner.invoke(cli, ["create", str(cart), "--title", "Snapper"]).exit_code == 0
         copyright_ = "(C) Acornsoft 1982"
-        assert (
-            runner.invoke(cli, ["romfs", "set-copyright", str(cart), copyright_]).exit_code == 0
-        )
+        assert runner.invoke(cli, ["romfs", "set-copyright", str(cart), copyright_]).exit_code == 0
         # A bare image path (no trailing colon) resolves to the ROM's root.
         copied = runner.invoke(cli, ["cp", f"{ssd}:$.*", str(cart)])
         assert copied.exit_code == 0, copied.output

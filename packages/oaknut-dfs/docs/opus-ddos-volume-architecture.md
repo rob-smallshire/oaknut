@@ -106,14 +106,25 @@ Present each Opus volume as a separate `Surface`:
 
 ```python
 # 8 volumes per side = 16 surfaces for double-sided disk
-disc = DiscImage(buffer, [
-    spec_0A, spec_0B, spec_0C, ..., spec_0H,  # Drive 0 volumes
-    spec_2A, spec_2B, spec_2C, ..., spec_2H,  # Drive 2 volumes
-])
+disc = DiscImage(
+    buffer,
+    [
+        spec_0A,
+        spec_0B,
+        spec_0C,
+        ...,
+        spec_0H,  # Drive 0 volumes
+        spec_2A,
+        spec_2B,
+        spec_2C,
+        ...,
+        spec_2H,  # Drive 2 volumes
+    ],
+)
 
-surface_0A = disc.surface(0)   # Volume 0A
-surface_0B = disc.surface(1)   # Volume 0B
-surface_2A = disc.surface(8)   # Volume 2A
+surface_0A = disc.surface(0)  # Volume 0A
+surface_0B = disc.surface(1)  # Volume 0B
+surface_2A = disc.surface(8)  # Volume 2A
 ```
 
 **Problems:**
@@ -145,12 +156,12 @@ disc = DiscImage(buffer, [spec0, spec1])
 
 # Surface 0 has OpusDDOSCatalogue managing volumes A-H
 catalog0 = OpusDDOSCatalogue(disc.surface(0))
-vol_0A = catalog0.get_volume('A')  # Volume A on surface 0
-vol_0B = catalog0.get_volume('B')  # Volume B on surface 0
+vol_0A = catalog0.get_volume("A")  # Volume A on surface 0
+vol_0B = catalog0.get_volume("B")  # Volume B on surface 0
 
 # Surface 1 has separate OpusDDOSCatalogue with volumes A-H
 catalog1 = OpusDDOSCatalogue(disc.surface(1))
-vol_2A = catalog1.get_volume('A')  # Volume A on surface 1
+vol_2A = catalog1.get_volume("A")  # Volume A on surface 1
 ```
 
 **Advantages:**
@@ -190,7 +201,7 @@ class Catalogue(ABC):
         """Whether this catalogue type supports volumes."""
         return False
 
-    def get_volume(self, letter: str) -> 'Catalogue':
+    def get_volume(self, letter: str) -> "Catalogue":
         """
         Get sub-catalogue for specific volume.
 
@@ -217,7 +228,7 @@ class OpusDDOSCatalogue(Catalogue):
     def __init__(self, surface: Surface):
         super().__init__(surface)
         self._volumes = {}
-        self._current_volume = 'A'
+        self._current_volume = "A"
         self._load_allocation_table()
 
     def _load_allocation_table(self):
@@ -225,13 +236,13 @@ class OpusDDOSCatalogue(Catalogue):
         sector16 = self._surface.sector_range(16, 1)
 
         # Parse allocation table header
-        self.format_marker = sector16[0]        # Should be 0x20
+        self.format_marker = sector16[0]  # Should be 0x20
         self.disk_size = sector16[1] | (sector16[2] << 8)
-        self.sectors_per_track = sector16[3]   # Should be 18 (0x12)
-        self.format_indicator = sector16[4]    # Typically 0x50 or 0xFF
+        self.sectors_per_track = sector16[3]  # Should be 18 (0x12)
+        self.format_indicator = sector16[4]  # Typically 0x50 or 0xFF
 
         # Parse volume start tracks (16-bit little-endian words)
-        for i, letter in enumerate('ABCDEFGH'):
+        for i, letter in enumerate("ABCDEFGH"):
             offset = 0x08 + (i * 2)  # Each volume uses 2 bytes
             start_track = sector16[offset] | (sector16[offset + 1] << 8)
             catalog_sector = i * 2  # Volumes A-H in sectors 0-15
@@ -242,18 +253,18 @@ class OpusDDOSCatalogue(Catalogue):
                     surface=self._surface,
                     letter=letter,
                     catalog_sector=catalog_sector,
-                    start_track=start_track
+                    start_track=start_track,
                 )
 
-    def get_volume(self, letter: str) -> 'OpusDDOSVolume':
+    def get_volume(self, letter: str) -> "OpusDDOSVolume":
         """Get specific volume (A-H)."""
-        if letter not in 'ABCDEFGH':
+        if letter not in "ABCDEFGH":
             raise ValueError(f"Invalid volume: {letter}. Must be A-H")
         return self._volumes[letter]
 
     def set_current_volume(self, letter: str) -> None:
         """Set default volume for operations."""
-        if letter not in 'ABCDEFGH':
+        if letter not in "ABCDEFGH":
             raise ValueError(f"Invalid volume: {letter}")
         self._current_volume = letter
 
@@ -263,8 +274,8 @@ class OpusDDOSCatalogue(Catalogue):
 
     def find_file(self, filename: str) -> Optional[FileEntry]:
         # Support volume prefix: "B:$.FILE"
-        if ':' in filename:
-            volume, path = filename.split(':', 1)
+        if ":" in filename:
+            volume, path = filename.split(":", 1)
             return self.get_volume(volume).find_file(path)
         return self._volumes[self._current_volume].find_file(filename)
 
@@ -279,8 +290,7 @@ class OpusDDOSCatalogue(Catalogue):
 class OpusDDOSVolume(Catalogue):
     """Single volume within an Opus DDOS disc."""
 
-    def __init__(self, surface: Surface, letter: str,
-                 catalog_sector: int, start_track: int):
+    def __init__(self, surface: Surface, letter: str, catalog_sector: int, start_track: int):
         super().__init__(surface)
         self._letter = letter
         self._catalog_sector = catalog_sector
@@ -322,7 +332,7 @@ class OpusDDOSVolume(Catalogue):
 class DFS:
     """High-level DFS filesystem operations."""
 
-    def __init__(self, catalogued_surface: CataloguedSurface, volume: str = 'A'):
+    def __init__(self, catalogued_surface: CataloguedSurface, volume: str = "A"):
         """
         Initialize DFS instance.
 
@@ -334,12 +344,13 @@ class DFS:
         self._current_volume = volume
 
         # Set volume if catalog supports it
-        if hasattr(catalogued_surface.catalogue, 'set_current_volume'):
+        if hasattr(catalogued_surface.catalogue, "set_current_volume"):
             catalogued_surface.catalogue.set_current_volume(volume)
 
     @classmethod
-    def from_buffer(cls, buffer: memoryview, disc_format: DiscFormat,
-                    side: int = 0, volume: str = 'A') -> "DFS":
+    def from_buffer(
+        cls, buffer: memoryview, disc_format: DiscFormat, side: int = 0, volume: str = "A"
+    ) -> "DFS":
         """
         Create DFS from buffer.
 
@@ -373,14 +384,14 @@ class DFS:
         Args:
             letter: Volume letter (A-H)
         """
-        if hasattr(self._catalogued_surface.catalogue, 'set_current_volume'):
+        if hasattr(self._catalogued_surface.catalogue, "set_current_volume"):
             self._catalogued_surface.catalogue.set_current_volume(letter)
             self._current_volume = letter
 
     @property
     def current_volume(self) -> str | None:
         """Get current volume (Opus DDOS) or None (other formats)."""
-        if hasattr(self._catalogued_surface.catalogue, 'supports_volumes'):
+        if hasattr(self._catalogued_surface.catalogue, "supports_volumes"):
             if self._catalogued_surface.catalogue.supports_volumes:
                 return self._current_volume
         return None
@@ -394,8 +405,9 @@ class DFS:
 from oaknut_dfs.formats import ACORN_DFS_80T_DOUBLE_SIDED_INTERLEAVED
 
 # Volume parameter ignored for Acorn DFS
-dfs = DFS.from_buffer(buffer, ACORN_DFS_80T_DOUBLE_SIDED_INTERLEAVED,
-                      side=0, volume='B')  # 'B' ignored
+dfs = DFS.from_buffer(
+    buffer, ACORN_DFS_80T_DOUBLE_SIDED_INTERLEAVED, side=0, volume="B"
+)  # 'B' ignored
 
 files = dfs.list_files()  # Works as before
 ```
@@ -406,18 +418,17 @@ files = dfs.list_files()  # Works as before
 from oaknut_dfs.formats import OPUS_DDOS_80T_DOUBLE_SIDED_INTERLEAVED
 
 # Access drive 0, volume A (default)
-dfs_0a = DFS.from_buffer(buffer, OPUS_DDOS_80T_DOUBLE_SIDED_INTERLEAVED,
-                         side=0)  # Defaults to volume='A'
+dfs_0a = DFS.from_buffer(
+    buffer, OPUS_DDOS_80T_DOUBLE_SIDED_INTERLEAVED, side=0
+)  # Defaults to volume='A'
 files = dfs_0a.list_files()
 
 # Access drive 0, volume B
-dfs_0b = DFS.from_buffer(buffer, OPUS_DDOS_80T_DOUBLE_SIDED_INTERLEAVED,
-                         side=0, volume='B')
+dfs_0b = DFS.from_buffer(buffer, OPUS_DDOS_80T_DOUBLE_SIDED_INTERLEAVED, side=0, volume="B")
 files = dfs_0b.list_files()
 
 # Access drive 2, volume C (side 1)
-dfs_2c = DFS.from_buffer(buffer, OPUS_DDOS_80T_DOUBLE_SIDED_INTERLEAVED,
-                         side=1, volume='C')
+dfs_2c = DFS.from_buffer(buffer, OPUS_DDOS_80T_DOUBLE_SIDED_INTERLEAVED, side=1, volume="C")
 files = dfs_2c.list_files()
 ```
 
@@ -431,11 +442,11 @@ dfs = DFS.from_buffer(buffer, OPUS_DDOS_80T_DOUBLE_SIDED_INTERLEAVED, side=0)
 files_a = dfs.list_files()
 
 # Switch to volume B
-dfs.set_volume('B')
+dfs.set_volume("B")
 files_b = dfs.list_files()
 
 # Switch back to volume A
-dfs.set_volume('A')
+dfs.set_volume("A")
 ```
 
 ### Opus DDOS - Volume Prefix in Filenames
@@ -444,11 +455,11 @@ dfs.set_volume('A')
 dfs = DFS.from_buffer(buffer, OPUS_DDOS_80T_DOUBLE_SIDED_INTERLEAVED, side=0)
 
 # Explicit volume in filename (overrides current volume)
-data = dfs.load('B:$.MENU')      # Load from volume B
-dfs.save('C:$.DATA', data)       # Save to volume C
+data = dfs.load("B:$.MENU")  # Load from volume B
+dfs.save("C:$.DATA", data)  # Save to volume C
 
 # Implicit (uses current volume)
-data = dfs.load('$.MENU')        # Uses current volume (A by default)
+data = dfs.load("$.MENU")  # Uses current volume (A by default)
 ```
 
 ## Comparison: Current vs. Proposed
@@ -527,14 +538,14 @@ Total: 2 physical sides × 8 volumes = 16 logical "drives"
 
 **Option A: In-Place Switching**
 ```python
-dfs = DFS.from_buffer(buffer, format, side=0, volume='A')
-dfs.set_volume('B')  # Switch to volume B
+dfs = DFS.from_buffer(buffer, format, side=0, volume="A")
+dfs.set_volume("B")  # Switch to volume B
 ```
 
 **Option B: New Instances**
 ```python
-dfs_a = DFS.from_buffer(buffer, format, side=0, volume='A')
-dfs_b = DFS.from_buffer(buffer, format, side=0, volume='B')
+dfs_a = DFS.from_buffer(buffer, format, side=0, volume="A")
+dfs_b = DFS.from_buffer(buffer, format, side=0, volume="B")
 ```
 
 **Recommendation:** Support both. Provide `set_volume()` for convenience, but users can create multiple instances if preferred.
@@ -554,11 +565,11 @@ dfs_b = DFS.from_buffer(buffer, format, side=0, volume='B')
 
 **Recommendation:** Not initially. Users can:
 ```python
-dfs_a = DFS.from_buffer(buffer, format, side=0, volume='A')
-dfs_b = DFS.from_buffer(buffer, format, side=0, volume='B')
+dfs_a = DFS.from_buffer(buffer, format, side=0, volume="A")
+dfs_b = DFS.from_buffer(buffer, format, side=0, volume="B")
 
-data = dfs_a.load('$.FILE')
-dfs_b.save('$.FILE', data)
+data = dfs_a.load("$.FILE")
+dfs_b.save("$.FILE", data)
 ```
 
 ### 4. Partial Volume Validation

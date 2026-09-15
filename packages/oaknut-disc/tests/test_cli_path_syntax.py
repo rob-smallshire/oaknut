@@ -206,9 +206,7 @@ class TestMvPathSyntax:
         self, runner: CliRunner, adfs_image_filepath: Path
     ):
         runner.invoke(cli, ["put", f"{adfs_image_filepath}:$.Target", "-"], input=b"OLD")
-        result = runner.invoke(
-            cli, ["mv", "-f", f"{adfs_image_filepath}:$.Hello", "$.Target"]
-        )
+        result = runner.invoke(cli, ["mv", "-f", f"{adfs_image_filepath}:$.Hello", "$.Target"])
         assert result.exit_code == 0, result.output
         assert runner.invoke(cli, ["cat", f"{adfs_image_filepath}:$.Target"]).output == "Hello ADFS"
         assert "Hello" not in runner.invoke(cli, ["ls", f"{adfs_image_filepath}:$"]).output

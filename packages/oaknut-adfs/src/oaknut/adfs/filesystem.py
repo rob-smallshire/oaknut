@@ -43,6 +43,7 @@ from oaknut.filesystem.wildcards import ACORN_WILDCARDS, AcornWildcards
 # The old free-space map occupies sectors 0–1.
 _MAP_BYTES = 512
 
+
 # ADFS floppy geometries. The old-map S/M/L discs use 256-byte sectors (16
 # per track); the New-map/New-directory family (D onwards) uses 1024-byte
 # sectors. D, E and E+ share a physical size (800K), as do F/F+ (1.6M) and

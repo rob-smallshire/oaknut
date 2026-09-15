@@ -112,9 +112,7 @@ def test_big_dir_check_byte_matches_real_blank():
     assert got == block[dir_size - 1]
 
 
-@pytest.mark.parametrize(
-    "fmt,nzones,size", [(ADFS_E_PLUS, 1, 819200), (ADFS_F_PLUS, 4, 1638400)]
-)
+@pytest.mark.parametrize("fmt,nzones,size", [(ADFS_E_PLUS, 1, 819200), (ADFS_F_PLUS, 4, 1638400)])
 def test_create_blank_plus(fmt, nzones, size):
     adfs = ADFS.create(fmt, title="MadePlus")
     try:

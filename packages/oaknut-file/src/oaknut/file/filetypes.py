@@ -73,11 +73,7 @@ def parse_filetype(text: str) -> int:
         try:
             number = int(literal, 0)
         except ValueError:
-            raise InvalidFiletypeError(
-                f"{text!r} is not a known filetype name or number"
-            ) from None
+            raise InvalidFiletypeError(f"{text!r} is not a known filetype name or number") from None
     if not 0 <= number <= 0xFFF:
-        raise InvalidFiletypeError(
-            f"filetype {text!r} is out of range (000–FFF)"
-        )
+        raise InvalidFiletypeError(f"filetype {text!r} is out of range (000–FFF)")
     return number

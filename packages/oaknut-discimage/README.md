@@ -75,8 +75,8 @@ and vends a `Surface` per spec:
 
 ```python
 image = DiscImage(buffer, specs)
-side0 = image.surface(0)        # a Surface
-image.num_surfaces              # 1 for SSD, 2 for DSD
+side0 = image.surface(0)  # a Surface
+image.num_surfaces  # 1 for SSD, 2 for DSD
 ```
 
 ### `Surface` — one physical side
@@ -96,9 +96,9 @@ memoryviews as a single addressable buffer. It indexes and slices like a
 `bytearray`, and writes pass straight through to the backing image:
 
 ```python
-view[0]                 # read a byte
-view[0:8] = b"DISK    " # write — persists to the buffer (and the file)
-view.tobytes()          # a plain bytes copy
+view[0]  # read a byte
+view[0:8] = b"DISK    "  # write — persists to the buffer (and the file)
+view.tobytes()  # a plain bytes copy
 ```
 
 This is the read/write surface every filing system actually operates on.
@@ -113,7 +113,7 @@ former view — it maps a unified sector number to the right
 
 ```python
 disc = UnifiedDisc(image)
-disc.sector_range(start_sector, num_sectors)   # spans both sides seamlessly
+disc.sector_range(start_sector, num_sectors)  # spans both sides seamlessly
 ```
 
 ADFS reads a double-sided floppy through a `UnifiedDisc`; DFS, where each
@@ -152,8 +152,8 @@ image = DiscImage(buffer, [single_sided_spec(num_tracks=80, sectors_per_track=10
 
 surface = image.surface(0)
 sector0 = surface.sector_range(0, 1)
-sector0[0:8] = b"MYDISC  "          # write the catalogue title into sector 0
-assert bytes(buffer[0:8]) == b"MYDISC  "   # it landed in the backing buffer
+sector0[0:8] = b"MYDISC  "  # write the catalogue title into sector 0
+assert bytes(buffer[0:8]) == b"MYDISC  "  # it landed in the backing buffer
 ```
 
 ## ROMFS: a sequential exception

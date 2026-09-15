@@ -56,7 +56,9 @@ def test_mkdir_and_write_nested_file():
         assert (adfs.root / "Games" / "Elite").read_bytes() == b"COMMANDER JAMESON"
         # The subdirectory kept the New Map "Nick" signature, not "Hugo".
         raw = bytes(adfs._disc.sector_range(0, ADFS_E.total_sectors))
-        games_addr = adfs._object_disc_sector((adfs.root / "Games")._resolve()[1].indirect_disc_address)
+        games_addr = adfs._object_disc_sector(
+            (adfs.root / "Games")._resolve()[1].indirect_disc_address
+        )
         assert raw[games_addr * 256 + 1 : games_addr * 256 + 5] == b"Nick"
     finally:
         adfs.close()

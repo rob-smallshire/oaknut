@@ -61,9 +61,7 @@ _VECTORS = [
     # Rule 2 — an FN/PROC name breaks at a FLAG_START keyword (THEN/ELSE).
     (
         "IFA THENPROCWTKEYELSEPROCBKKEY",
-        bytes.fromhex(
-            "e7 41 20 8c f2 57 54 4b 45 59 45 4c 53 45 50 52 4f 43 42 4b 4b 45 59"
-        ),
+        bytes.fromhex("e7 41 20 8c f2 57 54 4b 45 59 45 4c 53 45 50 52 4f 43 42 4b 4b 45 59"),
         bytes.fromhex("e7 41 20 8c f2 57 54 4b 45 59 8b f2 42 4b 4b 45 59"),
     ),
     # Rule 2 — a function keyword embedded in a name is not a break point.

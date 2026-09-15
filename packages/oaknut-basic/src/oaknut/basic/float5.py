@@ -58,9 +58,7 @@ def unpack_float5(packed: bytes) -> float:
         return 0.0
     sign_and_msb = packed[1]
     negative = bool(sign_and_msb & 0x80)
-    significand = (
-        ((sign_and_msb | 0x80) << 24) | (packed[2] << 16) | (packed[3] << 8) | packed[4]
-    )
+    significand = ((sign_and_msb | 0x80) << 24) | (packed[2] << 16) | (packed[3] << 8) | packed[4]
     value = math.ldexp(significand, exponent - _EXPONENT_FOLD)
     return -value if negative else value
 

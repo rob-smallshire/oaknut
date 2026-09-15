@@ -71,8 +71,11 @@ def _run_service_call(handler: bytes, base: int, *, a: int, f4: int, f5: int) ->
             nxt = operand
         elif mnem in ("BEQ", "BNE", "BCC", "BCS", "BMI"):
             taken = {
-                "BEQ": zero, "BNE": not zero, "BCC": not carry,
-                "BCS": carry, "BMI": neg,
+                "BEQ": zero,
+                "BNE": not zero,
+                "BCC": not carry,
+                "BCS": carry,
+                "BMI": neg,
             }[mnem]
             if taken:
                 nxt = (pc + length + (operand - 256 if operand > 127 else operand)) & 0xFFFF
@@ -135,6 +138,7 @@ def _catalogue_passes(handler: bytes, base: int, socket: int, *, limit: int = 64
     looping while a ROM claims. Returns the pass count, or "LOOPS" if the
     re-init keeps re-claiming (an endless *CAT).
     """
+
     def claim(f5: int) -> int | None:
         # The MOS polls sockets 15..0; only our socket carries the handler.
         out_a, out_f5 = _run_service_call(handler, base, a=_SERVICE_INITIALISE, f4=socket, f5=f5)

@@ -145,13 +145,13 @@ Touches to existing packages:
 from oaknut.afs import AFS, Access
 
 with AFS.from_file("l3fs-master.adl") as fs:
-    fs.disc_name                      # "Level3MasterDisc"
-    fs.geometry                       # Geometry(cylinders=160, heads=4, ...)
-    fs.start_cylinder                 # 5
-    fs.free_sectors                   # int
-    fs.root                           # AFSPath("$")
+    fs.disc_name  # "Level3MasterDisc"
+    fs.geometry  # Geometry(cylinders=160, heads=4, ...)
+    fs.start_cylinder  # 5
+    fs.free_sectors  # int
+    fs.root  # AFSPath("$")
 
-    for entry in fs.root:             # alphabetical (already sorted on disc)
+    for entry in fs.root:  # alphabetical (already sorted on disc)
         print(entry.name, entry.access, entry.length, entry.sin)
         if entry.is_directory:
             ...
@@ -175,9 +175,9 @@ it, the natural entry point is:
 from oaknut.adfs import ADFS
 
 with ADFS.from_file("l3fs-master.adl") as adfs:
-    afs = adfs.afs_partition          # Optional[AFS]
+    afs = adfs.afs_partition  # Optional[AFS]
     if afs is not None:
-        ...                           # same surface as above
+        ...  # same surface as above
 ```
 
 `adfs.afs_partition` is lazy and does not open a second file handle — it
@@ -193,14 +193,14 @@ context exit or explicit flush.
 from oaknut.afs import AFS, Access, BootOption
 
 with AFS.from_file("disc.adl", writable=True, user="Syst") as fs:
-    (fs.root / "Docs").mkdir()                           # DIRMAN insert + allocate dir
+    (fs.root / "Docs").mkdir()  # DIRMAN insert + allocate dir
     (fs.root / "Docs" / "README").write_bytes(
         b"...",
         load=0x0000FFFF,
         exec_=0x0000FFFF,
         access=Access.from_string("LR/R"),
     )
-    (fs.root / "Obsolete").unlink()                      # file or empty dir
+    (fs.root / "Obsolete").unlink()  # file or empty dir
     (fs.root / "Docs" / "README").rename(fs.root / "Docs" / "Readme")
 
     # passwords admin (requires system privilege on the acting user)
@@ -243,9 +243,9 @@ from oaknut.afs.wfsinit import partition, AFSSizeSpec
 with ADFS.from_file("disc.adl", writable=True) as adfs:
     plan = partition.plan(
         adfs,
-        size=AFSSizeSpec.max(),     # largest AFS region the disc can hold
-                                     # after compaction (the common case)
-        compact_adfs=True,           # False → use only current tail free
+        size=AFSSizeSpec.max(),  # largest AFS region the disc can hold
+        # after compaction (the common case)
+        compact_adfs=True,  # False → use only current tail free
     )
     print(plan)
     # RepartitionPlan(
@@ -257,8 +257,8 @@ with ADFS.from_file("disc.adl", writable=True) as adfs:
     #     will_compact=True,         # apply() must run adfs.compact() first
     # )
 
-    partition.apply(adfs, plan)      # adfs.compact() (if will_compact)
-                                      # then shrink ADFS + install pointers
+    partition.apply(adfs, plan)  # adfs.compact() (if will_compact)
+    # then shrink ADFS + install pointers
 ```
 
 `AFSSizeSpec` is a small algebraic type with constructors:
@@ -323,7 +323,7 @@ with ADFS.from_file("blank-l-disc.adl", writable=True) as adfs:
             date=datetime.date(2026, 4, 11),
             size=AFSSizeSpec.max(),
             addition_factor=0,
-            default_quota=0x40404,           # WFSINIT's original default
+            default_quota=0x40404,  # WFSINIT's original default
             users=[
                 UserSpec("Syst", password="", system=True, boot=BootOption.RUN),
                 UserSpec("BeebMaster"),
@@ -345,23 +345,24 @@ Types:
 class UserSpec:
     name: str
     password: str = ""
-    quota: int | None = None           # None → use InitSpec.default_quota
+    quota: int | None = None  # None → use InitSpec.default_quota
     system: bool = False
     privileged: bool = False
     boot: BootOption = BootOption.OFF
 
+
 @dataclass(frozen=True)
 class InitSpec:
-    disc_name: str                     # ≤16 chars, printable ASCII
+    disc_name: str  # ≤16 chars, printable ASCII
     date: datetime.date
     size: AFSSizeSpec = field(default_factory=AFSSizeSpec.max)
     compact_adfs: bool = True
-    addition_factor: int = 0           # multi-drive; 0 for single-drive
-    default_quota: int = 0x40404       # WFSINIT's original; tune up for
-                                        # large modern images
+    addition_factor: int = 0  # multi-drive; 0 for single-drive
+    default_quota: int = 0x40404  # WFSINIT's original; tune up for
+    # large modern images
     users: Sequence[UserSpec] = ()
     libraries: Sequence[LibraryImage] = ()  # shipped images to merge in
-    repartition: bool = True           # False → assume partition.apply already ran
+    repartition: bool = True  # False → assume partition.apply already ran
 ```
 
 Validation is done up-front in `InitSpec.__post_init__`: disc name length
@@ -396,9 +397,9 @@ with AFS.from_file("target.adl", writable=True, user="Syst") as target:
         merge(
             target,
             source,
-            source_path=source.root,            # subtree to copy
+            source_path=source.root,  # subtree to copy
             target_path=target.root / "Library",
-            conflict="error",                   # "error" | "skip" | "overwrite"
+            conflict="error",  # "error" | "skip" | "overwrite"
         )
 ```
 
@@ -422,10 +423,10 @@ Four AFS disc images ship as package resources under
 
 ```python
 class LibraryImage(Enum):
-    UTILS      = "library_utils.adl"      # Utils (shared)
-    MODEL_B    = "library_model_b.adl"    # "Library" — BBC B / B+ (ANFS)
-    MASTER     = "library_master.adl"     # "Library1" — Master 128/Compact
-    ARCHIMEDES = "library_archimedes.adl" # "ArthurLib" — Archimedes
+    UTILS = "library_utils.adl"  # Utils (shared)
+    MODEL_B = "library_model_b.adl"  # "Library" — BBC B / B+ (ANFS)
+    MASTER = "library_master.adl"  # "Library1" — Master 128/Compact
+    ARCHIMEDES = "library_archimedes.adl"  # "ArthurLib" — Archimedes
 
     @classmethod
     def ALL(cls) -> list[LibraryImage]:
@@ -480,15 +481,15 @@ mutable on a writable session opened by a system user.
 
 ```python
 for user in fs.users:
-    user.name              # "BeebMaster"
-    user.group             # Optional[str] — the "group." prefix form
-    user.free_space        # int, bytes
+    user.name  # "BeebMaster"
+    user.group  # Optional[str] — the "group." prefix form
+    user.free_space  # int, bytes
     user.is_in_use
     user.is_system
     user.is_privileged
-    user.boot_option       # BootOption.{OFF, LOAD, RUN, EXEC}
+    user.boot_option  # BootOption.{OFF, LOAD, RUN, EXEC}
 
-fs.users["BeebMaster"]     # UserRecord, by name lookup
+fs.users["BeebMaster"]  # UserRecord, by name lookup
 
 fs.users.add("alice", password="secret", quota=0x40404)
 fs.users.remove("alice")

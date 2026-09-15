@@ -135,9 +135,7 @@ class AcornDFSCatalogue(Catalogue):
         # file, every entry living in the data area (sector >= 2) and
         # ending within the surface. Random data almost never satisfies
         # this on top of the count/flag/7-bit checks already passed.
-        if needs_corroboration and not cls._file_table_fits_surface(
-            surface, sector1, num_files
-        ):
+        if needs_corroboration and not cls._file_table_fits_surface(surface, sector1, num_files):
             return None
 
         # A truncated image declares its full (untruncated) sector count

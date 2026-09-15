@@ -162,8 +162,7 @@ def detect(data: bytes | bytearray) -> Detection:
             if line_count == 0:
                 return Detection(
                     Verdict.NOT_BASIC,
-                    f"&0D &{marker:02X} at offset 0 — terminator with no lines, "
-                    "not a program",
+                    f"&0D &{marker:02X} at offset 0 — terminator with no lines, not a program",
                 )
             program_length = pos + 2
             trailing = n - program_length
@@ -195,10 +194,7 @@ def detect(data: bytes | bytearray) -> Detection:
         line_no = (marker << 8) | data[pos + 2]
         length = data[pos + 3]
         if length < HEADER_LENGTH:
-            return broke(
-                f"line {line_no} at offset {pos} has length {length} "
-                f"(< {HEADER_LENGTH})"
-            )
+            return broke(f"line {line_no} at offset {pos} has length {length} (< {HEADER_LENGTH})")
         if pos + length > n:
             return broke(f"line {line_no} at offset {pos} runs {length} bytes past end of data")
 

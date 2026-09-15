@@ -56,7 +56,7 @@ a format explicitly only to override detection.
 from oaknut.dfs import DFS
 
 with DFS.from_file("Zalaga.ssd") as dfs:
-    print(dfs.title)   # 'ZALAG-L'
+    print(dfs.title)  # 'ZALAG-L'
 
     # Navigate with a pathlib-inspired API.
     for entry in dfs.root / "$":

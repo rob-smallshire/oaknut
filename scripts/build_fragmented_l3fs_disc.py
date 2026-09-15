@@ -149,21 +149,24 @@ def _report(afs, payload: bytes) -> tuple[int, list[int]]:
     successor_blocks = chain.blocks[1:]
 
     print(f"Disc:                {afs.disc_name!r}")
-    print(f"$.Frag size:         {len(payload):,} bytes "
-          f"({len(payload) // 256} sectors)")
+    print(f"$.Frag size:         {len(payload):,} bytes ({len(payload) // 256} sectors)")
     print(f"$.Frag head SIN:     {int(entry.sin):#x}")
     print(f"$.Frag map blocks:   {len(chain.blocks)}")
     print(f"$.Frag total extents: {sum(len(b.extents) for b in chain.blocks)}")
 
     head_raw = afs._read_sector(int(head_block.sin))
-    print(f"  block 0 (head)  sin={int(head_block.sin):#x}  "
-          f"extents={len(head_block.extents)}  "
-          f"bytes[0:6]={bytes(head_raw[0:6])!r}")
+    print(
+        f"  block 0 (head)  sin={int(head_block.sin):#x}  "
+        f"extents={len(head_block.extents)}  "
+        f"bytes[0:6]={bytes(head_raw[0:6])!r}"
+    )
     for i, block in enumerate(successor_blocks, start=1):
         raw = afs._read_sector(int(block.sin))
-        print(f"  block {i} (link)  sin={int(block.sin):#x}  "
-              f"extents={len(block.extents)}  "
-              f"bytes[0:6]={bytes(raw[0:6])!r}")
+        print(
+            f"  block {i} (link)  sin={int(block.sin):#x}  "
+            f"extents={len(block.extents)}  "
+            f"bytes[0:6]={bytes(raw[0:6])!r}"
+        )
 
     return len(chain.blocks), [int(b.sin) for b in successor_blocks]
 
@@ -243,9 +246,7 @@ def build_fragmented_disc(
         chain = afs._read_map_chain(entry.sin)
         head_raw = afs._read_sector(int(chain.blocks[0].sin))
         if head_raw[0:6] != MAGIC:
-            sys.exit(
-                f"FAILED: head block missing 'JesMap' magic; got {head_raw[0:6]!r}"
-            )
+            sys.exit(f"FAILED: head block missing 'JesMap' magic; got {head_raw[0:6]!r}")
         for block in chain.blocks[1:]:
             raw = afs._read_sector(int(block.sin))
             if raw[0:6] != b"\x00" * 6:
@@ -259,8 +260,7 @@ def build_fragmented_disc(
     print()
     print(f"Wrote: {output_filepath}")
     print(f"       {output_filepath.with_suffix('.dsc')}")
-    print(f"Chain: {n_blocks} map blocks "
-          f"({n_blocks - 1} successor(s) with zero magic)")
+    print(f"Chain: {n_blocks} map blocks ({n_blocks - 1} successor(s) with zero magic)")
     print(
         "Boot:  on a real BBC with the L3FS ROM attached, this disc "
         "boots straight into the file server. Logging in and reading "
@@ -282,8 +282,7 @@ def main() -> None:
         type=Path,
         default=DEFAULT_FS_BINARY,
         help=(
-            "SSD image containing $.FS3v126 "
-            f"(default: {DEFAULT_FS_BINARY.relative_to(REPO_ROOT)})."
+            f"SSD image containing $.FS3v126 (default: {DEFAULT_FS_BINARY.relative_to(REPO_ROOT)})."
         ),
     )
     parser.add_argument(
@@ -295,10 +294,7 @@ def main() -> None:
         "--payload-sectors",
         type=int,
         default=400,
-        help=(
-            "Size of the fragmented test file, in 256-byte sectors "
-            "(default: 400 = 100 KiB)."
-        ),
+        help=("Size of the fragmented test file, in 256-byte sectors (default: 400 = 100 KiB)."),
     )
     parser.add_argument(
         "--disc-name",

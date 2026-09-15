@@ -16,8 +16,8 @@ _DATA_DIRPATH = Path(__file__).parent / "data"
 
 class TestNumberLines:
     def test_numbers_each_line_from_ten_in_tens(self):
-        source = "PRINT \"Hello\"\nEND"
-        assert basic.number_lines(source) == "10 PRINT \"Hello\"\n20 END"
+        source = 'PRINT "Hello"\nEND'
+        assert basic.number_lines(source) == '10 PRINT "Hello"\n20 END'
 
     def test_custom_step(self):
         source = "A\nB\nC"

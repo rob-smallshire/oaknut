@@ -158,9 +158,7 @@ class TestProbe:
         # — 22 files, 800 sectors matching the surface — but the title
         # heuristic used to reject any byte <= 31. A control-character
         # title must not disqualify a well-formed catalogue.
-        image_filepath = (
-            REFERENCE_IMAGES_DIRPATH / "oxford-pascal" / "OXFORD PASCAL (80 TRACK).SSD"
-        )
+        image_filepath = REFERENCE_IMAGES_DIRPATH / "oxford-pascal" / "OXFORD PASCAL (80 TRACK).SSD"
         results = identify(image_filepath)
         acorn = [r for r in results if r.filesystem == "acorn-dfs"]
         assert acorn, f"acorn-dfs not identified; got {[r.filesystem for r in results]}"

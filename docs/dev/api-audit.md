@@ -115,11 +115,11 @@ A user iterating across filesystems cannot write polymorphic code: `st.is_direct
 
 ```python
 # ADFS — clean.
-adfs.root / "ReadMe"                # -> $.ReadMe
+adfs.root / "ReadMe"  # -> $.ReadMe
 
 # DFS — surprising.
-dfs.root / "$.HELLO"                # works
-dfs.root / "HELLO"                  # produces "HELLO", not "$.HELLO"
+dfs.root / "$.HELLO"  # works
+dfs.root / "HELLO"  # produces "HELLO", not "$.HELLO"
 ```
 
 The current `__truediv__` blindly concatenates with `.`, leaving the caller responsible for getting the `$.` prefix right.

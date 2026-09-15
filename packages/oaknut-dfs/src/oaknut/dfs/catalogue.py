@@ -36,8 +36,7 @@ DFS_NAME_GRAMMAR = NameGrammar(
     notes=(
         "The wildcard characters * and # are stored literally; address "
         "such a file with --no-wildcards rather than by pattern.",
-        "A separator (. or :) in a name cannot yet be expressed through "
-        "the dotted-path syntax.",
+        "A separator (. or :) in a name cannot yet be expressed through the dotted-path syntax.",
     ),
 )
 

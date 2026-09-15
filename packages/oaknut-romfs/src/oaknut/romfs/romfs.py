@@ -97,7 +97,6 @@ class ROMFSFile:
         return (self.length - 1) // BLOCK_DATA_SIZE
 
 
-
 def _unwrap_title(name: str) -> str:
     """Strip the surrounding asterisks from an Acornsoft-style title block."""
     if len(name) >= 2 and name[0] == "*" and name[-1] == "*":
@@ -199,9 +198,7 @@ def _assemble_files(buf: bytes, start: int) -> tuple[list[ROMFSFile], bool, int]
             chunks.append(data)
         if header is not None and header.is_last:
             files.append(
-                ROMFSFile(
-                    name, load, execa, run_only, b"".join(chunks), end_address, flag_extra
-                )
+                ROMFSFile(name, load, execa, run_only, b"".join(chunks), end_address, flag_extra)
             )
             open_file = False
 

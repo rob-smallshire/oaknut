@@ -299,9 +299,7 @@ def _resolve_metadata_lens(metadata_lens: str, raw_addresses: bool, mount):
             err=True,
         )
         if metadata_lens == "type-date":
-            raise click.UsageError(
-                "--raw-addresses conflicts with --metadata-lens=type-date."
-            )
+            raise click.UsageError("--raw-addresses conflicts with --metadata-lens=type-date.")
         return Lens.ADDRESSES
     explicit = {"addresses": Lens.ADDRESSES, "type-date": Lens.TYPE_DATE}.get(metadata_lens)
     if explicit is not None:
@@ -403,9 +401,7 @@ def ls(
     table.add_column("exec", "Exec", importance=Importance.DETAIL, omit_if_empty_for=_OMIT)
     # A filetype-stamped file shows its type and datestamp here instead of
     # the load/exec they encode; other filesystems leave these blank.
-    table.add_column(
-        "filetype", "Filetype", importance=Importance.DETAIL, omit_if_empty_for=_OMIT
-    )
+    table.add_column("filetype", "Filetype", importance=Importance.DETAIL, omit_if_empty_for=_OMIT)
     table.add_column(
         "datestamp", "Datestamp", importance=Importance.DETAIL, omit_if_empty_for=_OMIT
     )
@@ -470,8 +466,10 @@ def ls(
             # plain address (a load == exec module address, which RISC OS
             # FileSwitch reads as an address) decodes to neither, so its real
             # load/exec stay visible rather than blanking the row.
-            conceal = typed_view and encodes_in_load_exec and (
-                filetype is not None or derived_when is not None
+            conceal = (
+                typed_view
+                and encodes_in_load_exec
+                and (filetype is not None or derived_when is not None)
             )
             load_cell = address_cell(meta.load_address, conceal=conceal, min_digits=addr_digits)
             exec_cell = address_cell(meta.exec_address, conceal=conceal, min_digits=addr_digits)
@@ -670,8 +668,10 @@ def stat(
         # Conceal the pair only when we have a filetype or load/exec-derived
         # datestamp to show instead — a coincidental marker on a plain address
         # (load == exec) decodes to neither and keeps its addresses visible.
-        stamped = typed_view and encodes_in_load_exec and (
-            filetype is not None or derived_when is not None
+        stamped = (
+            typed_view
+            and encodes_in_load_exec
+            and (filetype is not None or derived_when is not None)
         )
         # Declare every metadata field for a stable machine schema; the
         # human view drops whichever are empty for this file (a stamped
@@ -1577,8 +1577,10 @@ def _put_target(
     """
     root = mount.path_root()
     root_dest = inner_path in ("", "$") or inner_path == root
-    existing_dir = bool(inner_path) and not root_dest and (
-        mount.exists(inner_path) and mount.stat(inner_path).is_dir
+    existing_dir = (
+        bool(inner_path)
+        and not root_dest
+        and (mount.exists(inner_path) and mount.stat(inner_path).is_dir)
     )
 
     if root_dest or existing_dir:
@@ -1728,9 +1730,7 @@ def put(
     if (filetype is not None or datestamp is not None) and (
         load_address is not None or exec_address is not None
     ):
-        raise click.UsageError(
-            "--filetype/--datestamp cannot be combined with --load/--exec"
-        )
+        raise click.UsageError("--filetype/--datestamp cannot be combined with --load/--exec")
     filetype_number, when = _parse_typestamp_options(filetype, datestamp)
     host_path = Path(host_path) if host_path is not None else None
 
@@ -1778,8 +1778,11 @@ def put(
     with resolve_mount(compound_path, writable=True) as resolved:
         mount = resolved.mount
         target = _put_target(
-            mount, resolved.path, name_option=name_option,
-            sidecar_name=sidecar_name, host_leaf=host_leaf,
+            mount,
+            resolved.path,
+            name_option=name_option,
+            sidecar_name=sidecar_name,
+            host_leaf=host_leaf,
         )
         # The generic write carries no addresses; set them after, when the
         # filesystem records Acorn metadata (DFS/ADFS/AFS), preserving the
@@ -2115,9 +2118,7 @@ def _mutate_access(
             )
         flat = not isinstance(mount, HierarchicalDirectories)
         pattern = resolved.path or mount.path_root()
-        for target in _iter_target_paths(
-            mount, pattern, recursive=recursive, wildcards=wildcards
-        ):
+        for target in _iter_target_paths(mount, pattern, recursive=recursive, wildcards=wildcards):
             if flat and mount.stat(target).is_dir:
                 continue  # a flat catalogue's directories are notional
             if dry_run:
@@ -2306,9 +2307,7 @@ def _expand_glob(src_mount, src_bare: str) -> list[str]:
     parent = parent or src_mount.path_root()
     if not src_mount.exists(parent) or not src_mount.stat(parent).is_dir:
         raise click.ClickException(f"parent directory of glob does not exist: {parent or '$'!r}")
-    return [
-        e.path for e in src_mount.iter_entries(parent) if matcher.matches(leaf_pattern, e.name)
-    ]
+    return [e.path for e in src_mount.iter_entries(parent) if matcher.matches(leaf_pattern, e.name)]
 
 
 def _map_dst_path_for_dfs(path: str) -> str:
@@ -2415,9 +2414,7 @@ def _file_item(src_mount, src_path: str, rel_dst: str) -> dict:
     # and AFS). A typed file's load/exec hold the encoding, not a real
     # address, so do not carry them to a filesystem that stores addresses.
     filetype = src_mount.filetype(src_path) if isinstance(src_mount, Filetyped) else None
-    datestamp = (
-        src_mount.datestamp(src_path) if isinstance(src_mount, Datestamped) else None
-    )
+    datestamp = src_mount.datestamp(src_path) if isinstance(src_mount, Datestamped) else None
     if filetype is not None:
         load = exec_addr = 0
     item = {
@@ -2923,9 +2920,7 @@ def _parse_datestamp(text: str):
     try:
         return datetime.fromisoformat(text)
     except ValueError as error:
-        raise click.BadParameter(
-            f"{text!r} is not an ISO 8601 date-time (or 'now')"
-        ) from error
+        raise click.BadParameter(f"{text!r} is not an ISO 8601 date-time (or 'now')") from error
 
 
 @cli.command(name="get-filetype")
@@ -3036,9 +3031,7 @@ def get_datestamp(compound_path: str):
 
     mount, target = _require_read_target(compound_path, Datestamped, "datestamp")
     when = mount.datestamp(target)
-    value = (
-        datestamp_cell(when, mount.datestamp_resolution) if when is not None else ""
-    )
+    value = datestamp_cell(when, mount.datestamp_resolution) if when is not None else ""
     return Reports(
         datestamp=Report(data=ScalarContent(value=value, title="Datestamp")),
     )
@@ -3548,15 +3541,27 @@ def _import_host_dir(
                 # A flat catalogue (DFS) imports files from subdirectories
                 # directly into the same directory.
                 _import_host_dir(
-                    mount, parent_path, entry, meta_formats, verbose,
-                    filesystem_name, filetype, when,
+                    mount,
+                    parent_path,
+                    entry,
+                    meta_formats,
+                    verbose,
+                    filesystem_name,
+                    filetype,
+                    when,
                 )
             else:
                 sub = mount.join(parent_path, entry.name)
                 mount.make_directory(sub, exist_ok=True)
                 _import_host_dir(
-                    mount, sub, entry, meta_formats, verbose,
-                    filesystem_name, filetype, when,
+                    mount,
+                    sub,
+                    entry,
+                    meta_formats,
+                    verbose,
+                    filesystem_name,
+                    filetype,
+                    when,
                 )
 
 

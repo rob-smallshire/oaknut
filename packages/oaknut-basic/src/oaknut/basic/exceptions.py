@@ -96,8 +96,7 @@ class LineNumberRangeError(TokeniseError):
 
     def __init__(self, line_index: int, line_number: int, line_text: str) -> None:
         super().__init__(
-            f"line {line_index}: line number {line_number} is out of range "
-            f"(0-{MAX_LINE_NUMBER})",
+            f"line {line_index}: line number {line_number} is out of range (0-{MAX_LINE_NUMBER})",
             line_index=line_index,
             line_text=line_text,
         )
@@ -300,10 +299,7 @@ class IntegerRangeError(DataFileError):
     """
 
     def __init__(self, value: int) -> None:
-        super().__init__(
-            f"{value} is out of range for a BBC integer "
-            f"(must be -2**31 .. 2**31 - 1)"
-        )
+        super().__init__(f"{value} is out of range for a BBC integer (must be -2**31 .. 2**31 - 1)")
         self.value = value
 
 

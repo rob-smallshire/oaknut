@@ -46,8 +46,18 @@ def test_d_format_root_listing():
     # Directories sort with FileCore's case-insensitive ordering; just
     # assert the full expected membership regardless of order.
     assert set(names) == {
-        "!Configure", "!Draw", "!Edit", "!Fonts", "!Help", "!Paint",
-        "!PrinterDM", "!PrinterPS", "!System", "DrawDemo", "PaintDemo", "ReadMe",
+        "!Configure",
+        "!Draw",
+        "!Edit",
+        "!Fonts",
+        "!Help",
+        "!Paint",
+        "!PrinterDM",
+        "!PrinterPS",
+        "!System",
+        "DrawDemo",
+        "PaintDemo",
+        "ReadMe",
     }
 
 

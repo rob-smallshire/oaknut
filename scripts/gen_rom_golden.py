@@ -18,33 +18,94 @@ OUT = Path("/Users/rjs/Code/oaknut/packages/oaknut-basic/tests/test_rom_golden.p
 # Curated to exercise every subtle rule the differential fuzz pinned down.
 INPUTS = [
     # Plain keywords and a function.
-    'PRINT "Hi"', "END", "GOTO 100", "FOR I=1 TO 10 STEP 2", "NEXT I",
-    "REPEAT", "UNTIL X>5", "IF A=1 THEN PRINT A", "X=INT(RND(1)*6)+1",
-    "PROCdraw(x%,y%)", "DEF PROCgbpb(A$,T%)", "DEF FNsq(x)=x*x", "=FNsq(3)",
+    'PRINT "Hi"',
+    "END",
+    "GOTO 100",
+    "FOR I=1 TO 10 STEP 2",
+    "NEXT I",
+    "REPEAT",
+    "UNTIL X>5",
+    "IF A=1 THEN PRINT A",
+    "X=INT(RND(1)*6)+1",
+    "PROCdraw(x%,y%)",
+    "DEF PROCgbpb(A$,T%)",
+    "DEF FNsq(x)=x*x",
+    "=FNsq(3)",
     # Abbreviations.
-    "P.", "PR.", "PRO.", "F.", "N.", "G.100", "REP.",
+    "P.",
+    "PR.",
+    "PRO.",
+    "F.",
+    "N.",
+    "G.100",
+    "REP.",
     # Arm carry-over (leading line number leaves the flag armed).
-    "AND0", "TO1", "PRINT1", "DIV9", "SIN1", "TAB(1", "X=2", "5",
+    "AND0",
+    "TO1",
+    "PRINT1",
+    "DIV9",
+    "SIN1",
+    "TAB(1",
+    "X=2",
+    "5",
     # Line-number references and the encoding.
-    "GOTO0", "GOTO1", "GOTO 10", "GOTO 32767", "GOSUB 100", "RESTORE 100,200",
-    "ON X GOTO 10,20,30", "IF A THEN 100 ELSE 200", "GOTO X", "GOTO -5",
-    "RESTORE", "TRACE 500", "RENUMBER 100,10",
+    "GOTO0",
+    "GOTO1",
+    "GOTO 10",
+    "GOTO 32767",
+    "GOSUB 100",
+    "RESTORE 100,200",
+    "ON X GOTO 10,20,30",
+    "IF A THEN 100 ELSE 200",
+    "GOTO X",
+    "GOTO -5",
+    "RESTORE",
+    "TRACE 500",
+    "RENUMBER 100,10",
     # Pseudo-variables: assignment vs function form by context.
-    "PAGE=&2000", "X=PAGE", "PRINT PAGE", "TIME=0", "X=TIME", "PTR#3=0",
-    "X=PTR#3", "HIMEM=&7C00", "LOMEM=PAGE", "? ERR PAGE", "GET$;,PTR",
+    "PAGE=&2000",
+    "X=PAGE",
+    "PRINT PAGE",
+    "TIME=0",
+    "X=TIME",
+    "PTR#3=0",
+    "X=PTR#3",
+    "HIMEM=&7C00",
+    "LOMEM=PAGE",
+    "? ERR PAGE",
+    "GET$;,PTR",
     # Value keywords do not flip to mid-statement.
-    "INSTR(A$,B$) PTR", "OPENOUT LOMEM", "SQR RAD PTR", "RND * SQR ENDPROC",
+    "INSTR(A$,B$) PTR",
+    "OPENOUT LOMEM",
+    "SQR RAD PTR",
+    "RND * SQR ENDPROC",
     # Strings preserve state; hex too. A never-closed quote copies to EOL.
-    'A$="he""llo"', 'PRINT "GOTO 10"', "X=&FF+&1A2B", "Y=1.5E3+.25",
+    'A$="he""llo"',
+    'PRINT "GOTO 10"',
+    "X=&FF+&1A2B",
+    "Y=1.5E3+.25",
     'PRINT "unterminated GOTO',
     # Suppression contexts.
-    "REM this has PRINT GOTO 10", "DATA 1,2,PRINT,3:X=4", "*CAT", "*FX 21,0",
-    "X=3*4", "PRINT~&FF", "VDU 26,12;0;",
+    "REM this has PRINT GOTO 10",
+    "DATA 1,2,PRINT,3:X=4",
+    "*CAT",
+    "*FX 21,0",
+    "X=3*4",
+    "PRINT~&FF",
+    "VDU 26,12;0;",
     # Conditional keywords (Rule B) and interior keywords (Rule A).
-    "TIMER", "TRUEELSE", "GDIV40", "TOTAL", "DIVMOD", "TRUE+",
+    "TIMER",
+    "TRUEELSE",
+    "GDIV40",
+    "TOTAL",
+    "DIVMOD",
+    "TRUE+",
     # Indirection and multiple statements.
-    "text%?p%=ASC(MID$(A$,i%,1))", "?(a%+1)=&FF", "A=1:B=2:PRINT A,B",
-    "COLOUR 129:CLS", "MODE 7:VDU 23",
+    "text%?p%=ASC(MID$(A$,i%,1))",
+    "?(a%+1)=&FF",
+    "A=1:B=2:PRINT A,B",
+    "COLOUR 129:CLS",
+    "MODE 7:VDU 23",
 ]
 
 
@@ -58,9 +119,7 @@ with tempfile.TemporaryDirectory() as d:
     src = Path(d) / "i"
     for s in INPUTS:
         src.write_bytes(f"10 {s}\n".encode("latin-1"))
-        r = subprocess.run(
-            [BT, "-2", "-t", "--output-binary", str(src), "-"], capture_output=True
-        )
+        r = subprocess.run([BT, "-2", "-t", "--output-binary", str(src), "-"], capture_output=True)
         if r.returncode != 0:
             raise SystemExit(f"basictool rejected {s!r}: {r.stderr.decode(errors='replace')}")
         vectors.append((s, parse_body(r.stdout)))

@@ -143,11 +143,16 @@ def test_run_only_is_a_distinct_axis_from_the_disc_lock():
     mount, data = _open_writable("Electron_Hopper.rom")
 
     mount.write_bytes("FROMDFS", b"loader")
-    mount.set_acorn_meta("FROMDFS", AcornMeta(load_address=0x1900, exec_address=0x8023,
-                                              access=int(Access.L | Access.R | Access.W)))
+    mount.set_acorn_meta(
+        "FROMDFS",
+        AcornMeta(
+            load_address=0x1900, exec_address=0x8023, access=int(Access.L | Access.R | Access.W)
+        ),
+    )
     mount.write_bytes("FROMROM", b"object")
-    mount.set_acorn_meta("FROMROM", AcornMeta(load_address=0x3000, exec_address=0x3000,
-                                              access=int(Access.X)))
+    mount.set_acorn_meta(
+        "FROMROM", AcornMeta(load_address=0x3000, exec_address=0x3000, access=int(Access.X))
+    )
 
     by_name = {f.name: f for f in ROMFS.from_bytes(bytes(data)).data_files}
     assert not by_name["FROMDFS"].run_only  # disc lock did NOT make it *RUN-only

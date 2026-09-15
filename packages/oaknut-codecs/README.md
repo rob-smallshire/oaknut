@@ -18,7 +18,7 @@ the name `"acorn"`, so it works with the standard `str.encode` /
 ```python
 import oaknut.codecs  # registers the "acorn" codec
 
-"COST£100".encode("acorn")   # b'COST\x60100'
+"COST£100".encode("acorn")  # b'COST\x60100'
 b"COST\x60100".decode("acorn")  # 'COST£100'
 ```
 

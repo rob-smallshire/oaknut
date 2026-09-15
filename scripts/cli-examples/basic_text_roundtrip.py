@@ -24,13 +24,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from cli_example_helper import in_tmp_dir, section, show, silent  # noqa: E402
 
 # A small, numbered program authored in a modern editor (UTF-8).
-_SOURCE = (
-    "10 REM Greeting\n"
-    "20 FOR I%=1 TO 3\n"
-    '30   PRINT "HELLO WORLD"\n'
-    "40 NEXT I%\n"
-    "50 END\n"
-)
+_SOURCE = '10 REM Greeting\n20 FOR I%=1 TO 3\n30   PRINT "HELLO WORLD"\n40 NEXT I%\n50 END\n'
 
 with in_tmp_dir():
     Path("greeting.bas").write_text(_SOURCE, encoding="utf-8")
@@ -53,8 +47,5 @@ with in_tmp_dir():
     section("get")
     # The reverse: stream the stored program through the de-tokeniser into
     # a host text file an ordinary editor can open.
-    show(
-        "disc cat 'greeting.ssd:$.GREET' "
-        "| oaknut-basic detokenise > recovered.bas"
-    )
+    show("disc cat 'greeting.ssd:$.GREET' | oaknut-basic detokenise > recovered.bas")
     show("cat recovered.bas")

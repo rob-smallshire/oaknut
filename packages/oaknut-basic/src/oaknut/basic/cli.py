@@ -217,8 +217,8 @@ def _listing_to_bytes(listing: str, encoding: str) -> bytes:
     type=click.Choice(["rom", "greedy"]),
     default="rom",
     show_default=True,
-    help="Which tokeniser to emulate. \"rom\" is byte-exact to the BBC BASIC "
-    "ROM. Use \"greedy\" to reproduce the greedier third-party tokeniser "
+    help='Which tokeniser to emulate. "rom" is byte-exact to the BBC BASIC '
+    'ROM. Use "greedy" to reproduce the greedier third-party tokeniser '
     "behind some early-1980s commercial programs, so their de-tokenised "
     "source re-tokenises byte-identically.",
 )

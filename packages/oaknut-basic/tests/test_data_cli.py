@@ -58,9 +58,7 @@ class TestEncode:
 
     def test_encode_pound_sign_uses_acorn(self, tmp_path):
         out = tmp_path / "out.dat"
-        result = CliRunner().invoke(
-            cli, ["data", "encode", "-", str(out)], input=json.dumps(["£"])
-        )
+        result = CliRunner().invoke(cli, ["data", "encode", "-", str(out)], input=json.dumps(["£"]))
         assert result.exit_code == 0, result.output
         # 00 (string tag) 01 (length) 60 (pound) — single char, reversal a no-op.
         assert out.read_bytes() == bytes.fromhex("000160")

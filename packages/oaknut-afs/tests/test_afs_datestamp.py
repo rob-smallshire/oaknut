@@ -28,9 +28,7 @@ _L3FS_DAT = REFERENCE_IMAGES_DIRPATH / "l3fs" / "l3fs-wfsinit.dat"
 def _afs_region_reader(reader):
     identification = create_filesystem("adfs").probe(reader)
     region = identification.reserved_regions[0]
-    return region_reader(
-        reader, identification.geometry, region.start_sector, region.num_sectors
-    )
+    return region_reader(reader, identification.geometry, region.start_sector, region.num_sectors)
 
 
 def _writable_copy(tmp_path):

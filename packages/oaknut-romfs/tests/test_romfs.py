@@ -32,9 +32,7 @@ def test_hopper_header():
 
 def test_hopper_catalogue():
     rom = load("Electron_Hopper.rom")
-    catalogue = [
-        (f.name, f.length, f.load_address, f.exec_address, f.run_only) for f in rom.files
-    ]
+    catalogue = [(f.name, f.length, f.load_address, f.exec_address, f.run_only) for f in rom.files]
     assert catalogue == [
         ("*Hopper01*", 0x0000, 0x00000000, 0x00000000, True),
         ("!BOOT", 0x003A, 0x00001E86, 0x00001E86, False),

@@ -327,15 +327,15 @@ A minimal round-trip in Python — verified locally against
 
 ```python
 src = Path("cf_b131.dat").read_bytes()
-total_sectors = src[0xFC] | (src[0xFD]<<8) | (src[0xFE]<<16)
+total_sectors = src[0xFC] | (src[0xFD] << 8) | (src[0xFE] << 16)
 buf = bytearray(src) + bytearray(total_sectors * 256 - len(src))
 
 adfs = ADFS.from_buffer(memoryview(buf))
 (adfs.root / "E" / "PROBE").write_bytes(b"hello data centre")
 
 # Re-truncate to the new first-free sector before saving.
-new_first_free = buf[0] | (buf[1]<<8) | (buf[2]<<16)
-Path("cf_b131_modified.dat").write_bytes(buf[:new_first_free * 256])
+new_first_free = buf[0] | (buf[1] << 8) | (buf[2] << 16)
+Path("cf_b131_modified.dat").write_bytes(buf[: new_first_free * 256])
 ```
 
 That suffices for ADFS Explorer / Disc Image Manager / BeebEm to read

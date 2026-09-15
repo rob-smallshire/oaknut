@@ -34,8 +34,13 @@ class TestAutoFollowsFormat:
     ):
         _stamp(runner, adfs_typed_image_filepath)
         out = _run(
-            runner, "ls", "--as", "display", "--detailed",
-            f"{adfs_typed_image_filepath}:$", env={"COLUMNS": "200"},
+            runner,
+            "ls",
+            "--as",
+            "display",
+            "--detailed",
+            f"{adfs_typed_image_filepath}:$",
+            env={"COLUMNS": "200"},
         ).output
         assert "Obey" in out and "Datestamp" in out
 
@@ -47,19 +52,20 @@ class TestAutoFollowsFormat:
         # address, not decoded, unless the user asks for type-date.
         _stamp(runner, adfs_image_filepath)
         out = _run(
-            runner, "ls", "--as", "display", "--detailed",
-            f"{adfs_image_filepath}:$", env={"COLUMNS": "200"},
+            runner,
+            "ls",
+            "--as",
+            "display",
+            "--detailed",
+            f"{adfs_image_filepath}:$",
+            env={"COLUMNS": "200"},
         ).output
         assert "Load" in out and "Exec" in out
         assert "Obey" not in out
         assert "Filetype" not in out
 
-    def test_dfs_shows_addresses_by_default(
-        self, runner: CliRunner, dfs_image_filepath: Path
-    ):
-        out = _run(
-            runner, "ls", "--as", "display", "--detailed", f"{dfs_image_filepath}:$"
-        ).output
+    def test_dfs_shows_addresses_by_default(self, runner: CliRunner, dfs_image_filepath: Path):
+        out = _run(runner, "ls", "--as", "display", "--detailed", f"{dfs_image_filepath}:$").output
         assert "Load" in out
         assert "Filetype" not in out and "Datestamp" not in out
 
@@ -70,8 +76,14 @@ class TestExplicitOverride:
     ):
         _stamp(runner, adfs_image_filepath)
         out = _run(
-            runner, "ls", "--as", "display", "--detailed",
-            "--metadata-lens", "type-date", f"{adfs_image_filepath}:$",
+            runner,
+            "ls",
+            "--as",
+            "display",
+            "--detailed",
+            "--metadata-lens",
+            "type-date",
+            f"{adfs_image_filepath}:$",
             env={"COLUMNS": "200"},
         ).output
         assert "Obey" in out and "Datestamp" in out
@@ -81,20 +93,30 @@ class TestExplicitOverride:
     ):
         _stamp(runner, adfs_typed_image_filepath)
         out = _run(
-            runner, "ls", "--as", "display", "--detailed",
-            "--metadata-lens", "addresses", f"{adfs_typed_image_filepath}:$",
+            runner,
+            "ls",
+            "--as",
+            "display",
+            "--detailed",
+            "--metadata-lens",
+            "addresses",
+            f"{adfs_typed_image_filepath}:$",
             env={"COLUMNS": "200"},
         ).output
         assert "Load" in out and "Exec" in out
         assert "Obey" not in out
 
-    def test_addresses_tsv_keeps_raw_load(
-        self, runner: CliRunner, adfs_typed_image_filepath: Path
-    ):
+    def test_addresses_tsv_keeps_raw_load(self, runner: CliRunner, adfs_typed_image_filepath: Path):
         _stamp(runner, adfs_typed_image_filepath)
         out = _run(
-            runner, "ls", "--as", "tsv", "--detailed",
-            "--metadata-lens", "addresses", f"{adfs_typed_image_filepath}:$",
+            runner,
+            "ls",
+            "--as",
+            "tsv",
+            "--detailed",
+            "--metadata-lens",
+            "addresses",
+            f"{adfs_typed_image_filepath}:$",
         ).output
         lines = out.splitlines()
         header = lines[0].lstrip("# ").split("\t")
@@ -103,12 +125,14 @@ class TestExplicitOverride:
         assert cell["Filetype"] == "" and cell["Datestamp"] == ""
         assert int(cell["Load"]) & 0xFFF00000 == 0xFFF00000  # raw encoded load kept
 
-    def test_env_var_sets_default(
-        self, runner: CliRunner, adfs_typed_image_filepath: Path
-    ):
+    def test_env_var_sets_default(self, runner: CliRunner, adfs_typed_image_filepath: Path):
         _stamp(runner, adfs_typed_image_filepath)
         out = _run(
-            runner, "ls", "--as", "display", "--detailed",
+            runner,
+            "ls",
+            "--as",
+            "display",
+            "--detailed",
             f"{adfs_typed_image_filepath}:$",
             env={"COLUMNS": "200", "OAKNUT_DISC_METADATA_LENS": "addresses"},
         ).output
@@ -122,16 +146,10 @@ class TestEqualLoadExec:
     FPEmulator (&FFFFFA00/&FFFFFA00) sat next to genuinely dated modules.
     """
 
-    _D_ARTHUR = (
-        REFERENCE_IMAGES_DIRPATH / "adfs-riscos" / "D_Arthur_Welcome.adf"
-    )
+    _D_ARTHUR = REFERENCE_IMAGES_DIRPATH / "adfs-riscos" / "D_Arthur_Welcome.adf"
 
-    def test_equal_pair_shows_addresses_dated_neighbours_keep_dates(
-        self, runner: CliRunner
-    ):
-        out = _run(
-            runner, "ls", "--as", "json", "--detailed", f"{self._D_ARTHUR}:$.Modules"
-        ).output
+    def test_equal_pair_shows_addresses_dated_neighbours_keep_dates(self, runner: CliRunner):
+        out = _run(runner, "ls", "--as", "json", "--detailed", f"{self._D_ARTHUR}:$.Modules").output
         rows = {r["name"]: r for r in json.loads(out)["reports"]["entries"]["rows"]}
         # load == exec -> address pair, no filetype/datestamp decoded.
         fp = rows["FPEmulator"]
@@ -152,8 +170,14 @@ class TestDFS:
         # is forced there is nothing to decode and the load/exec pair must
         # still be shown — the row is never blanked.
         out = _run(
-            runner, "ls", "--as", "display", "--detailed",
-            "--metadata-lens", "type-date", f"{dfs_image_filepath}:$",
+            runner,
+            "ls",
+            "--as",
+            "display",
+            "--detailed",
+            "--metadata-lens",
+            "type-date",
+            f"{dfs_image_filepath}:$",
             env={"COLUMNS": "200"},
         ).output
         assert "Load" in out and "Exec" in out
@@ -163,8 +187,14 @@ class TestDFS:
         self, runner: CliRunner, dfs_image_filepath: Path
     ):
         out = _run(
-            runner, "ls", "--as", "json", "--detailed",
-            "--metadata-lens", "type-date", f"{dfs_image_filepath}:$",
+            runner,
+            "ls",
+            "--as",
+            "json",
+            "--detailed",
+            "--metadata-lens",
+            "type-date",
+            f"{dfs_image_filepath}:$",
         ).output
         rows = json.loads(out)["reports"]["entries"]["rows"]
         # Every file keeps a real integer load address; nothing is concealed.
@@ -181,25 +211,32 @@ class TestZip:
             archive.writestr("Sprites,ff9", b"sprite data")
         return archive_filepath
 
-    def test_default_decodes_filetype_and_conceals_address(
-        self, runner: CliRunner, tmp_path: Path
-    ):
+    def test_default_decodes_filetype_and_conceals_address(self, runner: CliRunner, tmp_path: Path):
         archive = self._riscos_zip(tmp_path)
         out = _run(
-            runner, "ls", "--as", "display", "--detailed", str(archive),
+            runner,
+            "ls",
+            "--as",
+            "display",
+            "--detailed",
+            str(archive),
             env={"COLUMNS": "200"},
         ).output
         assert "Sprite" in out
         assert "Filetype" in out
         assert "0xFFFFF900" not in out  # the filetyped load address is concealed
 
-    def test_addresses_lens_reveals_raw_load(
-        self, runner: CliRunner, tmp_path: Path
-    ):
+    def test_addresses_lens_reveals_raw_load(self, runner: CliRunner, tmp_path: Path):
         archive = self._riscos_zip(tmp_path)
         out = _run(
-            runner, "ls", "--as", "display", "--detailed",
-            "--metadata-lens", "addresses", str(archive),
+            runner,
+            "ls",
+            "--as",
+            "display",
+            "--detailed",
+            "--metadata-lens",
+            "addresses",
+            str(archive),
             env={"COLUMNS": "200"},
         ).output
         assert "0xFFFFF900" in out
@@ -215,8 +252,14 @@ class TestAFSDatestampIsLensIndependent:
         image = partitioned_image_with_files
         _run(runner, "set-datestamp", f"{image}:afs:$.afsA", "2005-06-15T14:30:00")
         out = _run(
-            runner, "ls", "--as", "display", "--detailed",
-            "--metadata-lens", "addresses", f"{image}:afs:$",
+            runner,
+            "ls",
+            "--as",
+            "display",
+            "--detailed",
+            "--metadata-lens",
+            "addresses",
+            f"{image}:afs:$",
             env={"COLUMNS": "240"},
         ).output
         assert "2005-06-15" in out
@@ -229,8 +272,14 @@ class TestAFSDatestampIsLensIndependent:
         image = partitioned_image_with_files
         _run(runner, "set-datestamp", f"{image}:afs:$.afsA", "2005-06-15T14:30:00")
         out = _run(
-            runner, "ls", "--as", "json", "--detailed",
-            "--metadata-lens", "addresses", f"{image}:afs:$",
+            runner,
+            "ls",
+            "--as",
+            "json",
+            "--detailed",
+            "--metadata-lens",
+            "addresses",
+            f"{image}:afs:$",
         ).output
         rows = json.loads(out)["reports"]["entries"]["rows"]
         afsa = next(r for r in rows if r["name"] == "afsA")
@@ -246,8 +295,14 @@ class TestAFSDatestampIsLensIndependent:
         image = partitioned_image_with_files
         _run(runner, "set-load", f"{image}:afs:$.afsA", "0xFFF00000")
         out = _run(
-            runner, "ls", "--as", "display", "--detailed",
-            "--metadata-lens", "type-date", f"{image}:afs:$",
+            runner,
+            "ls",
+            "--as",
+            "display",
+            "--detailed",
+            "--metadata-lens",
+            "type-date",
+            f"{image}:afs:$",
             env={"COLUMNS": "240"},
         ).output
         # The real address is shown, not blanked out as a filetype encoding.

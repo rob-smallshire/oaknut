@@ -142,10 +142,10 @@ lists, master-sequence-number tail byte).
 from oaknut.adfs import ADFS
 
 with ADFS.from_file("l3fs-master.dat") as adfs:
-    print(adfs.root.name)                  # ADFS side still works
-    afs = adfs.afs_partition               # or None
+    print(adfs.root.name)  # ADFS side still works
+    afs = adfs.afs_partition  # or None
     if afs is not None:
-        print(afs.disc_name)               # "Level3MasterDisc"
+        print(afs.disc_name)  # "Level3MasterDisc"
         for entry in afs.root:
             print(entry.name, entry.access_str)
         hello = (afs.root / "BeebMaster" / "!Boot").read_bytes()

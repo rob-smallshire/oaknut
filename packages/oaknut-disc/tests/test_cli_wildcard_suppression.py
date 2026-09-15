@@ -98,9 +98,7 @@ def test_rm_no_wildcards_deletes_only_the_literal_file(
     runner: CliRunner, source_image_filepath: Path
 ) -> None:
     """The same suppression governs rm — delete GUARD#1, spare GUARD41."""
-    result = runner.invoke(
-        cli, ["rm", "--no-wildcards", f"{source_image_filepath}:$.GUARD#1"]
-    )
+    result = runner.invoke(cli, ["rm", "--no-wildcards", f"{source_image_filepath}:$.GUARD#1"])
 
     assert result.exit_code == 0, result.output
     assert _names_in(source_image_filepath) == {"GUARD#2", "GUARD41", "GUARD42"}

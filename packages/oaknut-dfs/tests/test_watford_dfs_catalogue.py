@@ -475,12 +475,22 @@ class TestWatfordDFSCatalogueFileOperations:
         """An explicit order positions the named file first (Watford layout)."""
         catalogue = WatfordDFSCatalogue(watford_dfs_surface)
         catalogue.add_file_entry(
-            filename="FILE1", directory="$", load_address=0, exec_address=0,
-            length=256, start_sector=4, locked=False,
+            filename="FILE1",
+            directory="$",
+            load_address=0,
+            exec_address=0,
+            length=256,
+            start_sector=4,
+            locked=False,
         )
         catalogue.add_file_entry(
-            filename="FILE2", directory="$", load_address=0, exec_address=0,
-            length=256, start_sector=5, locked=False,
+            filename="FILE2",
+            directory="$",
+            load_address=0,
+            exec_address=0,
+            length=256,
+            start_sector=5,
+            locked=False,
         )
 
         catalogue.compact(order=["$.FILE2"])
@@ -494,12 +504,22 @@ class TestWatfordDFSCatalogueFileOperations:
         """Compaction carries load/exec/lock across the two-section rebuild."""
         catalogue = WatfordDFSCatalogue(watford_dfs_surface)
         catalogue.add_file_entry(
-            filename="KEEP", directory="$", load_address=0x1900, exec_address=0x8023,
-            length=256, start_sector=4, locked=True,
+            filename="KEEP",
+            directory="$",
+            load_address=0x1900,
+            exec_address=0x8023,
+            length=256,
+            start_sector=4,
+            locked=True,
         )
         catalogue.add_file_entry(
-            filename="GAP", directory="$", load_address=0, exec_address=0,
-            length=256, start_sector=10, locked=False,  # gap between 4 and 10
+            filename="GAP",
+            directory="$",
+            load_address=0,
+            exec_address=0,
+            length=256,
+            start_sector=10,
+            locked=False,  # gap between 4 and 10
         )
         catalogue.remove_file_entry("$.GAP")
 

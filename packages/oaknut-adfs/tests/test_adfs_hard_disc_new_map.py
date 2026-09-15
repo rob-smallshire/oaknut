@@ -20,10 +20,7 @@ from oaknut.adfs.adfs import ADFS, ADFS_F
 from oaknut.adfs.directory import BigDirectoryFormat, NewDirectoryFormat
 from oaknut.adfs.new_map import hard_drive_params
 
-_HD4 = (
-    Path("/private/tmp/claude-501/-Users-rjs-Code-oaknut")
-    .glob("*/scratchpad/hd4.hdf")
-)
+_HD4 = Path("/private/tmp/claude-501/-Users-rjs-Code-oaknut").glob("*/scratchpad/hd4.hdf")
 
 
 def _rotate_as_hdf(disc: bytes, header: int = 0x200) -> bytes:
@@ -65,9 +62,7 @@ def test_hdf_offset_detected_and_read_by_rotation():
 
 @pytest.mark.skipif(not next(_HD4, None), reason="Arculator hd4.hdf not in scratchpad")
 def test_read_real_arculator_hdd():
-    hd4 = next(
-        Path("/private/tmp/claude-501/-Users-rjs-Code-oaknut").glob("*/scratchpad/hd4.hdf")
-    )
+    hd4 = next(Path("/private/tmp/claude-501/-Users-rjs-Code-oaknut").glob("*/scratchpad/hd4.hdf"))
     with ADFS.from_file(hd4) as adfs:
         assert adfs.is_new_map
         assert adfs._map.disc_record.nzones == 26

@@ -29,25 +29,15 @@ with in_tmp_dir():
 
     section("auto")
     # Unnumbered source, numbered as if typed under AUTO, then read back.
-    show(
-        "printf 'PRINT\\nEND\\n' | oaknut-basic tokenise --start 10 "
-        "| oaknut-basic detokenise"
-    )
+    show("printf 'PRINT\\nEND\\n' | oaknut-basic tokenise --start 10 | oaknut-basic detokenise")
 
     section("roundtrip")
-    show(
-        "printf '10 PRINT\\n20 GOTO 10\\n' "
-        "| oaknut-basic tokenise "
-        "| oaknut-basic detokenise"
-    )
+    show("printf '10 PRINT\\n20 GOTO 10\\n' | oaknut-basic tokenise | oaknut-basic detokenise")
 
     section("greedy")
     # A keyword interrupting a hex constant: the ROM default keeps &FE60A
     # as one hex run, while --crunch greedy ends it at AND. Shown as bytes.
-    show(
-        "printf '10 A=?&FE60ANDROW%%\\n' "
-        "| oaknut-basic tokenise --crunch greedy | od -An -tx1"
-    )
+    show("printf '10 A=?&FE60ANDROW%%\\n' | oaknut-basic tokenise --crunch greedy | od -An -tx1")
 
     section("already-numbered")
     show_error("printf '10 PRINT\\n' | oaknut-basic tokenise --start 10")

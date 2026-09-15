@@ -24,9 +24,7 @@ def _make_image(tmp_path):
     image_filepath = tmp_path / "test.ads"
     with ADFS.create_file(str(image_filepath), ADFS_S, title="TESTDISC") as adfs:
         # A plain addressed file (BBC default load/exec).
-        (adfs.root / "$.PLAIN").write_bytes(
-            b"plain", load_address=0x1900, exec_address=0x8023
-        )
+        (adfs.root / "$.PLAIN").write_bytes(b"plain", load_address=0x1900, exec_address=0x8023)
     return image_filepath
 
 

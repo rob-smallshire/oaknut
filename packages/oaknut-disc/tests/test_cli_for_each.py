@@ -226,9 +226,7 @@ class TestMaterialiseMode:
 class TestEmptyOutputColumn:
     """The Output column drops from the human view when no command emits."""
 
-    def test_display_drops_output_when_all_empty(
-        self, runner: CliRunner, tmp_path: Path
-    ) -> None:
+    def test_display_drops_output_when_all_empty(self, runner: CliRunner, tmp_path: Path) -> None:
         img = _build_disc(tmp_path)
         # `true` produces no stdout for any file, so the column is empty.
         result = runner.invoke(cli, ["for-each", "--as", "display", f"{img}:*", "--", "true"])
@@ -236,19 +234,13 @@ class TestEmptyOutputColumn:
         assert "Output" not in result.output
         assert "Path" in result.output
 
-    def test_display_keeps_output_when_present(
-        self, runner: CliRunner, tmp_path: Path
-    ) -> None:
+    def test_display_keeps_output_when_present(self, runner: CliRunner, tmp_path: Path) -> None:
         img = _build_disc(tmp_path)
-        result = runner.invoke(
-            cli, ["for-each", "--as", "display", f"{img}:*", "--", *_BYTELEN]
-        )
+        result = runner.invoke(cli, ["for-each", "--as", "display", f"{img}:*", "--", *_BYTELEN])
         assert result.exit_code == 0, result.output
         assert "Output" in result.output
 
-    def test_tsv_keeps_output_for_stable_schema(
-        self, runner: CliRunner, tmp_path: Path
-    ) -> None:
+    def test_tsv_keeps_output_for_stable_schema(self, runner: CliRunner, tmp_path: Path) -> None:
         img = _build_disc(tmp_path)
         header = runner.invoke(
             cli, ["for-each", "--as", "tsv", f"{img}:*", "--", "true"]

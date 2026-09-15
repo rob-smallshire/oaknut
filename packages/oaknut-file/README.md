@@ -46,8 +46,8 @@ from oaknut.file import Access
 
 # Compose flags with bitwise OR
 flags = Access.R | Access.W | Access.L
-print(repr(flags))   # <Access.LWR: 11>
-print(hex(flags))    # 0xb
+print(repr(flags))  # <Access.LWR: 11>
+print(hex(flags))  # 0xb
 ```
 
 | Flag | Value | Meaning |
@@ -74,7 +74,10 @@ let you choose explicitly when writing.
 
 ```python
 from oaknut.file import (
-    Access, format_trad_inf_line, format_pieb_inf_line, parse_inf_line,
+    Access,
+    format_trad_inf_line,
+    format_pieb_inf_line,
+    parse_inf_line,
 )
 
 # Traditional INF: filename load exec length [attr]

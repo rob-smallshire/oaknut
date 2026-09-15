@@ -138,9 +138,7 @@ def test_import_surfaces_filename_encoded_name(tmp_path: Path):
     target = tmp_path / "DATA"
     export_with_metadata(b"x", target, SAMPLE_META, meta_format=MetaFormat.FILENAME_RISCOS)
     written = next(p for p in tmp_path.iterdir() if p.name.startswith("DATA"))
-    _clean, _label, meta = import_with_metadata(
-        written, meta_formats=(MetaFormat.FILENAME_RISCOS,)
-    )
+    _clean, _label, meta = import_with_metadata(written, meta_formats=(MetaFormat.FILENAME_RISCOS,))
     assert meta.name == "DATA"
 
 

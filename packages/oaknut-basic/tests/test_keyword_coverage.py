@@ -66,7 +66,9 @@ def test_every_keyword_tokenises_to_its_token(keyword, token, flags):
     assert _body(prefix + keyword) == prefix.encode("latin-1") + bytes([token])
 
 
-@pytest.mark.parametrize(("keyword", "token"), [(kw, t) for kw, t, _f in KEYWORDS], ids=_ids(KEYWORDS))
+@pytest.mark.parametrize(
+    ("keyword", "token"), [(kw, t) for kw, t, _f in KEYWORDS], ids=_ids(KEYWORDS)
+)
 def test_every_token_detokenises_to_its_keyword(keyword, token):
     program = b"\x0d\x00\x0a\x05" + bytes([token]) + b"\x0d\xff"
     assert detokenise(program) == f"10{keyword}\n"

@@ -23,7 +23,7 @@ def _program(*lines: tuple[int, bytes]) -> bytes:
 
 class TestClean:
     def test_tokenised_program_is_basic(self):
-        program = tokenise("10 PRINT \"HELLO\"\n20 GOTO 10")
+        program = tokenise('10 PRINT "HELLO"\n20 GOTO 10')
         result = detect(program)
         assert result.verdict is Verdict.BASIC
         assert result.is_basic

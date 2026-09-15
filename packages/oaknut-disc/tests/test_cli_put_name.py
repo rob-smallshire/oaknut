@@ -24,9 +24,7 @@ def _host_file_with_inf(tmp_path: Path, host_name: str, inf_name: str) -> Path:
     """A host data file plus a traditional INF naming a different Acorn name."""
     data = tmp_path / host_name
     data.write_bytes(b"payload!!" * 4)
-    (tmp_path / f"{host_name}.inf").write_text(
-        f"{inf_name}    00000800 0000B82B 00000020 WR\n"
-    )
+    (tmp_path / f"{host_name}.inf").write_text(f"{inf_name}    00000800 0000B82B 00000020 WR\n")
     return data
 
 
@@ -62,8 +60,14 @@ class TestDirectoryDestDerivesLeaf:
         image = _make_dfs(runner, tmp_path)
         host = _host_file_with_inf(tmp_path, "test8_3", "test8/3")
         r = _run(
-            runner, "put", f"{image}:$", str(host),
-            "--meta-format", "inf-trad", "--name", "MYNAME",
+            runner,
+            "put",
+            f"{image}:$",
+            str(host),
+            "--meta-format",
+            "inf-trad",
+            "--name",
+            "MYNAME",
         )
         assert r.exit_code == 0, r.output
         got = _names(runner, image)
@@ -81,9 +85,7 @@ class TestFileDestNamesFile:
     def test_explicit_leaf_wins_over_sidecar(self, runner: CliRunner, tmp_path: Path):
         image = _make_dfs(runner, tmp_path)
         host = _host_file_with_inf(tmp_path, "test8_3", "test8/3")
-        r = _run(
-            runner, "put", f"{image}:$.NAMED", str(host), "--meta-format", "inf-trad"
-        )
+        r = _run(runner, "put", f"{image}:$.NAMED", str(host), "--meta-format", "inf-trad")
         assert r.exit_code == 0, r.output
         got = _names(runner, image)
         assert "NAMED" in got and "test8/3" not in got
@@ -92,8 +94,14 @@ class TestFileDestNamesFile:
         image = _make_dfs(runner, tmp_path)
         host = _host_file_with_inf(tmp_path, "test8_3", "test8/3")
         r = _run(
-            runner, "put", f"{image}:$.NAMED", str(host),
-            "--meta-format", "inf-trad", "--name", "BAR",
+            runner,
+            "put",
+            f"{image}:$.NAMED",
+            str(host),
+            "--meta-format",
+            "inf-trad",
+            "--name",
+            "BAR",
         )
         assert r.exit_code == 0, r.output
         got = _names(runner, image)

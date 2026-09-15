@@ -78,9 +78,7 @@ class TestADFSDisplay:
         self, runner: CliRunner, adfs_typed_image_filepath: Path
     ):
         self._stamp(runner, adfs_typed_image_filepath)
-        out = _run(
-            runner, "stat", "--as", "display", f"{adfs_typed_image_filepath}:$.Hello"
-        ).output
+        out = _run(runner, "stat", "--as", "display", f"{adfs_typed_image_filepath}:$.Hello").output
         assert "Text" in out
         assert "2024-03-01T14:22:08" in out
 
@@ -106,9 +104,7 @@ class TestPutOverrides:
         got = _run(runner, "get-datestamp", "--as", "display", f"{adfs_image_filepath}:$.NEW")
         assert "2024-03-01T14:22:08" in got.output
 
-    def test_put_filetype_conflicts_with_load(
-        self, runner: CliRunner, adfs_image_filepath: Path
-    ):
+    def test_put_filetype_conflicts_with_load(self, runner: CliRunner, adfs_image_filepath: Path):
         result = runner.invoke(
             cli,
             ["put", f"{adfs_image_filepath}:$.NEW", "-", "--filetype", "Text", "--load", "0x1900"],
@@ -135,9 +131,7 @@ class TestImportOverrides:
         (host / "TWO").write_bytes(b"two")
         return host
 
-    def test_import_datestamp_applies_to_all(
-        self, runner: CliRunner, tmp_path: Path
-    ):
+    def test_import_datestamp_applies_to_all(self, runner: CliRunner, tmp_path: Path):
         from oaknut.adfs import ADFS, ADFS_L
 
         image = tmp_path / "imp.adl"
@@ -152,9 +146,7 @@ class TestImportOverrides:
             got = _run(runner, "get-datestamp", "--as", "display", f"{image}:$.{name}")
             assert "2024-03-01" in got.output, name
 
-    def test_import_filetype_on_dfs_fails_fast(
-        self, runner: CliRunner, tmp_path: Path
-    ):
+    def test_import_filetype_on_dfs_fails_fast(self, runner: CliRunner, tmp_path: Path):
         from oaknut.dfs import ACORN_DFS_80T_SINGLE_SIDED, DFS
 
         image = tmp_path / "imp.ssd"
@@ -170,9 +162,7 @@ class TestEmptyColumnOmission:
     def test_dfs_display_drops_filetype_and_datestamp(
         self, runner: CliRunner, dfs_image_filepath: Path
     ):
-        out = _run(
-            runner, "ls", "--as", "display", "--detailed", f"{dfs_image_filepath}:$"
-        ).output
+        out = _run(runner, "ls", "--as", "display", "--detailed", f"{dfs_image_filepath}:$").output
         # DFS has neither capability, so both columns are empty for the whole
         # listing and vanish from the human table.
         assert "Filetype" not in out
@@ -180,9 +170,7 @@ class TestEmptyColumnOmission:
         # Load/exec are real on DFS, so they stay.
         assert "Load" in out
 
-    def test_tsv_keeps_columns_for_stable_schema(
-        self, runner: CliRunner, dfs_image_filepath: Path
-    ):
+    def test_tsv_keeps_columns_for_stable_schema(self, runner: CliRunner, dfs_image_filepath: Path):
         header = _run(
             runner, "ls", "--as", "tsv", "--detailed", f"{dfs_image_filepath}:$"
         ).output.splitlines()[0]
@@ -221,9 +209,7 @@ class TestAFS:
     ):
         image = partitioned_image_with_files
         assert (
-            _run(
-                runner, "set-datestamp", f"{image}:afs:$.afsA", "2005-06-15T14:30:00"
-            ).exit_code
+            _run(runner, "set-datestamp", f"{image}:afs:$.afsA", "2005-06-15T14:30:00").exit_code
             == 0
         )
         got = _run(runner, "get-datestamp", "--as", "display", f"{image}:afs:$.afsA")
@@ -235,9 +221,7 @@ class TestAFS:
     def test_set_filetype_errors_cleanly(
         self, runner: CliRunner, partitioned_image_with_files: Path
     ):
-        result = _run(
-            runner, "set-filetype", f"{partitioned_image_with_files}:afs:$.afsA", "Text"
-        )
+        result = _run(runner, "set-filetype", f"{partitioned_image_with_files}:afs:$.afsA", "Text")
         assert result.exit_code != 0
         assert "filetype" in result.output
 
@@ -275,14 +259,20 @@ class TestRawAddressesDeprecated:
         self._stamp(runner, adfs_typed_image_filepath)
         result = runner.invoke(
             cli,
-            ["ls", "--as", "display", "--detailed", "--raw-addresses",
-             f"{adfs_typed_image_filepath}:$"],
+            [
+                "ls",
+                "--as",
+                "display",
+                "--detailed",
+                "--raw-addresses",
+                f"{adfs_typed_image_filepath}:$",
+            ],
             env={"COLUMNS": "200"},
         )
         out = result.output
         assert "Load" in out and "Exec" in out
-        assert "0xFFFFEB" in out            # the encoded load, shown as an address
-        assert "Filetype" not in out        # not decoded
+        assert "0xFFFFEB" in out  # the encoded load, shown as an address
+        assert "Filetype" not in out  # not decoded
         assert "Datestamp" not in out
         assert "Obey" not in out
 
@@ -302,28 +292,28 @@ class TestRawAddressesDeprecated:
     ):
         result = runner.invoke(
             cli,
-            ["ls", "--raw-addresses", "--metadata-lens", "type-date",
-             f"{adfs_typed_image_filepath}:$"],
+            [
+                "ls",
+                "--raw-addresses",
+                "--metadata-lens",
+                "type-date",
+                f"{adfs_typed_image_filepath}:$",
+            ],
         )
         assert result.exit_code != 0
         assert "conflicts" in result.output
 
-    def test_stat_raw_shows_load_exec(
-        self, runner: CliRunner, adfs_typed_image_filepath: Path
-    ):
+    def test_stat_raw_shows_load_exec(self, runner: CliRunner, adfs_typed_image_filepath: Path):
         self._stamp(runner, adfs_typed_image_filepath)
         out = runner.invoke(
             cli,
-            ["stat", "--as", "display", "--raw-addresses",
-             f"{adfs_typed_image_filepath}:$.Hello"],
+            ["stat", "--as", "display", "--raw-addresses", f"{adfs_typed_image_filepath}:$.Hello"],
             env={"COLUMNS": "200"},
         ).output
         assert "Load" in out
         assert "Filetype" not in out and "Datestamp" not in out
 
-    def test_env_var_sets_default(
-        self, runner: CliRunner, adfs_typed_image_filepath: Path
-    ):
+    def test_env_var_sets_default(self, runner: CliRunner, adfs_typed_image_filepath: Path):
         # OAKNUT_DISC_RAW_ADDRESSES acts as the cross-command default.
         self._stamp(runner, adfs_typed_image_filepath)
         out = runner.invoke(

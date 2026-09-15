@@ -207,9 +207,9 @@ side = track % 2
 physical_track = track // 2
 
 physical_offset = (
-    physical_track * 2560 * 2 +  # Skip complete track pairs
-    side * 2560 +                 # Offset to correct side
-    sector_in_track * 256         # Offset within track
+    physical_track * 2560 * 2  # Skip complete track pairs
+    + side * 2560  # Offset to correct side
+    + sector_in_track * 256  # Offset within track
 )
 ```
 

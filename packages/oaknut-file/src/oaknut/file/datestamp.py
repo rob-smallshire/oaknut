@@ -63,9 +63,7 @@ def decode_datestamp(load_address: int, exec_address: int) -> datetime | None:
     if not is_datestamped(load_address, exec_address):
         return None
     centiseconds = ((load_address & 0xFF) << 32) | (exec_address & 0xFFFFFFFF)
-    return RISCOS_EPOCH + timedelta(
-        microseconds=centiseconds * _MICROSECONDS_PER_CENTISECOND
-    )
+    return RISCOS_EPOCH + timedelta(microseconds=centiseconds * _MICROSECONDS_PER_CENTISECOND)
 
 
 def encode_datestamp(when: datetime) -> tuple[int, int]:

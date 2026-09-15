@@ -150,9 +150,9 @@ class InterleavedDSDSectorImage(SectorImage):
         physical_track = track // 2
 
         return (
-            physical_track * self.TRACK_SIZE * 2 +
-            side * self.TRACK_SIZE +
-            sector_in_track * self.SECTOR_SIZE
+            physical_track * self.TRACK_SIZE * 2
+            + side * self.TRACK_SIZE
+            + sector_in_track * self.SECTOR_SIZE
         )
 ```
 
@@ -197,13 +197,13 @@ Parse and manage the disk catalog structure (sectors 0-1), providing structured 
 ```python
 @dataclass
 class FileEntry:
-    filename: str          # 7 chars max, without directory
-    directory: str         # Single character
+    filename: str  # 7 chars max, without directory
+    directory: str  # Single character
     locked: bool
-    load_address: int      # 18-bit (32-bit with sign extension)
-    exec_address: int      # 18-bit (32-bit with sign extension)
-    length: int            # 18-bit
-    start_sector: int      # 10-bit
+    load_address: int  # 18-bit (32-bit with sign extension)
+    exec_address: int  # 18-bit (32-bit with sign extension)
+    length: int  # 18-bit
+    start_sector: int  # 10-bit
 
     @property
     def full_name(self) -> str:
@@ -218,11 +218,11 @@ class FileEntry:
 ```python
 @dataclass
 class DiscInfo:
-    title: str             # 12 chars max
-    cycle_number: int      # Sequence counter
+    title: str  # 12 chars max
+    cycle_number: int  # Sequence counter
     num_files: int
-    total_sectors: int     # 10-bit
-    boot_option: int       # 0-3
+    total_sectors: int  # 10-bit
+    boot_option: int  # 0-3
 ```
 
 **`Catalog` (Abstract Base Class)**
@@ -271,7 +271,7 @@ class AcornDFSCatalog(Catalog):
         sector1 = self._sector_image.read_sector(1)
 
         # Parse title (8 bytes from sector0, 4 from sector1)
-        title = (sector0[0:8] + sector1[0:4]).decode('ascii').rstrip()
+        title = (sector0[0:8] + sector1[0:4]).decode("ascii").rstrip()
 
         # Parse metadata from sector1
         cycle = sector1[0x04]
@@ -288,7 +288,7 @@ class AcornDFSCatalog(Catalog):
             cycle_number=cycle,
             num_files=num_files,
             total_sectors=total_sectors,
-            boot_option=boot_option
+            boot_option=boot_option,
         )
 
     def list_files(self) -> list[FileEntry]:
@@ -341,11 +341,13 @@ class DFSImage:
         pass
 
     @classmethod
-    def create(cls,
-               filepath: Path | str,
-               title: str = "NEW DISK",
-               num_tracks: int = 40,
-               double_sided: bool = False) -> "DFSImage":
+    def create(
+        cls,
+        filepath: Path | str,
+        title: str = "NEW DISK",
+        num_tracks: int = 40,
+        double_sided: bool = False,
+    ) -> "DFSImage":
         """Create a new formatted disk image."""
         pass
 
@@ -387,19 +389,19 @@ class DFSImage:
         # Read file data sector by sector
         data = bytearray()
         for i in range(entry.sectors_required):
-            sector_data = self._sector_image.read_sector(
-                entry.start_sector + i
-            )
+            sector_data = self._sector_image.read_sector(entry.start_sector + i)
             data.extend(sector_data)
 
-        return bytes(data[:entry.length])
+        return bytes(data[: entry.length])
 
-    def save(self,
-             filename: str,
-             data: bytes,
-             load_address: int = 0,
-             exec_address: int = 0,
-             locked: bool = False) -> None:
+    def save(
+        self,
+        filename: str,
+        data: bytes,
+        load_address: int = 0,
+        exec_address: int = 0,
+        locked: bool = False,
+    ) -> None:
         """
         *SAVE - Write file to disk.
 
@@ -485,8 +487,7 @@ with DFSImage.open("games.ssd") as disk:
     data = disk.load("$.ELITE")
 
     # Save a file
-    disk.save("$.HELLO", b"PRINT 'Hello!'",
-              load_address=0x1900, exec_address=0x1900)
+    disk.save("$.HELLO", b"PRINT 'Hello!'", load_address=0x1900, exec_address=0x1900)
 
 # Create new disk
 disk = DFSImage.create("new.ssd", title="MY DISK", num_tracks=40)
@@ -516,10 +517,12 @@ Each layer has clear responsibilities:
 class WatfordSectorImage(SectorImage):
     pass
 
+
 # Layer 3: New catalog implementation
 class WatfordDFSCatalog(Catalog):
     MAX_FILES = 62
     # Different catalog parsing
+
 
 # Layer 4: No changes needed!
 # Same DFSImage works with WatfordDFSCatalog

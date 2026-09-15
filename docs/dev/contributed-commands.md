@@ -69,7 +69,7 @@ and attaches it:
 # oaknut-disc/cli.py, after `cli` is defined
 from oaknut.cli import contributed_commands
 
-for command in contributed_commands():   # stevedore over "oaknut.command"
+for command in contributed_commands():  # stevedore over "oaknut.command"
     cli.add_command(command)
 ```
 

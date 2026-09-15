@@ -57,9 +57,7 @@ ROMFS_NAME_GRAMMAR = NameGrammar(
     allow_control=True,
     case="sensitive",
     codec="latin-1",
-    notes=(
-        "Flat namespace: . and / are ordinary name characters, not separators.",
-    ),
+    notes=("Flat namespace: . and / are ordinary name characters, not separators.",),
 )
 
 #: The name comparator for this filesystem — ROMFS matches byte-for-byte
@@ -331,9 +329,7 @@ class AcornROMFS(Filesystem):
         confident = romfs.has_service_entry and romfs.copyright.startswith("(C)")
         if not romfs.is_complete:
             evidence.append("no end marker — incomplete (multi-ROM fragment?); read-only")
-        confidence = (
-            Confidence.STRONG if (confident and romfs.is_complete) else Confidence.PROBABLE
-        )
+        confidence = Confidence.STRONG if (confident and romfs.is_complete) else Confidence.PROBABLE
         return Identification(
             filesystem=self.name,
             confidence=confidence,

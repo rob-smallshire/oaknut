@@ -37,11 +37,11 @@ The oaknut-dfs library implements Acorn encoding as a proper Python codec, regis
 ```python
 # Encoding Unicode to Acorn bytes
 text = "COST£100"
-data = text.encode('acorn')  # b'COST\x60100'
+data = text.encode("acorn")  # b'COST\x60100'
 
 # Decoding Acorn bytes to Unicode
 data = b"PRICE:\x60500"
-text = data.decode('acorn')  # "PRICE:£500"
+text = data.decode("acorn")  # "PRICE:£500"
 ```
 
 ### Codec Features
@@ -66,15 +66,15 @@ The codec supports standard Python error handling modes:
 ```python
 # Strict mode (raises exception)
 try:
-    "TEST™".encode('acorn')
+    "TEST™".encode("acorn")
 except UnicodeEncodeError:
     print("Cannot encode trademark symbol")
 
 # Ignore mode (skips invalid characters)
-result = "TEST™OK".encode('acorn', errors='ignore')  # b'TESTOK'
+result = "TEST™OK".encode("acorn", errors="ignore")  # b'TESTOK'
 
 # Replace mode (uses ? for invalid characters)
-result = "TEST™".encode('acorn', errors='replace')  # b'TEST?'
+result = "TEST™".encode("acorn", errors="replace")  # b'TEST?'
 ```
 
 ### Stream Support
@@ -86,13 +86,13 @@ import io
 
 # Write using Acorn encoding
 buffer = io.BytesIO()
-writer = io.TextIOWrapper(buffer, encoding='acorn')
+writer = io.TextIOWrapper(buffer, encoding="acorn")
 writer.write("£100")
 writer.flush()
 
 # Read using Acorn encoding
 buffer.seek(0)
-reader = io.TextIOWrapper(buffer, encoding='acorn')
+reader = io.TextIOWrapper(buffer, encoding="acorn")
 text = reader.read()  # "£100"
 ```
 
@@ -176,8 +176,8 @@ from oaknut_dfs.acorn_encoding import sanitize_for_acorn
 
 # Converts to uppercase and removes invalid characters
 clean = sanitize_for_acorn("test*file.bin")  # "TESTFILE.BIN"
-clean = sanitize_for_acorn("my file")        # "MYFILE"
-clean = sanitize_for_acorn("COST£100")       # "COST£100"
+clean = sanitize_for_acorn("my file")  # "MYFILE"
+clean = sanitize_for_acorn("COST£100")  # "COST£100"
 ```
 
 ## Historical Context
@@ -211,8 +211,8 @@ The codec is automatically registered when the `oaknut_dfs.acorn_encoding` modul
 import oaknut_dfs.acorn_encoding  # Registers 'acorn' codec
 
 # Now available system-wide
-text.encode('acorn')
-bytes.decode('acorn')
+text.encode("acorn")
+bytes.decode("acorn")
 ```
 
 ### Implementation

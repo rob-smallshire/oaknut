@@ -576,10 +576,7 @@ def _ror13(value: int) -> int:
 def _read_32bit_le(data: SectorsView | bytes, offset: int) -> int:
     """Read a 32-bit little-endian value."""
     return (
-        data[offset]
-        | (data[offset + 1] << 8)
-        | (data[offset + 2] << 16)
-        | (data[offset + 3] << 24)
+        data[offset] | (data[offset + 1] << 8) | (data[offset + 2] << 16) | (data[offset + 3] << 24)
     )
 
 
@@ -961,9 +958,7 @@ class BigDirectoryFormat(ADFSDirectoryFormat):
         """
         name_len = len(directory.name.encode("latin-1"))
         header_size = _big_dir_header_size(name_len)
-        names_size = _word_align(
-            sum(len(e.name.encode("latin-1")) + 1 for e in directory.entries)
-        )
+        names_size = _word_align(sum(len(e.name.encode("latin-1")) + 1 for e in directory.entries))
         needed = (
             header_size
             + len(directory.entries) * _BIG_DIR_ENTRY_SIZE
@@ -1052,9 +1047,7 @@ class BigDirectoryFormat(ADFSDirectoryFormat):
     def serialize(self, directory: _ADFSDirectory, data: SectorsView) -> None:
         dir_size = directory.big_dir_size or _BIG_DIR_DEFAULT_SIZE
         if len(data) < dir_size:
-            raise ADFSDirectoryError(
-                f"Output data too short: {len(data)} bytes, need {dir_size}"
-            )
+            raise ADFSDirectoryError(f"Output data too short: {len(data)} bytes, need {dir_size}")
         for i in range(dir_size):
             data[i] = 0
 

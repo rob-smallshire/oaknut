@@ -74,9 +74,7 @@ class TestAFSToADFS:
 
 
 class TestSameFilesystemUnaffected:
-    def test_adfs_to_adfs_preserves_type_and_date(
-        self, runner: CliRunner, tmp_path: Path
-    ):
+    def test_adfs_to_adfs_preserves_type_and_date(self, runner: CliRunner, tmp_path: Path):
         from oaknut.adfs import ADFS, ADFS_L
 
         src = _make_stamped_adfs(runner, tmp_path)
@@ -90,9 +88,7 @@ class TestSameFilesystemUnaffected:
         ds = runner.invoke(cli, ["get-datestamp", "--as", "display", f"{dst}:$.GOT"])
         assert "2024-03-01T14:22:08" in ds.output
 
-    def test_adfs_addressed_file_keeps_load_exec(
-        self, runner: CliRunner, tmp_path: Path
-    ):
+    def test_adfs_addressed_file_keeps_load_exec(self, runner: CliRunner, tmp_path: Path):
         from oaknut.adfs import ADFS, ADFS_L
 
         src = tmp_path / "src.adl"

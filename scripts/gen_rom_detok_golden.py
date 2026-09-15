@@ -51,7 +51,6 @@ INPUTS = [
     "MODE 7:PRINT'TAB(10)'",
     "?(addr%+1)=base%?2",
     'PRINT "unterminated GOTO',  # never-closed quote
-
 ]
 
 

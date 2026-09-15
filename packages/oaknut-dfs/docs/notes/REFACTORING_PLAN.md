@@ -83,7 +83,7 @@ modified = bytes(disk._buffer)
 # From MMB container (future)
 with open("container.mmb", "r+b") as f:
     mm = mmap.mmap(f.fileno(), 0)
-    disk_view = memoryview(mm)[disk_num * 204800:(disk_num + 1) * 204800]
+    disk_view = memoryview(mm)[disk_num * 204800 : (disk_num + 1) * 204800]
     disk = DFSImage(disk_view, format="ssd")
     # Changes write directly to MMB via mmap!
 ```

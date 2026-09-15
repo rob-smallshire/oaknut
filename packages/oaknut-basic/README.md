@@ -107,9 +107,9 @@ Programs are handled by the functions `tokenise`, `detokenise`, and
 ```python
 from oaknut.basic import tokenise, detokenise
 
-program = tokenise('10 PRINT "HELLO"\n20 GOTO 10\n')   # str -> bytes
-listing = detokenise(program)                          # bytes -> str
-assert tokenise(detokenise(program)) == program        # byte-exact
+program = tokenise('10 PRINT "HELLO"\n20 GOTO 10\n')  # str -> bytes
+listing = detokenise(program)  # bytes -> str
+assert tokenise(detokenise(program)) == program  # byte-exact
 ```
 
 When the program lives in a disc image, prefer the path-object wrappers
@@ -126,12 +126,12 @@ polymorphic `write` picks the record type from the Python value; typed
 from oaknut.basic import datafile
 
 with datafile.open("scores.dat", "w") as f:
-    f.write("ALICE")     # str   -> string record
-    f.write(42)          # int   -> integer record
-    f.write(3.5)         # float -> real record
+    f.write("ALICE")  # str   -> string record
+    f.write(42)  # int   -> integer record
+    f.write(3.5)  # float -> real record
 
 with datafile.open("scores.dat", "r") as f:
-    for value in f:      # yields "ALICE", 42, 3.5
+    for value in f:  # yields "ALICE", 42, 3.5
         print(value)
 ```
 

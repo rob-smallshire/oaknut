@@ -289,8 +289,9 @@ volume with no designation. So the dual hook:
 ```python
 @dataclass(frozen=True)
 class Volume:
-    designation: str   # the path token to address it (":0", ":2", "" if sole)
-    surface: int       # the surface index to open it with
+    designation: str  # the path token to address it (":0", ":2", "" if sole)
+    surface: int  # the surface index to open it with
+
 
 def volumes(self, geometry: Geometry) -> tuple[Volume, ...]:
     """The addressable volumes within this filesystem at *geometry*.

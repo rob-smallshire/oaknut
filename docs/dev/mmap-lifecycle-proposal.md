@@ -79,9 +79,9 @@ Ownership today is already mostly context-managed; what's missing is the
 Resulting usage is plain nested context managers:
 
 ```python
-with reader_for(path, writable=True) as reader:   # owns the mmap
-    with fs.open(reader, geometry) as mount:       # borrows the buffer
-        ...                                          # use the mount
+with reader_for(path, writable=True) as reader:  # owns the mmap
+    with fs.open(reader, geometry) as mount:  # borrows the buffer
+        ...  # use the mount
     # mount.__exit__ → DiscImage._buffer.release()
 # reader.__exit__ → mapping.close() now succeeds (no live views)
 ```
@@ -106,8 +106,8 @@ reader = reader_for(path, writable=True)
 with fs.open(reader, geom) as mount:
     ...
 reader.close()
-assert reader._closeables == ()           # closed
-assert mapping.closed is True             # the real assertion — fails today
+assert reader._closeables == ()  # closed
+assert mapping.closed is True  # the real assertion — fails today
 ```
 
 This fails on macOS/Linux today (mapping stays open) and passes after the

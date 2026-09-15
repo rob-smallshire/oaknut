@@ -1497,10 +1497,9 @@ class TestCliList:
     def test_tsv_keeps_metadata_columns_for_plain_zip(self, tmp_path):
         zip_filepath = make_zip_file(tmp_path, [("README", b"text", None)])
         runner = CliRunner()
-        header = (
-            runner.invoke(cli, ["list", "--as", "tsv", str(zip_filepath)])
-            .output.splitlines()[0]
-        )
+        header = runner.invoke(cli, ["list", "--as", "tsv", str(zip_filepath)]).output.splitlines()[
+            0
+        ]
         for column in ("Load", "Exec", "Filetype", "Attr", "Source"):
             assert column in header, column
 
@@ -1555,7 +1554,11 @@ class TestCliList:
                 ("Archive/Interpreters/", b"", None),
                 ("Archive/Interpreters/Tokenisers/", b"", None),
                 ("Archive/Interpreters/Tokenisers/BasicTokeniserImplementation", b"x" * 10, extra),
-                ("Archive/Interpreters/Tokenisers/BasicDetokeniserImplementation", b"x" * 10, extra),
+                (
+                    "Archive/Interpreters/Tokenisers/BasicDetokeniserImplementation",
+                    b"x" * 10,
+                    extra,
+                ),
             ],
         )
 
@@ -1563,11 +1566,15 @@ class TestCliList:
     def test_deep_archive_keeps_one_row_per_entry(self, tmp_path, columns):
         """However narrow the terminal, an entry never spans two rows."""
         zip_filepath = self._deep_archive(tmp_path)
-        out = CliRunner().invoke(
-            cli,
-            ["list", "--as", "display", "--no-header", str(zip_filepath)],
-            env={"COLUMNS": columns},
-        ).output
+        out = (
+            CliRunner()
+            .invoke(
+                cli,
+                ["list", "--as", "display", "--no-header", str(zip_filepath)],
+                env={"COLUMNS": columns},
+            )
+            .output
+        )
         assert len(first_column_cells(out)) == 5, out  # three dirs, two files
 
     def test_deep_archive_elides_names_that_do_not_fit(self, tmp_path):
@@ -1578,11 +1585,15 @@ class TestCliList:
         row still says which directory it belongs to.
         """
         zip_filepath = self._deep_archive(tmp_path)
-        out = CliRunner().invoke(
-            cli,
-            ["list", "--as", "display", "--no-header", str(zip_filepath)],
-            env={"COLUMNS": "80"},
-        ).output
+        out = (
+            CliRunner()
+            .invoke(
+                cli,
+                ["list", "--as", "display", "--no-header", str(zip_filepath)],
+                env={"COLUMNS": "80"},
+            )
+            .output
+        )
         leaves = [cell.strip() for cell in first_column_cells(out) if "Basic" in cell]
         assert len(leaves) == 2, out
         assert all("…" in leaf for leaf in leaves), leaves
@@ -1596,21 +1607,29 @@ class TestCliList:
         columns the Filename column used to be two cells short of
         ``└── Dircopy267``, which put the name on a row of its own.
         """
-        out = CliRunner().invoke(
-            cli,
-            ["list", "--as", "display", "--no-header", str(M128WELC_ZIP_FILEPATH)],
-            env={"COLUMNS": columns},
-        ).output
+        out = (
+            CliRunner()
+            .invoke(
+                cli,
+                ["list", "--as", "display", "--no-header", str(M128WELC_ZIP_FILEPATH)],
+                env={"COLUMNS": columns},
+            )
+            .output
+        )
         for cell in first_column_cells(out):
             assert cell.strip("│├└─ ") != "", f"orphaned tree prefix: {cell!r}"
 
     def test_reported_archive_shows_uncrunched_children_whole(self):
         """At 80 columns — the reported width — no name needs eliding."""
-        out = CliRunner().invoke(
-            cli,
-            ["list", "--as", "display", str(M128WELC_ZIP_FILEPATH)],
-            env={"COLUMNS": "80"},
-        ).output
+        out = (
+            CliRunner()
+            .invoke(
+                cli,
+                ["list", "--as", "display", str(M128WELC_ZIP_FILEPATH)],
+                env={"COLUMNS": "80"},
+            )
+            .output
+        )
         assert "├── Copyf254" in out
         assert "└── Dircopy267" in out
 

@@ -698,9 +698,7 @@ class AFS:
                 sequence_number=(last_block.sequence_number + 1) & 0xFF,
                 next_sin=last_block.next_sin,
             )
-            self._write_sector(
-                int(last_block.sin), new_last.to_bytes(is_head=last_is_head)
-            )
+            self._write_sector(int(last_block.sin), new_last.to_bytes(is_head=last_is_head))
         else:
             # Overflow: keep the first 48 in the current block and
             # spill the rest into a freshly-allocated successor.
@@ -714,9 +712,7 @@ class AFS:
                 sequence_number=(last_block.sequence_number + 1) & 0xFF,
                 next_sin=successor_sin,
             )
-            self._write_sector(
-                int(last_block.sin), updated_last.to_bytes(is_head=last_is_head)
-            )
+            self._write_sector(int(last_block.sin), updated_last.to_bytes(is_head=last_is_head))
             successor = MapSector(
                 sin=successor_sin,
                 extents=tuple(spill),

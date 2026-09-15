@@ -44,18 +44,14 @@ class TestCreatedNewMapMetadata:
         assert out.exit_code == 0, out.output
         assert "adfs" in out.output
 
-    def test_set_get_filetype_round_trips(
-        self, runner: CliRunner, new_map_image_filepath: Path
-    ):
+    def test_set_get_filetype_round_trips(self, runner: CliRunner, new_map_image_filepath: Path):
         target = f"{new_map_image_filepath}:$.Hello"
         assert _run(runner, "set-filetype", target, "Text").exit_code == 0
         got = _run(runner, "get-filetype", "--as", "display", target)
         assert got.exit_code == 0, got.output
         assert "Text" in got.output
 
-    def test_set_get_datestamp_round_trips(
-        self, runner: CliRunner, new_map_image_filepath: Path
-    ):
+    def test_set_get_datestamp_round_trips(self, runner: CliRunner, new_map_image_filepath: Path):
         target = f"{new_map_image_filepath}:$.Hello"
         assert _run(runner, "set-datestamp", target, "1995-06-15T12:30:45").exit_code == 0
         got = _run(runner, "get-datestamp", "--as", "display", target)
@@ -70,9 +66,7 @@ class TestCreatedNewMapMetadata:
         assert out.exit_code == 0, out.output
         assert "Filetype" in out.output and "Datestamp" in out.output
 
-    def test_metadata_write_keeps_disc_valid(
-        self, runner: CliRunner, new_map_image_filepath: Path
-    ):
+    def test_metadata_write_keeps_disc_valid(self, runner: CliRunner, new_map_image_filepath: Path):
         target = f"{new_map_image_filepath}:$.Hello"
         _run(runner, "set-filetype", target, "&FFB")
         _run(runner, "set-datestamp", target, "1995-06-15T12:30:45")
@@ -109,9 +103,7 @@ class TestRiscOsSpecimenMetadata:
         assert "1993-03-15" in out.output
 
     def test_get_filetype_display(self, runner: CliRunner):
-        out = _run(
-            runner, "get-filetype", "--as", "display", f"{_NEWLOOK}:$.!NewLook.!RunImage"
-        )
+        out = _run(runner, "get-filetype", "--as", "display", f"{_NEWLOOK}:$.!NewLook.!RunImage")
         assert out.exit_code == 0, out.output
         assert "BASIC" in out.output
 

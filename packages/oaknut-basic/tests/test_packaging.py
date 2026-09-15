@@ -48,9 +48,7 @@ def test_console_script_is_declared():
 
 def test_cli_dependencies_are_unconditional():
     unconditional = _unconditional_requirements()
-    missing = [
-        name for name in _CLI_REQUIREMENTS if name.lower() not in unconditional
-    ]
+    missing = [name for name in _CLI_REQUIREMENTS if name.lower() not in unconditional]
     assert not missing, (
         f"{_DISTRIBUTION} ships a console script but these imports of "
         f"oaknut.basic.cli are not unconditional dependencies: {missing}. "

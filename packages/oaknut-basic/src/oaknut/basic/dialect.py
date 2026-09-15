@@ -142,9 +142,7 @@ _BASIC_V_SINGLE_BYTE_OVERRIDES = {
 # (so a bare prefix never resolves to AUTO/DELETE/LOAD), then apply the
 # re-purposed single-byte slots.
 _basic_v_single_byte = {
-    token: keyword
-    for token, keyword in TOKEN_TO_KEYWORD.items()
-    if token not in (0xC6, 0xC7, 0xC8)
+    token: keyword for token, keyword in TOKEN_TO_KEYWORD.items() if token not in (0xC6, 0xC7, 0xC8)
 }
 _basic_v_single_byte.update(_BASIC_V_SINGLE_BYTE_OVERRIDES)
 

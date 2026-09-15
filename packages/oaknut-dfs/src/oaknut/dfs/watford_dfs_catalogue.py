@@ -586,10 +586,9 @@ class WatfordDFSCatalogue(Catalogue):
         # DFS folds case only when matching, so compare case-insensitively
         # (names are now stored with their original case).
         for entry in all_files:
-            if (
-                _name_key(entry.filename) == _name_key(parsed.filename)
-                and _name_key(entry.directory) == _name_key(parsed.directory)
-            ):
+            if _name_key(entry.filename) == _name_key(parsed.filename) and _name_key(
+                entry.directory
+            ) == _name_key(parsed.directory):
                 return entry
         return None
 

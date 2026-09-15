@@ -72,6 +72,7 @@ Crunch = Literal["rom", "greedy"]
 def _split_source_lines(source: str) -> list[str]:
     return LINE_SEPARATOR_RE.split(source)
 
+
 # Keyword entries grouped by first character, preserving ROM order within
 # each group, so the crunch only scans the relevant group.
 _KEYWORDS_BY_FIRST: dict[str, list[tuple[str, int, int]]] = {}

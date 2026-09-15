@@ -141,9 +141,7 @@ class DiscRecord:
     @classmethod
     def parse(cls, data: SectorsView | bytes, offset: int = _DISC_RECORD_OFFSET) -> DiscRecord:
         """Parse a disc record starting at *offset* (0x04 within zone 0)."""
-        disc_name = bytes(data[offset + 0x16 : offset + 0x20]).rstrip(b"\x00 ").decode(
-            "latin-1"
-        )
+        disc_name = bytes(data[offset + 0x16 : offset + 0x20]).rstrip(b"\x00 ").decode("latin-1")
         return cls(
             log2_sector_size=data[offset + 0x00],
             sectors_per_track=data[offset + 0x01],
@@ -1119,9 +1117,7 @@ def e_plus_disc_record(title: str, *, disc_id: int = 0, boot_option: int = 0) ->
 def f_plus_disc_record(title: str, *, disc_id: int = 0, boot_option: int = 0) -> DiscRecord:
     """Disc record for a blank 1.6MB four-zone ADFS F+ disc (Big directories)."""
     dr = f_disc_record(title, disc_id=disc_id, boot_option=boot_option)
-    root_fragment = (dr.nzones // 2) * (
-        (dr.sector_size * 8 - dr.zone_spare) // (dr.idlen + 1)
-    )
+    root_fragment = (dr.nzones // 2) * ((dr.sector_size * 8 - dr.zone_spare) // (dr.idlen + 1))
     return replace(
         dr,
         root=(root_fragment << 8) | 1,
@@ -1165,9 +1161,7 @@ def g_disc_record(title: str, *, disc_id: int = 0, boot_option: int = 0) -> Disc
 def g_plus_disc_record(title: str, *, disc_id: int = 0, boot_option: int = 0) -> DiscRecord:
     """Disc record for a blank 3.2MB eight-zone ADFS G+ disc (Big directories)."""
     dr = g_disc_record(title, disc_id=disc_id, boot_option=boot_option)
-    root_fragment = (dr.nzones // 2) * (
-        (dr.sector_size * 8 - dr.zone_spare) // (dr.idlen + 1)
-    )
+    root_fragment = (dr.nzones // 2) * ((dr.sector_size * 8 - dr.zone_spare) // (dr.idlen + 1))
     return replace(
         dr,
         root=(root_fragment << 8) | 1,
@@ -1391,9 +1385,7 @@ def format_blank_f(
     if dr.density == 0:
         _write_hard_disc_hardware_info(data, dr)
     _write_partial_disc_record(data, dr)
-    data[_BOOT_CHECKSUM_OFFSET] = _boot_block_checksum(
-        data, _BOOT_BLOCK_OFFSET, _BOOT_BLOCK_SIZE
-    )
+    data[_BOOT_CHECKSUM_OFFSET] = _boot_block_checksum(data, _BOOT_BLOCK_OFFSET, _BOOT_BLOCK_SIZE)
 
     # Full disc record in zone 0, and per-zone cross-check bytes (0xFF marks the
     # last zone; the others are zero — their XOR is the single-zone 0xFF marker).
@@ -1453,9 +1445,7 @@ def format_blank_f(
     # Every zone's check byte (computed over a copy of that zone), then
     # duplicate the whole map into the second copy.
     for zone in range(nzones):
-        zone_bytes = bytearray(
-            data[bootmap + zone * secsize + i] for i in range(secsize)
-        )
+        zone_bytes = bytearray(data[bootmap + zone * secsize + i] for i in range(secsize))
         data[bootmap + zone * secsize + _ZONE_CHECK_OFFSET] = calculate_zone_check(
             zone_bytes, 0, dr.log2_sector_size
         )
