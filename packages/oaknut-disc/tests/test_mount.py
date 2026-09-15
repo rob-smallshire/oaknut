@@ -168,3 +168,80 @@ class TestResolveMountDriveSide:
             resolve_mount(f"{dfs_image_filepath}::2.$")
         assert ":2" in str(exc.value)
         assert "surface" not in str(exc.value).lower()
+
+
+class TestGeometryFromSidecar:
+    """`_geometry_from_sidecar` resolves CHS from a `.cfg` or `.dsc`.
+
+    A BeebSCSI/Pi1MHz `.cfg` is preferred over a `.dsc` because only the
+    `.cfg` records sectors-per-track — the firmware's own precedence.
+    """
+
+    @staticmethod
+    def _dsc(cylinders: int, heads: int) -> bytes:
+        data = bytearray(22)
+        data[13] = (cylinders >> 8) & 0xFF
+        data[14] = cylinders & 0xFF
+        data[15] = heads
+        return bytes(data)
+
+    def test_none_without_sidecar(self, tmp_path):
+        from oaknut.disc.mount import _geometry_from_sidecar
+
+        dat = tmp_path / "image.dat"
+        dat.write_bytes(b"\x00" * 256)
+        assert _geometry_from_sidecar(dat) is None
+
+    def test_reads_dsc_when_only_dsc(self, tmp_path):
+        from oaknut.disc.mount import _geometry_from_sidecar
+
+        dat = tmp_path / "image.dat"
+        dat.write_bytes(b"\x00" * 256)
+        dat.with_suffix(".dsc").write_bytes(self._dsc(296, 4))
+        geom = _geometry_from_sidecar(dat)
+        assert geom is not None
+        assert geom.cylinders == 296
+        assert geom.heads == 4
+        assert geom.sectors_per_track == 33  # the .dsc default
+
+    def test_reads_cfg_with_real_spt(self, tmp_path):
+        from oaknut.disc.mount import _geometry_from_sidecar
+        from oaknut.filesystem import BeebScsiConfig
+
+        dat = tmp_path / "image.dat"
+        dat.write_bytes(b"\x00" * 256)
+        cfg = BeebScsiConfig.default()
+        cfg.set_geometry(cylinders=100, heads=4, sectors_per_track=64)
+        dat.with_suffix(".cfg").write_text(cfg.render())
+        geom = _geometry_from_sidecar(dat)
+        assert geom is not None
+        assert geom.cylinders == 100
+        assert geom.sectors_per_track == 64  # not the .dsc default of 33
+
+    def test_cfg_preferred_over_dsc(self, tmp_path):
+        from oaknut.disc.mount import _geometry_from_sidecar
+        from oaknut.filesystem import BeebScsiConfig
+
+        dat = tmp_path / "image.dat"
+        dat.write_bytes(b"\x00" * 256)
+        # A .dsc claiming 4 heads / SPT 33, and a .cfg claiming 8 heads / SPT 64.
+        dat.with_suffix(".dsc").write_bytes(self._dsc(100, 4))
+        cfg = BeebScsiConfig.default()
+        cfg.set_geometry(cylinders=100, heads=8, sectors_per_track=64)
+        dat.with_suffix(".cfg").write_text(cfg.render())
+        geom = _geometry_from_sidecar(dat)
+        assert geom is not None
+        assert geom.heads == 8  # the .cfg won
+        assert geom.sectors_per_track == 64
+
+    def test_malformed_cfg_falls_back_to_dsc(self, tmp_path):
+        from oaknut.disc.mount import _geometry_from_sidecar
+
+        dat = tmp_path / "image.dat"
+        dat.write_bytes(b"\x00" * 256)
+        dat.with_suffix(".cfg").write_text("Title=no geometry here\n")
+        dat.with_suffix(".dsc").write_bytes(self._dsc(296, 2))
+        geom = _geometry_from_sidecar(dat)
+        assert geom is not None
+        assert geom.cylinders == 296
+        assert geom.heads == 2

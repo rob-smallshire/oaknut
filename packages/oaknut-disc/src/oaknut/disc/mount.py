@@ -27,6 +27,7 @@ from oaknut.filesystem import (
     Partition,
     create_filesystem,
     filesystem_names,
+    geometry_from_cfg,
     geometry_from_dsc,
     identify,
     reader_for,
@@ -253,19 +254,28 @@ def _ambiguities(force_geometry: str | None, identification) -> tuple[Geometry, 
 
 
 def _geometry_from_sidecar(outer_filepath: Path) -> Geometry | None:
-    """The CHS geometry from an adjacent ``.dsc`` sidecar, if present.
+    """The CHS geometry from an adjacent geometry sidecar, if present.
 
-    A hard-disc image records its geometry only in the sidecar, so this
-    is geometry *resolution* (a separate layer) — identification stays
-    content-first. A malformed sidecar is ignored.
+    A hard-disc image records its geometry only in a sidecar, so this is
+    geometry *resolution* (a separate layer) — identification stays
+    content-first. A BeebSCSI/Pi1MHz ``.cfg`` is preferred over a ``.dsc``,
+    matching the firmware's own precedence: only the ``.cfg`` carries
+    sectors-per-track, so a ``.dsc`` beside it would report the wrong SPT.
+    A malformed or missing sidecar is ignored.
     """
-    sidecar = outer_filepath.with_suffix(".dsc")
-    if not sidecar.is_file():
-        return None
-    try:
-        return geometry_from_dsc(sidecar.read_bytes())
-    except (GeometryError, OSError):
-        return None
+    cfg = outer_filepath.with_suffix(".cfg")
+    if cfg.is_file():
+        try:
+            return geometry_from_cfg(cfg.read_text())
+        except (GeometryError, OSError, UnicodeDecodeError):
+            pass
+    dsc = outer_filepath.with_suffix(".dsc")
+    if dsc.is_file():
+        try:
+            return geometry_from_dsc(dsc.read_bytes())
+        except (GeometryError, OSError):
+            pass
+    return None
 
 
 def _unrecognised_message(name: str) -> str:
