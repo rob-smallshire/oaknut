@@ -170,109 +170,32 @@ package, which the ZIP filesystem wraps.
 
 .. _gather-many-discs:
 
-Gather many discs into one image
---------------------------------
+Build a Pi1MHz / BeebSCSI hard disc from a shelf of cover discs
+---------------------------------------------------------------
 
-You have a directory full of floppy images on your host — DFS
-``.ssd``/``.dsd`` and ADFS ``.adf`` in any mix — and want them all
-on a single hard disc, each under its own directory named for the
-source.
+You have a directory full of floppy images — DFS ``.ssd``/``.dsd``
+and ADFS ``.adf``/``.adl`` in any mix — and want them all on one
+hard disc, each under its own directory, ready to serve from a
+`Pi1MHz <https://github.com/dp111/Pi1MHz>`_ (or standalone BeebSCSI)
+as a single virtual drive on a real BBC Micro.
 
-``disc gather`` does exactly this in one command: it copies each
+``disc gather`` does the collation in one command: it copies each
 source image's files into its own directory of the destination,
 naming the directory from the host filename by default (or the
 disc's on-disc title with ``--name-from title``), sanitising the
 name to the destination filesystem's rules and de-duplicating
-collisions. The destination is opened once for the whole run, and
+collisions. The destination is opened once for the whole run and
 must be a hierarchical image (ADFS or AFS — a flat DFS destination
-is refused).
+is refused). The same operation is available from Python as
+``oaknut.disc.gather(destination, sources, …)``, so a batch import
+needs no shell at all — handy on Windows.
 
-.. cli-example:: cmd_gather
-
-Create the destination first (``disc gather`` deliberately does not,
-so you choose the geometry and sidecars with ``disc create`` — see
-the Pi1MHz recipe above), then gather onto it. The same operation is
-available from Python as ``oaknut.disc.gather(destination, sources,
-…)``, so a batch import needs no shell at all — handy on Windows,
-where the ``for`` loop below would need rewriting.
-
-When you want directory names the filename and title can't give
-you — a title's *first word*, say, or a value pulled from a
-manifest — drop to a shell ``for`` loop around ``disc cp -r``, which
-gives you the full expressive power of the shell for naming.
-
-**1. Create an empty archive disc.**
-
-.. cli-example:: bulk_archive_ssds
-   :section: create
-
-A 10 MB ADFS hard-disc image is plenty for three DFS floppies-
-worth of content; ``--title Games`` sets the name that ``*CAT``
-will display.
-
-**2. Look at the source filenames.**
-
-.. cli-example:: bulk_archive_ssds
-   :section: sources
-
-Each SSD is named ``DiscNNN-Title.ssd`` — a disc-number prefix
-followed by the game title. The loop in the next step pulls the
-title's first word out of each filename and uses it as the
-subdirectory name on the archive disc.
-
-**3. Loop the SSDs, copying each into its own subdirectory.**
-
-.. cli-example:: bulk_archive_ssds
-   :section: loop
-
-The interesting moves:
-
-- The ``sed -E 's/.*-([A-Z][a-z]+).*/\1/'`` expression captures the
-  first PascalCase word after the hyphen, yielding ``Planetoid`` /
-  ``Arcadians`` / ``Zalaga``. Longer titles like
-  ``PlanetoidAKADefender`` get truncated at the first uppercase
-  letter, which fits comfortably inside ADFS's 10-character
-  filename limit.
-- ``disc cp -r SOURCE:$ TARGET:$.NAME`` recursively copies every
-  file under the DFS directory ``$`` into ``$.NAME`` on the archive
-  disc. The destination directory is **created automatically** —
-  same convention as Unix ``cp -r SRC DEST`` when ``DEST`` does not
-  exist. No explicit ``disc mkdir`` is required.
-- The disc-side ``$`` characters appear as ``\$`` inside the
-  double-quoted shell arguments: the arguments must be
-  double-quoted (not single-quoted) so ``$ssd`` and ``$name``
-  expand, and inside double quotes the shell would otherwise treat
-  the bare ``$`` as the start of a variable name. Escaping with a
-  backslash passes a literal ``$`` through to ``disc``. See
-  :doc:`conventions/quoting` for the broader rules.
-
-Note the silence: each successful ``disc cp -r`` writes nothing,
-so the 18-file copy across three SSDs produces no stdout chatter.
-
-**4. Verify the archive.**
-
-.. cli-example:: bulk_archive_ssds
-   :section: verify
-
-The top level of the archive holds three sibling directories named
-for the games — one per SSD. Walking the whole thing with
-``disc tree`` then exposes each SSD's catalogue under the matching
-directory.
-
-
-Consolidate a shelf of discs onto a Pi1MHz / BeebSCSI hard drive
-----------------------------------------------------------------
-
-The previous recipe's target — one ADFS hard disc holding a
-directory per source floppy — is exactly what a `Pi1MHz
-<https://github.com/dp111/Pi1MHz>`_ (or standalone BeebSCSI) needs
-to serve a whole magazine cover-disc collection as a single virtual
-hard drive on a real BBC Micro. BeebSCSI keeps each virtual drive
-("LUN") on its SD card as ``BeebSCSI<n>/scsiN.dat`` — a raw ADFS
-FileCore image, precisely what ``disc create`` writes — beside a
-geometry sidecar. This recipe adds the two things that make the
-image drop-in ready for the SD card: the sidecars, and the on-card
-layout.
+BeebSCSI keeps each virtual drive ("LUN") on its SD card as
+``BeebSCSI<n>/scsiN.dat`` — a raw ADFS FileCore image, precisely
+what ``disc create`` writes — beside a geometry sidecar. So the
+whole job is three moves: create the LUN image with its sidecars,
+gather the cover discs onto it, and drop it into the card's
+``BeebSCSI0`` directory.
 
 **1. Create the LUN image with both sidecars.**
 
@@ -284,33 +207,32 @@ come out as ``scsi0.dsc`` and ``scsi0.cfg`` — the exact filenames
 BeebSCSI reads for LUN 0. ``--sidecar`` is repeatable; passing both
 ``dsc`` and ``cfg`` writes each. The 22-byte ``.dsc`` is the legacy
 binary descriptor; the ``.cfg`` is BeebSCSI's richer "extended
-attributes" file, and it is the one to prefer because it records
+attributes" file, and the one to prefer because it records
 **sectors-per-track**, which the ``.dsc`` cannot. (A ``.dsc``-only
 image is always read back at the Acorn default of 33 SPT — fine for
 a stock SCSI geometry, wrong for anything else.) To synthesise a
 ``.cfg`` for a ``.dat`` you already have, use
-``disc adfs generate-cfg`` instead.
+``disc adfs generate-cfg``.
 
-**2. Copy each cover disc into its own directory.**
-
-.. cli-example:: pi1mhz_beebscsi
-   :section: import
-
-``disc gather`` does the whole batch in one command: each source
-image's files land in a directory named after it, created
-automatically, with the destination opened just once. Sources may
-be DFS ``.ssd``/``.dsd`` or ADFS ``.adf`` images in any mix, since
-gather maps metadata across formats exactly as ``disc cp`` does.
-Directory names are sanitised to the destination filesystem's rules
-(ADFS's ten-character limit here) and de-duplicated. See
-:ref:`gather-many-discs` below for the naming options.
-
-**3. Confirm the geometry the sidecar records.**
+**2. Gather the cover discs onto it.**
 
 .. cli-example:: pi1mhz_beebscsi
-   :section: stat
+   :section: gather
 
-``disc stat`` resolves the geometry from the sidecar, preferring the
+One command copies all four discs — three DFS ``.ssd`` and one ADFS
+``.adl`` — each into a directory named for its file, cross-format
+metadata mapped exactly as ``disc cp`` does. The report shows where
+each landed; names are sanitised to ADFS's ten-character limit and
+de-duplicated. Here the filenames are already tidy; when a disc's
+own title would read better, add ``--name-from title``.
+
+**3. Check the result and the recorded geometry.**
+
+.. cli-example:: pi1mhz_beebscsi
+   :section: inspect
+
+Each cover disc is now a sibling directory at the root. ``disc
+stat`` resolves the geometry from the sidecar, preferring the
 ``.cfg`` over the ``.dsc`` exactly as the firmware does — here 33
 sectors per track, read from the ``.cfg``'s mode pages rather than
 assumed.
@@ -327,6 +249,31 @@ and its sidecars into that directory on the card. Further LUNs are
 BeebSCSI directory (``BeebSCSI1/``) holds the next four drives.
 Copy the ``BeebSCSI0`` directory to the root of a FAT-formatted SD
 card and the collection is ready to mount from the BBC.
+
+
+Gathering with custom directory names
+-------------------------------------
+
+``disc gather`` names each directory from the source filename or its
+disc title. When you need a name neither gives you — a title's
+*first word*, say, or a value from a manifest — drop to a shell
+``for`` loop around ``disc cp -r``, which puts the full expressive
+power of the shell behind the naming:
+
+.. cli-example:: bulk_archive_ssds
+   :section: loop
+
+The moves:
+
+- The ``sed -E 's/.*-([A-Z][a-z]+).*/\1/'`` expression captures the
+  first PascalCase word after the hyphen, yielding ``Planetoid`` /
+  ``Arcadians`` / ``Zalaga``, well inside ADFS's 10-character limit.
+- ``disc cp -r SOURCE:$ TARGET:$.NAME`` recursively copies every
+  file under the source's ``$`` into ``$.NAME`` on the destination,
+  which is **created automatically** — no ``disc mkdir`` needed.
+- The disc-side ``$`` appears as ``\$`` inside the double-quoted
+  shell arguments, so ``$ssd``/``$name`` expand while the literal
+  ``$`` passes through to ``disc``. See :doc:`conventions/quoting`.
 
 
 Assemble a double-sided DSD from two SSDs
