@@ -3261,20 +3261,21 @@ _alias("*OPT4", "opt")
 @click.option("--title", "disc_title", default="", help="Disc title.")
 @click.option(
     "--sidecar",
-    type=click.Choice(["dsc", "cfg", "both"]),
-    default="dsc",
-    show_default=True,
+    "sidecars",
+    type=click.Choice(["dsc", "cfg"]),
+    multiple=True,
     metavar="KIND",
-    help="Geometry sidecar(s) to write beside a hard-disc .dat: dsc (the "
-    "22-byte binary descriptor), cfg (the BeebSCSI/Pi1MHz .cfg), or both. "
-    "Ignored for floppies.",
+    help="Geometry sidecar to write beside a hard-disc .dat, repeatable: "
+    "dsc (the 22-byte binary descriptor) and/or cfg (the BeebSCSI/Pi1MHz "
+    ".cfg), e.g. --sidecar dsc --sidecar cfg. Defaults to dsc. Ignored for "
+    "floppies.",
 )
 def create(
     host_path: Path,
     filesystem_name: str | None,
     geometry_spec: str | None,
     disc_title: str,
-    sidecar: str,
+    sidecars: tuple[str, ...],
 ) -> None:
     """Create a new empty disc image.
 
@@ -3313,7 +3314,8 @@ def create(
             f"({hint}run `disc describe-filesystem {name}` for all options)"
         )
 
-    sidecars = ("dsc", "cfg") if sidecar == "both" else (sidecar,)
+    # Repeatable --sidecar; de-duplicate, defaulting to just the .dsc.
+    sidecars = tuple(dict.fromkeys(sidecars)) or ("dsc",)
     filesystem.create(host_path, geometry, title=disc_title, sidecars=sidecars)
 
 

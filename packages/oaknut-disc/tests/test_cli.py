@@ -2936,11 +2936,21 @@ class TestCreate:
         geom = geometry_from_cfg(out.with_suffix(".cfg").read_text())
         assert (geom.cylinders, geom.heads, geom.sectors_per_track) == (50, 4, 33)
 
-    def test_create_hard_sidecar_both(self, runner: CliRunner, tmp_path: Path) -> None:
+    def test_create_hard_sidecar_repeatable(self, runner: CliRunner, tmp_path: Path) -> None:
+        # --sidecar is repeatable: name each format to emit.
         out = tmp_path / "both.dat"
         result = runner.invoke(
             cli,
-            ["create", str(out), "--geometry", "cylinders=50,heads=4,spt=33", "--sidecar", "both"],
+            [
+                "create",
+                str(out),
+                "--geometry",
+                "cylinders=50,heads=4,spt=33",
+                "--sidecar",
+                "dsc",
+                "--sidecar",
+                "cfg",
+            ],
         )
         assert result.exit_code == 0, result.output
         assert out.with_suffix(".dsc").exists()
@@ -2949,7 +2959,7 @@ class TestCreate:
     def test_create_floppy_ignores_sidecar(self, runner: CliRunner, tmp_path: Path) -> None:
         # A floppy has no hard-disc geometry sidecar; --sidecar is accepted but inert.
         out = tmp_path / "flop.ssd"
-        result = runner.invoke(cli, ["create", str(out), "--sidecar", "both"])
+        result = runner.invoke(cli, ["create", str(out), "--sidecar", "dsc", "--sidecar", "cfg"])
         assert result.exit_code == 0, result.output
         assert not out.with_suffix(".cfg").exists()
 
