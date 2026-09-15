@@ -349,6 +349,11 @@ Diagnostics
 
    .. cli-example:: cmd_generate_dsc
 
+.. oaknut-command:: oaknut.adfs.cli:generate_cfg
+   :prog: disc adfs generate-cfg
+
+   .. cli-example:: cmd_generate_cfg
+
 
 Filesystem identification
 -------------------------

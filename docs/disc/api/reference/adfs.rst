@@ -63,7 +63,8 @@ Hard-disc geometry
 
 Hard-disc images carry an explicit cylinders/heads/sectors geometry,
 held in an :class:`~oaknut.adfs.ADFSGeometry` and persisted alongside
-the image in a 22-byte ``.dsc`` sidecar.
+the image in a 22-byte ``.dsc`` sidecar, or a richer BeebSCSI/Pi1MHz
+``.cfg`` extended-attributes file that also records sectors-per-track.
 
 .. autoclass:: oaknut.adfs.ADFSGeometry
    :members:
@@ -71,6 +72,8 @@ the image in a 22-byte ``.dsc`` sidecar.
 .. autofunction:: oaknut.adfs.geometry_for_capacity
 
 .. autofunction:: oaknut.adfs.write_dsc
+
+.. autofunction:: oaknut.adfs.write_cfg
 
 
 See also

@@ -141,6 +141,11 @@ terms.
 
 .. autofunction:: oaknut.filesystem.geometry_from_dsc
 
+.. autofunction:: oaknut.filesystem.geometry_from_cfg
+
+.. autoclass:: oaknut.filesystem.BeebScsiConfig
+   :members:
+
 .. autofunction:: oaknut.filesystem.region_reader
 
 .. autodata:: oaknut.filesystem.FLOPPY
@@ -204,6 +209,8 @@ Exceptions
 .. autoexception:: oaknut.filesystem.FilesystemError
 
 .. autoexception:: oaknut.filesystem.GeometryError
+
+.. autoexception:: oaknut.filesystem.BeebScsiConfigError
 
 .. autoexception:: oaknut.filesystem.NoSuchVolumeError
 
