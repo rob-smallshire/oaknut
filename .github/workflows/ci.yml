@@ -42,6 +42,9 @@ jobs:
       - name: Run ruff
         run: uv run --no-project ruff check
 
+      - name: Check formatting
+        run: uv run --no-project ruff format --check
+
       - name: Build all workspace wheels
         run: uv build --all-packages
 
