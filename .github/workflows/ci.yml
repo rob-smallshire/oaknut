@@ -46,6 +46,11 @@ jobs:
         run: uv run --no-project ruff format --check
 
       - name: Check generated READMEs are current
+        # Single-source consistency check, not a per-OS runtime test: the
+        # renderer executes example scripts whose captured output carries
+        # platform line endings, so it is only reproducible on the canonical
+        # (Linux) platform the committed READMEs are generated on.
+        if: runner.os == 'Linux'
         run: uv run python scripts/render_readme.py --check
 
       - name: Build all workspace wheels
