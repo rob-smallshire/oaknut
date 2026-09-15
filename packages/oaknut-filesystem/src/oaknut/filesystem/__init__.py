@@ -13,6 +13,7 @@ into reserved regions to build a per-partition :class:`Identification`
 tree — depending on, and importing, no concrete filesystem package.
 """
 
+from oaknut.filesystem.beebscsi import BeebScsiConfig, geometry_from_cfg
 from oaknut.filesystem.capabilities import (
     AcornMetadata,
     Bootable,
@@ -49,6 +50,7 @@ from oaknut.filesystem.coordinator import (
     identify,
 )
 from oaknut.filesystem.exceptions import (
+    BeebScsiConfigError,
     FilesystemError,
     FilesystemExtensionError,
     GeometryError,
@@ -119,6 +121,8 @@ __all__ = [
     "floppy_geometry",
     "winchester_geometry",
     "geometry_from_dsc",
+    "geometry_from_cfg",
+    "BeebScsiConfig",
     "region_reader",
     "FLOPPY",
     "WINCHESTER",
@@ -140,6 +144,7 @@ __all__ = [
     # exceptions
     "FilesystemError",
     "GeometryError",
+    "BeebScsiConfigError",
     "NoSuchVolumeError",
     "VolumeNotFormattedError",
     "ReadOnlyFilesystemError",

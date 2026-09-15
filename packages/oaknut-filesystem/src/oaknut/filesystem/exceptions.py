@@ -14,6 +14,14 @@ class GeometryError(FilesystemError):
     """A geometry specification could not be parsed, or is invalid."""
 
 
+class BeebScsiConfigError(GeometryError):
+    """A BeebSCSI ``.cfg`` sidecar could not be parsed, or lacks geometry.
+
+    A :class:`GeometryError` so sidecar geometry resolution can catch
+    ``.cfg`` and ``.dsc`` failures uniformly and fall back.
+    """
+
+
 class NoSuchVolumeError(FilesystemError):
     """A volume designation addresses a volume the image does not have.
 
