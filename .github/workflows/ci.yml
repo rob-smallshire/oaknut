@@ -45,6 +45,9 @@ jobs:
       - name: Check formatting
         run: uv run --no-project ruff format --check
 
+      - name: Check generated READMEs are current
+        run: uv run python scripts/render_readme.py --check
+
       - name: Build all workspace wheels
         run: uv build --all-packages
 
