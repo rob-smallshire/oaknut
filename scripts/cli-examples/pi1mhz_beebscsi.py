@@ -47,13 +47,7 @@ with in_tmp_dir():
     show("ls scsi0.*")
 
     section("import")
-    show(
-        "for ssd in discs/*.ssd; do\n"
-        '  dir="$(basename "$ssd" .ssd)"\n'
-        '  disc cp -r "$ssd:\\$" "scsi0.dat:\\$.$dir"\n'
-        "done"
-    )
-    show("disc ls 'scsi0.dat:$'")
+    show("disc gather scsi0.dat discs/*.ssd")
 
     section("stat")
     show("disc stat scsi0.dat")

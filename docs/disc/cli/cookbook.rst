@@ -168,15 +168,38 @@ supported. The metadata recovery itself — SparkFS extras, bundled
 package, which the ZIP filesystem wraps.
 
 
-Archive a folder of SSDs to one ADFS hard disc
-----------------------------------------------
+.. _gather-many-discs:
 
-You have a directory full of DFS ``.ssd`` floppies on your host
-and want them all sitting on a single ADFS hard disc, each under
-its own subdirectory named for the source.
+Gather many discs into one image
+--------------------------------
 
-Three lines of shell — a ``for`` loop wrapping a single
-``disc cp -r`` per SSD — do the work.
+You have a directory full of floppy images on your host — DFS
+``.ssd``/``.dsd`` and ADFS ``.adf`` in any mix — and want them all
+on a single hard disc, each under its own directory named for the
+source.
+
+``disc gather`` does exactly this in one command: it copies each
+source image's files into its own directory of the destination,
+naming the directory from the host filename by default (or the
+disc's on-disc title with ``--name-from title``), sanitising the
+name to the destination filesystem's rules and de-duplicating
+collisions. The destination is opened once for the whole run, and
+must be a hierarchical image (ADFS or AFS — a flat DFS destination
+is refused).
+
+.. cli-example:: cmd_gather
+
+Create the destination first (``disc gather`` deliberately does not,
+so you choose the geometry and sidecars with ``disc create`` — see
+the Pi1MHz recipe above), then gather onto it. The same operation is
+available from Python as ``oaknut.disc.gather(destination, sources,
+…)``, so a batch import needs no shell at all — handy on Windows,
+where the ``for`` loop below would need rewriting.
+
+When you want directory names the filename and title can't give
+you — a title's *first word*, say, or a value pulled from a
+manifest — drop to a shell ``for`` loop around ``disc cp -r``, which
+gives you the full expressive power of the shell for naming.
 
 **1. Create an empty archive disc.**
 
@@ -273,13 +296,14 @@ a stock SCSI geometry, wrong for anything else.) To synthesise a
 .. cli-example:: pi1mhz_beebscsi
    :section: import
 
-The same ``for`` loop as the SSD-archive recipe above — one
-``disc cp -r`` per source, the destination directory created
-automatically. Sources may be DFS ``.ssd``/``.dsd`` or ADFS
-``.adf`` images in any mix, since ``disc cp`` maps metadata across
-formats. Keep each directory name within ADFS's ten-character
-limit — the four-digit issue numbers here (``8402``, ``8404``)
-leave plenty of room.
+``disc gather`` does the whole batch in one command: each source
+image's files land in a directory named after it, created
+automatically, with the destination opened just once. Sources may
+be DFS ``.ssd``/``.dsd`` or ADFS ``.adf`` images in any mix, since
+gather maps metadata across formats exactly as ``disc cp`` does.
+Directory names are sanitised to the destination filesystem's rules
+(ADFS's ten-character limit here) and de-duplicated. See
+:ref:`gather-many-discs` below for the naming options.
 
 **3. Confirm the geometry the sidecar records.**
 

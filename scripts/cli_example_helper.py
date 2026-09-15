@@ -99,6 +99,7 @@ _REPORT_SUBCOMMANDS = frozenset(
         "tree",
         "stat",
         "find",
+        "gather",
         "storage-order",
         "title",
         "opt",

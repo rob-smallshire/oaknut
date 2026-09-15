@@ -128,6 +128,11 @@ File transfer (host ↔ image)
 
    .. cli-example:: cmd_import
 
+.. oaknut-command:: oaknut.disc.cli:gather
+   :prog: disc gather
+
+   .. cli-example:: cmd_gather
+
 
 Modification (within an image)
 ------------------------------
