@@ -363,9 +363,7 @@ class BeebScsiConfig:
         self._set(_KeyEntry("ModePage3", _HEX, bytes(mp3)))
 
         # Page 4 -- rigid drive geometry parameters.
-        self._set(
-            _KeyEntry("ModePage4", _HEX, bytes([0x04, 0x04, 0x00, cyl_hi, cyl_lo, heads]))
-        )
+        self._set(_KeyEntry("ModePage4", _HEX, bytes([0x04, 0x04, 0x00, cyl_hi, cyl_lo, heads])))
 
     # -- serialisation ------------------------------------------------------
 

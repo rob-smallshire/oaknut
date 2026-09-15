@@ -2915,7 +2915,9 @@ class TestCreate:
 
     def test_create_hard_writes_dsc_by_default(self, runner: CliRunner, tmp_path: Path) -> None:
         out = tmp_path / "def.dat"
-        result = runner.invoke(cli, ["create", str(out), "--geometry", "cylinders=50,heads=4,spt=33"])
+        result = runner.invoke(
+            cli, ["create", str(out), "--geometry", "cylinders=50,heads=4,spt=33"]
+        )
         assert result.exit_code == 0, result.output
         assert out.with_suffix(".dsc").exists()
         assert not out.with_suffix(".cfg").exists()
