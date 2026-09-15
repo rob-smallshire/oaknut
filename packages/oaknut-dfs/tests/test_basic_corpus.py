@@ -89,6 +89,8 @@ KNOWN_LIMITATIONS: frozenset[str] = frozenset(
         "MasterWelcome.adl:$.Pfill",
         "MasterWelcome.adl:$.TimPaint",
         "MasterWelcome.adl:$.TurtleInfo",
+        # A crunched ("PACKED") Acorn User cover-disc program.
+        "Tau87-a.adl:$.FEB87.PUSH",
         "l3server.adl:$.CopyF",
         "l3server.adl:$.WFSInit",
     }
