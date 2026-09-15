@@ -4001,6 +4001,100 @@ class TestGenerateDsc:
         assert result.exit_code != 0
         assert ".dat" in result.output
 
+
+class TestGenerateCfg:
+    """``disc adfs generate-cfg`` synthesises a BeebSCSI/Pi1MHz .cfg sidecar
+    that records sectors-per-track, so a .dat drops onto a Pi1MHz SD card
+    with its true geometry.
+    """
+
+    def test_writes_cfg_sidecar_readable_back(
+        self,
+        runner: CliRunner,
+        tmp_path: Path,
+        adfs_hard_no_afs_filepath: Path,
+    ) -> None:
+        from oaknut.filesystem import geometry_from_cfg
+
+        cf_dat = tmp_path / "cf.dat"
+        _make_cfbackup_style_dat(adfs_hard_no_afs_filepath, cf_dat)
+        cf_cfg = cf_dat.with_suffix(".cfg")
+        assert not cf_cfg.exists()
+
+        # BeebSCSI-native default: spt=33, heads derived.
+        result = runner.invoke(cli, ["adfs", "generate-cfg", str(cf_dat)])
+        assert result.exit_code == 0, result.output
+        assert cf_cfg.exists()
+
+        geom = geometry_from_cfg(cf_cfg.read_text())
+        assert geom.sectors_per_track == 33
+        # ls opens the image via the .cfg-resolved geometry.
+        assert runner.invoke(cli, ["ls", str(cf_dat)]).exit_code == 0
+
+    def test_records_non_default_spt(
+        self,
+        runner: CliRunner,
+        tmp_path: Path,
+    ) -> None:
+        """A 4×64 IDE geometry is recorded faithfully — the case a .dsc
+        would misreport as 33."""
+        from oaknut.adfs import ADFS
+        from oaknut.filesystem import geometry_from_cfg
+
+        src = tmp_path / "src.dat"
+        with ADFS.create_file(src, cylinders=20, heads=4, sectors_per_track=64, title="DC"):
+            pass
+        cf_dat = tmp_path / "cf.dat"
+        _make_cfbackup_style_dat(src, cf_dat)
+
+        result = runner.invoke(
+            cli,
+            ["adfs", "generate-cfg", str(cf_dat), "--heads", "4", "--sectors-per-track", "64"],
+        )
+        assert result.exit_code == 0, result.output
+        geom = geometry_from_cfg(cf_dat.with_suffix(".cfg").read_text())
+        assert geom.heads == 4
+        assert geom.sectors_per_track == 64
+
+    def test_title_recorded(
+        self,
+        runner: CliRunner,
+        tmp_path: Path,
+        adfs_hard_no_afs_filepath: Path,
+    ) -> None:
+        from oaknut.filesystem import BeebScsiConfig
+
+        cf_dat = tmp_path / "cf.dat"
+        _make_cfbackup_style_dat(adfs_hard_no_afs_filepath, cf_dat)
+        result = runner.invoke(cli, ["adfs", "generate-cfg", str(cf_dat), "--title", "MyDisc"])
+        assert result.exit_code == 0, result.output
+        cfg = BeebScsiConfig.parse(cf_dat.with_suffix(".cfg").read_text())
+        assert cfg.title == "MyDisc"
+
+    def test_refuses_to_overwrite_without_force(
+        self,
+        runner: CliRunner,
+        tmp_path: Path,
+        adfs_hard_no_afs_filepath: Path,
+    ) -> None:
+        cf_dat = tmp_path / "cf.dat"
+        _make_cfbackup_style_dat(adfs_hard_no_afs_filepath, cf_dat)
+        cf_dat.with_suffix(".cfg").write_text("Title=existing\n")
+        result = runner.invoke(cli, ["adfs", "generate-cfg", str(cf_dat)])
+        assert result.exit_code != 0
+        assert "refusing to overwrite" in result.output
+
+    def test_rejects_non_dat_extension(
+        self,
+        runner: CliRunner,
+        tmp_path: Path,
+    ) -> None:
+        bogus = tmp_path / "wrong.bin"
+        bogus.write_bytes(b"\x00" * 1024)
+        result = runner.invoke(cli, ["adfs", "generate-cfg", str(bogus)])
+        assert result.exit_code != 0
+        assert ".dat" in result.output
+
     def test_rejects_unaligned_size(
         self,
         runner: CliRunner,

@@ -509,6 +509,32 @@ def _write_dsc(filepath: Union[str, PathLike], geometry: ADFSGeometry) -> None:
     Path(filepath).write_bytes(data)
 
 
+def write_cfg(
+    filepath: Union[str, PathLike],
+    geometry: ADFSGeometry,
+    *,
+    title: str = "",
+) -> None:
+    """Write a BeebSCSI/Pi1MHz ``.cfg`` extended-attributes sidecar.
+
+    The richer counterpart to :func:`write_dsc`: its SCSI mode pages
+    record sectors-per-track, so a non-default geometry (an IDE 4x64
+    layout, say) round-trips faithfully rather than being reported as the
+    Acorn default of 33 the way a ``.dsc`` would.
+    """
+    from oaknut.filesystem import BeebScsiConfig
+
+    config = BeebScsiConfig.default()
+    config.set_geometry(
+        cylinders=geometry.cylinders,
+        heads=geometry.heads,
+        sectors_per_track=geometry.sectors_per_track,
+    )
+    if title:
+        config.set_title(title)
+    Path(filepath).write_text(config.render())
+
+
 # --- Public value type ---
 
 
