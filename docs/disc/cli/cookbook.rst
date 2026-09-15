@@ -237,6 +237,74 @@ for the games — one per SSD. Walking the whole thing with
 directory.
 
 
+Consolidate a shelf of discs onto a Pi1MHz / BeebSCSI hard drive
+----------------------------------------------------------------
+
+The previous recipe's target — one ADFS hard disc holding a
+directory per source floppy — is exactly what a `Pi1MHz
+<https://github.com/dp111/Pi1MHz>`_ (or standalone BeebSCSI) needs
+to serve a whole magazine cover-disc collection as a single virtual
+hard drive on a real BBC Micro. BeebSCSI keeps each virtual drive
+("LUN") on its SD card as ``BeebSCSI<n>/scsiN.dat`` — a raw ADFS
+FileCore image, precisely what ``disc create`` writes — beside a
+geometry sidecar. This recipe adds the two things that make the
+image drop-in ready for the SD card: the sidecars, and the on-card
+layout.
+
+**1. Create the LUN image with both sidecars.**
+
+.. cli-example:: pi1mhz_beebscsi
+   :section: create
+
+Naming the image ``scsi0.dat`` from the outset means its sidecars
+come out as ``scsi0.dsc`` and ``scsi0.cfg`` — the exact filenames
+BeebSCSI reads for LUN 0. ``--sidecar`` is repeatable; passing both
+``dsc`` and ``cfg`` writes each. The 22-byte ``.dsc`` is the legacy
+binary descriptor; the ``.cfg`` is BeebSCSI's richer "extended
+attributes" file, and it is the one to prefer because it records
+**sectors-per-track**, which the ``.dsc`` cannot. (A ``.dsc``-only
+image is always read back at the Acorn default of 33 SPT — fine for
+a stock SCSI geometry, wrong for anything else.) To synthesise a
+``.cfg`` for a ``.dat`` you already have, use
+``disc adfs generate-cfg`` instead.
+
+**2. Copy each cover disc into its own directory.**
+
+.. cli-example:: pi1mhz_beebscsi
+   :section: import
+
+The same ``for`` loop as the SSD-archive recipe above — one
+``disc cp -r`` per source, the destination directory created
+automatically. Sources may be DFS ``.ssd``/``.dsd`` or ADFS
+``.adf`` images in any mix, since ``disc cp`` maps metadata across
+formats. Keep each directory name within ADFS's ten-character
+limit — the four-digit issue numbers here (``8402``, ``8404``)
+leave plenty of room.
+
+**3. Confirm the geometry the sidecar records.**
+
+.. cli-example:: pi1mhz_beebscsi
+   :section: stat
+
+``disc stat`` resolves the geometry from the sidecar, preferring the
+``.cfg`` over the ``.dsc`` exactly as the firmware does — here 33
+sectors per track, read from the ``.cfg``'s mode pages rather than
+assumed.
+
+**4. Lay the LUN out for the SD card.**
+
+.. cli-example:: pi1mhz_beebscsi
+   :section: deploy
+
+BeebSCSI reads LUN 0 of the first drive from ``BeebSCSI0/scsi0.dat``
+(plus ``scsi0.cfg``), so the whole deployment is copying the image
+and its sidecars into that directory on the card. Further LUNs are
+``scsi1.dat``, ``scsi2.dat``, … in the same directory; a second
+BeebSCSI directory (``BeebSCSI1/``) holds the next four drives.
+Copy the ``BeebSCSI0`` directory to the root of a FAT-formatted SD
+card and the collection is ready to mount from the BBC.
+
+
 Assemble a double-sided DSD from two SSDs
 -----------------------------------------
 
