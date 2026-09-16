@@ -324,9 +324,7 @@ class _BaseDFS(Filesystem):
         evidence = self._catalogue.match_evidence(surface)
         if evidence is None:
             return None
-        geometry, ambiguities = _propose_geometry(
-            reader.size, _declared_total_sectors(surface)
-        )
+        geometry, ambiguities = _propose_geometry(reader.size, _declared_total_sectors(surface))
         return Identification(
             filesystem=self.name,
             confidence=self._confidence,
