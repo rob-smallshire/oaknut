@@ -80,10 +80,14 @@ def format_capacity(num_bytes: int) -> str:
     mantissa below 1024, with one decimal place. Binary rather than
     decimal units, since Acorn disc and quota sizes are powers of two.
 
-    Raises :class:`ValueError` on a negative count.
+    Raises :class:`~oaknut.exception.DataError` on a negative count — the
+    value only goes negative when the image data feeding it is
+    inconsistent, so the CLI boundary renders it rather than crashing.
     """
     if num_bytes < 0:
-        raise ValueError(f"capacity must be non-negative, got {num_bytes}")
+        from oaknut.exception import DataError
+
+        raise DataError(f"capacity must be non-negative, got {num_bytes}")
     if num_bytes < 1_024:
         return "1 byte" if num_bytes == 1 else f"{num_bytes} bytes"
 

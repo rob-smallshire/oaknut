@@ -119,6 +119,12 @@ class TestFormatCapacity:
         # 2 MiB must read as MiB, not 2048 KiB.
         assert format_capacity(2 * 1024 * 1024) == "2.0 MiB"
 
-    def test_negative_raises(self):
-        with pytest.raises(ValueError, match="non-negative"):
+    def test_negative_raises_data_error(self):
+        # A negative count only reaches here from inconsistent image data
+        # (e.g. a disc whose files claim more sectors than it holds), so it
+        # is a DataError the CLI boundary renders cleanly, not a bare
+        # ValueError that escapes as a traceback.
+        from oaknut.exception import DataError
+
+        with pytest.raises(DataError, match="non-negative"):
             format_capacity(-1)
