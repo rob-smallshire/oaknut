@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Iterator, Union
 import oaknut.basic as basic
 from oaknut.dfs.catalogue import DFS_NAME_GRAMMAR, FileEntry
 from oaknut.dfs.catalogued_surface import CataloguedSurface
-from oaknut.dfs.formats import BYTES_PER_SECTOR, DiscFormat
+from oaknut.dfs.formats import DiscFormat
 from oaknut.discimage.surface import DiscImage
 from oaknut.file import Access, AcornMeta, AcornPath, MetaFormat, resolving_io
 from oaknut.file.host_bridge import (
@@ -799,18 +799,23 @@ class DFS:
     def _pad_buffer(buffer: memoryview, disc_format: DiscFormat) -> memoryview:
         """Pad a truncated buffer to the canonical format size with zero bytes.
 
-        Accepts buffers that are shorter than the format requires, provided
-        the size is a whole number of sectors (a multiple of 256 bytes).
-        Full-size buffers are returned unchanged, and an oversized buffer
-        is clamped to the format's region — the surface addresses only
-        whole sectors up to ``image_size``, so a trailing fragment (some
-        images carry a trailer beyond the last whole sector) is ignored.
+        Accepts buffers shorter than the format requires — including ones
+        trimmed mid-sector to the last byte of the last file, so the length
+        is not a whole number of sectors. An SSD/DSD is a catalogue plus
+        concatenated file data, not an inherently sector-quantised
+        container, so a ragged final sector is simply zero-filled up to the
+        next boundary along with the rest of the missing tail. Full-size
+        buffers are returned unchanged, and an oversized buffer is clamped
+        to the format's region — the surface addresses only whole sectors
+        up to ``image_size``, so a trailing fragment (some images carry a
+        trailer beyond the last whole sector) is ignored.
 
         Raises:
-            ValueError: If the buffer is empty, or is shorter than the
-                format yet not a whole number of sectors (so it cannot be
-                padded cleanly).
+            InvalidFormatError: If the buffer is empty — there is not even
+                a catalogue to read.
         """
+        from oaknut.dfs.exceptions import InvalidFormatError
+
         buffer_size = len(buffer)
         expected_size = disc_format.image_size
 
@@ -818,19 +823,16 @@ class DFS:
             return buffer
 
         if buffer_size == 0:
-            raise ValueError("Buffer is empty")
+            raise InvalidFormatError("Buffer is empty")
 
         if buffer_size > expected_size:
             # Clamp to the format's whole-sector region; a ragged trailing
             # fragment (a 128-byte trailer, say) is not part of the disc.
             return buffer[:expected_size]
 
-        if buffer_size % BYTES_PER_SECTOR != 0:
-            raise ValueError(
-                f"Buffer size {buffer_size} is not a multiple of "
-                f"the sector size ({BYTES_PER_SECTOR} bytes)"
-            )
-
+        # Shorter than the format: copy what we have into a zero buffer of
+        # the full size. A ragged final sector needs no special handling —
+        # its bytes land at the front and the remainder stays zero.
         padded = bytearray(expected_size)
         padded[:buffer_size] = buffer
         return memoryview(padded)
@@ -1210,26 +1212,26 @@ def expand(filepath: Union[str, PathLike], disc_format: DiscFormat) -> int:
         The number of bytes appended (0 if the file was already the
         correct size).
 
+    A ragged image trimmed mid-sector to the last byte of the last file
+    (as some writers produce) is padded up like any other short image;
+    the partial final sector is absorbed and zero-filled to the boundary.
+
     Raises:
         FileNotFoundError: If the file does not exist.
-        ValueError: If the file is empty, not a whole number of sectors,
-            or already larger than the canonical format size.
+        InvalidFormatError: If the file is empty, or already larger than
+            the canonical format size.
     """
+    from oaknut.dfs.exceptions import InvalidFormatError
+
     filepath = Path(filepath)
     file_size = filepath.stat().st_size
     expected_size = disc_format.image_size
 
     if file_size == 0:
-        raise ValueError(f"{filepath.name} is empty")
-
-    if file_size % BYTES_PER_SECTOR != 0:
-        raise ValueError(
-            f"{filepath.name} size ({file_size}) is not a multiple of "
-            f"the sector size ({BYTES_PER_SECTOR} bytes)"
-        )
+        raise InvalidFormatError(f"{filepath.name} is empty")
 
     if file_size > expected_size:
-        raise ValueError(
+        raise InvalidFormatError(
             f"{filepath.name} ({file_size} bytes) is larger than "
             f"the canonical format size ({expected_size} bytes)"
         )

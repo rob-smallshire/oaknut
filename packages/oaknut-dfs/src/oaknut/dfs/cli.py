@@ -59,7 +59,7 @@ def expand(image: Path, fmt: str | None) -> None:
         ACORN_DFS_80T_SINGLE_SIDED if fmt == "ssd" else ACORN_DFS_80T_DOUBLE_SIDED_INTERLEAVED
     )
 
-    try:
-        dfs_expand(image, disc_format)
-    except ValueError as exc:
-        raise click.ClickException(str(exc)) from exc
+    # A bad image raises InvalidFormatError (a DataError); the top-level
+    # ``disc`` boundary renders it and sets the exit code, so it is not
+    # caught here.
+    dfs_expand(image, disc_format)

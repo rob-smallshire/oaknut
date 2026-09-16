@@ -3,9 +3,15 @@
 Phase 1: from_buffer / from_file padding.
 Phase 2: expand() function.
 
-Truncated images are shorter than the canonical format size but still a
-whole number of sectors.  They arise from tools like BeebAsm that omit
-trailing empty sectors.
+Truncated images are shorter than the canonical format size. They arise
+from tools like BeebAsm that omit trailing empty sectors, and from
+writers that trim the image to the last byte of the last file — which
+leaves a *ragged* final sector, so the file is not even a whole number
+of sectors. Both are tolerated: the short tail (whether whole trailing
+sectors or a ragged fraction of one) is zero-filled up to the disc's
+declared geometry. An SSD/DSD is a catalogue plus concatenated file
+data, not an inherently sector-quantised container, so the physical
+byte length carries no authority the catalogue does not.
 """
 
 import sys
@@ -21,6 +27,7 @@ for _path in (_TESTS_DIRPATH, _WORKSPACE_ROOT):
         sys.path.insert(0, str(_path))
 
 from oaknut.dfs.dfs import DFS, expand  # noqa: E402
+from oaknut.dfs.exceptions import InvalidFormatError  # noqa: E402
 from oaknut.dfs.formats import (  # noqa: E402
     ACORN_DFS_40T_SINGLE_SIDED,
     ACORN_DFS_80T_DOUBLE_SIDED_INTERLEAVED,
@@ -127,23 +134,40 @@ class TestFromBufferTruncated:
         assert dfs.title == "TRUNCATD"
 
 
-class TestFromBufferRejection:
-    """Buffers that are not sector-aligned or are otherwise invalid
-    should still be rejected.
+class TestFromBufferRagged:
+    """A buffer whose size is not a whole number of sectors — a writer
+    that trimmed the image to the last byte of the last file — is padded
+    up (its ragged final sector zero-filled) rather than rejected.
     """
 
-    def test_not_sector_aligned_raises(self):
-        """A buffer whose size is not a multiple of 256 should be rejected."""
-        bad_size = 136 * BYTES_PER_SECTOR + 1  # 34817 — one byte over a boundary
-        buf = bytearray(bad_size)
+    def test_not_sector_aligned_is_padded(self):
+        """A buffer one byte past a sector boundary is accepted, not rejected."""
+        ragged_size = 136 * BYTES_PER_SECTOR + 1  # 34817 — one byte over a boundary
+        buf = bytearray(ragged_size)
         _minimal_catalogue(buf)
-        with pytest.raises(ValueError):
-            DFS.from_buffer(memoryview(buf), ACORN_DFS_80T_SINGLE_SIDED)
+        dfs = DFS.from_buffer(memoryview(buf), ACORN_DFS_80T_SINGLE_SIDED)
+        assert dfs.title == "TRUNCATD"
 
-    def test_empty_buffer_raises(self):
-        """A zero-length buffer should be rejected."""
+    def test_ragged_tail_zero_filled_to_sector(self):
+        """The ragged final sector reads as its bytes followed by zeros."""
+        # 20 whole sectors of data plus a ragged 5 bytes of a 21st.
+        ragged_size = 20 * BYTES_PER_SECTOR + 5
+        buf = bytearray(ragged_size)
+        _minimal_catalogue(buf)
+        buf[20 * BYTES_PER_SECTOR : 20 * BYTES_PER_SECTOR + 5] = b"\x01\x02\x03\x04\x05"
+
+        dfs = DFS.from_buffer(memoryview(buf), ACORN_DFS_80T_SINGLE_SIDED)
+
+        surface = dfs._catalogued_surface._surface
+        sector20 = bytes(surface.sector_range(20, 1)[0:BYTES_PER_SECTOR])
+        # The five real bytes survive; the rest of the sector is zero-filled.
+        assert sector20[:5] == b"\x01\x02\x03\x04\x05"
+        assert sector20[5:] == b"\x00" * (BYTES_PER_SECTOR - 5)
+
+    def test_empty_buffer_raises_invalid_format(self):
+        """A zero-length buffer is a format error, reported as a domain exception."""
         buf = bytearray(0)
-        with pytest.raises(ValueError):
+        with pytest.raises(InvalidFormatError):
             DFS.from_buffer(memoryview(buf), ACORN_DFS_80T_SINGLE_SIDED)
 
 
@@ -282,29 +306,35 @@ class TestExpand:
         assert filepath.stat().st_size == expected_size
         assert bytes_added == expected_size - truncated_size
 
-    def test_expand_not_sector_aligned_raises(self, tmp_path):
-        """A file whose size is not a multiple of the sector size should be rejected."""
-        filepath = tmp_path / "bad.ssd"
-        filepath.write_bytes(b"\x00" * 257)
+    def test_expand_not_sector_aligned_is_padded(self, tmp_path):
+        """A ragged (non-sector-multiple) file is padded up to the canonical
+        size, its final partial sector absorbed and zero-filled — the
+        ``disc dfs expand`` repair path for a trimmed image.
+        """
+        expected_size = 80 * SECTORS_PER_TRACK * BYTES_PER_SECTOR  # 204800
+        filepath = tmp_path / "ragged.ssd"
+        filepath.write_bytes(b"\x00" * 257)  # one sector plus one ragged byte
 
-        with pytest.raises(ValueError, match="not a multiple of the sector size"):
-            expand(filepath, ACORN_DFS_80T_SINGLE_SIDED)
+        bytes_added = expand(filepath, ACORN_DFS_80T_SINGLE_SIDED)
+
+        assert filepath.stat().st_size == expected_size
+        assert bytes_added == expected_size - 257
 
     def test_expand_oversized_raises(self, tmp_path):
-        """A file larger than the canonical format size should be rejected."""
+        """A file larger than the canonical format size is a format error."""
         oversized = 80 * SECTORS_PER_TRACK * BYTES_PER_SECTOR + BYTES_PER_SECTOR
         filepath = tmp_path / "oversized.ssd"
         filepath.write_bytes(b"\x00" * oversized)
 
-        with pytest.raises(ValueError, match="larger than"):
+        with pytest.raises(InvalidFormatError, match="larger than"):
             expand(filepath, ACORN_DFS_80T_SINGLE_SIDED)
 
     def test_expand_empty_file_raises(self, tmp_path):
-        """An empty file should be rejected."""
+        """An empty file is a format error, reported as a domain exception."""
         filepath = tmp_path / "empty.ssd"
         filepath.write_bytes(b"")
 
-        with pytest.raises(ValueError, match="empty"):
+        with pytest.raises(InvalidFormatError, match="empty"):
             expand(filepath, ACORN_DFS_80T_SINGLE_SIDED)
 
     def test_expand_nonexistent_raises(self, tmp_path):
@@ -313,3 +343,57 @@ class TestExpand:
 
         with pytest.raises(FileNotFoundError):
             expand(filepath, ACORN_DFS_80T_SINGLE_SIDED)
+
+
+def _trimmed_to_last_byte_ssd(tmp_path: Path) -> tuple[Path, dict[str, bytes]]:
+    """Build an SSD trimmed to the last byte of its last file.
+
+    Reproduces the shape of the real ``hicomal.ssd`` from the bug report
+    (stardot p492650): an 80-track catalogue declaring 800 sectors, three
+    files laid down contiguously, and the backing file cut off at the last
+    byte of the highest-placed file — so it is neither a whole number of
+    sectors nor as long as the declared disc.
+
+    Returns the image path and a map of ``$.NAME -> content`` for the files
+    written, so a reader can assert every byte survives.
+    """
+    contents = {
+        "$.LOWROM": bytes((i * 7) & 0xFF for i in range(16384)),
+        "$.HIROM": bytes((i * 11 + 3) & 0xFF for i in range(16384)),
+        "$.BIGFILE": bytes((i * 13 + 5) & 0xFF for i in range(16309)),
+    }
+
+    full_filepath = tmp_path / "full.ssd"
+    with DFS.create_file(full_filepath, ACORN_DFS_80T_SINGLE_SIDED, title="HICOMAL") as dfs:
+        for name, data in contents.items():
+            (dfs.root / name).write_bytes(data)
+
+    # Find the highest byte any file occupies, then cut the image there —
+    # exactly what a writer trimming to the last file's last byte produces.
+    raw = bytearray(full_filepath.read_bytes())
+    with DFS.from_file(full_filepath, ACORN_DFS_80T_SINGLE_SIDED) as dfs:
+        last_byte = max(f.start_sector * BYTES_PER_SECTOR + f.length for f in dfs.files)
+
+    assert last_byte % BYTES_PER_SECTOR != 0, "test fixture should be ragged"
+    trimmed = raw[:last_byte]
+
+    trimmed_filepath = tmp_path / "hicomal.ssd"
+    trimmed_filepath.write_bytes(trimmed)
+    return trimmed_filepath, contents
+
+
+class TestTrimmedToLastByteRegression:
+    """The stardot hicomal.ssd shape: declared full geometry, backing file
+    trimmed to the last file's last byte (ragged, far short of declared).
+    """
+
+    def test_reads_every_file_byte_intact(self, tmp_path):
+        trimmed_filepath, contents = _trimmed_to_last_byte_ssd(tmp_path)
+        with DFS.from_file(trimmed_filepath, ACORN_DFS_80T_SINGLE_SIDED) as dfs:
+            for name, data in contents.items():
+                assert (dfs.root / name).read_bytes() == data
+
+    def test_validate_reports_no_defects(self, tmp_path):
+        trimmed_filepath, _ = _trimmed_to_last_byte_ssd(tmp_path)
+        with DFS.from_file(trimmed_filepath, ACORN_DFS_80T_SINGLE_SIDED) as dfs:
+            assert dfs.validate() == []
