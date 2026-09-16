@@ -184,6 +184,24 @@ class TestProbe:
             names = {entry.name for entry in mount.iter_entries(mount.path_root())}
         assert names, "expected catalogue entries"
 
+    def test_opens_hicomal_trimmed_to_last_byte(self):
+        # hicomal.ssd (stardot p492650) is trimmed to the last byte of its
+        # last file: 49589 bytes — 193 whole sectors plus a ragged 181, and
+        # far short of the 800-sector disc its catalogue declares. Geometry
+        # must come from the declared size, not the floored byte length, or
+        # the last file reads as extending past a bogus 193-sector disc.
+        image_filepath = REFERENCE_IMAGES_DIRPATH / "hicomal" / "hicomal.ssd"
+        results = identify(image_filepath)
+        acorn = [r for r in results if r.filesystem == "acorn-dfs"]
+        assert acorn, f"acorn-dfs not identified; got {[r.filesystem for r in results]}"
+        assert acorn[0].geometry.image_size == 800 * 256
+
+        filesystem = create_filesystem("acorn-dfs")
+        with reader_for(image_filepath) as reader:
+            mount = filesystem.open(reader, filesystem.probe(reader).geometry)
+            names = {entry.name for entry in mount.iter_entries("$")}
+        assert names == {"hifile", "hirom", "lowrom"}
+
     def test_top_bit_set_title_still_disqualifies(self, tmp_path):
         # The 7-bit-cleanliness of the title remains a hard signal: a
         # high-bit byte in the title field is not DFS, so even an

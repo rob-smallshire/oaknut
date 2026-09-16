@@ -15,6 +15,33 @@ from click.testing import CliRunner
 from oaknut.cli.help import strip_rst
 from oaknut.disc.cli import cli
 
+
+def _trimmed_to_last_byte_ssd(tmp_path: Path) -> Path:
+    """Write an SSD trimmed to the last byte of its last file.
+
+    Reproduces the real ``hicomal.ssd`` from stardot p492650: an 80-track
+    catalogue declaring 800 sectors, files laid down contiguously, and the
+    backing file cut off at the last byte of the highest-placed file — so
+    it is neither a whole number of sectors nor as long as the declared
+    disc. Returns the trimmed image path.
+    """
+    from oaknut.dfs import ACORN_DFS_80T_SINGLE_SIDED, DFS
+
+    full_filepath = tmp_path / "full.ssd"
+    with DFS.create_file(full_filepath, ACORN_DFS_80T_SINGLE_SIDED, title="HICOMAL") as dfs:
+        (dfs.root / "$.LOWROM").write_bytes(bytes((i * 7) & 0xFF for i in range(16384)))
+        (dfs.root / "$.BIGFILE").write_bytes(bytes((i * 13 + 5) & 0xFF for i in range(16309)))
+
+    raw = bytearray(full_filepath.read_bytes())
+    with DFS.from_file(full_filepath, ACORN_DFS_80T_SINGLE_SIDED) as dfs:
+        last_byte = max(f.start_sector * 256 + f.length for f in dfs.files)
+    assert last_byte % 256 != 0, "test fixture should be ragged"
+
+    trimmed_filepath = tmp_path / "hicomal.ssd"
+    trimmed_filepath.write_bytes(raw[:last_byte])
+    return trimmed_filepath
+
+
 # ---------------------------------------------------------------------------
 # Version and help
 # ---------------------------------------------------------------------------
@@ -1066,6 +1093,30 @@ class TestStat:
         result = runner.invoke(cli, ["stat", f"{dfs_image_filepath}:$.NOPE"])
         assert result.exit_code != 0
 
+    def test_stat_trimmed_dfs_does_not_crash(self, runner: CliRunner, tmp_path: Path) -> None:
+        """stat on the trimmed hicomal.ssd shape must not blow up computing
+        free space (it used to raise ``capacity must be non-negative`` from a
+        negative free count). Regression for stardot p492650.
+        """
+        trimmed = _trimmed_to_last_byte_ssd(tmp_path)
+        result = runner.invoke(cli, ["stat", str(trimmed)])
+        assert result.exit_code == 0, result.output
+        assert "HICOMAL" in result.output
+
+    def test_stat_trimmed_dfs_geometry_from_catalogue(
+        self, runner: CliRunner, tmp_path: Path
+    ) -> None:
+        """The disc size is taken from the catalogue's declared sector count
+        (800 → 200 KiB), not floored from the physical byte length. Free
+        space is therefore non-negative.
+        """
+        from oaknut.disc.mount import resolve_mount
+
+        trimmed = _trimmed_to_last_byte_ssd(tmp_path)
+        with resolve_mount(str(trimmed)) as resolved:
+            assert resolved.mount.size_bytes() == 800 * 256
+            assert resolved.mount.free_bytes() >= 0
+
 
 # ---------------------------------------------------------------------------
 # Issue #7 — disc stat must show a disc-level summary followed by one block
@@ -1536,6 +1587,17 @@ class TestValidate:
         assert "Sector 2" in result.output
         # Summary line
         assert "1 error" in result.output or "error(s) found" in result.output.lower()
+
+    def test_validate_trimmed_dfs_is_silent(self, runner: CliRunner, tmp_path: Path) -> None:
+        """An image trimmed to the last file's last byte (the stardot
+        hicomal.ssd shape) is well-formed against its declared geometry, so
+        validation is silent — it must not read a bogus sector count from
+        the physical file length. Regression for stardot p492650.
+        """
+        trimmed = _trimmed_to_last_byte_ssd(tmp_path)
+        result = runner.invoke(cli, ["validate", str(trimmed)])
+        assert result.exit_code == 0, result.output
+        assert result.output == ""
 
     def test_validate_damaged_dfs_summary_uses_singular_for_one_error(
         self, runner: CliRunner, tmp_path: Path
@@ -3894,11 +3956,17 @@ class TestExpand:
         assert result.output == ""
         assert dfs_image_filepath.stat().st_size == original_size
 
-    def test_expand_not_sector_aligned(self, runner: CliRunner, tmp_path: Path) -> None:
-        filepath = tmp_path / "bad.ssd"
-        filepath.write_bytes(b"\x00" * 257)
+    def test_expand_not_sector_aligned_is_padded(self, runner: CliRunner, tmp_path: Path) -> None:
+        # A ragged (non-sector-multiple) image trimmed to the last file's
+        # last byte is the very case expand repairs: it pads up to the full
+        # canonical size, absorbing and zero-filling the partial final
+        # sector, rather than rejecting. Regression for stardot p492650.
+        filepath = self._make_truncated_ssd(tmp_path)
+        raw = filepath.read_bytes()
+        filepath.write_bytes(raw[:-100])  # trim into the final sector
         result = runner.invoke(cli, ["dfs", "expand", str(filepath)])
-        assert result.exit_code != 0
+        assert result.exit_code == 0, result.output
+        assert filepath.stat().st_size == 204800
 
     def test_expand_nonexistent_file(self, runner: CliRunner, tmp_path: Path) -> None:
         filepath = tmp_path / "nonexistent.ssd"
