@@ -80,12 +80,33 @@ def _flat_surface(reader: ImageReader):
     return DiscImage(buffer, [spec]).surface(0)
 
 
-def _propose_geometry(size: int) -> tuple[Geometry | None, tuple[Geometry, ...]]:
+def _declared_total_sectors(surface) -> int:
+    """The disc's own declared sector count, from catalogue sector 1.
+
+    DFS records the full disc size in a 10-bit field (sector 1 bytes 6–7),
+    shared by the Acorn and Watford layouts. It describes the whole disc
+    regardless of how many sectors the image file physically carries — a
+    writer that trims the image to the last file's last byte leaves this
+    field intact, so it, not the byte length, is the disc's true size.
+    """
+    sector1 = surface.sector_range(1, 1)
+    return ((sector1[6] & 0x03) << 8) | sector1[7]
+
+
+def _propose_geometry(
+    size: int, declared_sectors: int = 0
+) -> tuple[Geometry | None, tuple[Geometry, ...]]:
     """Best-guess geometry from image size, plus byte-identical alternatives.
 
     Sidedness/interleave cannot be read from the bytes: an 80-track
     single-sided image and a 40-track double-sided one are the same
     length, so the latter is reported as an *ambiguity*.
+
+    *declared_sectors* is the catalogue's own disc size (see
+    :func:`_declared_total_sectors`). For a non-canonical image length it
+    takes precedence over the physical byte count when it is plausible,
+    so an image trimmed to the last file's last byte still presents its
+    full declared disc (with the missing tail zero-filled on open).
     """
     if size == _GEOMETRY_PRESETS["40t-ss"].image_size:
         return _GEOMETRY_PRESETS["40t-ss"], ()
@@ -93,13 +114,27 @@ def _propose_geometry(size: int) -> tuple[Geometry | None, tuple[Geometry, ...]]
         return _GEOMETRY_PRESETS["80t-ss"], (_GEOMETRY_PRESETS["40t-ds"],)
     if size == _GEOMETRY_PRESETS["80t-ds"].image_size:
         return _GEOMETRY_PRESETS["80t-ds"], ()
-    # Any other length: floor to whole sectors, matching how
-    # ``_flat_surface`` reads the image for catalogue matching. Some
-    # images carry a trailing fragment (the Oxford Pascal 40-track disc
-    # is 400 whole sectors plus a 128-byte trailer); the filing system
-    # only addresses whole sectors, so the remainder is ignored rather
-    # than left to crash a geometry-less open.
-    sectors = size // BYTES_PER_SECTOR
+
+    # A non-canonical length is a trimmed image (short of a full disc) or
+    # one carrying a sub-sector trailer past a whole disc. Trust the
+    # catalogue's declared size when it is plausible — a positive multiple
+    # of ten sectors, the same soft test ``match_evidence`` applies. That
+    # honours a trimmed image's full declared disc (hicomal.ssd, stardot
+    # p492650) and floors a trailer (the Oxford Pascal 40-track disc is
+    # 400 whole sectors plus a 128-byte trailer) to the declared 400. When
+    # the declared total is implausible (Owlet writes 3), fall back to
+    # flooring the physical length to whole sectors as before.
+    if declared_sectors >= 10 and declared_sectors % 10 == 0:
+        sectors = declared_sectors
+    else:
+        sectors = size // BYTES_PER_SECTOR
+
+    # Snap to a canonical single-sided floppy when the count lands on one,
+    # so a trimmed disc presents exactly as its full-size sibling would.
+    if sectors == _GEOMETRY_PRESETS["40t-ss"].image_size // BYTES_PER_SECTOR:
+        return _GEOMETRY_PRESETS["40t-ss"], ()
+    if sectors == _GEOMETRY_PRESETS["80t-ss"].image_size // BYTES_PER_SECTOR:
+        return _GEOMETRY_PRESETS["80t-ss"], (_GEOMETRY_PRESETS["40t-ds"],)
     if sectors >= _MIN_SECTORS:
         usable = sectors * BYTES_PER_SECTOR
         spec = SurfaceSpec(1, sectors, BYTES_PER_SECTOR, 0, usable)
@@ -289,7 +324,9 @@ class _BaseDFS(Filesystem):
         evidence = self._catalogue.match_evidence(surface)
         if evidence is None:
             return None
-        geometry, ambiguities = _propose_geometry(reader.size)
+        geometry, ambiguities = _propose_geometry(
+            reader.size, _declared_total_sectors(surface)
+        )
         return Identification(
             filesystem=self.name,
             confidence=self._confidence,
