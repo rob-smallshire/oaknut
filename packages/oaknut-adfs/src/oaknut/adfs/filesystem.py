@@ -351,7 +351,11 @@ class ADFS(Filesystem):
     wildcard_syntax = ACORN_WILDCARDS
     name_grammar = ADFS_NAME_GRAMMAR
 
-    extensions = frozenset({".adf", ".ads", ".adm", ".adl", ".dat"})
+    #: Recognised suffixes. Identification is content-first, so the emulator
+    #: and SCSI-adaptor raw hard-disc images (Arculator .hdf, BlueSCSI
+    #: .hdf/.hda) open regardless of suffix; listing them here only makes the
+    #: extension a positive tie-breaker when another filesystem probes equally.
+    extensions = frozenset({".adf", ".ads", ".adm", ".adl", ".dat", ".hdf", ".hda"})
     #: ADFS is the default creator for all its extensions, including the
     #: hard-disc .dat (AFS, which also reads .dat, is made inside an ADFS
     #: disc by afs-init, not by `disc create`).

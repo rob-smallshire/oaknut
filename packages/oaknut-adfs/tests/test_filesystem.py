@@ -35,6 +35,19 @@ class TestRegistration:
     def test_adfs_registered(self):
         assert "adfs" in filesystem_names()
 
+    def test_emulator_hard_disc_extensions_recognised(self):
+        # Raw hard-disc images from emulators and SCSI adaptors (Arculator
+        # .hdf, BlueSCSI .hdf/.hda) are content-identified regardless of
+        # suffix, but listing them makes the extension a positive tie-breaker.
+        filesystem = create_filesystem("adfs")
+        assert {".hdf", ".hda"} <= filesystem.extensions
+
+    def test_emulator_extensions_are_not_created(self):
+        # .dat stays the canonical create extension for hard discs; oaknut
+        # does not mint BlueSCSI/emulator-named raw images itself.
+        filesystem = create_filesystem("adfs")
+        assert not ({".hdf", ".hda"} & filesystem.creates)
+
 
 class TestProbe:
     def test_identifies_created_floppy_strong(self, tmp_path):
