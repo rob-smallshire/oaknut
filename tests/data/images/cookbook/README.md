@@ -37,3 +37,13 @@ spending a few seconds choosing.
 directory. If you rename an image, update the recipes that
 reference it; the docs build with `-W` fails loud on a missing
 image so you cannot silently break a recipe.
+
+## Provenance
+
+- `l3v126.ssd` — the Acorn Level 3 File Server version 1.26 release disc,
+  unmodified, from the mmbeeb/L3V126 repository's `MML3V126` release:
+  <https://github.com/mmbeeb/L3V126/releases/tag/MML3V126>
+  (SHA-256 `0c9ebd5e5cc5200262f5951431fed8f0b3bbe7d2d0ed19242ddac76c99099107`).
+  The executable on it is `$.FS`. Keep the disc exactly as released, so
+  the recipes match what readers download; recipes install the executable
+  as `$.FS3v126`, the community's conventional name for the 1.26 server.

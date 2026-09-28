@@ -450,17 +450,14 @@ Creating a Level 3 File Server disc
 -----------------------------------
 
 The full walkthrough builds a bootable L3FS hard disc from a fresh
-ADFS envelope plus the Level 3 File Server executable. The canonical
-source for version 1.26 is the `mmbeeb/L3V126
-<https://github.com/mmbeeb/L3V126>`_ repository: download ``l3v126.ssd``
-from its `latest release
-<https://github.com/mmbeeb/L3V126/releases/latest>`_. On that disc the
-executable is ``$.FS``, so step 2 copies it with::
-
-   disc cp 'l3v126.ssd:$.FS' 'scsi0.dat:$.FS3v126'
-
-The recorded run below uses a copy of the executable saved as
-``FS3v126.ssd:$.FS3v126``; the remaining steps are the same.
+ADFS envelope plus the Level 3 File Server executable. It uses version
+1.26 from the `mmbeeb/L3V126 <https://github.com/mmbeeb/L3V126>`_
+repository, the canonical source: download ``l3v126.ssd`` from its
+`Version 1.26 release
+<https://github.com/mmbeeb/L3V126/releases/tag/MML3V126>`_. On that disc
+the executable is ``$.FS``; the recipe installs it on the server disc as
+``$.FS3v126``, the name the community conventionally gives the 1.26 file
+server so its version is plain from a catalogue.
 
 **1. Lay down an empty ADFS hard-disc envelope.**
 
@@ -481,9 +478,9 @@ for the broader contract.
 .. cli-example:: l3fs_disc
    :section: install_fs
 
-A classic cross-format ``disc cp`` — the source ``$.FS3v126`` lives
-on a DFS floppy, the destination is the same name on the ADFS
-partition of the hard disc we just created. Load and exec
+A classic cross-format ``disc cp`` — the source ``$.FS`` lives on
+the release's DFS floppy, and the copy lands as ``$.FS3v126`` on the
+ADFS partition of the hard disc we just created. Load and exec
 addresses survive the crossing; see :doc:`/api/patterns/metadata`
 for the attribute-mapping table.
 
@@ -599,8 +596,9 @@ two partitions genuinely carry different things; the envelope is
 the natural umbrella.
 
 Walking the whole image with ``disc tree`` then exposes both
-halves. The ADFS half is tiny — just ``!BOOT`` and the FS3 binary,
-which is all the boot needs to load before handing off to AFS.
+halves. The ADFS half is tiny — just ``!BOOT`` and the file-server
+executable ``FS3v126``, which is all the boot needs to load before handing
+off to AFS.
 
 The AFS half shows ``RJS``'s ``Saves`` directory from step 7 and the
 two emplaced library trees in full, with the BBC-era utilities

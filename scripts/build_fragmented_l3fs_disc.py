@@ -21,7 +21,8 @@ and the parser correctly walks the chain without inspecting offsets
 The script mirrors the bootable-disc cookbook recipe:
 
 1. Create an empty ADFS hard-disc envelope.
-2. Copy the FS3 binary off ``FS3v126.ssd`` onto the ADFS partition.
+2. Copy the file-server executable ``$.FS`` off ``l3v126.ssd`` onto the
+   ADFS partition as ``$.FS3v126``.
 3. Write ``!BOOT`` containing ``*RUN $.FS3v126<CR>`` and set the boot
    option to ``EXEC``.
 4. Initialise the AFS partition.
@@ -38,9 +39,10 @@ Usage::
 
     uv run python scripts/build_fragmented_l3fs_disc.py \\
         --output /tmp/fragmented.dat \\
-        --fs-binary tests/data/images/cookbook/FS3v126.ssd
+        --fs-binary tests/data/images/cookbook/l3v126.ssd
 
-If ``--fs-binary`` is omitted, the cookbook's ``FS3v126.ssd`` is used.
+If ``--fs-binary`` is omitted, the cookbook's ``l3v126.ssd`` (the
+Level 3 File Server 1.26 release disc from mmbeeb/L3V126) is used.
 The output is a ``.dat`` SCSI hard-disc image plus a companion
 ``.dsc`` sidecar; both are needed by L3FS.
 """
@@ -58,7 +60,7 @@ from oaknut.dfs import DFS, DFSPath
 from oaknut.file import Access, BootOption
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-DEFAULT_FS_BINARY = REPO_ROOT / "tests" / "data" / "images" / "cookbook" / "FS3v126.ssd"
+DEFAULT_FS_BINARY = REPO_ROOT / "tests" / "data" / "images" / "cookbook" / "l3v126.ssd"
 
 # Bitmap-fragmentation stride: how many free sectors between each
 # allocated marker within an AFS cylinder. A SCSI hard disc cylinder
@@ -71,13 +73,13 @@ _FRAGMENTATION_STRIDE = 4
 
 
 def _copy_fs_binary_to_adfs(adfs: ADFS, dfs_ssd_filepath: Path) -> None:
-    """Pull ``$.FS3v126`` off the source SSD and write it to ADFS root.
+    """Pull ``$.FS`` off the source SSD and write it to ADFS root as ``FS3v126``.
 
     Preserves the DFS file's load/exec addresses so the binary is
     runnable; sets the access bits to ``LR/R`` (locked, readable).
     """
     with DFS.from_file(dfs_ssd_filepath) as dfs:
-        binary_path = DFSPath(dfs, "$.FS3v126")
+        binary_path = DFSPath(dfs, "$.FS")
         binary_bytes = binary_path.read_bytes()
         binary_stat = binary_path.stat()
     target = adfs.root / "FS3v126"
@@ -184,9 +186,9 @@ def build_fragmented_disc(
     Args:
         output_filepath: Destination ``.dat`` (the companion ``.dsc``
             is written alongside automatically).
-        fs_binary_filepath: SSD image containing ``$.FS3v126`` —
+        fs_binary_filepath: SSD image containing ``$.FS`` —
             usually the cookbook's ``tests/data/images/cookbook/
-            FS3v126.ssd``.
+            l3v126.ssd``.
         capacity: ADFS envelope size. ``5MB`` leaves enough room for
             both the FS binary and a small AFS region.
         payload_sectors: Size of the fragmented test file in 256-byte
@@ -281,9 +283,7 @@ def main() -> None:
         "--fs-binary",
         type=Path,
         default=DEFAULT_FS_BINARY,
-        help=(
-            f"SSD image containing $.FS3v126 (default: {DEFAULT_FS_BINARY.relative_to(REPO_ROOT)})."
-        ),
+        help=(f"SSD image containing $.FS (default: {DEFAULT_FS_BINARY.relative_to(REPO_ROOT)})."),
     )
     parser.add_argument(
         "--capacity",

@@ -17,8 +17,11 @@ Sections:
   populate_afs Copy a file from a floppy into a user's AFS directory.
   verify       Final stat showing the dual-partition shape.
 
-The source SSD with the FS executable lives in the cookbook corpus
-at tests/data/images/cookbook/FS3v126.ssd.
+The source SSD is the Level 3 File Server 1.26 release disc,
+l3v126.ssd, from https://github.com/mmbeeb/L3V126/releases/tag/MML3V126,
+kept unmodified in the cookbook corpus. Its executable is $.FS; the
+recipe installs it as $.FS3v126, the name the community conventionally
+gives the 1.26 file server so its version is plain.
 """
 
 from __future__ import annotations
@@ -32,16 +35,16 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from cli_example_helper import in_tmp_dir, section, show  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
-SOURCE = REPO_ROOT / "tests" / "data" / "images" / "cookbook" / "FS3v126.ssd"
+SOURCE = REPO_ROOT / "tests" / "data" / "images" / "cookbook" / "l3v126.ssd"
 
 with in_tmp_dir():
-    shutil.copy(SOURCE, "FS3v126.ssd")
+    shutil.copy(SOURCE, "l3v126.ssd")
 
     section("envelope")
     show("disc create scsi0.dat --geometry capacity=10MB --title Server")
 
     section("install_fs")
-    show("disc cp 'FS3v126.ssd:$.FS3v126' 'scsi0.dat:$.FS3v126'")
+    show("disc cp 'l3v126.ssd:$.FS' 'scsi0.dat:$.FS3v126'")
 
     section("boot")
     show("printf '*RUN $.FS3v126\\r' | disc put 'scsi0.dat:$.!BOOT' -")
