@@ -571,7 +571,20 @@ initialisation::
 ``NAME`` matches a ``--user`` or a built-in; set a password later with
 ``disc afs passwd IMAGE NAME --password VALUE``.
 
-**7. Verify the dual-partition shape and walk the disc.**
+**7. Copy files into a user's directory.**
+
+.. cli-example:: l3fs_disc
+   :section: populate_afs
+
+A user's files live in the AFS partition, so the destination path
+starts with the ``afs:`` partition selector. Here a file on a DFS
+floppy goes into a ``Saves`` directory in ``RJS``'s user root; ``disc
+cp`` creates ``Saves`` on the way. The selector ends with a colon:
+``scsi0.dat:afs.RJS.Saves.MAX`` names an ADFS path whose first
+directory is called ``afs``, and ``disc`` warns when it sees one (see
+:doc:`conventions/paths`).
+
+**8. Verify the dual-partition shape and walk the disc.**
 
 .. cli-example:: l3fs_disc
    :section: verify
@@ -589,10 +602,10 @@ Walking the whole image with ``disc tree`` then exposes both
 halves. The ADFS half is tiny — just ``!BOOT`` and the FS3 binary,
 which is all the boot needs to load before handing off to AFS.
 
-The AFS half shows the two emplaced library trees in full, with
-the BBC-era utilities (``LCAT``, ``NETMON``, ``PROT``, ``USERS``,
-…) that the Level 3 File Server's clients reach for via
-``*<command>`` once the server is up.
+The AFS half shows ``RJS``'s ``Saves`` directory from step 7 and the
+two emplaced library trees in full, with the BBC-era utilities
+(``LCAT``, ``NETMON``, ``PROT``, ``USERS``, …) that the Level 3 File
+Server's clients reach for via ``*<command>`` once the server is up.
 
 
 A checksum table for every file on a disc

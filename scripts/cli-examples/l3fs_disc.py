@@ -14,6 +14,7 @@ Sections:
   plan_afs     Dry-run sizing of the AFS partition (afs-plan).
   init_afs     Carve out the AFS partition for real (afs-init).
   inspect_afs  Confirm the resulting user list (afs-users).
+  populate_afs Copy a file from a floppy into a user's AFS directory.
   verify       Final stat showing the dual-partition shape.
 
 The source SSD with the FS executable lives in the cookbook corpus
@@ -60,6 +61,12 @@ with in_tmp_dir():
 
     section("inspect_afs")
     show("disc afs users scsi0.dat")
+
+    section("populate_afs")
+    show("disc create saves.ssd")
+    show("printf 'Commander Jameson' | disc put 'saves.ssd:$.MAX' -")
+    show("disc cp 'saves.ssd:$.MAX' 'scsi0.dat:afs:$.RJS.Saves.MAX'")
+    show("disc tree 'scsi0.dat:afs:$.RJS'")
 
     section("verify")
     show("disc stat scsi0.dat")
