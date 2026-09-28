@@ -450,8 +450,17 @@ Creating a Level 3 File Server disc
 -----------------------------------
 
 The full walkthrough builds a bootable L3FS hard disc from a fresh
-ADFS envelope plus the file-server executable shipped on
-``tests/data/images/cookbook/FS3v126.ssd``.
+ADFS envelope plus the Level 3 File Server executable. The canonical
+source for version 1.26 is the `mmbeeb/L3V126
+<https://github.com/mmbeeb/L3V126>`_ repository: download ``l3v126.ssd``
+from its `latest release
+<https://github.com/mmbeeb/L3V126/releases/latest>`_. On that disc the
+executable is ``$.FS``, so step 2 copies it with::
+
+   disc cp 'l3v126.ssd:$.FS' 'scsi0.dat:$.FS3v126'
+
+The recorded run below uses a copy of the executable saved as
+``FS3v126.ssd:$.FS3v126``; the remaining steps are the same.
 
 **1. Lay down an empty ADFS hard-disc envelope.**
 
