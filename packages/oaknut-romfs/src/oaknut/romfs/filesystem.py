@@ -102,6 +102,28 @@ _GEOMETRY_PRESETS = {
 }
 
 
+def _block_range(first: int, count: int) -> str:
+    last = first + count - 1
+    return f"block {first}" if count == 1 else f"blocks {first}–{last}"
+
+
+def _span_descriptions(romfs: ROMFS) -> list[str]:
+    """How *romfs* shares files with its neighbours in a multi-ROM set."""
+    descriptions = []
+    leading = romfs.leading_fragment
+    if leading is not None:
+        blocks = _block_range(leading.first_block_number, leading.block_count)
+        description = f"{leading.name} continues from the previous ROM, with {blocks} here"
+        if not leading.ends_file:
+            description += " and on into the next ROM"
+        descriptions.append(description)
+    trailing = romfs.trailing_fragment
+    if trailing is not None:
+        blocks = _block_range(trailing.first_block_number, trailing.block_count)
+        descriptions.append(f"{trailing.name} continues in the next ROM, with {blocks} here")
+    return descriptions
+
+
 class _ROMFSMount(AcornWildcards):
     """A :class:`~oaknut.filesystem.Mount` over a :class:`ROMFS` instance.
 
@@ -132,8 +154,14 @@ class _ROMFSMount(AcornWildcards):
     def _require_writable(self) -> None:
         if not self._romfs.is_complete:
             raise ReadOnlyFilesystemError(
-                "this ROM has no end marker — it is a fragment of a multi-ROM "
-                "filing system (or a truncated image); ROMFS writes are refused"
+                "this ROM has no end marker — it is a truncated or damaged "
+                "image; ROMFS writes are refused"
+            )
+        if self._romfs.is_set_member:
+            raise ReadOnlyFilesystemError(
+                "this ROM shares a file with another ROM of a multi-ROM set: "
+                f"{'; '.join(_span_descriptions(self._romfs))}. ROMFS writes are "
+                "refused, since rewriting it would break that file"
             )
         if not self._romfs.is_plain:
             raise ReadOnlyFilesystemError(
@@ -262,7 +290,12 @@ class _ROMFSMount(AcornWildcards):
     # -- StatusReporting --
     def status_notes(self) -> tuple[str, ...]:
         if not self._romfs.is_complete:
-            return ("incomplete — appears to be a fragment of a multi-ROM set (read-only)",)
+            return ("incomplete — no end marker; truncated or damaged (read-only)",)
+        if self._romfs.is_set_member:
+            return tuple(
+                f"multi-ROM set member — {description} (read-only)"
+                for description in _span_descriptions(self._romfs)
+            )
         if not self._romfs.is_plain:
             return ("composite — carries code after the filing system (read-only)",)
         return ()
@@ -323,12 +356,16 @@ class AcornROMFS(Filesystem):
             evidence.append(f"title {romfs.title!r}")
         # A CRC-validated block chain plus an Acorn (C) copyright string is a
         # strong, integrity-checked match; without the copyright it is merely
-        # a well-formed chain. An image with no end marker is incomplete — a
-        # fragment of a multi-ROM filing system, or truncated — so it is
-        # demoted and flagged: it is identified and read, but never written.
+        # a well-formed chain. An image with no end marker is incomplete —
+        # truncated or damaged — so it is demoted and flagged: it is
+        # identified and read, but never written. A member of a multi-ROM set
+        # sharing a file with a neighbour is well-formed, so it keeps its
+        # confidence; the evidence names the shared file.
         confident = romfs.has_service_entry and romfs.copyright.startswith("(C)")
         if not romfs.is_complete:
-            evidence.append("no end marker — incomplete (multi-ROM fragment?); read-only")
+            evidence.append("no end marker — incomplete (truncated or damaged); read-only")
+        for description in _span_descriptions(romfs):
+            evidence.append(f"{description}; read-only")
         confidence = Confidence.STRONG if (confident and romfs.is_complete) else Confidence.PROBABLE
         return Identification(
             filesystem=self.name,

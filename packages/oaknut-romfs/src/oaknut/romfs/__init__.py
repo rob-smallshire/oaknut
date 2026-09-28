@@ -30,13 +30,15 @@ from oaknut.romfs.exceptions import (
     ROMFullError,
     TruncatedROMError,
 )
-from oaknut.romfs.romfs import ROMFS, ROMFSFile
+from oaknut.romfs.romfs import ROMFS, ROMFSFile, ROMFSFragment, ROMFSSet
 
 __version__ = "12.18.2"
 
 __all__ = [
     "ROMFS",
     "ROMFSFile",
+    "ROMFSFragment",
+    "ROMFSSet",
     "ROMFSError",
     "NotAROMFSError",
     "CRCError",

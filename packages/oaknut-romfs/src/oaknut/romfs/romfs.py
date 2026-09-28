@@ -15,7 +15,8 @@ preserving the machine-code prefix it does not model. See
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from collections.abc import Iterable
+from dataclasses import dataclass, field
 
 from oaknut.romfs.block import (
     BLOCK_DATA_SIZE,
@@ -97,6 +98,99 @@ class ROMFSFile:
         return (self.length - 1) // BLOCK_DATA_SIZE
 
 
+@dataclass(frozen=True)
+class ROMFSFragment:
+    """The part of a file held by one member ROM of a multi-ROM set.
+
+    A file's block chain may run past the ``&2B`` end-of-ROM marker into the
+    next-lower ROM, which resumes with a header for the next block (see
+    ``docs/romfs-format-spec.md`` §7). A ROM that ends mid-file carries a
+    *trailing* fragment (starting at block 0, not ending the file); a ROM
+    that begins mid-file carries a *leading* fragment (starting at a block
+    number above 0). A fragment is not a file in its own right: it is joined
+    to its neighbours by :class:`ROMFSSet`.
+
+    *raw* holds the fragment's on-ROM bytes verbatim, so the member it came
+    from re-serialises byte-exact.
+    """
+
+    name: str
+    load_address: int
+    exec_address: int
+    run_only: bool
+    first_block_number: int
+    block_count: int
+    data: bytes
+    ends_file: bool
+    end_address: int
+    flag_extra: int
+    raw: bytes = field(repr=False)
+
+    @property
+    def starts_file(self) -> bool:
+        """Whether this fragment holds the file's first block."""
+        return self.first_block_number == 0
+
+    @property
+    def next_block_number(self) -> int:
+        """The block number the fragment's continuation must start with."""
+        return self.first_block_number + self.block_count
+
+
+class _PendingChain:
+    """A block chain being accumulated during the walk of one ROM."""
+
+    def __init__(self, header: BlockHeader, start: int):
+        self.name = header.name
+        self.load_address = header.load_address
+        self.exec_address = header.exec_address
+        self.run_only = header.is_run_only
+        self.end_address = header.end_address
+        # Preserve any flag bits we do not derive (the &40 "no data" bit and
+        # the unused bits 1–5) so re-serialising is byte-exact.
+        self.flag_extra = header.flag & ~(FLAG_LAST | FLAG_RUN_ONLY)
+        self.first_block_number = header.block_number
+        self.start = start
+        self.chunks: list[bytes] = []
+
+    def to_file(self) -> ROMFSFile:
+        return ROMFSFile(
+            self.name,
+            self.load_address,
+            self.exec_address,
+            self.run_only,
+            b"".join(self.chunks),
+            self.end_address,
+            self.flag_extra,
+        )
+
+    def to_fragment(self, raw: bytes, *, ends_file: bool) -> ROMFSFragment:
+        return ROMFSFragment(
+            name=self.name,
+            load_address=self.load_address,
+            exec_address=self.exec_address,
+            run_only=self.run_only,
+            first_block_number=self.first_block_number,
+            block_count=len(self.chunks),
+            data=b"".join(self.chunks),
+            ends_file=ends_file,
+            end_address=self.end_address,
+            flag_extra=self.flag_extra,
+            raw=raw,
+        )
+
+
+@dataclass(frozen=True)
+class _Chain:
+    """The result of walking one ROM's block chain."""
+
+    files: tuple[ROMFSFile, ...]
+    leading_fragment: ROMFSFragment | None
+    trailing_fragment: ROMFSFragment | None
+    complete: bool
+    end: int
+
+
 def _unwrap_title(name: str) -> str:
     """Strip the surrounding asterisks from an Acornsoft-style title block."""
     if len(name) >= 2 and name[0] == "*" and name[-1] == "*":
@@ -148,29 +242,42 @@ def _read_data(buf: bytes, offset: int, length: int) -> tuple[bytes, int]:
     return data, end + 2
 
 
-def _assemble_files(buf: bytes, start: int) -> tuple[list[ROMFSFile], bool, int]:
-    """Walk the block chain from *start* into whole files.
+def _assemble_files(buf: bytes, start: int) -> _Chain:
+    """Walk the block chain from *start* into whole files and fragments.
 
-    Returns ``(files, complete, end)``. *complete* is True only when the
-    chain ended cleanly at the ``&2B`` marker; *end* is the offset just past
-    it. When the data runs off the end of the ROM, or meets a non-marker
-    byte where a block is expected — as a fragment of a multi-ROM filing
-    system does, having no terminator — the walk stops, *complete* is False,
-    *end* is where it stopped, and any dangling (partly-present) trailing
-    file is discarded; the complete files before it are returned. A bad CRC
-    is genuine corruption and still raises.
+    The ``&2B`` marker ends the ROM, not necessarily a file: a file whose
+    chain is still open when ``&2B`` is reached continues in the next-lower
+    ROM of a multi-ROM set and is kept as the *trailing fragment*. A chain
+    whose first block number is above 0, at the very start of the data,
+    continues a file from the previous ROM and is kept as the *leading
+    fragment* (a chain that neither starts nor ends here — a file running
+    through a middle member — is a leading fragment that does not end its
+    file). Neither is listed as a file.
+
+    *complete* is True only when the walk reached the ``&2B`` marker; *end*
+    is the offset just past it. When the data runs off the end of the ROM,
+    or meets a non-marker byte where a block is expected, the walk stops,
+    *complete* is False, *end* is where it stopped, and any dangling
+    trailing chain is discarded — a truncated or damaged image. A bad CRC is
+    genuine corruption and still raises.
     """
     files: list[ROMFSFile] = []
-    name = load = execa = end_address = 0
-    run_only = False
-    chunks: list[bytes] = []
-    open_file = False
+    leading: ROMFSFragment | None = None
+    pending: _PendingChain | None = None
     pos = start
 
     while pos < len(buf):
         marker = buf[pos]
         if marker == END_OF_FILESYSTEM:
-            return files, True, pos + 1
+            trailing = None
+            if pending is not None:
+                fragment = pending.to_fragment(buf[pending.start : pos], ends_file=False)
+                if pending.first_block_number == 0:
+                    trailing = fragment
+                else:
+                    leading = fragment
+            return _Chain(tuple(files), leading, trailing, True, pos + 1)
+        block_start = pos
         try:
             if marker == SYNC_BYTE:
                 header, data_offset = BlockHeader.parse(buf, pos)
@@ -180,29 +287,27 @@ def _assemble_files(buf: bytes, start: int) -> tuple[list[ROMFSFile], bool, int]
             else:
                 break  # non-marker byte: no terminator here — an incomplete ROM
         except TruncatedROMError:
-            break  # ran off the end mid-block — an incomplete (fragment) ROM
+            break  # ran off the end mid-block — an incomplete (truncated) ROM
 
-        if header is not None and header.block_number == 0:
-            if open_file:
-                break  # a new file began before the previous ended — stop, incomplete
-            name, load, execa = header.name, header.load_address, header.exec_address
-            run_only, end_address = header.is_run_only, header.end_address
-            # Preserve any flag bits we do not derive (the &40 "no data" bit
-            # and the unused bits 1–5) so re-serialising is byte-exact.
-            flag_extra = header.flag & ~(FLAG_LAST | FLAG_RUN_ONLY)
-            chunks = [data]
-            open_file = True
-        else:
-            if not open_file:
-                break  # continuation with no file in progress — stop, incomplete
-            chunks.append(data)
+        if pending is None:
+            if header is None:
+                break  # continuation with no chain in progress — stop, incomplete
+            at_data_start = block_start == start
+            if header.block_number != 0 and not at_data_start:
+                break  # a mid-file block after other files — stop, incomplete
+            pending = _PendingChain(header, block_start)
+        elif header is not None and header.block_number == 0:
+            break  # a new file began before the previous ended — stop, incomplete
+        pending.chunks.append(data)
+
         if header is not None and header.is_last:
-            files.append(
-                ROMFSFile(name, load, execa, run_only, b"".join(chunks), end_address, flag_extra)
-            )
-            open_file = False
+            if pending.first_block_number == 0:
+                files.append(pending.to_file())
+            else:
+                leading = pending.to_fragment(buf[pending.start : pos], ends_file=True)
+            pending = None
 
-    return files, False, pos
+    return _Chain(tuple(files), leading, None, False, pos)
 
 
 def _chain_length(name: str, data_length: int) -> int:
@@ -410,6 +515,12 @@ def set_copyright(image: bytes, text: str) -> bytes:
             "would relocate its code; set a same-length copyright, or recreate "
             "the ROM with `disc create`"
         )
+    if rom.is_set_member:
+        raise ROMFSError(
+            "this ROM holds part of a file that spans into another ROM of a "
+            "multi-ROM set, so rebuilding it is unsafe; set a same-length "
+            "copyright instead"
+        )
     if not (rom.is_complete and rom.is_plain):
         raise ROMFSError(
             "this ROM carries code after the filing system (or is incomplete), "
@@ -441,8 +552,12 @@ class ROMFS:
         data_offset: int,
         fs_end: int,
         complete: bool,
+        leading_fragment: ROMFSFragment | None = None,
+        trailing_fragment: ROMFSFragment | None = None,
     ):
         self._files = tuple(files)
+        self._leading_fragment = leading_fragment
+        self._trailing_fragment = trailing_fragment
         self._rom_type = rom_type
         self._header_title = header_title
         self._version = version
@@ -460,27 +575,31 @@ class ROMFS:
         """Parse a ROMFS image from *buf* (bytes-like).
 
         Raises :class:`NotAROMFSError` if no valid ROMFS block is found, and
-        :class:`CRCError` on a corrupt block. A ROM with no ``&2B``
-        terminator — a fragment of a multi-ROM filing system, or a truncated
-        image — does **not** raise: it parses to an *incomplete* ROMFS
-        (:attr:`is_complete` is False) holding the complete files it could
-        read, with any dangling trailing file dropped.
+        :class:`CRCError` on a corrupt block. A member of a multi-ROM set
+        parses with the part of any file it shares with a neighbouring ROM
+        held in :attr:`leading_fragment` / :attr:`trailing_fragment` rather
+        than in :attr:`files`. A ROM with no ``&2B`` terminator — a truncated
+        or damaged image — does **not** raise: it parses to an *incomplete*
+        ROMFS (:attr:`is_complete` is False) holding the complete files it
+        could read, with any dangling trailing file dropped.
         """
         image = bytes(buf)
         if len(image) <= _TITLE_OFFSET:
             raise NotAROMFSError("image too small to be a paged ROM")
         data_offset = _find_data_start(image)
-        files, complete, fs_end = _assemble_files(image, data_offset)
+        chain = _assemble_files(image, data_offset)
         return cls(
-            tuple(files),
+            chain.files,
             rom_type=image[_ROM_TYPE_OFFSET],
             header_title=_decode_string(image, _TITLE_OFFSET),
             version=image[_VERSION_OFFSET],
             copyright=_decode_string(image, image[_COPYRIGHT_PTR_OFFSET] + 1),
             image=image,
             data_offset=data_offset,
-            fs_end=fs_end,
-            complete=complete,
+            fs_end=chain.end,
+            complete=chain.complete,
+            leading_fragment=chain.leading_fragment,
+            trailing_fragment=chain.trailing_fragment,
         )
 
     @property
@@ -549,18 +668,50 @@ class ROMFS:
 
     @property
     def is_complete(self) -> bool:
-        """Whether the filing system terminates within this ROM (a ``&2B``).
+        """Whether the block chain reaches this ROM's ``&2B`` end marker.
 
-        False marks an *incomplete* image: the block chain ran to the end of
-        the ROM without a terminator. That is how a non-final fragment of a
-        multi-ROM filing system looks (its data continues in the socket
-        below), and also how a truncated image looks — the two are
-        indistinguishable from one ROM alone. Either way the image is read
-        as far as its complete files and is treated as read-only, since it
-        is part of (or a damaged) larger whole. Multi-ROM reassembly is not
-        supported; see ``docs/romfs-format-spec.md`` §7.
+        False marks a truncated or damaged image: the chain ran to the end
+        of the ROM, or into bytes that are not a block, without a
+        terminator. Such an image is read as far as its complete files and
+        is treated as read-only. A member of a multi-ROM set *is* complete —
+        each member ends with its own ``&2B`` — even when a file continues
+        into the next ROM; see :attr:`is_set_member`.
         """
         return self._complete
+
+    @property
+    def leading_fragment(self) -> ROMFSFragment | None:
+        """The end of a file begun in the previous ROM of a set, or ``None``."""
+        return self._leading_fragment
+
+    @property
+    def trailing_fragment(self) -> ROMFSFragment | None:
+        """The start of a file continued in the next ROM of a set, or ``None``."""
+        return self._trailing_fragment
+
+    @property
+    def continues_from_previous(self) -> bool:
+        """Whether this ROM begins mid-file, continuing the previous ROM."""
+        return self._leading_fragment is not None
+
+    @property
+    def continues_in_next(self) -> bool:
+        """Whether this ROM ends mid-file, continuing in the next ROM."""
+        if self._trailing_fragment is not None:
+            return True
+        return self._leading_fragment is not None and not self._leading_fragment.ends_file
+
+    @property
+    def is_set_member(self) -> bool:
+        """Whether this ROM shares a file with a neighbouring ROM of a set.
+
+        Such a ROM is one piece of a larger filing system: rewriting it
+        would move or drop the part of the file it shares, breaking the
+        whole set, so it is never rebuilt. A member whose files all end
+        cleanly is indistinguishable from a standalone ROM, so this is False
+        for it.
+        """
+        return self.continues_from_previous or self.continues_in_next
 
     @property
     def is_plain(self) -> bool:
@@ -582,8 +733,15 @@ class ROMFS:
 
         The header/handler prefix, header metadata and image size are
         carried over; :meth:`to_bytes` lays the new chain out within the
-        same ROM, so the result re-parses as the same kind of image.
+        same ROM, so the result re-parses as the same kind of image. Refused
+        with :class:`ROMFSError` for a ROM that shares a file with a
+        neighbouring ROM (:attr:`is_set_member`).
         """
+        if self.is_set_member:
+            raise ROMFSError(
+                "this ROM holds part of a file that spans into another ROM of a "
+                "multi-ROM set; changing its files would break that file"
+            )
         return ROMFS(
             tuple(files),
             rom_type=self._rom_type,
@@ -610,13 +768,20 @@ class ROMFS:
         """
         if not self._complete:
             raise ROMFSError(
-                "cannot serialise an incomplete ROMFS: it is a fragment of a "
-                "multi-ROM filing system (or a truncated image), so there is no "
+                "cannot serialise an incomplete ROMFS: its block chain has no "
+                "end marker (a truncated or damaged image), so there is no "
                 "whole filing system to write back"
             )
         prefix = self._image[: self._data_offset]
 
-        chain = _serialise_chain(self._files, ROM_BASE_ADDRESS + self._data_offset)
+        # A set member's shared fragments are carried verbatim: the leading
+        # one before the files, the trailing one after them. Such a ROM is
+        # never given new files (with_files refuses it), so they re-emit
+        # exactly where they were read.
+        leading = self._leading_fragment.raw if self._leading_fragment else b""
+        trailing = self._trailing_fragment.raw if self._trailing_fragment else b""
+        files_address = ROM_BASE_ADDRESS + self._data_offset + len(leading)
+        chain = leading + _serialise_chain(self._files, files_address) + trailing
         new_fs_end = self._data_offset + len(chain) + 1  # the &2B end marker
 
         # The original image's layout after the FS: a padding run, then any
@@ -655,3 +820,95 @@ class ROMFS:
         while opaque_start < len(self._image) and self._image[opaque_start] == pad_byte:
             opaque_start += 1
         return pad_byte, opaque_start
+
+
+def _join(fragments: list[ROMFSFragment]) -> ROMFSFile:
+    """The whole file assembled from its fragments, first to last."""
+    first, last = fragments[0], fragments[-1]
+    return ROMFSFile(
+        first.name,
+        first.load_address,
+        first.exec_address,
+        first.run_only,
+        b"".join(fragment.data for fragment in fragments),
+        last.end_address,
+        first.flag_extra,
+    )
+
+
+def _continues(fragment: ROMFSFragment, continuation: ROMFSFragment) -> bool:
+    """Whether *continuation* resumes the file *fragment* left unfinished."""
+    return (
+        continuation.name == fragment.name
+        and continuation.load_address == fragment.load_address
+        and continuation.exec_address == fragment.exec_address
+        and continuation.first_block_number == fragment.next_block_number
+    )
+
+
+class ROMFSSet:
+    """The filing system of several ROMs read as one, in socket order.
+
+    The MOS reads the RFS ROMs from the highest socket down, moving to the
+    next-lower ROM at each ``&2B`` end-of-ROM marker, so a set's catalogue is
+    the members' files in that order — and a file may run from one member
+    into the next. :attr:`files` joins such a file back into one
+    :class:`ROMFSFile` at the place it starts. Membership and order are
+    given explicitly; they are never inferred from file names. See
+    ``docs/romfs-format-spec.md`` §7.
+    """
+
+    def __init__(self, members: Iterable[ROMFS]):
+        self._members = tuple(members)
+        if not self._members:
+            raise ROMFSError("a ROMFS set needs at least one ROM")
+        self._files = self._assemble()
+
+    @classmethod
+    def from_images(cls, images: Iterable) -> "ROMFSSet":
+        """Parse a set from ROM images given highest socket first."""
+        return cls(ROMFS.from_bytes(image) for image in images)
+
+    @property
+    def members(self) -> tuple[ROMFS, ...]:
+        """The member ROMs, highest socket first."""
+        return self._members
+
+    @property
+    def files(self) -> tuple[ROMFSFile, ...]:
+        """Every file in the set in catalogue order, spanning files joined."""
+        return self._files
+
+    def _assemble(self) -> tuple[ROMFSFile, ...]:
+        files: list[ROMFSFile] = []
+        carried: list[ROMFSFragment] = []
+        for index, member in enumerate(self._members, start=1):
+            leading = member.leading_fragment
+            if leading is not None:
+                if not carried:
+                    raise ROMFSError(
+                        f"ROM {index} continues {leading.name!r} from a previous ROM, "
+                        "but no earlier ROM in the set begins it; check the order"
+                    )
+                if not _continues(carried[-1], leading):
+                    raise ROMFSError(
+                        f"ROM {index} does not continue {carried[-1].name!r} "
+                        f"from block {carried[-1].next_block_number}; check the order"
+                    )
+                carried.append(leading)
+                if leading.ends_file:
+                    files.append(_join(carried))
+                    carried = []
+            elif carried:
+                raise ROMFSError(
+                    f"{carried[-1].name!r} continues beyond ROM {index - 1}, but "
+                    f"ROM {index} does not continue it; check the order"
+                )
+            files.extend(member.files)
+            if member.trailing_fragment is not None:
+                carried = [member.trailing_fragment]
+        if carried:
+            raise ROMFSError(
+                f"{carried[-1].name!r} continues beyond the last ROM of the set; a ROM is missing"
+            )
+        return tuple(files)
