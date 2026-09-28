@@ -147,6 +147,12 @@ path. When an image holds two partitions of the same filesystem, the
 first is the bare key and the rest are numbered from one: ``afs:`` is
 the first AFS partition, ``afs.1:`` the second.
 
+A selector ends with a colon. Written with a dot instead — ``afs.ELITE``
+— the same text is an ordinary path in the default partition whose first
+directory is named ``afs``. On an image that has an ``afs`` partition,
+``disc`` carries out the command on the path as written and prints a
+warning suggesting ``afs:ELITE``.
+
 With no selector, ``disc`` identifies the image by its *content* — not
 its file extension — and mounts the best candidate (the whole-image
 host, so a combined ADFS+AFS disc opens at its ADFS root). Because

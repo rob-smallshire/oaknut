@@ -36,6 +36,7 @@ from oaknut.filesystem import (
 from oaknut.filesystem.exceptions import GeometryError
 
 from .cli_paths import parse_compound_path
+from .console import print_warning
 
 # A partition selector is a lower-case filesystem key, optionally with a
 # ``.N`` index, followed by a colon: ``afs:``, ``afs.1:``, ``acorn-dfs:``.
@@ -86,6 +87,42 @@ def split_selector(inner_path: str) -> tuple[str | None, str]:
     if match is None:
         return None, inner_path
     return match.group(1), match.group(2)
+
+
+def misplaced_selector(inner_path: str, selectors: list[str]) -> str | None:
+    """The selector form *inner_path* was probably meant as, or ``None``.
+
+    A partition selector ends with a colon (``afs:ELITE``). Written with a
+    dot instead (``afs.ELITE``) it is a legal path whose first directory
+    is named after the partition, so it silently lands in the default
+    partition. When *inner_path* starts with one of the image's
+    *selectors* followed by a dot (or is exactly one), return the inner
+    path with the selector's colon restored. An image with a single
+    partition has nothing to confuse, so it never matches.
+    """
+    if len(selectors) < 2:
+        return None
+    # Longest first, so "afs.1.X" matches the afs.1 selector, not afs.
+    for selector in sorted(selectors, key=len, reverse=True):
+        if inner_path == selector:
+            return f"{selector}:"
+        if inner_path.startswith(f"{selector}."):
+            return f"{selector}:{inner_path[len(selector) + 1 :]}"
+    return None
+
+
+def _warn_if_misplaced_selector(inner_path: str, host: Identification) -> None:
+    """Warn when *inner_path* looks like a selector written with a dot."""
+    selectors = [host.partition.selector] + [
+        c.partition.selector for c in host.contained if c.identified
+    ]
+    suggestion = misplaced_selector(inner_path, selectors)
+    if suggestion is not None:
+        print_warning(
+            f"warning: {inner_path!r} is a path in the default partition that "
+            f"starts with a directory named {suggestion.split(':')[0]!r}; "
+            f"did you mean {suggestion!r}? A partition selector ends with a colon."
+        )
 
 
 def resolve_mount(
@@ -140,6 +177,8 @@ def resolve_mount(
                 raise click.ClickException(_unrecognised_message(outer_filepath.name))
             host = candidates[0]
             chosen, region = _select(host, selector)
+            if selector is None:
+                _warn_if_misplaced_selector(in_path, host)
             filesystem = create_filesystem(chosen.filesystem)
             if region is None:
                 region_view = reader
