@@ -73,7 +73,7 @@ Dependencies flow strictly downward, mirroring oaknut-dfs.
 | `Mount` (core) | yes | flat list + read + write; `path_root()` is `""` |
 | `AcornMetadata` | yes | CFS load/exec + lock bit |
 | `Titled` | yes | the ROM title string |
-| `StatusReporting` | yes | flags an incomplete (fragment) or composite ROM as read-only in `disc stat` |
+| `StatusReporting` | yes | flags a truncated, composite or multi-ROM-set-member ROM as read-only in `disc stat` |
 | `HierarchicalDirectories` | **no** | ROMFS is flat — no directories |
 | `Bootable` | **no** | no `*OPT 4` boot byte on ROM |
 | `FreeSpace` / `Sized` | maybe | ROM is fixed; free space is the unused tail to the `&2B` marker / bank end |
@@ -167,8 +167,11 @@ anything.
    created-style ROM only).
 9. ⬜ BBC BASIC detokenisation for files stored as tokenised BASIC
    (mirroring the DFS package), once a use-case needs it.
-10. ⬜ Multi-ROM **spanning** reassembler — deferred until a genuine
-    spanning example exists (§7 of the format spec).
+10. ◐ Multi-ROM **spanning** (§7 of the format spec, fixture: the
+    *Mined-Out* two-ROM set). ✅ Read: `ROMFSFragment` holds the part of a
+    file a member shares with a neighbour, set members are read-only and
+    round-trip byte-exact, and `ROMFSSet` joins a set given in socket
+    order. ⬜ A CLI form for reading a set; ⬜ creating and editing sets.
 11. ⬜ **Self-starting (language-ROM) cartridges** — see below.
 
 ## Future: self-starting cartridges (the language-ROM technique)
