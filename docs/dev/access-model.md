@@ -309,6 +309,13 @@ Where the implementation differs from the design above, and why:
   `DFSStat`, `ADFSStat`, `AFSAccess.to_acorn` / `from_acorn`, the write
   paths, `chmod`, AFS host import and every mount use them; the CLI's
   `cp`, `gather`, `import` and `chmod` route through `translate_access`.
+- **Run-only as `E` without `R` (step 4, part).** `Access.X` is retired;
+  `Access.is_run_only` tests owner `E` without `R`, the `X` access letter
+  is rejected with a pointer to `E`, and `format_access_text` shows `E`
+  only when the owner has neither `R` nor `W` (BeebWiki `FNf_access`).
+  `acorn-romfs` reads an ordinary file as `R` and a run-only one as `E`,
+  and writes run-only exactly when the access is run-only. Adding `PE`,
+  `PL` and bits 8–10 remains.
 - **Behaviour pinned** by `packages/oaknut-disc/tests/test_cli_access_behaviour.py`,
   which records what each copying path produces today, known-wrong rows
   included.
