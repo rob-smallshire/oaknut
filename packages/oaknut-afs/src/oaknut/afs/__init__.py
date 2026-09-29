@@ -15,7 +15,7 @@ and ``docs/dev/afs-onwire.md`` for the on-disc format specification.
 
 __version__ = "12.19.0"
 
-from oaknut.afs.access import AFSAccess
+from oaknut.afs.access import AFS_ACCESS, AFSAccess, AFSAccessConvention
 from oaknut.afs.afs import AFS, AFSNotPresentError
 from oaknut.afs.allocator import Allocator
 from oaknut.afs.exceptions import (
@@ -69,7 +69,9 @@ from oaknut.afs.wfsinit import (
 
 __all__ = [
     "AFS",
+    "AFS_ACCESS",
     "AFSAccess",
+    "AFSAccessConvention",
     "AFSNotPresentError",
     "AFSPath",
     "AFSSizeSpec",

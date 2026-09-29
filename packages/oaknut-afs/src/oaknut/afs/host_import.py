@@ -24,11 +24,11 @@ import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
-from oaknut.afs.access import AFSAccess
+from oaknut.afs.access import AFS_ACCESS, AFSAccess
 from oaknut.afs.directory import MAX_NAME_LENGTH
 from oaknut.afs.exceptions import AFSHostImportError
 from oaknut.afs.types import AfsDate
-from oaknut.file import AcornMeta
+from oaknut.file import Access, AcornMeta
 from oaknut.file.host_bridge import import_with_metadata
 
 if TYPE_CHECKING:
@@ -53,28 +53,13 @@ def _sanitise_name(host_name: str) -> str:
 def _meta_to_access(meta: AcornMeta) -> AFSAccess:
     """Convert an :class:`AcornMeta` to an AFS access byte.
 
-    ``AcornMeta.access`` is the raw DFS/ADFS attribute byte as read
-    from the host sidecar or xattr. Falls back to ``WR/`` (owner
-    R+W) when no attribute info is present.
+    ``AcornMeta.access`` is the canonical attribute byte as read from the
+    host sidecar or xattr, translated by the AFS access convention. Falls
+    back to ``WR/`` (owner R+W) when no attribute info is present.
     """
     if meta.access is None:
         return AFSAccess.from_string("WR/")
-    # oaknut.file.Access is the DFS/ADFS Access IntFlag.
-    from oaknut.file import Access as FileAccess
-
-    attr = FileAccess(meta.access)
-    result = AFSAccess(0)
-    if attr & FileAccess.L:
-        result |= AFSAccess.LOCKED
-    if attr & FileAccess.R:
-        result |= AFSAccess.OWNER_READ
-    if attr & FileAccess.W:
-        result |= AFSAccess.OWNER_WRITE
-    if attr & FileAccess.PR:
-        result |= AFSAccess.PUBLIC_READ
-    if attr & FileAccess.PW:
-        result |= AFSAccess.PUBLIC_WRITE
-    return result
+    return AFS_ACCESS.from_canonical(Access(meta.access))
 
 
 def import_host_tree(

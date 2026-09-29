@@ -18,6 +18,7 @@ from collections.abc import Iterable
 from datetime import datetime, timedelta
 
 from exit_codes import ExitCode
+from oaknut.afs.access import AFS_ACCESS
 from oaknut.afs.afs import AFS as _AFSRegion
 from oaknut.afs.directory import AFS_NAME_GRAMMAR
 from oaknut.afs.exceptions import AFSInfoSectorError
@@ -81,6 +82,9 @@ class _AFSMount(AcornWildcards):
     Implements the core plus ``HierarchicalDirectories``,
     ``AcornMetadata`` and ``UserDatabase``.
     """
+
+    #: How this filing system's access maps to and from the canonical word.
+    access_convention = AFS_ACCESS
 
     #: AFS load/exec are full 32-bit fields; display them as eight hex
     #: digits, as RISC OS ``*Info`` does.

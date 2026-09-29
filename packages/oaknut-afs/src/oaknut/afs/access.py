@@ -38,10 +38,8 @@ metadata round-trips correctly.
 from __future__ import annotations
 
 from enum import IntFlag
-from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
-    from oaknut.file import Access
+from oaknut.file import FILE_CONTEXT, Access, AccessContext, AccessConvention
 
 # ---------------------------------------------------------------------------
 # Bit positions — the on-disc layout.
@@ -193,43 +191,20 @@ class AFSAccess(IntFlag):
         ``E`` (execute-only) bit has no AFS counterpart and is dropped.
         The directory-type bit is a property of the *object*, not its
         access, so it is never set here — the directory serialiser owns it.
+        This is the AFS access convention's
+        :meth:`~AFSAccessConvention.from_canonical` for a file.
         """
-        from oaknut.file import Access
-
-        wire = Access(int(access))
-        result = cls(0)
-        if wire & Access.R:
-            result |= cls.OWNER_READ
-        if wire & Access.W:
-            result |= cls.OWNER_WRITE
-        if wire & Access.L:
-            result |= cls.LOCKED
-        if wire & Access.PR:
-            result |= cls.PUBLIC_READ
-        if wire & Access.PW:
-            result |= cls.PUBLIC_WRITE
-        return result
+        return AFS_ACCESS.from_canonical(access)
 
     def to_acorn(self) -> "Access":
         """Translate this on-disc access to a canonical :class:`Access`.
 
         The directory-type bit has no wire-form counterpart and is
         dropped — directory-ness is carried by the object, not its access.
+        This is the AFS access convention's
+        :meth:`~AFSAccessConvention.to_canonical`.
         """
-        from oaknut.file import Access
-
-        result = Access(0)
-        if self & AFSAccess.OWNER_READ:
-            result |= Access.R
-        if self & AFSAccess.OWNER_WRITE:
-            result |= Access.W
-        if self & AFSAccess.LOCKED:
-            result |= Access.L
-        if self & AFSAccess.PUBLIC_READ:
-            result |= Access.PR
-        if self & AFSAccess.PUBLIC_WRITE:
-            result |= Access.PW
-        return result
+        return AFS_ACCESS.to_canonical(self)
 
     # -----------------------------------------------------------------
     # Type-checking helpers
@@ -252,3 +227,59 @@ def _reject_unexpected(segment: str, allowed: str, original: str) -> None:
             f"AFSAccess.from_string: unexpected character(s) "
             f"{''.join(unexpected)!r} in {original!r} (allowed: {allowed!r})"
         )
+
+
+class AFSAccessConvention(AccessConvention[AFSAccess]):
+    """AFS access: owner and public read/write and the lock bit.
+
+    The on-disc byte uses its own bit layout (see :class:`AFSAccess`).
+    Owner R/W, ``L`` and public R/W map to the canonical bits; the
+    canonical ``E`` has no AFS counterpart and is dropped. The directory
+    bit records the object's type, so reading drops it and writing sets
+    it from the context.
+    """
+
+    name = "afs"
+    family = "afs"
+    representable = Access.R | Access.W | Access.L | Access.PR | Access.PW
+    source = "AFS0 on-disc format (Rick Murray, heyrick.eu/econet/fs/afs0.html)"
+
+    def to_canonical(self, native: AFSAccess, context: AccessContext = FILE_CONTEXT) -> Access:
+        access = Access(0)
+        if native & AFSAccess.OWNER_READ:
+            access |= Access.R
+        if native & AFSAccess.OWNER_WRITE:
+            access |= Access.W
+        if native & AFSAccess.LOCKED:
+            access |= Access.L
+        if native & AFSAccess.PUBLIC_READ:
+            access |= Access.PR
+        if native & AFSAccess.PUBLIC_WRITE:
+            access |= Access.PW
+        return access
+
+    def from_canonical(
+        self,
+        access: Access,
+        context: AccessContext = FILE_CONTEXT,
+        current: AFSAccess | None = None,
+    ) -> AFSAccess:
+        wire = Access(int(access))
+        native = AFSAccess(0)
+        if wire & Access.R:
+            native |= AFSAccess.OWNER_READ
+        if wire & Access.W:
+            native |= AFSAccess.OWNER_WRITE
+        if wire & Access.L:
+            native |= AFSAccess.LOCKED
+        if wire & Access.PR:
+            native |= AFSAccess.PUBLIC_READ
+        if wire & Access.PW:
+            native |= AFSAccess.PUBLIC_WRITE
+        if context.is_directory:
+            native |= AFSAccess.DIRECTORY
+        return native
+
+
+#: The shared instance used by the AFS path API and mount.
+AFS_ACCESS = AFSAccessConvention()
