@@ -1670,6 +1670,17 @@ def _apply_typestamp(mount, filesystem_name: str, target: str, filetype, when) -
         mount.set_datestamp(target, when)
 
 
+def _is_locked(mount, path: str) -> bool:
+    """Whether *path* on *mount* carries the locked bit."""
+    from oaknut.file import Access
+    from oaknut.filesystem import AcornMetadata
+
+    if not isinstance(mount, AcornMetadata):
+        return False
+    access = mount.acorn_meta(path).access
+    return access is not None and bool(Access(access) & Access.L)
+
+
 def _access_option(func):
     """The ``--access`` option shared by the commands that write files."""
     return click.option(
@@ -1740,6 +1751,7 @@ def _access_override(access_spec: str | None):
 )
 @_typestamp_options
 @_access_option
+@click.option("-f", "--force", is_flag=True, help="Replace the destination even if it is locked.")
 def put(
     compound_path: str,
     host_path: str | None,
@@ -1750,6 +1762,7 @@ def put(
     filetype: str | None,
     datestamp: str | None,
     access_spec: str | None,
+    force: bool,
 ) -> None:
     """Import a host file into the image.
 
@@ -1855,6 +1868,15 @@ def put(
             sidecar_name=sidecar_name,
             host_leaf=host_leaf,
         )
+        # A locked destination is replaced only when forced, as with cp -f.
+        if mount.exists(target):
+            if force:
+                mount.remove(target, force=True)
+            elif _is_locked(mount, target):
+                raise FSError(
+                    f"'{target}' is locked; use -f to replace it",
+                    exit_code=ExitCode.NO_PERM,
+                )
         # The generic write carries no addresses; set them after, when the
         # filesystem records Acorn metadata (DFS/ADFS/AFS), preserving the
         # access the write established.
