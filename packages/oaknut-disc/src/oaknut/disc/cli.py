@@ -1670,6 +1670,30 @@ def _apply_typestamp(mount, filesystem_name: str, target: str, filetype, when) -
         mount.set_datestamp(target, when)
 
 
+def _access_option(func):
+    """The ``--access`` option shared by the commands that write files."""
+    return click.option(
+        "--access",
+        "access_spec",
+        default=None,
+        metavar="ACCESS",
+        help=(
+            "Set the access of each file written, in chmod's syntax: an "
+            "absolute value (R/R, 0x19) replaces the access the file would "
+            "otherwise get, an incremental one (+/R, -W) edits it."
+        ),
+    )(func)
+
+
+def _access_override(access_spec: str | None):
+    """Compile an ``--access`` value, validating it before anything is written."""
+    if access_spec is None:
+        return None
+    from oaknut.file import parse_access_spec
+
+    return parse_access_spec(access_spec)
+
+
 @cli.command()
 @click.argument("compound_path", metavar="OUTER_PATH:INNER_PATH")
 @click.argument("host_path", required=False, default=None)
@@ -1715,6 +1739,7 @@ def _apply_typestamp(mount, filesystem_name: str, target: str, filetype, when) -
     ),
 )
 @_typestamp_options
+@_access_option
 def put(
     compound_path: str,
     host_path: str | None,
@@ -1724,6 +1749,7 @@ def put(
     name_option: str | None,
     filetype: str | None,
     datestamp: str | None,
+    access_spec: str | None,
 ) -> None:
     """Import a host file into the image.
 
@@ -1766,6 +1792,7 @@ def put(
     from oaknut.file import AcornMeta, parse_address
     from oaknut.filesystem import AcornMetadata
 
+    access_override = _access_override(access_spec)
     _outer_filepath, path = parse_compound_path(compound_path)
     if not path:
         raise click.UsageError("PATH is required")
@@ -1834,6 +1861,8 @@ def put(
         mount.write_bytes(target, data)
         if isinstance(mount, AcornMetadata):
             access = mount.acorn_meta(target).access
+            if access_override is not None:
+                access = _destination_access(mount, access or 0, override=access_override)
             mount.set_acorn_meta(
                 target,
                 AcornMeta(
@@ -1998,7 +2027,10 @@ _alias("*RENAME", "mv")
     help="Copy directories recursively.",
 )
 @_wildcards_option
-def cp(src: str, dst: str, force: bool, recursive: bool, wildcards: bool) -> None:
+@_access_option
+def cp(
+    src: str, dst: str, force: bool, recursive: bool, wildcards: bool, access_spec: str | None
+) -> None:
     """Copy file(s) or a tree within or between disc images.
 
     Acorn alias: *COPY.
@@ -2021,8 +2053,21 @@ def cp(src: str, dst: str, force: bool, recursive: bool, wildcards: bool) -> Non
     AFS keeps a native date and no filetype — so a date survives an
     ADFS↔AFS copy. Where ADFS must choose (it cannot hold both a real
     address and a datestamp in the one field), the datestamp wins.
+
+    ``--access`` sets the access of every file copied, in ``disc chmod``'s
+    syntax: an absolute value replaces the access the copy would give,
+    an incremental one edits it (``--access +/R`` grants public read).
+    Directories that ``cp`` creates keep their default access.
     """
-    _cp_dispatch(src, dst, force=force, recursive=recursive, wildcards=wildcards)
+    access_override = _access_override(access_spec)
+    _cp_dispatch(
+        src,
+        dst,
+        force=force,
+        recursive=recursive,
+        wildcards=wildcards,
+        access_override=access_override,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -2211,7 +2256,13 @@ def _mutate_access(
 
 
 def _cp_dispatch(
-    src_spec: str, dst_spec: str, *, force: bool, recursive: bool, wildcards: bool = True
+    src_spec: str,
+    dst_spec: str,
+    *,
+    force: bool,
+    recursive: bool,
+    wildcards: bool = True,
+    access_override=None,
 ) -> None:
     """Orchestrate a cp invocation.
 
@@ -2245,7 +2296,9 @@ def _cp_dispatch(
             if item["kind"] == "mkdir":
                 _ensure_dir_chain(dst_mount, item["dst"])
             elif item["kind"] == "file":
-                _write_copy_item(dst_mount, item["dst"], item, force)
+                _write_copy_item(
+                    dst_mount, item["dst"], item, force, access_override=access_override
+                )
 
 
 def _collect_copy_items(
@@ -2565,8 +2618,14 @@ def _ensure_dir_chain(dst_mount, bare: str) -> None:
     dst_mount.make_directory(bare, parents=True, exist_ok=True)
 
 
-def _write_copy_item(dst_mount, dst_path: str, item: dict, force: bool) -> None:
-    """Write a file item to its destination path."""
+def _write_copy_item(
+    dst_mount, dst_path: str, item: dict, force: bool, *, access_override=None
+) -> None:
+    """Write a file item to its destination path.
+
+    *access_override* is a compiled ``--access`` spec applied to the
+    access the copy would otherwise give.
+    """
     from oaknut.file import AcornMeta
     from oaknut.filesystem import (
         AcornMetadata,
@@ -2594,7 +2653,7 @@ def _write_copy_item(dst_mount, dst_path: str, item: dict, force: bool) -> None:
             AcornMeta(
                 load_address=item["load"],
                 exec_address=item["exec"],
-                access=_destination_access(dst_mount, item["access"]),
+                access=_destination_access(dst_mount, item["access"], override=access_override),
             ),
         )
     # Re-encode the logical filetype/datestamp in the destination's own form.
