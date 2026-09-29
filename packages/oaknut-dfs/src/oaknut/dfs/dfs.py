@@ -86,11 +86,14 @@ def detect_dfs_format(filepath: Union[str, PathLike]) -> DiscFormat:
 def _coerce_access_to_locked(access: "Access | None") -> bool:
     """Project the canonical ``access`` value down to DFS's lone L bit.
 
-    ``None`` (the default) maps to unlocked; otherwise the DFS access
-    convention keeps only the lock bit.
+    ``None`` (the default) maps to unlocked and a plain ``bool`` is the
+    locked flag itself; otherwise the DFS access convention keeps only the
+    lock bit.
     """
     if access is None:
         return False
+    if isinstance(access, bool):
+        return access
     return ACORN_DFS_ACCESS.from_canonical(Access(int(access)))
 
 

@@ -288,7 +288,11 @@ class _ROMFSMount(AcornWildcards):
         # ROMFS→ROMFS copy preserves it, while a locked DFS/ADFS file imported
         # here does not become *RUN-only (which would otherwise make it
         # unloadable: *EXEC / CHAIN would fail with "Locked").
-        run_only = self.access_convention.from_canonical(Access(meta.access))
+        run_only = (
+            file.run_only
+            if meta.access is None
+            else self.access_convention.from_canonical(Access(meta.access))
+        )
         updated = replace(file, load_address=load, exec_address=execa, run_only=run_only)
         self._commit(tuple(updated if f is file else f for f in self._romfs.files))
 

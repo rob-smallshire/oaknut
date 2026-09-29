@@ -1045,8 +1045,9 @@ class ADFSPath(AcornPath):
             from oaknut.adfs.directory import Access
             path.chmod(Access.R | Access.W | Access.L)
 
-        Only the owner R, W, L, and E attributes are affected.
-        Public/private NFS attributes are preserved.
+        The owner R, W, E and L and public R and W attributes are replaced.
+        The directory, public-execute and private attributes, which the
+        canonical ``Access`` word cannot express, are kept.
 
         Args:
             access: Combination of ``Access`` flags.

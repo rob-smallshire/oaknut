@@ -142,24 +142,6 @@ def _format_access(access) -> str:
     return format_access_text(access)
 
 
-def _access_byte_hex(stat_obj) -> str:
-    """Two-digit hex for the canonical wire-form access byte, ``0x``-prefixed.
-
-    Used by ``ls --access-byte`` (issue #10). Every :class:`oaknut.file.Stat`
-    exposes ``.access`` as a canonical :class:`oaknut.file.Access` value
-    regardless of the underlying filesystem family — for AFS this is the
-    wire-form byte its on-disc access translates to (via
-    :meth:`AFSAccess.to_acorn`), not the on-disc byte itself, so the
-    displayed value round-trips through ``disc chmod path 0x..`` cleanly.
-
-    The ``0x`` prefix makes the value unambiguously hex and directly
-    copy-pasteable into ``disc chmod`` — a bare ``13`` would also parse,
-    but ``WR`` (also two valid hex digits) would not, so insist on the
-    explicit prefix.
-    """
-    return f"0x{int(stat_obj.access):02X}"
-
-
 # ---------------------------------------------------------------------------
 # DFS format detection (extension + file size)
 # ---------------------------------------------------------------------------

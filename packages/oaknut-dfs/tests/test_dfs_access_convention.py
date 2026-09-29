@@ -51,3 +51,14 @@ def test_every_value_settles_within_representable():
     for value in range(0x80):
         settled = ACORN_DFS_ACCESS.settle(Access(value))
         assert settled & ~ACORN_DFS_ACCESS.representable == Access(0)
+
+
+@pytest.mark.parametrize(("access", "locked"), [(True, True), (False, False)])
+def test_write_bytes_accepts_a_bool(tmp_path, access, locked):
+    # write_bytes documents a plain bool: True locks, False leaves unlocked (#66).
+    from oaknut.dfs import ACORN_DFS_80T_SINGLE_SIDED, DFS
+
+    with DFS.create_file(tmp_path / "d.ssd", ACORN_DFS_80T_SINGLE_SIDED, title="T") as dfs:
+        path = dfs.root / "$" / "F"
+        path.write_bytes(b"x", access=access)
+        assert path.stat().locked is locked

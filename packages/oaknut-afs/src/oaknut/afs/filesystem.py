@@ -191,7 +191,8 @@ class _AFSMount(AcornWildcards):
             target.set_load_address(meta.load_address)
         if meta.exec_address is not None:
             target.set_exec_address(meta.exec_address)
-        target.chmod(int(meta.access))
+        if meta.access is not None:
+            target.chmod(int(meta.access))
         self._afs.flush()
 
     # -- Datestamped --

@@ -254,7 +254,10 @@ class _DFSMount(AcornWildcards):
             target.set_load_address(meta.load_address)
         if meta.exec_address is not None:
             target.set_exec_address(meta.exec_address)
-        # DFS records only the lock bit; the convention decides it.
+        # DFS records only the lock bit; the convention decides it. No access
+        # means leave it alone, as for the addresses.
+        if meta.access is None:
+            return
         if self.access_convention.from_canonical(Access(meta.access)):
             target.lock()
         else:
