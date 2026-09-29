@@ -2526,13 +2526,17 @@ class ADFS:
         self,
         target_dirpath: Union[str, PathLike],
         *,
-        preserve_metadata: bool = True,
+        meta_format: MetaFormat | None = DEFAULT_EXPORT_META_FORMAT,
+        owner: int = 0,
     ) -> None:
         """Export entire filesystem preserving directory structure.
 
         Args:
-            target_dirpath: Host directory to export into.
-            preserve_metadata: If True, write .inf sidecar files.
+            target_dirpath: Host directory to export into. Created if missing.
+            meta_format: Metadata encoding, as for :meth:`ADFSPath.export_file`.
+                Defaults to traditional INF sidecars; ``None`` writes data
+                files only.
+            owner: Econet owner ID, used only by PiEconetBridge formats.
         """
         target = Path(target_dirpath)
         target.mkdir(parents=True, exist_ok=True)
@@ -2549,7 +2553,7 @@ class ADFS:
             for filename in filenames:
                 adfs_path = dirpath / filename
                 host_filepath = host_dir / filename
-                adfs_path.export_file(host_filepath, preserve_metadata=preserve_metadata)
+                adfs_path.export_file(host_filepath, meta_format=meta_format, owner=owner)
 
     # --- Pythonic protocols ---
 

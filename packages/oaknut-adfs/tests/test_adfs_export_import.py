@@ -212,3 +212,33 @@ class TestMetaFormatRoundTrip:
         assert stat.public_read is True
         assert stat.owner_read is True
         assert stat.owner_write is True
+
+
+class TestExportAll:
+    """export_all writes the whole tree to the host (issue #65)."""
+
+    def _disc(self):
+        adfs = ADFS.create(ADFS_S)
+        (adfs.root / "Hello").write_bytes(b"hello", load_address=0x1900, exec_address=0x8023)
+        (adfs.root / "Games").mkdir()
+        (adfs.root / "Games" / "Elite").write_bytes(b"elite", load_address=0x1100)
+        return adfs
+
+    def test_exports_the_tree_with_inf_sidecars(self, tmp_path):
+        self._disc().export_all(tmp_path / "out")
+        assert (tmp_path / "out" / "Hello").read_bytes() == b"hello"
+        assert (tmp_path / "out" / "Games" / "Elite").read_bytes() == b"elite"
+        inf = (tmp_path / "out" / "Hello.inf").read_text()
+        assert "00001900" in inf and "00008023" in inf
+
+    def test_meta_format_none_writes_data_only(self, tmp_path):
+        self._disc().export_all(tmp_path / "out", meta_format=None)
+        assert (tmp_path / "out" / "Hello").exists()
+        assert not (tmp_path / "out" / "Hello.inf").exists()
+
+    def test_round_trips_through_import_file(self, tmp_path):
+        self._disc().export_all(tmp_path / "out")
+        adfs2 = ADFS.create(ADFS_S)
+        (adfs2.root / "Hello").import_file(tmp_path / "out" / "Hello")
+        stat = (adfs2.root / "Hello").stat()
+        assert (stat.load_address, stat.exec_address) == (0x1900, 0x8023)
