@@ -22,6 +22,7 @@ See ``docs/romfs-format-spec.md`` for the on-ROM byte layout and
 
 from __future__ import annotations
 
+from oaknut.romfs.access import ACORN_ROMFS_ACCESS, AcornROMFSAccessConvention
 from oaknut.romfs.crc import crc16_ccitt
 from oaknut.romfs.exceptions import (
     CRCError,
@@ -35,6 +36,8 @@ from oaknut.romfs.romfs import ROMFS, ROMFSFile, ROMFSFragment, ROMFSSet
 __version__ = "12.19.0"
 
 __all__ = [
+    "ACORN_ROMFS_ACCESS",
+    "AcornROMFSAccessConvention",
     "ROMFS",
     "ROMFSFile",
     "ROMFSFragment",

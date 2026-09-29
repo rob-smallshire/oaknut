@@ -35,6 +35,7 @@ from oaknut.filesystem import (
 )
 from oaknut.filesystem.exceptions import ReadOnlyFilesystemError
 from oaknut.filesystem.wildcards import ACORN_WILDCARDS, AcornWildcards
+from oaknut.romfs.access import ACORN_ROMFS_ACCESS
 from oaknut.romfs.block import MAX_NAME_LENGTH
 from oaknut.romfs.exceptions import CRCError, NotAROMFSError, ROMFSError, TruncatedROMError
 from oaknut.romfs.romfs import MAX_TITLE_LENGTH, ROMFS, ROMFSFile, build_rom_image
@@ -132,6 +133,9 @@ class _ROMFSMount(AcornWildcards):
     file. Mutating operations rebuild the whole ROM and write it back
     through the reader; they refuse a composite or read-only image.
     """
+
+    #: How this filing system's access maps to and from the canonical word.
+    access_convention = ACORN_ROMFS_ACCESS
 
     def __init__(self, romfs: ROMFS, reader: ImageReader):
         self._romfs = romfs
@@ -267,7 +271,7 @@ class _ROMFSMount(AcornWildcards):
         file = self._find(path)
         if file is None:
             raise ROMFSError(f"no file named {path!r}")
-        access = Access.X if file.run_only else Access(0)
+        access = self.access_convention.to_canonical(file.run_only)
         return AcornMeta(
             load_address=file.load_address, exec_address=file.exec_address, access=int(access)
         )
@@ -283,7 +287,7 @@ class _ROMFSMount(AcornWildcards):
         # from X means a ROMFS→ROMFS copy preserves it, while a locked DFS/ADFS
         # file imported here does not become *RUN-only (which would otherwise
         # make it unloadable: *EXEC / CHAIN would fail with "Locked").
-        run_only = bool(meta.access & Access.X)
+        run_only = self.access_convention.from_canonical(Access(meta.access))
         updated = replace(file, load_address=load, exec_address=execa, run_only=run_only)
         self._commit(tuple(updated if f is file else f for f in self._romfs.files))
 
