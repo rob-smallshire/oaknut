@@ -68,6 +68,27 @@ and hexadecimal representations used in INF sidecars and CLI output.
 .. autofunction:: oaknut.file.format_access_hex
 
 
+Access conventions
+------------------
+
+Each filing system maps its own access representation to and from the
+:class:`~oaknut.file.Access` word through an access convention, so every
+command that reads, copies or shows a file applies the same rules. A
+copy asks :func:`~oaknut.file.translate_access` what the destination
+will hold.
+
+.. autoclass:: oaknut.file.AccessConvention
+   :members: to_canonical, from_canonical, settle
+
+.. autoclass:: oaknut.file.AccessContext
+
+.. autodata:: oaknut.file.FILE_CONTEXT
+
+.. autodata:: oaknut.file.DIRECTORY_CONTEXT
+
+.. autofunction:: oaknut.file.translate_access
+
+
 INF sidecars
 ------------
 

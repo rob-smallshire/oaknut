@@ -16,6 +16,13 @@ from oaknut.file.access import (
     parse_access,
     parse_access_spec,
 )
+from oaknut.file.access_convention import (
+    DIRECTORY_CONTEXT,
+    FILE_CONTEXT,
+    AccessContext,
+    AccessConvention,
+    translate_access,
+)
 from oaknut.file.address import parse_address
 from oaknut.file.boot_option import BootOption
 from oaknut.file.copy import copy_file
@@ -66,6 +73,10 @@ from oaknut.file.xattr import (
 
 __all__ = [
     "Access",
+    "AccessContext",
+    "AccessConvention",
+    "DIRECTORY_CONTEXT",
+    "FILE_CONTEXT",
     "AcornMeta",
     "AcornPath",
     "resolving_io",
@@ -97,6 +108,7 @@ __all__ = [
     "format_access_text",
     "parse_access",
     "parse_access_spec",
+    "translate_access",
     "format_pieb_inf_line",
     "format_trad_inf_line",
     "parse_encoded_filename",
