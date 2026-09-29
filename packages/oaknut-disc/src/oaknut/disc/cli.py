@@ -282,6 +282,20 @@ _raw_addresses_option = click.option(
 )
 
 
+def _address_digits(mount) -> dict:
+    """The hex-digit widths for *mount*'s load/exec addresses, as ``address_cell`` kwargs.
+
+    ``address_hex_digits`` is the minimum width (six on DFS, as MOS prints;
+    eight on the 32-bit filing systems). ``address_max_hex_digits``, when a
+    mount declares it, caps what humans see: DFS shows the low three bytes
+    of an ``&FFFFxxxx`` I/O-processor address, as ``*INFO`` does.
+    """
+    return {
+        "min_digits": getattr(mount, "address_hex_digits", 6),
+        "max_digits": getattr(mount, "address_max_hex_digits", None),
+    }
+
+
 def _resolve_metadata_lens(metadata_lens: str, raw_addresses: bool, mount):
     """Resolve the effective display lens for a mount.
 
@@ -423,7 +437,7 @@ def ls(
     has_datestamp = isinstance(mount, Datestamped)
     # Load/exec field width: DFS shows six hex digits (MOS), ADFS/AFS/ZIP
     # eight (the full 32-bit field, as RISC OS *Info does).
-    addr_digits = getattr(mount, "address_hex_digits", 6)
+    addr_digits = _address_digits(mount)
     for child in sorted(mount.iter_entries(target), key=lambda e: _natural_name_key(e.name)):
         if child.is_dir:
             row = {
@@ -471,8 +485,8 @@ def ls(
                 and encodes_in_load_exec
                 and (filetype is not None or derived_when is not None)
             )
-            load_cell = address_cell(meta.load_address, conceal=conceal, min_digits=addr_digits)
-            exec_cell = address_cell(meta.exec_address, conceal=conceal, min_digits=addr_digits)
+            load_cell = address_cell(meta.load_address, conceal=conceal, **addr_digits)
+            exec_cell = address_cell(meta.exec_address, conceal=conceal, **addr_digits)
             if meta.access is not None:
                 attr_str = _format_access(Access(meta.access))
                 hex_cell = f"0x{int(meta.access):02X}"
@@ -708,11 +722,11 @@ def stat(
         # file's load/exec, or filetype/datestamp on a filesystem that has
         # none), mirroring the ls listing.
         _omit = {Audience.HUMAN}
-        addr_digits = getattr(mount, "address_hex_digits", 6)
+        addr_digits = _address_digits(mount)
         tc.add_column("load", "Load", omit_if_empty_for=_omit)
-        row["load"] = address_cell(meta.load_address, conceal=stamped, min_digits=addr_digits)
+        row["load"] = address_cell(meta.load_address, conceal=stamped, **addr_digits)
         tc.add_column("exec", "Exec", omit_if_empty_for=_omit)
-        row["exec"] = address_cell(meta.exec_address, conceal=stamped, min_digits=addr_digits)
+        row["exec"] = address_cell(meta.exec_address, conceal=stamped, **addr_digits)
         tc.add_column("filetype", "Filetype", omit_if_empty_for=_omit)
         row["filetype"] = filetype_cell(filetype) if filetype is not None else ""
         tc.add_column("datestamp", "Datestamp", omit_if_empty_for=_omit)
@@ -3032,7 +3046,7 @@ def _require_acorn_meta(compound_path: str):
             f"{resolved.filesystem} files carry no load/exec address",
             exit_code=ExitCode.OS_FILE,
         )
-    return mount.acorn_meta(target), getattr(mount, "address_hex_digits", 6)
+    return mount.acorn_meta(target), _address_digits(mount)
 
 
 @cli.command(name="get-load")
@@ -3057,9 +3071,7 @@ def get_load(compound_path: str):
     meta, addr_digits = _require_acorn_meta(compound_path)
     return Reports(
         load=Report(
-            data=ScalarContent(
-                value=address_cell(meta.load_address, min_digits=addr_digits), title="Load"
-            ),
+            data=ScalarContent(value=address_cell(meta.load_address, **addr_digits), title="Load"),
         ),
     )
 
@@ -3086,9 +3098,7 @@ def get_exec(compound_path: str):
     meta, addr_digits = _require_acorn_meta(compound_path)
     return Reports(
         exec=Report(
-            data=ScalarContent(
-                value=address_cell(meta.exec_address, min_digits=addr_digits), title="Exec"
-            ),
+            data=ScalarContent(value=address_cell(meta.exec_address, **addr_digits), title="Exec"),
         ),
     )
 

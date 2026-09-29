@@ -153,6 +153,9 @@ class _DFSMount(AcornWildcards):
 
     #: DFS load/exec are 18-bit; MOS ``*INFO`` shows six hex digits.
     address_hex_digits = 6
+    #: ...and only six: an I/O-processor address is the OSFILE value
+    #: ``&FFFFxxxx``, of which ``*INFO`` prints the low three bytes.
+    address_max_hex_digits = 6
 
     def __init__(self, dfs: DFS):
         self._dfs = dfs

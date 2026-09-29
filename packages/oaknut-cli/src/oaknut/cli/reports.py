@@ -74,7 +74,9 @@ def bytes_cell(num_bytes: int) -> ByAudience:
     return ByAudience(machine=num_bytes, human=format_capacity(num_bytes))
 
 
-def address_cell(address: int, *, conceal: bool = False, min_digits: int = 6) -> ByAudience:
+def address_cell(
+    address: int, *, conceal: bool = False, min_digits: int = 6, max_digits: int | None = None
+) -> ByAudience:
     """An Acorn load/exec address as an audience-aware cell.
 
     Humans read the ``0x``-prefixed hex form, padded to a whole number
@@ -87,6 +89,11 @@ def address_cell(address: int, *, conceal: bool = False, min_digits: int = 6) ->
     RISC OS ``*Info``. Machine formatters (JSON, TSV) get the raw
     integer, so a consumer never has to parse a base back out of a string.
 
+    With *max_digits* the human form shows only the low *max_digits* hex
+    digits. DFS passes six: its OSFILE value for an I/O-processor address
+    is ``&FFFF1900``, but ``*EX`` / ``*INFO`` print the low three bytes,
+    ``FF1900``. The machine form always keeps the whole value.
+
     When *conceal* is set the human form is blank but the machine form
     keeps the raw integer: a filetype-stamped file's load/exec hold an
     encoded filetype and datestamp shown in their own columns, yet a
@@ -94,9 +101,10 @@ def address_cell(address: int, *, conceal: bool = False, min_digits: int = 6) ->
     """
     if conceal:
         return ByAudience(machine=address, human="")
-    digits = max(min_digits, len(f"{address:X}"))
+    shown = address if max_digits is None else address & ((1 << (4 * max_digits)) - 1)
+    digits = max(min_digits, len(f"{shown:X}"))
     width = digits + (digits & 1)  # round up to a whole number of bytes
-    return ByAudience(machine=address, human=f"0x{address:0{width}X}")
+    return ByAudience(machine=address, human=f"0x{shown:0{width}X}")
 
 
 def filetype_cell(filetype: int) -> ByAudience:
