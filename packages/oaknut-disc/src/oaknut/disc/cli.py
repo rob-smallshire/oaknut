@@ -1766,9 +1766,9 @@ def put(
     When ``HOST_PATH`` is ``-``, or is omitted while stdin is piped,
     the raw bytes are read from stdin with no metadata-sidecar lookup;
     supply ``--load`` / ``--exec`` to set the addresses, otherwise they
-    default to ``0xFFFF`` (the Acorn "address not meaningful"
-    sentinel). This lets ``... | disc put img:$.F`` work without a
-    trailing ``-``; omitting ``HOST_PATH`` at an interactive terminal,
+    default to ``0``, as for a host file with no sidecar. This lets
+    ``... | disc put img:$.F`` work without a trailing ``-``; omitting
+    ``HOST_PATH`` at an interactive terminal,
     with nothing to read, is an error. Otherwise ``HOST_PATH`` names
     the host file to import.
 
@@ -1800,9 +1800,9 @@ def put(
     filetype_number, when = _parse_typestamp_options(filetype, datestamp)
     host_path = Path(host_path) if host_path is not None else None
 
-    # Default addresses: 0xFFFF matches the convention for text/data
-    # files on DFS and ADFS where the address is not meaningful.
-    _DEFAULT_ADDR = 0xFFFF
+    # With no --load/--exec, addresses default to 0, the same whether the
+    # data comes from stdin or a host file without a sidecar.
+    _DEFAULT_ADDR = 0
 
     # Read data. An explicit "-" always means stdin; omitting HOST_PATH
     # reads stdin too when it is piped, so `... | disc put img:$.F` works

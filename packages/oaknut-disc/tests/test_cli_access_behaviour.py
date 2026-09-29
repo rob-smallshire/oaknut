@@ -150,3 +150,16 @@ def test_cp_from_a_member_without_access_gives_the_default(tmp_path):
         destination = _image(tmp_path, kind, f"from-zip-{kind}")
         _run("cp", f"{archive}:README", f"{destination}:{_inner(kind, 'README')}")
         assert _access(f"{destination}:{_inner(kind, 'README')}") == expected, kind
+
+
+@pytest.mark.parametrize("kind", ["dfs", "adfs", "afs"])
+def test_put_defaults_addresses_to_zero_from_stdin_and_host_files(tmp_path, kind):
+    # With no --load/--exec and no sidecar, stdin and a host file agree (#64).
+    (tmp_path / "PLAIN").write_bytes(b"x")
+    destination = _image(tmp_path, kind, "destination")
+    _run("put", f"{destination}:{_inner(kind, 'PIPED')}", "-", input="x")
+    _run("put", f"{destination}:{_inner(kind, 'HOSTED')}", tmp_path / "PLAIN")
+    for leaf in ("PIPED", "HOSTED"):
+        with resolve_mount(f"{destination}:{_inner(kind, leaf)}") as resolved:
+            meta = resolved.mount.acorn_meta(resolved.path)
+        assert (meta.load_address, meta.exec_address) == (0, 0), leaf
