@@ -187,14 +187,16 @@ of a ``/``, the public's (other users of a file server) to the right.
    * - ``W``
      - may be written
    * - ``E``
-     - execute (owner only)
+     - may be executed (owner only); without ``R``, the file is
+       ``*RUN``-only
    * - ``L``
      - locked: may not be deleted, renamed or overwritten (owner only)
-   * - ``X``
-     - ``*RUN``-only (ROMFS copy protection; owner only)
 
 So ``WR/R`` is owner read and write with public read, and ``LR/`` a
-locked, read-only file other users cannot read. The same value can be
+locked, read-only file other users cannot read. ``E/`` is a ``*RUN``-only
+file: it may be run but not loaded, the copy protection ROMFS and
+cassette files use. Most filing systems treat a readable file as
+executable, so ``E`` is shown only in that run-only case. The same value can be
 given as the hex access byte (``0x13``, ``19``), which ``disc ls -H``
 displays.
 
@@ -202,7 +204,7 @@ Each filing system stores what it can. DFS records only a lock bit,
 which also means read-only, so a DFS file reads as ``WR/`` or ``LR/``
 and writing to DFS keeps only ``L``. ADFS stores owner ``R``, ``W``,
 ``E`` and ``L`` and public ``R`` and ``W``; AFS the same without ``E``;
-ROMFS only ``X``. A copy between filing systems keeps as much as the
+ROMFS whether a file is readable (``R/``) or ``*RUN``-only (``E/``). A copy between filing systems keeps as much as the
 destination can store — so a file copied from DFS arrives with no public
 access.
 

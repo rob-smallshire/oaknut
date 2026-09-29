@@ -16,9 +16,9 @@ def test_is_an_access_convention():
 @pytest.mark.parametrize(
     ("run_only", "expected"),
     [
-        # An ordinary ROMFS file reads as no access (#60 step 4).
-        (False, Access(0)),
-        (True, Access.X),
+        # An ordinary file is readable; a run-only one is E without R.
+        (False, Access.R),
+        (True, Access.E),
     ],
 )
 def test_to_canonical(run_only, expected):
@@ -29,10 +29,17 @@ def test_to_canonical(run_only, expected):
     ("access", "run_only"),
     [
         (Access(0), False),
-        (Access.X, True),
-        (Access.X | Access.R, True),
-        # The disc filing systems' delete-lock is not run-only.
+        (Access.R, False),
+        (Access.E, True),
+        (Access.E | Access.L, True),
+        # Readable means loadable, so not run-only.
+        (Access.E | Access.R, False),
+        # The disc filing systems' delete-lock is not run-only: a locked
+        # DFS file (LR) copied onto a ROM must stay loadable.
+        (Access.L | Access.R, False),
         (Access.LWR, False),
+        # Bit 6 is public execute in the Acorn byte, not run-only.
+        (Access(0x40), False),
     ],
 )
 def test_from_canonical(access, run_only):

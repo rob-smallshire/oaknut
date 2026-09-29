@@ -93,7 +93,7 @@ def test_mount_reads_file_and_metadata():
     meta = mount.acorn_meta("HOPOBJ")
     assert meta.load_address == 0x3000
     assert meta.exec_address == 0x3000
-    assert meta.access & Access.X  # HOPOBJ is *RUN-only (copy-protected)
+    assert Access(meta.access).is_run_only  # HOPOBJ is *RUN-only (copy-protected)
     assert not meta.access & Access.L  # not the disc delete-lock
 
 
@@ -131,15 +131,15 @@ def test_remove_ignores_run_only_protection():
     # delete-lock — and ROMFS has no delete-lock at all — so removing a
     # run-only file just works, no force needed.
     mount, data = _open_writable("Electron_Hopper.rom")
-    assert mount.acorn_meta("HOPOBJ").access & Access.X  # HOPOBJ is run-only
+    assert Access(mount.acorn_meta("HOPOBJ").access).is_run_only
     mount.remove("HOPOBJ")
     assert "HOPOBJ" not in {f.name for f in ROMFS.from_bytes(bytes(data)).files}
 
 
 def test_run_only_is_a_distinct_axis_from_the_disc_lock():
     # Importing a delete-locked DFS/ADFS file (Access.L) must NOT make the
-    # ROMFS file *RUN-only (Access.X) — that would make it unloadable. But a
-    # genuine Access.X (a ROMFS→ROMFS copy) is preserved.
+    # ROMFS file *RUN-only (E without R) — that would make it unloadable. But
+    # a genuine run-only access (a ROMFS→ROMFS copy) is preserved.
     mount, data = _open_writable("Electron_Hopper.rom")
 
     mount.write_bytes("FROMDFS", b"loader")
@@ -151,12 +151,12 @@ def test_run_only_is_a_distinct_axis_from_the_disc_lock():
     )
     mount.write_bytes("FROMROM", b"object")
     mount.set_acorn_meta(
-        "FROMROM", AcornMeta(load_address=0x3000, exec_address=0x3000, access=int(Access.X))
+        "FROMROM", AcornMeta(load_address=0x3000, exec_address=0x3000, access=int(Access.E))
     )
 
     by_name = {f.name: f for f in ROMFS.from_bytes(bytes(data)).data_files}
     assert not by_name["FROMDFS"].run_only  # disc lock did NOT make it *RUN-only
-    assert by_name["FROMROM"].run_only  # an explicit Access.X is preserved
+    assert by_name["FROMROM"].run_only  # an explicit run-only access is preserved
 
 
 def test_status_notes_via_capability():

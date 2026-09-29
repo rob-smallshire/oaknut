@@ -106,15 +106,50 @@ class TestFormatAccessText:
         result = format_access_text(None)
         assert result == "/"
 
-    def test_run_only(self):
-        # Access.X (run-only, CFS/ROMFS copy protection) renders as "X" in the
-        # owner part, and round-trips through parse_access.
+    def test_run_only_shows_execute(self):
+        # Run-only is owner E without R (BeebWiki, File access). E is shown
+        # only when the owner has neither R nor W, as FNf_access does.
         from oaknut.file import Access, parse_access
 
-        assert format_access_text(int(Access.X)) == "X/"
-        assert parse_access("X/") == Access.X
-        # It is a distinct bit from the disc delete-lock.
-        assert not (Access.X & Access.L)
+        assert format_access_text(int(Access.E)) == "E/"
+        assert format_access_text(int(Access.E | Access.L)) == "LE/"
+        assert parse_access("E/") == Access.E
+
+    def test_execute_alongside_read_is_not_shown(self):
+        from oaknut.file import Access
+
+        assert format_access_text(int(Access.E | Access.R | Access.W)) == "WR/"
+        assert format_access_text(int(Access.E | Access.R)) == "R/"
+
+    def test_bit_six_is_not_run_only(self):
+        # 0x40 is public execute in the Acorn byte, not a run-only flag.
+        assert format_access_text(0x40) == "/"
+
+
+class TestRunOnly:
+    def test_execute_without_read_is_run_only(self):
+        from oaknut.file import Access
+
+        assert Access.E.is_run_only
+        assert (Access.E | Access.L).is_run_only
+        assert (Access.E | Access.PR).is_run_only
+
+    def test_anything_readable_is_not_run_only(self):
+        from oaknut.file import Access
+
+        assert not (Access.E | Access.R).is_run_only
+        assert not Access.WR.is_run_only
+        assert not Access(0).is_run_only
+        assert not Access.L.is_run_only
+
+    def test_x_is_retired(self):
+        import pytest
+        from oaknut.file import Access, parse_access
+        from oaknut.file.exceptions import InvalidAccessError
+
+        assert not hasattr(Access, "X")
+        with pytest.raises(InvalidAccessError, match="E without R"):
+            parse_access("X/")
 
 
 class TestParseAccess:
@@ -232,7 +267,7 @@ class TestParseAccessSpec:
 
     def test_incremental_is_idempotent(self):
         assert parse_access_spec("+L")(Access.L) == Access.L
-        assert parse_access_spec("-X")(Access.R) == Access.R
+        assert parse_access_spec("-E")(Access.R) == Access.R
 
     def test_unknown_letter_raises_immediately(self):
         # Validated at compile time, before any file is touched.

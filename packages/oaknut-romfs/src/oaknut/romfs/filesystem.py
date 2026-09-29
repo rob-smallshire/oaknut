@@ -9,7 +9,8 @@ geometry (a ROM is a flat byte range, not a sectored disc).
 ROMFS is flat, so the mount does not advertise
 :class:`~oaknut.filesystem.HierarchicalDirectories`; it provides the
 ``AcornMetadata`` (load/exec + the `*RUN`-only copy-protection bit, surfaced
-as ``Access.X``) and ``Titled`` capabilities. Writes are supported on
+as owner ``E`` without ``R``) and ``Titled`` capabilities. Writes are
+supported on
 *plain* ROMFS images; a *composite* ROM (one carrying a service handler or
 language after the filing system) is read-only, so its trailing code is
 never corrupted.
@@ -282,11 +283,11 @@ class _ROMFSMount(AcornWildcards):
             raise ROMFSError(f"no file named {path!r}")
         load = file.load_address if meta.load_address is None else meta.load_address
         execa = file.exec_address if meta.exec_address is None else meta.exec_address
-        # The run-only (copy-protection) bit is its own access axis, Access.X —
-        # NOT the disc filing systems' delete-lock Access.L. Taking it only
-        # from X means a ROMFS→ROMFS copy preserves it, while a locked DFS/ADFS
-        # file imported here does not become *RUN-only (which would otherwise
-        # make it unloadable: *EXEC / CHAIN would fail with "Locked").
+        # The run-only (copy-protection) bit is its own access axis — owner E
+        # without R — NOT the disc filing systems' delete-lock Access.L. So a
+        # ROMFS→ROMFS copy preserves it, while a locked DFS/ADFS file imported
+        # here does not become *RUN-only (which would otherwise make it
+        # unloadable: *EXEC / CHAIN would fail with "Locked").
         run_only = self.access_convention.from_canonical(Access(meta.access))
         updated = replace(file, load_address=load, exec_address=execa, run_only=run_only)
         self._commit(tuple(updated if f is file else f for f in self._romfs.files))

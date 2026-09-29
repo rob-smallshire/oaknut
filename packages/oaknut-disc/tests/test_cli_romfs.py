@@ -169,8 +169,8 @@ class TestRomfsCreate:
             assert name in listing
         assert "$." not in listing  # flat ROMFS names, no DFS root leak
         # The DFS files were delete-locked; that must NOT become ROMFS's
-        # *RUN-only bit (Access.X), or *EXEC !BOOT / CHAIN would fail "Locked".
-        assert "X/" not in listing
+        # *RUN-only bit (shown E/), or *EXEC !BOOT / CHAIN would fail "Locked".
+        assert "E/" not in listing
         assert (
             runner.invoke(cli, ["romfs", "get-copyright", str(cart)]).output.strip() == copyright_
         )
@@ -243,13 +243,13 @@ class TestRomfsRunOnly:
 
     def test_chmod_sets_the_run_only_bit(self, runner: CliRunner, tmp_path):
         rom = self._rom_with_file(runner, tmp_path)
-        assert self._attr(runner, rom) == "/"  # newly put: loadable
-        assert runner.invoke(cli, ["chmod", f"{rom}:GAME", "X"]).exit_code == 0
-        assert self._attr(runner, rom) == "X/"  # now *RUN-only
+        assert self._attr(runner, rom) == "R/"  # newly put: loadable
+        assert runner.invoke(cli, ["chmod", f"{rom}:GAME", "E"]).exit_code == 0
+        assert self._attr(runner, rom) == "E/"  # now *RUN-only
 
     def test_chmod_clears_the_run_only_bit(self, runner: CliRunner, tmp_path):
         rom = self._rom_with_file(runner, tmp_path)
-        runner.invoke(cli, ["chmod", f"{rom}:GAME", "X"])
-        assert self._attr(runner, rom) == "X/"
+        runner.invoke(cli, ["chmod", f"{rom}:GAME", "E"])
+        assert self._attr(runner, rom) == "E/"
         assert runner.invoke(cli, ["chmod", f"{rom}:GAME", "WR"]).exit_code == 0
-        assert self._attr(runner, rom) == "/"  # cleared (R/W are not stored on ROMFS)
+        assert self._attr(runner, rom) == "R/"  # cleared (W is not stored on ROMFS)

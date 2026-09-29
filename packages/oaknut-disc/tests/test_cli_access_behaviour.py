@@ -56,20 +56,22 @@ def _access(compound_path: str) -> int:
 # (source kind, chmod applied to the source or None) ->
 #     (source access, access after cp to dfs, adfs, afs, romfs)
 _CP_MATRIX = {
-    ("dfs", None): (0x03, {"dfs": 0x03, "adfs": 0x03, "afs": 0x03, "romfs": 0x00}),
+    ("dfs", None): (0x03, {"dfs": 0x03, "adfs": 0x03, "afs": 0x03, "romfs": 0x01}),
     # A locked DFS file is read-only too: LR (&09), not LWR (#57).
-    ("dfs", "L"): (0x09, {"dfs": 0x09, "adfs": 0x09, "afs": 0x09, "romfs": 0x00}),
-    ("adfs", "WR/R"): (0x13, {"dfs": 0x03, "adfs": 0x13, "afs": 0x13, "romfs": 0x00}),
-    ("adfs", "LWR/R"): (0x1B, {"dfs": 0x09, "adfs": 0x1B, "afs": 0x1B, "romfs": 0x00}),
-    ("adfs", "WR/WR"): (0x33, {"dfs": 0x03, "adfs": 0x33, "afs": 0x33, "romfs": 0x00}),
+    ("dfs", "L"): (0x09, {"dfs": 0x09, "adfs": 0x09, "afs": 0x09, "romfs": 0x01}),
+    ("adfs", "WR/R"): (0x13, {"dfs": 0x03, "adfs": 0x13, "afs": 0x13, "romfs": 0x01}),
+    ("adfs", "LWR/R"): (0x1B, {"dfs": 0x09, "adfs": 0x1B, "afs": 0x1B, "romfs": 0x01}),
+    ("adfs", "WR/WR"): (0x33, {"dfs": 0x03, "adfs": 0x33, "afs": 0x33, "romfs": 0x01}),
     # AFS has no execute bit, so E is lost on the way in.
-    ("adfs", "EWR/"): (0x07, {"dfs": 0x03, "adfs": 0x07, "afs": 0x03, "romfs": 0x00}),
-    ("afs", "WR/"): (0x03, {"dfs": 0x03, "adfs": 0x03, "afs": 0x03, "romfs": 0x00}),
-    ("afs", "LR/R"): (0x19, {"dfs": 0x09, "adfs": 0x19, "afs": 0x19, "romfs": 0x00}),
-    # An ordinary ROMFS file reads as no access at all, and lands on ADFS
-    # and AFS unreadable (&00); a run-only file loses run-only there — #60.
-    ("romfs", None): (0x00, {"dfs": 0x03, "adfs": 0x00, "afs": 0x00, "romfs": 0x00}),
-    ("romfs", "X"): (0x40, {"dfs": 0x03, "adfs": 0x00, "afs": 0x00, "romfs": 0x40}),
+    ("adfs", "EWR/"): (0x07, {"dfs": 0x03, "adfs": 0x07, "afs": 0x03, "romfs": 0x01}),
+    # ADFS E without R is run-only, which ROMFS keeps.
+    ("adfs", "E/"): (0x04, {"dfs": 0x03, "adfs": 0x04, "afs": 0x00, "romfs": 0x04}),
+    ("afs", "WR/"): (0x03, {"dfs": 0x03, "adfs": 0x03, "afs": 0x03, "romfs": 0x01}),
+    ("afs", "LR/R"): (0x19, {"dfs": 0x09, "adfs": 0x19, "afs": 0x19, "romfs": 0x01}),
+    # An ordinary ROMFS file is readable. A run-only one (E without R) stays
+    # run-only on ADFS; AFS has no execute bit, so it arrives with no access.
+    ("romfs", None): (0x01, {"dfs": 0x03, "adfs": 0x01, "afs": 0x01, "romfs": 0x01}),
+    ("romfs", "E"): (0x04, {"dfs": 0x03, "adfs": 0x04, "afs": 0x00, "romfs": 0x04}),
 }
 
 

@@ -187,8 +187,10 @@ The header CRC and data CRC are stored most-significant-byte first
 | 5–1 | — | unused |
 | 0 | `&01` | **`*RUN`-only** copy protection: the file may be `*RUN` but not `*LOAD`ed / `*EXEC`ed / `CHAIN`ed. The MOS calls it "locked" and raises `"Locked"` on a load (OS 1.20 `checkFileAttributes` → `fileLocked`). It is **read** protection, not the disc filing systems' delete-lock |
 
-bit 0 is its own access axis — surfaced as **`Access.X`** ("run-only"),
-*not* `Access.L` (the DFS/ADFS delete-lock). The two never map to each
+bit 0 is its own access axis — surfaced as owner **`E` without `R`**,
+the Acorn access byte's representation of run-only (`Access.is_run_only`),
+*not* `Access.L` (the DFS/ADFS delete-lock). An ordinary file reads as
+owner `R`. The two never map to each
 other: copying a delete-locked DFS file into ROMFS does not `*RUN`-protect
 it (which would make its loader unrunnable), and a `*RUN`-only ROMFS file
 copied to a disc does not become delete-locked. ROMFS itself has no

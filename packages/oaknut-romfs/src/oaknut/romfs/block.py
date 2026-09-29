@@ -36,7 +36,8 @@ FLAG_EMPTY = 0x40
 #: Flag bit: the file is *RUN-only — a form of copy protection. The MOS
 #: refuses to ``*LOAD`` / ``*EXEC`` / ``CHAIN`` it (only ``*RUN``); the OS
 #: calls this "locked", but it is read-protection, not the disc filing
-#: systems' delete-lock (see ``oaknut.file.Access.X``).
+#: systems' delete-lock. Canonically it is owner ``E`` without ``R`` (see
+#: ``oaknut.file.Access.is_run_only``).
 FLAG_RUN_ONLY = 0x01
 
 #: Maximum file-name length (characters), excluding the NUL terminator.

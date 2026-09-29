@@ -54,17 +54,17 @@ print(hex(flags))  # 0xb
 |------|-------|---------|
 | `Access.R`  | 0x01 | Owner read |
 | `Access.W`  | 0x02 | Owner write |
-| `Access.E`  | 0x04 | Execute only |
+| `Access.E`  | 0x04 | Owner execute |
 | `Access.L`  | 0x08 | Locked — prevents delete, overwrite, and rename on the disc filing systems |
 | `Access.PR` | 0x10 | Public read |
 | `Access.PW` | 0x20 | Public write |
-| `Access.X`  | 0x40 | `*RUN`-only — may be `*RUN` but not `*LOAD`ed (CFS/ROMFS copy protection) |
 
-`Access.X` (`*RUN`-only) is a **distinct axis** from `Access.L` (locked):
-`X` is the cassette/ROM copy-protection bit and does not map to or from
-the disc filing systems' delete-lock. `Access.WR` and `Access.LWR` are
-provided as convenience composites for the common owner-read+write and
-locked-owner-read+write cases.
+A `*RUN`-only file — one that may be `*RUN` but not `*LOAD`ed, the
+cassette/ROM copy protection — is owner `E` without `R`, which
+`Access.is_run_only` tests. It is a distinct axis from `Access.L`
+(locked): a delete-locked disc file is not run-only. `Access.WR` and
+`Access.LWR` are provided as convenience composites for the common
+owner-read+write and locked-owner-read+write cases.
 
 ### INF sidecar files
 

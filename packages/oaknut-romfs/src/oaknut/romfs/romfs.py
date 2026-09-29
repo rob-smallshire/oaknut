@@ -61,7 +61,8 @@ class ROMFSFile:
     *run_only* is the copy-protection bit (flag bit 0): a `*RUN`-only file
     the MOS will not `*LOAD` / `*EXEC` / `CHAIN`. The OS calls it "locked",
     but it is read-protection, distinct from the disc filing systems'
-    delete-lock (`oaknut.file.Access.L`) — it is `oaknut.file.Access.X`.
+    delete-lock (`oaknut.file.Access.L`) — canonically owner `E` without `R`
+    (`oaknut.file.Access.is_run_only`).
 
     *flag_extra* preserves the block-flag bits this class does not otherwise
     model — chiefly the ``&40`` "no data" bit the New Advanced User Guide

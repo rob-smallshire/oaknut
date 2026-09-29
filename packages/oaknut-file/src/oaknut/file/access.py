@@ -39,21 +39,28 @@ class Access(IntFlag):
 
     R = 0x01  # Owner read
     W = 0x02  # Owner write
-    E = 0x04  # Execute only
+    E = 0x04  # Owner execute
     L = 0x08  # Locked (prevents delete, overwrite, rename — disc filesystems)
     PR = 0x10  # Public read
     PW = 0x20  # Public write
-    X = 0x40  # Run-only: may be *RUN but not *LOADed (CFS/ROMFS copy protection)
 
     # Convenience composites.
     WR = R | W
     LWR = L | R | W
 
+    @property
+    def is_run_only(self) -> bool:
+        """Whether the owner may ``*RUN`` the file but not load or read it.
 
-#: ``X`` (run-only) is a distinct axis from ``L`` (delete-lock): it is the
-#: cassette/ROM filing-system copy protection (a file that may be *RUN but
-#: not *LOADed), and does not map to or from the disc filesystems' lock.
-_OWNER_LETTERS = {"L": Access.L, "W": Access.W, "R": Access.R, "E": Access.E, "X": Access.X}
+        Run-only is owner ``E`` without ``R`` (BeebWiki, *File access*:
+        ``runonly%=(access% AND 5)=4``). It is how the cassette and ROM
+        filing systems' copy protection is represented, and is a distinct
+        axis from the disc filing systems' delete-lock ``L``.
+        """
+        return (self & (Access.R | Access.E)) == Access.E
+
+
+_OWNER_LETTERS = {"L": Access.L, "W": Access.W, "R": Access.R, "E": Access.E}
 _PUBLIC_LETTERS = {"W": Access.PW, "R": Access.PR}
 
 
@@ -101,7 +108,7 @@ def _parse_letters(text: str) -> Access:
 
     Shared by the symbolic branch of :func:`parse_access` and by each
     ``+``/``-`` clause of :func:`parse_access_spec`. Letters before the slash
-    are owner flags (L, W, R, E, X); letters after are public flags (W, R).
+    are owner flags (L, W, R, E); letters after are public flags (W, R).
     """
     if "/" in text:
         owner_part, public_part = text.split("/", 1)
@@ -110,6 +117,10 @@ def _parse_letters(text: str) -> Access:
 
     result = Access(0)
     for ch in owner_part.upper():
+        if ch == "X":
+            raise InvalidAccessError(
+                "'X' is not an access letter: a run-only file is written as E (owner E without R)"
+            )
         if ch not in _OWNER_LETTERS:
             raise InvalidAccessError(f"unrecognised owner access letter '{ch}'")
         result |= _OWNER_LETTERS[ch]
@@ -190,7 +201,10 @@ def format_access_hex(attr: int | None) -> str:
 def format_access_text(attr: int | None) -> str:
     """Format attributes as a human-readable access string.
 
-    Returns ``"owner/public"`` form, e.g. ``"LWR/R"``.
+    Returns ``"owner/public"`` form, e.g. ``"LWR/R"``. The owner ``E`` is
+    shown only when the owner has neither ``R`` nor ``W`` — a run-only
+    file reads ``E/`` — since most filing systems treat a readable file as
+    executable anyway (BeebWiki ``FNf_access``).
     """
     if attr is None:
         return "/"
@@ -202,8 +216,8 @@ def format_access_text(attr: int | None) -> str:
         owner += "W"
     if attr & Access.R:
         owner += "R"
-    if attr & Access.X:
-        owner += "X"
+    if (attr & (Access.R | Access.W | Access.E)) == Access.E:
+        owner += "E"
 
     public = ""
     if attr & Access.PW:

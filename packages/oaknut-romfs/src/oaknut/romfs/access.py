@@ -12,20 +12,26 @@ from oaknut.file import FILE_CONTEXT, Access, AccessContext, AccessConvention
 
 
 class AcornROMFSAccessConvention(AccessConvention[bool]):
-    """ROMFS access: the ``*RUN``-only flag, as :attr:`Access.X`.
+    """ROMFS access: readable, or ``*RUN``-only.
 
-    Run-only is its own axis, distinct from the disc filing systems'
-    delete-lock ``L``: a locked DFS file copied onto a ROM must not
-    become unloadable. An ordinary file reads as no access.
+    An ordinary file reads as owner read (``R``). A run-only file reads as
+    owner execute without read (``E``), the Acorn access byte's own
+    representation of run-only (BeebWiki, *File access*). Writing makes a
+    file run-only exactly when the access is run-only, so the disc filing
+    systems' delete-lock ``L`` never does: a locked DFS file copied onto a
+    ROM stays loadable.
     """
 
     name = "acorn-romfs"
     family = "acorn-romfs"
-    representable = Access.X
-    source = "CFS/ROMFS block flag bit 0; MOS 1.20 checkFileAttributes"
+    representable = Access.R | Access.E
+    source = (
+        "CFS/ROMFS block flag bit 0; MOS 1.20 checkFileAttributes; "
+        "BeebWiki, File access (run-only is E without R)"
+    )
 
     def to_canonical(self, native: bool, context: AccessContext = FILE_CONTEXT) -> Access:
-        return Access.X if native else Access(0)
+        return Access.E if native else Access.R
 
     def from_canonical(
         self,
@@ -33,7 +39,7 @@ class AcornROMFSAccessConvention(AccessConvention[bool]):
         context: AccessContext = FILE_CONTEXT,
         current: bool | None = None,
     ) -> bool:
-        return bool(Access(access) & Access.X)
+        return Access(access).is_run_only
 
 
 #: The shared instance used by the ROMFS mount.

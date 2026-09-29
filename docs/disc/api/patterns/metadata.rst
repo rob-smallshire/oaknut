@@ -57,7 +57,9 @@ word:
   and write, each as its own bit.
 - **AFS** stores owner and public read and write and the lock bit in its
   own byte layout (:class:`~oaknut.afs.AFSAccess`); it has no execute bit.
-- **ROMFS** records only whether a file is ``*RUN``-only.
+- **ROMFS** records only whether a file is ``*RUN``-only: an ordinary file
+  reads as ``R``, a run-only one as ``E`` without ``R``
+  (:attr:`~oaknut.file.Access.is_run_only`).
 
 Copying a file from one filing system to another keeps as much of its
 access as the destination can store.
