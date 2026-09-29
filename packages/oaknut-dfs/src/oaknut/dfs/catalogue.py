@@ -47,19 +47,24 @@ _name_key = DFS_NAME_GRAMMAR.name_key
 
 
 def expand_host_address(address: int) -> int:
-    """Expand a DFS 18-bit load/exec address to its full host form.
+    """Expand a DFS 18-bit load/exec address to the 32-bit OSFILE value.
 
     A DFS catalogue stores load and execution addresses as 18-bit values
     (16 bits in the entry plus two high bits packed into the shared "extra"
     byte). When those top two bits are both set the address denotes a host
-    I/O-processor address, and Acorn MOS fills the top byte with ``FF`` —
-    so ``*EX`` / ``*INFO`` print a value such as ``FFFFFF`` where the raw
-    field holds ``0x3FFFF``. Reconstructing the same value here keeps
-    oaknut's output matching the machine, and it round-trips: writing it
-    back masks down to the same two high bits.
+    I/O-processor address, and DFS returns it through OSFILE with the high
+    word set to ``FFFF`` (DFS 2.24 ``.decode``); any other pattern is a
+    parasite address in ``&0``–``&2FFFF``, returned as it stands. This is
+    not sign extension from bit 17: ``&2xxxx`` stays ``&0002xxxx``.
+
+    ``*EX`` / ``*INFO`` print only the low three bytes, so ``&FFFF1900``
+    shows as ``FF1900``; the DFS mount's display width reproduces that. The
+    full value is what a 32-bit filing system must store to keep the file
+    in the I/O processor, and it round-trips: writing it back masks down to
+    the same two high bits.
     """
     if (address & 0x30000) == 0x30000:
-        return address | 0xFF0000
+        return 0xFFFF0000 | (address & 0xFFFF)
     return address
 
 

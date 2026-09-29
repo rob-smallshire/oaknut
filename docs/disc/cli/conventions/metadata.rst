@@ -240,6 +240,25 @@ the Filer applying a local-time conversion oaknut deliberately does
 not — not a disagreement about the bytes.
 
 
+DFS host (I/O processor) addresses
+----------------------------------
+
+A DFS catalogue holds load and execution addresses in 18 bits. When the
+top two of those bits are both set, the address belongs to the I/O
+processor rather than a Second Processor, and DFS reports it as the
+32-bit value ``&FFFFxxxx``; any other pattern is a Second Processor
+address below ``&30000``. oaknut reads the same values, so a file copied
+from DFS to AFS or ADFS still loads and runs in the I/O processor, and
+the ``.inf`` sidecar ``disc get`` writes records ``FFFF1900``.
+
+DFS listings show the low three bytes, as ``*INFO`` does — ``FF1900`` —
+while the machine formats (``--as json``, ``--as tsv``) carry the full
+value. Writing ``&FFFF1900``, ``&FF1900`` or the raw ``&31900`` to DFS
+stores the same address. A 32-bit address with bits 16 and 17 both set,
+such as ``&00031900``, has no separate DFS form: it reads back as
+``&FFFF1900``.
+
+
 Address or datestamp? ``--metadata-lens``
 -----------------------------------------
 

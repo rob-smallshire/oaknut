@@ -3,10 +3,12 @@
 A DFS catalogue stores load and execution addresses as 18-bit values
 (16 bits plus two high bits packed into the shared "extra" byte). When
 the top two bits are both set, the address denotes a host I/O-processor
-address and Acorn MOS expands the top byte to ``FF`` — so ``*EX``/``*INFO``
-print a value such as ``FFFFFF`` where the raw 18-bit field holds
-``0x3FFFF``. oaknut reconstructs the same expanded address on read so its
-output matches the machine.
+address, and DFS returns it through OSFILE as the 32-bit ``&FFFFxxxx``
+(DFS 2.24 ``.decode``: "if b7,b6 both set then a host address, set high
+word = $FFFF"; otherwise a parasite address ``&0..2FFFF``). ``*EX`` and
+``*INFO`` print only the low three bytes, so ``&FFFFFFFF`` shows as
+``FFFFFF``. oaknut reads the full OSFILE value, so a copy to a 32-bit
+filing system keeps the address in the I/O processor (issue #61).
 """
 
 from __future__ import annotations
@@ -17,20 +19,21 @@ from oaknut.discimage.surface import DiscImage, SurfaceSpec
 
 _REFERENCE = "host-address/weekend-challenge.ssd"
 
-# Acorn *EX of the reference disc: load, exec for each file.
+# The OSFILE load, exec of each file on the reference disc. Acorn *EX
+# prints the low three bytes of each (so FFFFFF for the host addresses).
 _EXPECTED = {
     "TriDeep": (0x001900, 0x00838F),
-    "TEX5": (0x000000, 0xFFFFFF),
-    "TEX3": (0x000000, 0xFFFFFF),
+    "TEX5": (0x000000, 0xFFFFFFFF),
+    "TEX3": (0x000000, 0xFFFFFFFF),
     "T2": (0x001900, 0x00838F),
-    "TRITEX2": (0x000000, 0xFFFFFF),
-    "TRITEXT": (0x000000, 0xFFFFFF),
+    "TRITEX2": (0x000000, 0xFFFFFFFF),
+    "TRITEXT": (0x000000, 0xFFFFFFFF),
     "Triang": (0x001900, 0x00838F),
 }
 
 
 class TestReferenceDisc:
-    def test_exec_addresses_match_acorn_ex(self, reference_image):
+    def test_addresses_match_osfile(self, reference_image):
         disk = reference_image(_REFERENCE)
         by_name = {entry.filename: entry for entry in disk.files}
         for name, (load, exec_) in _EXPECTED.items():
@@ -72,12 +75,19 @@ def _build_entry_buffer(load_low: int, exec_low: int, extra_byte: int) -> DiscIm
 
 
 class TestTopBitExpansion:
-    def test_both_top_bits_set_expands_exec_top_byte(self):
-        # exec low = 0xFFFF, exec high bits (extra & 0xC0) = 0b11.
-        disc = _build_entry_buffer(load_low=0x0000, exec_low=0xFFFF, extra_byte=0xC0)
+    def test_both_top_bits_set_expands_to_host_high_word(self):
+        # exec low = 0x2000, exec high bits (extra & 0xC0) = 0b11.
+        disc = _build_entry_buffer(load_low=0x0000, exec_low=0x2000, extra_byte=0xC0)
         catalogue = AcornDFSCatalogue(disc.surface(0))
         entry = catalogue.list_files()[0]
-        assert entry.exec_address == 0xFFFFFF
+        assert entry.exec_address == 0xFFFF2000
+
+    def test_load_address_expands_the_same_way(self):
+        # load high bits (extra & 0x0C) = 0b11.
+        disc = _build_entry_buffer(load_low=0x1900, exec_low=0x0000, extra_byte=0x0C)
+        catalogue = AcornDFSCatalogue(disc.surface(0))
+        entry = catalogue.list_files()[0]
+        assert entry.load_address == 0xFFFF1900
 
     def test_top_bits_clear_leaves_address_unchanged(self):
         disc = _build_entry_buffer(load_low=0x838F, exec_low=0x1900, extra_byte=0x00)
@@ -87,8 +97,8 @@ class TestTopBitExpansion:
         assert entry.exec_address == 0x1900
 
     def test_single_top_bit_set_is_not_expanded(self):
-        # Only bit 17 of exec set (extra & 0xC0 == 0x80): not the host
-        # convention, so no top-byte expansion.
+        # Only bit 17 of exec set (extra & 0xC0 == 0x80): a parasite
+        # address in &0..2FFFF, so not expanded — this is not sign extension.
         disc = _build_entry_buffer(load_low=0x0000, exec_low=0xFFFF, extra_byte=0x80)
         catalogue = AcornDFSCatalogue(disc.surface(0))
         entry = catalogue.list_files()[0]
@@ -96,14 +106,22 @@ class TestTopBitExpansion:
 
 
 class TestRoundTrip:
-    def test_expanded_exec_round_trips(self, writable_copy):
+    def test_host_address_round_trips(self, writable_copy):
         disk, _ = writable_copy(_REFERENCE)
         (disk.root / "$" / "HOSTX").write_bytes(
-            b"payload", load_address=0xFFFFFF, exec_address=0xFFFFFF
+            b"payload", load_address=0xFFFF1900, exec_address=0xFFFF8023
         )
         reread = (disk.root / "$" / "HOSTX").stat()
-        assert reread.load_address == 0xFFFFFF
-        assert reread.exec_address == 0xFFFFFF
+        assert reread.load_address == 0xFFFF1900
+        assert reread.exec_address == 0xFFFF8023
+
+    @pytest.mark.parametrize("written", [0x31900, 0xFF1900, 0xFFFF1900])
+    def test_every_host_form_reads_back_as_osfile_value(self, writable_copy, written):
+        # The raw 18-bit form, the *INFO-printed form and the OSFILE form all
+        # set both high bits, so all store the same host address.
+        disk, _ = writable_copy(_REFERENCE)
+        (disk.root / "$" / "HOSTY").write_bytes(b"x", load_address=written)
+        assert (disk.root / "$" / "HOSTY").stat().load_address == 0xFFFF1900
 
 
 if __name__ == "__main__":
