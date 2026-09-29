@@ -121,3 +121,42 @@ def test_what_settle_promises_is_what_a_new_format_disc_stores(disc_format):
     for value in (0x07, 0x1B, 0x33, 0x04):
         path.chmod(value)
         assert path.stat().access == adfs.access_convention.settle(Access(value)), hex(value)
+
+
+# -- write_bytes applies access through the convention (#63) --
+
+
+@pytest.mark.parametrize("value", [0x19, 0x33, 0x0B, 0x07, 0x01])
+def test_write_bytes_applies_the_whole_access(value):
+    adfs = ADFS.create(ADFS_L)
+    (adfs.root / "F").write_bytes(b"x", access=Access(value))
+    assert (adfs.root / "F").stat().access == Access(value)
+
+
+def test_write_bytes_on_a_new_format_disc_keeps_what_it_can():
+    adfs = ADFS.create(ADFS_F)
+    (adfs.root / "F").write_bytes(b"x", access=Access(0x07))
+    assert (adfs.root / "F").stat().access == Access(0x03)
+
+
+def test_write_bytes_without_access_gives_a_new_file_the_default():
+    adfs = ADFS.create(ADFS_L)
+    (adfs.root / "F").write_bytes(b"x")
+    assert (adfs.root / "F").stat().access == Access(0x13)  # WR/R
+
+
+def test_replacing_a_file_without_access_keeps_its_access():
+    adfs = ADFS.create(ADFS_L)
+    path = adfs.root / "F"
+    path.write_bytes(b"one", access=Access(0x33))
+    path.write_bytes(b"two")
+    assert path.read_bytes() == b"two"
+    assert path.stat().access == Access(0x33)
+
+
+def test_replacing_a_file_with_access_sets_it():
+    adfs = ADFS.create(ADFS_L)
+    path = adfs.root / "F"
+    path.write_bytes(b"one", access=Access(0x33))
+    path.write_bytes(b"two", access=Access(0x03))
+    assert path.stat().access == Access(0x03)

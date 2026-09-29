@@ -591,19 +591,6 @@ class ADFSStat:
         return None
 
 
-def _coerce_access_to_locked(access: "Access | None") -> bool:
-    """Project the canonical ``access`` value down to ``locked: bool``.
-
-    write_bytes only sets the locked bit at the catalogue-write
-    layer; richer flags (R/W/E/PR/PW) are applied later via
-    :meth:`chmod`. ``None`` (the default) maps to unlocked; otherwise
-    the lock bit is the one the ADFS access convention writes.
-    """
-    if access is None:
-        return False
-    return ADFS_ACCESS.from_canonical(Access(int(access))).locked
-
-
 def _entry_to_stat(entry: _ADFSDirectoryEntry) -> ADFSStat:
     """Convert an internal directory entry to a public ADFSStat."""
     return ADFSStat(
@@ -852,11 +839,10 @@ class ADFSPath(AcornPath):
     ) -> None:
         """Write file contents, creating or overwriting the file.
 
-        ``access`` accepts a :class:`oaknut.file.Access` value, or
-        ``None`` for the filesystem default (unlocked + owner R+W).
-        Only the locked bit is honoured at the catalogue-write layer;
-        richer flags (owner R/W/E, public R/W) must be applied via
-        :meth:`chmod` after the write.
+        ``access`` accepts a :class:`oaknut.file.Access` value, applied
+        through the disc's access convention (so a New-format disc drops
+        owner execute). ``None`` gives a new file the default ``WR/R`` and
+        leaves a replaced file's access as it was.
 
         ``date`` is accepted for cross-filesystem signature uniformity
         but silently ignored at this layer.
@@ -873,8 +859,6 @@ class ADFSPath(AcornPath):
         """
         del date  # accepted for signature uniformity only
 
-        locked_val = _coerce_access_to_locked(access)
-
         if self._path == "$":
             raise ADFSPathError("Cannot write to root directory")
 
@@ -888,7 +872,7 @@ class ADFSPath(AcornPath):
             data,
             load_address,
             exec_address,
-            locked_val,
+            None if access is None else Access(int(access)),
         )
 
     @resolving_io
@@ -1152,16 +1136,8 @@ class ADFSPath(AcornPath):
             data,
             load_address=load_address,
             exec_address=exec_address,
-            access=bool((access or 0) & int(Access.L)),
+            access=None if access is None else Access(access),
         )
-
-        # If the resolved metadata carries richer Acorn attributes than
-        # the write_bytes locked flag covers (owner R/W/E, public R/W),
-        # apply them via chmod so they actually land in the directory
-        # entry. write_bytes has set a default R|W for the owner via
-        # the internal _write_file path, so a no-op chmod is harmless.
-        if access is not None:
-            self.chmod(access)
 
     # --- Protocols ---
 
@@ -2888,19 +2864,32 @@ class ADFS:
             signature=directory.signature,
         )
 
+    def _new_file_attributes(
+        self, existing: "_ADFSDirectoryEntry | None", access: Access | None
+    ) -> _ADFSRawAttributes:
+        """The attributes a written file gets, from *access* or its old entry."""
+        current = existing.attributes if existing is not None else None
+        if access is None:
+            if current is not None:
+                return current
+            access = Access.WR | Access.PR
+        return self.access_convention.from_canonical(access, current=current)
+
     def _write_file(
         self,
         path_parts: list[str],
         data: bytes,
         load_address: int,
         exec_address: int,
-        locked: bool,
+        access: Access | None,
     ) -> None:
         """Write a file to the disc image.
 
         Handles sector allocation, data writing, and directory update.
         If a file with the same name already exists, it is overwritten
-        and its old sectors are freed.
+        and its old sectors are freed. *access* is applied through the
+        disc's access convention; ``None`` keeps a replaced file's
+        attributes and gives a new file ``WR/R``.
         """
         filename = path_parts[-1]
         parent_dir, parent_disc_address = self._resolve_parent(path_parts)
@@ -2932,17 +2921,7 @@ class ADFS:
             length=len(data),
             indirect_disc_address=address,
             sequence_number=0,
-            attributes=_ADFSRawAttributes(
-                owner_read=True,
-                owner_write=True,
-                locked=locked,
-                directory=False,
-                owner_execute=False,
-                public_read=True,
-                public_write=False,
-                public_execute=False,
-                private=False,
-            ),
+            attributes=self._new_file_attributes(existing, access),
         )
 
         if existing is not None:

@@ -92,15 +92,15 @@ def test_cp_access_matrix(tmp_path, kind, spec):
 
 
 def test_copy_file_dfs_locked_to_adfs(tmp_path):
-    # copy_file goes through ADFS write_bytes, which honours only L and
-    # defaults the rest to WR/R — so it disagrees with cp (&0B) — #60.
+    # copy_file hands the translated access to ADFS write_bytes, which
+    # applies it in full, so it agrees with cp: LR/ (#63).
     source = _image(tmp_path, "dfs", "source")
     _run("put", f"{source}:$.F", "-", input="x")
     _run("chmod", f"{source}:$.F", "L")
     destination = _image(tmp_path, "adfs", "destination")
     with DFS.from_file(source) as dfs, ADFS.from_file(destination) as adfs:
         copy_file(dfs.root / "$" / "F", adfs.root / "F")
-    assert _access(f"{destination}:$.F") == 0x1B
+    assert _access(f"{destination}:$.F") == 0x09
 
 
 def test_import_without_sidecar_gives_no_access(tmp_path):

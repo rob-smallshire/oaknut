@@ -219,7 +219,9 @@ class TestStatAccess:
         adfs = ADFS.create(ADFS_S)
         (adfs.root / "File").write_bytes(b"data", access=Access.LWR)
         stat = (adfs.root / "File").stat()
-        assert stat.access == Access.R | Access.W | Access.L | Access.PR
+        # The access given is applied as it stands (#63); no public read is
+        # added to it.
+        assert stat.access == Access.R | Access.W | Access.L
 
     def test_read_only_access(self):
         adfs = ADFS.create(ADFS_S)
