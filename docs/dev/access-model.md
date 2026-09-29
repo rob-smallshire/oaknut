@@ -1,6 +1,7 @@
 # File access: the canonical model and translation conventions
 
-Status: design, agreed in outline (2026-09-28). Not yet implemented.
+Status: design agreed 2026-09-28. Step 1 (the conventions layer) implemented
+2026-09-29; see *As built* at the end.
 
 This note defines how oaknut represents file access and translates it
 between filing systems, so that every command which moves or displays a
@@ -279,3 +280,36 @@ destination actually holds rather than what was asked for.
   via bits 8–10).
 - Whether ZIP (SparkFS) attributes get their own convention.
 - Whether host permissions are applied by default, per platform.
+
+## As built (step 1)
+
+Where the implementation differs from the design above, and why:
+
+- **Mounts exchange canonical access.** The `AcornMetadata` capability's
+  `acorn_meta` / `set_acorn_meta` carry the canonical word, not native
+  values, so a copy between two mounts only ever sees canonical access.
+  `translate_access(access, *, destination, context, grant_public,
+  override)` therefore takes the source's canonical access and returns
+  the canonical access the destination will hold (`destination.settle`),
+  rather than a native value. It has no `source` argument.
+- **Same-family passthrough (§4) is deferred.** It needs native values to
+  cross the mount boundary. For the Acorn families, completing the
+  canonical word in step 4 (public E and L) makes same-family copies
+  lossless anyway; a native path can be added with the first non-Acorn
+  format that needs it.
+- **Conventions are found through their mounts.** Each mount advertises
+  `access_convention` (optional; the ZIP mount, being read-only, has
+  none). An entry-point registry waits for the first convention without
+  a mount — the host conventions, or a selectable FAT convention.
+- **`from_canonical` takes the current native value** (`current=`), so a
+  convention can keep native bits the canonical word cannot express, as
+  ADFS keeps directory, public-execute and private.
+- **Implemented conventions:** `acorn-dfs` (`oaknut.dfs`), `adfs`
+  (`oaknut.adfs`), `afs` (`oaknut.afs`), `acorn-romfs` (`oaknut.romfs`).
+  `DFSStat`, `ADFSStat`, `AFSAccess.to_acorn` / `from_acorn`, the write
+  paths, `chmod`, AFS host import and every mount use them; the CLI's
+  `cp`, `gather`, `import` and `chmod` route through `translate_access`.
+- **Behaviour pinned** by `packages/oaknut-disc/tests/test_cli_access_behaviour.py`,
+  which records what each copying path produces today, known-wrong rows
+  included.
+
