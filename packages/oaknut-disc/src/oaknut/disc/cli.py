@@ -2129,6 +2129,31 @@ def _iter_target_paths(mount, pattern: str, *, recursive: bool, wildcards: bool 
             yield seed
 
 
+def _destination_access(mount, access, *, is_directory: bool = False, override=None) -> int:
+    """The access byte *mount* will hold for an object given canonical *access*.
+
+    Routes every write of access — copies, imports and ``chmod`` — through
+    :func:`~oaknut.file.translate_access` and the mount's own access
+    convention, so each command applies the same rules. *override* is an
+    access-spec transform (see :func:`~oaknut.file.parse_access_spec`). A
+    mount without an access convention takes the value as given.
+    """
+    from oaknut.file import Access, AccessContext, translate_access
+
+    convention = getattr(mount, "access_convention", None)
+    if convention is None:
+        result = Access(access)
+        return int(override(result) if override is not None else result)
+    return int(
+        translate_access(
+            Access(access),
+            destination=convention,
+            context=AccessContext(is_directory=is_directory),
+            override=override,
+        )
+    )
+
+
 def _mutate_access(
     compound_path: str,
     *,
@@ -2175,7 +2200,12 @@ def _mutate_access(
                 AcornMeta(
                     load_address=meta.load_address,
                     exec_address=meta.exec_address,
-                    access=int(transform(current)),
+                    access=_destination_access(
+                        mount,
+                        current,
+                        is_directory=mount.stat(target).is_dir,
+                        override=transform,
+                    ),
                 ),
             )
 
@@ -2561,7 +2591,11 @@ def _write_copy_item(dst_mount, dst_path: str, item: dict, force: bool) -> None:
     if isinstance(dst_mount, AcornMetadata):
         dst_mount.set_acorn_meta(
             dst_path,
-            AcornMeta(load_address=item["load"], exec_address=item["exec"], access=item["access"]),
+            AcornMeta(
+                load_address=item["load"],
+                exec_address=item["exec"],
+                access=_destination_access(dst_mount, item["access"]),
+            ),
         )
     # Re-encode the logical filetype/datestamp in the destination's own form.
     # Filetype first, so a following datestamp preserves it; on ADFS each of
@@ -3744,7 +3778,9 @@ def _import_host_dir(
                     AcornMeta(
                         load_address=meta.load_address or 0,
                         exec_address=meta.exec_address or 0,
-                        access=int(meta.access) if meta.access is not None else 0,
+                        access=_destination_access(
+                            mount, meta.access if meta.access is not None else 0
+                        ),
                     ),
                 )
             _apply_typestamp(mount, filesystem_name, target, filetype, when)

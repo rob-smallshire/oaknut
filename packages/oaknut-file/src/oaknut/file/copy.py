@@ -13,8 +13,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from oaknut.file.access_mapping import access_from_stat
-
 
 def copy_file(src: Any, dst: Any, **write_kwargs: Any) -> None:
     """Copy a single file from *src* to *dst*.
@@ -41,7 +39,7 @@ def copy_file(src: Any, dst: Any, **write_kwargs: Any) -> None:
     kwargs: dict[str, Any] = {
         "load_address": getattr(st, "load_address", 0),
         "exec_address": getattr(st, "exec_address", 0),
-        "access": access_from_stat(st),
+        "access": st.access,
     }
     kwargs.update(write_kwargs)
     dst.write_bytes(data, **kwargs)

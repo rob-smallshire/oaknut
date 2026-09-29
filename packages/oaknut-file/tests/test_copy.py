@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import pytest
+from oaknut.file import Access
 from oaknut.file.copy import copy_file
 
 
@@ -15,6 +16,10 @@ class FakeStat:
     locked: bool = False
     length: int = 0
     is_directory: bool = False
+
+    @property
+    def access(self) -> Access:
+        return Access.WR | (Access.L if self.locked else Access(0))
 
 
 class FakePath:
