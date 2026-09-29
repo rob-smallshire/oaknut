@@ -23,6 +23,7 @@ from __future__ import annotations
 import io
 import zipfile
 from collections.abc import Iterable
+from dataclasses import replace
 from typing import NoReturn
 
 from oaknut.file import AcornMeta
@@ -40,6 +41,9 @@ from oaknut.filesystem import (
 from oaknut.filesystem.wildcards import ACORN_WILDCARDS, AcornWildcards
 
 from .api import resolved_entries
+
+#: A member's access when it records none: WR/WR (J.G. Harston).
+_DEFAULT_ACCESS = 0x33
 
 _SIGNATURES = {
     b"PK\x03\x04": "local file header",
@@ -133,7 +137,18 @@ class _ZipMount(AcornWildcards):
         return self._archive.read(self._member[path])
 
     def acorn_meta(self, path: str) -> AcornMeta:
-        return self._meta.get(path, AcornMeta())
+        # J.G. Harston's ZIP rules (mdfs.net Docs/Comp/BBC/Filing/Metadata):
+        # a member without an access byte has &33 (WR/WR), and one without
+        # an exec address executes at its load address.
+        meta = self._meta.get(path)
+        if meta is None:
+            return AcornMeta(access=_DEFAULT_ACCESS)
+        updates = {}
+        if meta.access is None:
+            updates["access"] = _DEFAULT_ACCESS
+        if meta.exec_address is None and meta.load_address is not None:
+            updates["exec_address"] = meta.load_address
+        return replace(meta, **updates) if updates else meta
 
     def set_acorn_meta(self, path: str, meta: AcornMeta) -> None:
         _read_only("change metadata")

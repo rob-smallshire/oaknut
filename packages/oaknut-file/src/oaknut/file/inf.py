@@ -41,13 +41,16 @@ def parse_inf_line(line: str) -> tuple[str, AcornMeta] | None:
         return None
 
     parts = line.split()
-    if len(parts) < 4:
+    if len(parts) < 2:
         return None
 
     first_is_hex = _is_hex(parts[0])
 
     try:
-        if not first_is_hex:
+        # Fields drop progressively from the right (J.G. Harston), so a
+        # line of fewer than four fields — name load [exec] — is always
+        # traditional: a PiEconetBridge line needs its perm field.
+        if not first_is_hex or len(parts) < 4:
             # First field is the filename — must be traditional INF
             return _parse_trad_inf(parts)
 
@@ -72,18 +75,21 @@ def parse_inf_line(line: str) -> tuple[str, AcornMeta] | None:
 def _parse_trad_inf(parts: list[str]) -> tuple[str, AcornMeta] | None:
     """Parse a traditional INF line that has already been split."""
     load_address = int(parts[1], 16)
-    exec_address = int(parts[2], 16)
-    # parts[3] is length, informational only
-    attr = None
+    # An omitted exec address is the load address (J.G. Harston).
+    exec_address = int(parts[2], 16) if len(parts) > 2 else load_address
+    # parts[3] is length, informational only.
+    # Access follows J.G. Harston's INF specification ("Storing Acorn/BBC
+    # metadata on other systems", mdfs.net Docs/Comp/BBC/Filing/Metadata):
+    # an omitted access field means &33 (WR/WR), and a field starting with
+    # "L" is a lock marker meaning &19 (LR/R, "Locked on DFS").
+    attr = int(Access.WR | Access.PR | Access.PW)
 
     if len(parts) > 4:
         token = parts[4]
-        if token == "L" or token == "Locked":
-            # A bare lock marker says only that the file is locked. On the
-            # DFS-era tools that write it, locked also means read-only, so
-            # it reads as LR (&09) — not a file with only the lock bit and
-            # no read access.
-            attr = int(Access.L | Access.R)
+        if token.upper().startswith("L") and "/" not in token:
+            # A lock marker (L, Locked, ...). An owner/public access string
+            # such as LWR/R is not a marker and parses as written below.
+            attr = int(Access.L | Access.R | Access.PR)
         else:
             # The attribute may be a hex byte (03) or a symbolic access
             # string (WR, LWR/R). parse_access handles both; an attr we

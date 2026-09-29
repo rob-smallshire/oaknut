@@ -151,6 +151,15 @@ on the destination: ``WR/R`` on ADFS, ``WR/`` on AFS and DFS. When a
 sidecar does record access, ``disc put`` and ``disc import`` both apply
 it; ``--access`` on ``put`` overrides it.
 
+A traditional ``.inf`` follows J.G. Harston's INF rules (`Storing
+Acorn/BBC metadata on other systems
+<https://mdfs.net/Docs/Comp/BBC/Filing/Metadata>`_). Fields may be dropped
+from the right, down to ``name load``: a missing exec address is the load
+address, and a missing access field means ``&33`` (``WR/WR``). An access
+field starting with ``L`` — ``L`` or ``Locked``, as DFS-era tools write it —
+means ``&19`` (``LR/R``). A ZIP member without Acorn attributes likewise has
+access ``&33``.
+
 To override the cascade, pass ``--meta-format VALUE`` and only
 that format is consulted. Pass ``--meta-format none`` to ignore
 all metadata sources and import bytes only.

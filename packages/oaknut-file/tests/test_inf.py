@@ -26,14 +26,14 @@ class TestParseInfLineTraditional:
     def test_with_locked_letter(self):
         """Handle the 'L' marker used by some ADFS exporters."""
         source, meta = parse_inf_line("SECRET   00001900 00008023 00000100 L")
-        # A bare lock marker says only "locked", which on the DFS-era tools
-        # that write it also means read-only: LR (#68).
-        assert meta.access == 0x09
+        # J.G. Harston, "Storing Acorn/BBC metadata on other systems": an
+        # access field starting with "L" is converted to "19" for Locked.
+        assert meta.access == 0x19
 
     def test_with_locked_word(self):
         """Handle the 'Locked' marker used by some DFS exporters."""
         source, meta = parse_inf_line("$.HELLO 00001900 00008023 00000100 Locked")
-        assert meta.access == 0x09  # LR
+        assert meta.access == 0x19  # LR/R
 
     def test_with_symbolic_access_wr(self):
         # DFS-style symbolic access in the attribute field. The valid
@@ -154,3 +154,45 @@ class TestReadWriteInfFile:
     def test_read_nonexistent_returns_none(self, tmp_path):
         result = read_inf_file(tmp_path / "missing.inf")
         assert result is None
+
+
+class TestHarstonDefaults:
+    """Defaults from J.G. Harston's INF specification (mdfs.net
+    Docs/Comp/BBC/Filing/Metadata): a missing access field is &33, and an
+    access field starting with "L" is &19."""
+
+    @pytest.mark.parametrize(
+        "line",
+        ["$.F 00001900 00008023 00000100", "$.F 00001900 00008023"],
+    )
+    def test_missing_access_is_33(self, line):
+        _source, meta = parse_inf_line(line)
+        assert meta.access == 0x33
+
+    @pytest.mark.parametrize("token", ["L", "Locked", "LOCKED", "LWR"])
+    def test_a_token_starting_with_l_is_19(self, token):
+        _source, meta = parse_inf_line(f"$.F 00001900 00008023 00000100 {token}")
+        assert meta.access == 0x19
+
+    def test_an_owner_public_string_still_parses_as_written(self):
+        _source, meta = parse_inf_line("$.F 00001900 00008023 00000100 LWR/R")
+        assert meta.access == 0x1B
+
+    def test_hex_access_is_the_acorn_byte(self):
+        _source, meta = parse_inf_line("$.F 00001900 00008023 00000100 33")
+        assert meta.access == 0x33
+
+    def test_the_basic_three_field_line_parses(self):
+        # BeebWiki: the basic INF line is name, load, exec.
+        source, meta = parse_inf_line("$.DCONV 1900 801F")
+        assert source == "inf-trad"
+        assert (meta.load_address, meta.exec_address) == (0x1900, 0x801F)
+        assert meta.name == "$.DCONV"
+
+    def test_a_missing_exec_address_is_the_load_address(self):
+        # J.G. Harston: IF exec$="" : exec$=load$
+        _source, meta = parse_inf_line("$.DATA 3000")
+        assert (meta.load_address, meta.exec_address) == (0x3000, 0x3000)
+
+    def test_a_name_alone_is_not_an_inf_line(self):
+        assert parse_inf_line("$.ONLY") is None

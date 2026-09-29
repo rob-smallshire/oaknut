@@ -436,7 +436,8 @@ class TestParseInfLine:
         source, meta = result
         assert source == "inf-trad"
         assert meta.load_address == 0xFFFFF004
-        assert meta.access is None
+        # An omitted access field means &33 (J.G. Harston's INF rules).
+        assert meta.access == 0x33
 
     def test_pieb_inf(self):
         result = parse_inf_line("0 fffff93a c7524201 33")
@@ -464,8 +465,11 @@ class TestParseInfLine:
         assert meta.load_address == 0xFFFFDD00
 
     def test_too_few_fields(self):
+        assert parse_inf_line("only") is None
+        # Non-hex addresses are not an INF line...
         assert parse_inf_line("only three fields") is None
-        assert parse_inf_line("a b c") is None
+        # ...but name load exec is the basic INF line, even with short hex.
+        assert parse_inf_line("a b c")[1].load_address == 0xB
 
     def test_empty_line(self):
         assert parse_inf_line("") is None
@@ -2161,3 +2165,32 @@ class TestEdgeCases:
         assert clean == "FILE"
         assert meta.load_address == 0xFFFFFFFF
         assert meta.exec_address == 0xFFFFFFFF
+
+
+class TestHarstonZipDefaults:
+    """A member without Acorn attributes follows J.G. Harston's ZIP rules
+    (mdfs.net Docs/Comp/BBC/Filing/Metadata): access &33, exec = load."""
+
+    def _mount(self, tmp_path, members):
+        import zipfile
+
+        from oaknut.filesystem import reader_for
+        from oaknut.zip.filesystem import Zip
+
+        archive = tmp_path / "plain.zip"
+        with zipfile.ZipFile(archive, "w") as zipped:
+            for name, data in members.items():
+                zipped.writestr(name, data)
+        filesystem = Zip(name="zip")
+        reader = reader_for(archive)
+        return filesystem.open(reader, filesystem.probe(reader).geometry)
+
+    def test_member_without_metadata_has_access_33(self, tmp_path):
+        mount = self._mount(tmp_path, {"README": b"hello"})
+        meta = mount.acorn_meta("README")
+        assert meta.access == 0x33
+        assert meta.load_address is None  # no addresses are invented
+
+    def test_member_with_a_load_suffix_but_no_access_gets_33(self, tmp_path):
+        mount = self._mount(tmp_path, {"PROG,ffff1900-ffff8023": b"x"})
+        assert mount.acorn_meta("PROG").access == 0x33

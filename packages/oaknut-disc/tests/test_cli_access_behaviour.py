@@ -139,15 +139,15 @@ def test_put_replacing_a_file_keeps_its_access(tmp_path):
     assert _access(f"{destination}:$.H") == 0x33
 
 
-def test_cp_from_a_member_without_access_gives_the_default(tmp_path):
-    # A ZIP member with no Acorn attributes has unknown access, so the
-    # destination's default applies rather than no access at all (#63).
+def test_cp_from_a_member_without_access_gets_harstons_default(tmp_path):
+    # J.G. Harston's ZIP rules: a member with no Acorn attributes has access
+    # &33 (WR/WR). Each destination keeps what it can store of it.
     import zipfile
 
     archive = tmp_path / "plain.zip"
     with zipfile.ZipFile(archive, "w") as zipped:
         zipped.writestr("README", b"hello")
-    for kind, expected in (("adfs", 0x13), ("afs", 0x03), ("dfs", 0x03)):
+    for kind, expected in (("adfs", 0x33), ("afs", 0x33), ("dfs", 0x03)):
         destination = _image(tmp_path, kind, f"from-zip-{kind}")
         _run("cp", f"{archive}:README", f"{destination}:{_inner(kind, 'README')}")
         assert _access(f"{destination}:{_inner(kind, 'README')}") == expected, kind
