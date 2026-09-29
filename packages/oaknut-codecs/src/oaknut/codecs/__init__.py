@@ -21,7 +21,7 @@ from oaknut.codecs.acorn import (
     unicode_to_acorn,
 )
 
-__version__ = "12.19.0"
+__version__ = "13.0.0"
 
 __all__ = [
     "BBC_MICRO_TO_UNICODE",
