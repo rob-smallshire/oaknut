@@ -1815,6 +1815,7 @@ def put(
     # the sidecar's Acorn name (a host filename may have transliterated it),
     # then the host filename (with any filename-encoded suffix stripped).
     sidecar_name: str | None = None
+    sidecar_access: int | None = None
     host_leaf: str | None = None
     if read_stdin:
         data = sys.stdin.buffer.read()
@@ -1837,6 +1838,7 @@ def put(
         resolved_load = parse_address(load_address) if load_address else (meta.load_address or 0)
         resolved_exec = parse_address(exec_address) if exec_address else (meta.exec_address or 0)
         sidecar_name = meta.name
+        sidecar_access = meta.access
         host_leaf = host_path.name.split(",", 1)[0]
     else:
         raise click.ClickException("HOST_PATH is required (or use - for stdin)")
@@ -1860,11 +1862,14 @@ def put(
                     exit_code=ExitCode.NO_PERM,
                 )
         # The generic write carries no addresses; set them after, when the
-        # filesystem records Acorn metadata (DFS/ADFS/AFS), preserving the
-        # access the write established.
+        # filesystem records Acorn metadata (DFS/ADFS/AFS). The access is the
+        # sidecar's when it gives one, else what the write established (the
+        # default for a new file, the old access for a replaced one).
         mount.write_bytes(target, data)
         if isinstance(mount, AcornMetadata):
             access = mount.acorn_meta(target).access
+            if sidecar_access is not None:
+                access = _destination_access(mount, sidecar_access)
             if access_override is not None:
                 access = _destination_access(mount, access or 0, override=access_override)
             mount.set_acorn_meta(
@@ -2533,12 +2538,15 @@ def _file_item(src_mount, src_path: str, rel_dst: str) -> dict:
         StorageOrdered,
     )
 
-    load = exec_addr = access = 0
+    # Access stays None when the source records none (a ZIP member without
+    # Acorn attributes), so the destination's default for a new file applies.
+    load = exec_addr = 0
+    access = None
     if isinstance(src_mount, AcornMetadata):
         meta = src_mount.acorn_meta(src_path)
         load = meta.load_address or 0
         exec_addr = meta.exec_address or 0
-        access = int(meta.access) if meta.access is not None else 0
+        access = int(meta.access) if meta.access is not None else None
     # Read the *logical* filetype/datestamp through the capabilities so a
     # cross-filesystem copy can re-encode them the destination's own way,
     # instead of copying raw load/exec (which mean different things on ADFS
@@ -2652,12 +2660,19 @@ def _write_copy_item(
 
     dst_mount.write_bytes(dst_path, item["data"])
     if isinstance(dst_mount, AcornMetadata):
+        # Unknown source access keeps the destination's default, which an
+        # --access spec may still edit.
+        access = item["access"]
+        if access is None and access_override is not None:
+            access = dst_mount.acorn_meta(dst_path).access or 0
         dst_mount.set_acorn_meta(
             dst_path,
             AcornMeta(
                 load_address=item["load"],
                 exec_address=item["exec"],
-                access=_destination_access(dst_mount, item["access"], override=access_override),
+                access=None
+                if access is None
+                else _destination_access(dst_mount, access, override=access_override),
             ),
         )
     # Re-encode the logical filetype/datestamp in the destination's own form.
@@ -3841,9 +3856,10 @@ def _import_host_dir(
                     AcornMeta(
                         load_address=meta.load_address or 0,
                         exec_address=meta.exec_address or 0,
-                        access=_destination_access(
-                            mount, meta.access if meta.access is not None else 0
-                        ),
+                        # No metadata source leaves the default for a new file.
+                        access=None
+                        if meta.access is None
+                        else _destination_access(mount, meta.access),
                     ),
                 )
             _apply_typestamp(mount, filesystem_name, target, filetype, when)

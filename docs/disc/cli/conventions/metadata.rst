@@ -146,9 +146,10 @@ results:
    ``,llllllll,eeeeeeee`` at the end of the host filename.
 
 If none of the three yield metadata, the file is imported with
-``load_address=0``, ``exec_address=0``, and unlocked owner-R+W
-access — the same defaults a fresh file would get from
-``disc put`` followed by ``disc chmod``.
+``load_address=0``, ``exec_address=0``, and the access a new file gets
+on the destination: ``WR/R`` on ADFS, ``WR/`` on AFS and DFS. When a
+sidecar does record access, ``disc put`` and ``disc import`` both apply
+it; ``--access`` on ``put`` overrides it.
 
 To override the cascade, pass ``--meta-format VALUE`` and only
 that format is consulted. Pass ``--meta-format none`` to ignore

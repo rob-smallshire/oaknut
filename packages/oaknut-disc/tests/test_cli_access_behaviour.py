@@ -103,21 +103,50 @@ def test_copy_file_dfs_locked_to_adfs(tmp_path):
     assert _access(f"{destination}:$.F") == 0x09
 
 
-def test_import_without_sidecar_gives_no_access(tmp_path):
-    # With no metadata source, import applies access 0 (/) — #60.
+def test_import_without_sidecar_gives_the_default(tmp_path):
+    # With no metadata source, the destination's default for a new file
+    # applies: WR/R on ADFS (#63).
     host_dirpath = tmp_path / "host"
     host_dirpath.mkdir()
     (host_dirpath / "PLAIN").write_bytes(b"x")
     destination = _image(tmp_path, "adfs", "destination")
     _run("import", destination, host_dirpath)
-    assert _access(f"{destination}:$.PLAIN") == 0x00
+    assert _access(f"{destination}:$.PLAIN") == 0x13
 
 
-def test_put_ignores_sidecar_access(tmp_path):
-    # put keeps the destination's default access (WR/R on ADFS) rather than
-    # the .inf's &33 — #60.
+def test_put_applies_sidecar_access(tmp_path):
+    # put takes the access an .inf records (#63).
     (tmp_path / "H").write_bytes(b"x")
     (tmp_path / "H.inf").write_text("$.H 00001900 00008023 00000001 33\n")
     destination = _image(tmp_path, "adfs", "destination")
     _run("put", f"{destination}:$.H", tmp_path / "H")
+    assert _access(f"{destination}:$.H") == 0x33
+
+
+def test_put_without_sidecar_gives_the_default(tmp_path):
+    (tmp_path / "H").write_bytes(b"x")
+    destination = _image(tmp_path, "adfs", "destination")
+    _run("put", f"{destination}:$.H", tmp_path / "H")
     assert _access(f"{destination}:$.H") == 0x13
+
+
+def test_put_replacing_a_file_keeps_its_access(tmp_path):
+    destination = _image(tmp_path, "adfs", "destination")
+    _run("put", f"{destination}:$.H", "-", input="one")
+    _run("chmod", f"{destination}:$.H", "WR/WR")
+    _run("put", f"{destination}:$.H", "-", input="two")
+    assert _access(f"{destination}:$.H") == 0x33
+
+
+def test_cp_from_a_member_without_access_gives_the_default(tmp_path):
+    # A ZIP member with no Acorn attributes has unknown access, so the
+    # destination's default applies rather than no access at all (#63).
+    import zipfile
+
+    archive = tmp_path / "plain.zip"
+    with zipfile.ZipFile(archive, "w") as zipped:
+        zipped.writestr("README", b"hello")
+    for kind, expected in (("adfs", 0x13), ("afs", 0x03), ("dfs", 0x03)):
+        destination = _image(tmp_path, kind, f"from-zip-{kind}")
+        _run("cp", f"{archive}:README", f"{destination}:{_inner(kind, 'README')}")
+        assert _access(f"{destination}:{_inner(kind, 'README')}") == expected, kind
