@@ -6,6 +6,7 @@ import oaknut.dfs.watford_dfs_catalogue  # noqa: F401
 
 # Import acorn_encoding to register the codec
 import oaknut.file.acorn_encoding  # noqa: F401
+from oaknut.dfs.access import ACORN_DFS_ACCESS, AcornDFSAccessConvention
 from oaknut.dfs.catalogue import DiscInfo
 from oaknut.dfs.dfs import DFS, DFSPath, DFSStat, detect_dfs_format, expand
 from oaknut.dfs.formats import (
@@ -24,6 +25,8 @@ __version__ = "12.19.0"
 __version_info__ = Version(*(__version__.split(".")))
 
 __all__ = [
+    "ACORN_DFS_ACCESS",
+    "AcornDFSAccessConvention",
     "DFS",
     "DFSPath",
     "DFSStat",

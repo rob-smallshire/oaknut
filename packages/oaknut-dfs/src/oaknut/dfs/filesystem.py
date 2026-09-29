@@ -17,6 +17,7 @@ from __future__ import annotations
 import re
 from collections.abc import Iterable
 
+from oaknut.dfs.access import ACORN_DFS_ACCESS
 from oaknut.dfs.acorn_dfs_catalogue import AcornDFSCatalogue
 from oaknut.dfs.catalogue import DFS_NAME_GRAMMAR
 from oaknut.dfs.dfs import DFS
@@ -151,6 +152,9 @@ class _DFSMount(AcornWildcards):
     ``HierarchicalDirectories``.
     """
 
+    #: How this filing system's access maps to and from the canonical word.
+    access_convention = ACORN_DFS_ACCESS
+
     #: DFS load/exec are 18-bit; MOS ``*INFO`` shows six hex digits.
     address_hex_digits = 6
     #: ...and only six: an I/O-processor address is the OSFILE value
@@ -250,9 +254,8 @@ class _DFSMount(AcornWildcards):
             target.set_load_address(meta.load_address)
         if meta.exec_address is not None:
             target.set_exec_address(meta.exec_address)
-        # DFS records only the lock bit; the other access flags have no
-        # representation in its catalogue.
-        if meta.access & Access.L:
+        # DFS records only the lock bit; the convention decides it.
+        if self.access_convention.from_canonical(Access(meta.access)):
             target.lock()
         else:
             target.unlock()

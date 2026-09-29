@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Iterator, Union
 
 import oaknut.basic as basic
+from oaknut.dfs.access import ACORN_DFS_ACCESS
 from oaknut.dfs.catalogue import DFS_NAME_GRAMMAR, FileEntry
 from oaknut.dfs.catalogued_surface import CataloguedSurface
 from oaknut.dfs.formats import DiscFormat
@@ -85,13 +86,12 @@ def detect_dfs_format(filepath: Union[str, PathLike]) -> DiscFormat:
 def _coerce_access_to_locked(access: "Access | None") -> bool:
     """Project the canonical ``access`` value down to DFS's lone L bit.
 
-    DFS only stores the locked bit; the richer :class:`Access` flags
-    collapse to ``Access.L`` presence. ``None`` (the default) maps to
-    unlocked; an :class:`Access` value is masked against ``Access.L``.
+    ``None`` (the default) maps to unlocked; otherwise the DFS access
+    convention keeps only the lock bit.
     """
     if access is None:
         return False
-    return bool(int(access) & int(Access.L))
+    return ACORN_DFS_ACCESS.from_canonical(Access(int(access)))
 
 
 @dataclass(frozen=True)
@@ -115,15 +115,10 @@ class DFSStat:
     def access(self) -> "Access":
         """Canonical :class:`~oaknut.file.Access` flags.
 
-        DFS only stores a single ``locked`` bit, so the result is
-        always owner-read + owner-write, plus ``L`` if locked.
+        DFS only stores a single ``locked`` bit; the DFS access
+        convention reads it.
         """
-        from oaknut.file import Access
-
-        flags = Access.R | Access.W
-        if self.locked:
-            flags |= Access.L
-        return flags
+        return ACORN_DFS_ACCESS.to_canonical(self.locked)
 
     @property
     def date(self) -> None:
@@ -493,9 +488,7 @@ class DFSPath(AcornPath):
         """
         entry = self._find_entry()
         data = self.read_bytes()
-        attr = int(Access.R | Access.W)
-        if entry.locked:
-            attr |= int(Access.L)
+        attr = int(ACORN_DFS_ACCESS.to_canonical(entry.locked))
         meta = AcornMeta(
             load_address=entry.load_address,
             exec_address=entry.exec_address,

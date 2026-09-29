@@ -57,6 +57,18 @@ are detected at read time and need no separate format constant here.
 .. autodata:: oaknut.dfs.IMAGE_FORMAT_BY_EXTENSION
 
 
+Access
+------
+
+A DFS catalogue records one access bit per file, the lock flag. The DFS
+access convention maps it to and from the :class:`~oaknut.file.Access`
+word (see :class:`~oaknut.file.AccessConvention`).
+
+.. autoclass:: oaknut.dfs.AcornDFSAccessConvention
+
+.. autodata:: oaknut.dfs.ACORN_DFS_ACCESS
+
+
 See also
 --------
 
