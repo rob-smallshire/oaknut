@@ -79,14 +79,23 @@ the image in a 22-byte ``.dsc`` sidecar, or a richer BeebSCSI/Pi1MHz
 Access
 ------
 
-An ADFS directory entry carries owner read, write, execute and locked
-bits and public read and write bits. The ADFS access convention maps
+An old-format ADFS directory entry carries owner read, write, execute
+and locked bits and public read and write bits. The ADFS access convention maps
 them to and from the :class:`~oaknut.file.Access` word (see
 :class:`~oaknut.file.AccessConvention`).
 
 .. autoclass:: oaknut.adfs.ADFSAccessConvention
 
 .. autodata:: oaknut.adfs.ADFS_ACCESS
+
+New and Big directories (the D, E, F, E+ and F+ formats) have no owner
+execute or private bit, so they use their own convention;
+:attr:`ADFS.access_convention <oaknut.adfs.ADFS.access_convention>`
+gives the one for a disc.
+
+.. autoclass:: oaknut.adfs.ADFSNewDirectoryAccessConvention
+
+.. autodata:: oaknut.adfs.ADFS_NEW_DIRECTORY_ACCESS
 
 
 See also

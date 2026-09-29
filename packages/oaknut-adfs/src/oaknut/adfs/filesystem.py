@@ -16,7 +16,6 @@ from __future__ import annotations
 from collections.abc import Iterable
 from datetime import datetime, timedelta
 
-from oaknut.adfs.access import ADFS_ACCESS
 from oaknut.adfs.adfs import ADFS as _ADFSDisc
 from oaknut.adfs.directory import ADFS_NAME_GRAMMAR
 from oaknut.adfs.exceptions import ADFSError
@@ -123,9 +122,6 @@ class _ADFSMount(AcornWildcards):
     ``Titled``, ``Bootable``, ``FreeSpace`` and ``RegionHost``.
     """
 
-    #: How this filing system's access maps to and from the canonical word.
-    access_convention = ADFS_ACCESS
-
     #: ADFS load/exec are full 32-bit fields; display them as eight hex
     #: digits, as RISC OS ``*Info`` does.
     address_hex_digits = 8
@@ -141,6 +137,14 @@ class _ADFSMount(AcornWildcards):
         # The geometry the disc was opened with — carries hard-disc CHS
         # from a .dsc sidecar that the content alone cannot supply.
         self._geometry = geometry
+
+    @property
+    def access_convention(self):
+        """How this disc's access maps to and from the canonical word.
+
+        Depends on the directory format: see :attr:`ADFS.access_convention`.
+        """
+        return self._adfs.access_convention
 
     def path_root(self) -> str:
         return "$"

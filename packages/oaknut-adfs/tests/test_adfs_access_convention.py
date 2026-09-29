@@ -70,3 +70,54 @@ def test_round_trip_for_every_representable_value():
     for value in range(0x40):
         access = Access(value)
         assert ADFS_ACCESS.settle(access) == access
+
+
+# -- New and Big directories (#67) --
+
+from oaknut.adfs import (  # noqa: E402
+    ADFS,
+    ADFS_D,
+    ADFS_E_PLUS,
+    ADFS_F,
+    ADFS_L,
+    ADFS_NEW_DIRECTORY_ACCESS,
+    ADFS_S,
+)
+
+
+def test_new_directory_convention_cannot_hold_execute():
+    assert ADFS_NEW_DIRECTORY_ACCESS.name == "adfs-new-directory"
+    assert not ADFS_NEW_DIRECTORY_ACCESS.representable & Access.E
+    assert ADFS_NEW_DIRECTORY_ACCESS.settle(Access(0x07)) == Access(0x03)
+    assert ADFS_NEW_DIRECTORY_ACCESS.settle(Access(0x3B)) == Access(0x3B)
+    assert ADFS_NEW_DIRECTORY_ACCESS.settle(Access.E) == Access(0)
+
+
+def test_new_directory_convention_drops_what_the_byte_cannot_store():
+    current = replace(_PLAIN, public_execute=True, private=True)
+    raw = ADFS_NEW_DIRECTORY_ACCESS.from_canonical(Access(0x07), current=current)
+    assert not (raw.owner_execute or raw.public_execute or raw.private)
+
+
+@pytest.mark.parametrize(
+    ("disc_format", "convention"),
+    [
+        (ADFS_S, ADFS_ACCESS),
+        (ADFS_L, ADFS_ACCESS),
+        (ADFS_D, ADFS_NEW_DIRECTORY_ACCESS),
+        (ADFS_F, ADFS_NEW_DIRECTORY_ACCESS),
+        (ADFS_E_PLUS, ADFS_NEW_DIRECTORY_ACCESS),
+    ],
+)
+def test_disc_chooses_the_convention_for_its_directory_format(disc_format, convention):
+    assert ADFS.create(disc_format).access_convention is convention
+
+
+@pytest.mark.parametrize("disc_format", [ADFS_D, ADFS_F, ADFS_E_PLUS])
+def test_what_settle_promises_is_what_a_new_format_disc_stores(disc_format):
+    adfs = ADFS.create(disc_format)
+    path = adfs.root / "F"
+    path.write_bytes(b"x")
+    for value in (0x07, 0x1B, 0x33, 0x04):
+        path.chmod(value)
+        assert path.stat().access == adfs.access_convention.settle(Access(value)), hex(value)

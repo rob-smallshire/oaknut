@@ -64,5 +64,42 @@ class ADFSAccessConvention(AccessConvention[_ADFSRawAttributes]):
         )
 
 
-#: The shared instance used by the ADFS path API and mount.
+class ADFSNewDirectoryAccessConvention(ADFSAccessConvention):
+    """ADFS access in New and Big directories (D, E, F, E+ and F+ formats).
+
+    The ``NewDirAtts`` byte stores owner read, write and locked, public
+    read and write, and the directory bit — but no owner execute, public
+    execute or private bit. Writing therefore drops ``E``, so a run-only
+    file cannot be represented.
+    """
+
+    name = "adfs-new-directory"
+    family = "adfs-new-directory"
+    representable = Access.R | Access.W | Access.L | Access.PR | Access.PW
+    source = "RISC OS FileCore New/Big directory formats (NewDirAtts)"
+
+    def from_canonical(
+        self,
+        access: Access,
+        context: AccessContext = FILE_CONTEXT,
+        current: _ADFSRawAttributes | None = None,
+    ) -> _ADFSRawAttributes:
+        raw = super().from_canonical(access, context, current)
+        return _ADFSRawAttributes(
+            owner_read=raw.owner_read,
+            owner_write=raw.owner_write,
+            locked=raw.locked,
+            directory=raw.directory,
+            owner_execute=False,
+            public_read=raw.public_read,
+            public_write=raw.public_write,
+            public_execute=False,
+            private=False,
+        )
+
+
+#: The shared instance for old-format directories (S, M and L formats).
 ADFS_ACCESS = ADFSAccessConvention()
+
+#: The shared instance for New and Big directories.
+ADFS_NEW_DIRECTORY_ACCESS = ADFSNewDirectoryAccessConvention()

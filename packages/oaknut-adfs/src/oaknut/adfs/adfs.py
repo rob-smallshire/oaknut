@@ -23,7 +23,11 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Iterator, Union
 
 import oaknut.basic as basic
-from oaknut.adfs.access import ADFS_ACCESS
+from oaknut.adfs.access import (
+    ADFS_ACCESS,
+    ADFS_NEW_DIRECTORY_ACCESS,
+    ADFSAccessConvention,
+)
 from oaknut.adfs.directory import (
     ADFS_BIG_NAME_GRAMMAR,
     ADFS_NAME_GRAMMAR,
@@ -1694,6 +1698,17 @@ class ADFS:
         return not isinstance(self._dir_format, OldDirectoryFormat)
 
     @property
+    def access_convention(self) -> ADFSAccessConvention:
+        """The access convention for this disc's directory format.
+
+        Old directories (S, M and L formats) store owner execute and the
+        private bit; New and Big directories (D, E, F, E+ and F+) do not.
+        """
+        if isinstance(self._dir_format, OldDirectoryFormat):
+            return ADFS_ACCESS
+        return ADFS_NEW_DIRECTORY_ACCESS
+
+    @property
     def closed(self) -> bool:
         """Whether this handle has been closed.
 
@@ -3210,7 +3225,7 @@ class ADFS:
 
         # The convention replaces R, W, E, L, PR, PW and keeps D,
         # public_execute and private from the existing entry.
-        updated_attrs = ADFS_ACCESS.from_canonical(
+        updated_attrs = self.access_convention.from_canonical(
             Access(int(access)),
             AccessContext(is_directory=existing.attributes.directory),
             current=existing.attributes,
