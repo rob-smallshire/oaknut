@@ -316,6 +316,11 @@ Where the implementation differs from the design above, and why:
   `acorn-romfs` reads an ordinary file as `R` and a run-only one as `E`,
   and writes run-only exactly when the access is run-only. Adding `PE`,
   `PL` and bits 8–10 remains.
+- **First host convention: `pieb`** (`oaknut.file.pieb`, #70). PiEconetBridge's
+  `perm` byte swaps the lock (`0x04`) and execute-only (`0x08`) bits relative
+  to the Acorn byte and uses `0x80` for hidden; the PiEB INF and
+  `user.econet_*` xattr formats now translate through it, and a file with no
+  known access gets PiEB's own default, `WR/R`.
 - **Behaviour pinned** by `packages/oaknut-disc/tests/test_cli_access_behaviour.py`,
   which records what each copying path produces today, known-wrong rows
   included.

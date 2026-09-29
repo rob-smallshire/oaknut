@@ -76,7 +76,8 @@ class TestParseInfLinePiEconetBridge:
         source, meta = parse_inf_line("0 ffffdd00 ffffdd00 17")
         assert source == "inf-pieb"
         assert meta.load_address == 0xFFFFDD00
-        assert meta.access == 0x17
+        # PiEB perm 0x17 is locked owner R/W with public R: LWR/R (#70).
+        assert meta.access == 0x1B
 
     def test_pieb_with_owner(self):
         source, meta = parse_inf_line("5 1900 8023 03")

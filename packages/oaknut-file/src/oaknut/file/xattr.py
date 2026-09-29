@@ -22,7 +22,9 @@ import os
 from pathlib import Path
 from typing import Union
 
+from oaknut.file.access import Access
 from oaknut.file.meta import AcornMeta
+from oaknut.file.pieb import PIEB_ACCESS, PIEB_DEFAULT_PERM
 
 # --- Acorn namespace constants ---
 _ACORN_LOAD = "user.acorn.load"
@@ -122,10 +124,11 @@ def write_econet_xattrs(
     """Write PiEconetBridge-compatible extended attributes.
 
     Writes the four ``user.econet_*`` attributes used by PiEconetBridge.
-    When *attr* is None, the conventional default of ``0x17`` (LR/R)
+    *attr* is canonical access, written in PiEB's own ``perm`` layout.
+    When *attr* is None, PiEB's default for a new file, ``WR/R``,
     is written.
     """
-    perm = attr if attr is not None else 0x17
+    perm = PIEB_DEFAULT_PERM if attr is None else PIEB_ACCESS.from_canonical(Access(attr))
     attrs = {
         _ECONET_OWNER: f"{owner:04X}",
         _ECONET_LOAD: f"{load_address:08X}",
@@ -152,5 +155,6 @@ def read_econet_xattrs(filepath: Union[str, Path]) -> AcornMeta | None:
     return AcornMeta(
         load_address=int(load, 16),
         exec_address=int(exec_val, 16) if exec_val is not None else None,
-        access=int(perm_val, 16) if perm_val is not None else None,
+        # PiEB's perm byte has its own layout (lock and execute swapped).
+        access=int(PIEB_ACCESS.to_canonical(int(perm_val, 16))) if perm_val is not None else None,
     )

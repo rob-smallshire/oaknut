@@ -695,7 +695,8 @@ class TestFormatTradInfLine:
 
 class TestFormatPibridgeInfLine:
     def test_basic_format(self):
-        line = format_pieb_inf_line(0xFFFF0E23, 0xFFFF0E23, 0x15, owner=0)
+        # Canonical LR/R (0x19) is PiEB perm 0x15 (lock and execute swapped).
+        line = format_pieb_inf_line(0xFFFF0E23, 0xFFFF0E23, 0x19, owner=0)
         assert line == "0 ffff0e23 ffff0e23 15"
 
     def test_with_owner(self):
@@ -703,8 +704,9 @@ class TestFormatPibridgeInfLine:
         assert line == "5 ffff0e10 ffff0e10 3"
 
     def test_default_perm_for_none_attr(self):
+        # PiEB's own default for a new file, WR/R.
         line = format_pieb_inf_line(0xFFFF0E10, 0xFFFF0E10, attr=None)
-        assert line == "0 ffff0e10 ffff0e10 17"
+        assert line == "0 ffff0e10 ffff0e10 13"
 
     def test_zero_addresses(self):
         line = format_pieb_inf_line(0, 0, 0, owner=0)
@@ -921,7 +923,9 @@ class TestNetUtilsZip:
         # junk in bits 8-31 (the archive was not produced by genuine
         # RISC OS tooling). The parser must mask to the low byte so
         # the written perm is exactly two hex digits.
-        assert get_xattr(out / "Free", "user.econet_perm") == b"5D"
+        # The SparkFS attribute 0x5D (R|E|L|PR plus bit 6) in PiEB's layout:
+        # R|L|PR, since PiEB keeps execute only as execute-only (#70).
+        assert get_xattr(out / "Free", "user.econet_perm") == b"15"
 
     @requires_xattr
     def test_extract_xattr_acorn(self, tmp_path):

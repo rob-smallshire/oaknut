@@ -16,6 +16,7 @@ from pathlib import Path
 from oaknut.file.access import Access, parse_access
 from oaknut.file.formats import SOURCE_INF_PIEB, SOURCE_INF_TRAD
 from oaknut.file.meta import AcornMeta
+from oaknut.file.pieb import PIEB_ACCESS, PIEB_DEFAULT_PERM
 
 
 def _is_hex(s: str) -> bool:
@@ -59,7 +60,8 @@ def parse_inf_line(line: str) -> tuple[str, AcornMeta] | None:
         # PiEconetBridge: owner load exec perm
         load_address = int(parts[1], 16)
         exec_address = int(parts[2], 16)
-        attr = int(parts[3], 16)
+        # PiEB's perm byte has its own layout (lock and execute swapped).
+        attr = int(PIEB_ACCESS.to_canonical(int(parts[3], 16)))
         meta = AcornMeta(load_address=load_address, exec_address=exec_address, access=attr)
         meta.filetype = meta.infer_filetype()
         return SOURCE_INF_PIEB, meta
@@ -124,9 +126,11 @@ def format_pieb_inf_line(
 ) -> str:
     """Format a PiEconetBridge INF line.
 
-    Returns a string like ``"0 ffffdd00 ffffdd00 17"``.
+    *attr* is canonical access, written in PiEB's own ``perm`` layout;
+    ``None`` gives PiEB's default for a new file, ``WR/R``. Returns a
+    string like ``"0 ffffdd00 ffffdd00 13"``.
     """
-    perm = attr if attr is not None else 0x17
+    perm = PIEB_DEFAULT_PERM if attr is None else PIEB_ACCESS.from_canonical(Access(attr))
     return f"{owner:x} {load_address:x} {exec_address:x} {perm:x}"
 
 

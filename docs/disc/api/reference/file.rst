@@ -88,6 +88,14 @@ will hold.
 
 .. autofunction:: oaknut.file.translate_access
 
+PiEconetBridge stores permissions in its own ``perm`` byte, whose lock and
+execute bits are swapped relative to the Acorn byte. The PiEB INF and
+``user.econet_*`` xattr formats translate through this convention:
+
+.. autoclass:: oaknut.file.PiEconetBridgeAccessConvention
+
+.. autodata:: oaknut.file.PIEB_ACCESS
+
 
 INF sidecars
 ------------

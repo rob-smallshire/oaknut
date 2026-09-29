@@ -51,8 +51,9 @@ class TestAccessFlags:
         assert Access.PW in flags
         assert int(flags) == 0x33
 
-    def test_pieb_default_perm(self):
-        """PiEconetBridge default perm 0x17 = PR | E | W | R."""
+    def test_hex_17_as_an_acorn_byte(self):
+        """As an Acorn access byte, 0x17 is PR | E | W | R. (PiEconetBridge
+        reads the same number differently — see test_pieb_access.py.)"""
         flags = Access(0x17)
         assert Access.R in flags
         assert Access.W in flags

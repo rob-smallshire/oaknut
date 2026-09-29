@@ -62,6 +62,7 @@ from oaknut.file.inf import (
 )
 from oaknut.file.meta import AcornMeta
 from oaknut.file.path import AcornPath, resolving_io
+from oaknut.file.pieb import PIEB_ACCESS, PiEconetBridgeAccessConvention
 from oaknut.file.stat import Stat
 from oaknut.file.text_io import decode_text, encode_text
 from oaknut.file.xattr import (
@@ -77,6 +78,8 @@ __all__ = [
     "AccessConvention",
     "DIRECTORY_CONTEXT",
     "FILE_CONTEXT",
+    "PIEB_ACCESS",
+    "PiEconetBridgeAccessConvention",
     "AcornMeta",
     "AcornPath",
     "resolving_io",

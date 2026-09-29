@@ -1,9 +1,9 @@
 """Acorn file access attributes.
 
 The ``Access`` IntFlag enum represents the standard Acorn OSFILE
-attribute byte. Bit values match the filing system API convention,
-ensuring compatibility with PiEconetBridge ``perm`` and the
-``user.acorn.attr`` extended attribute.
+attribute byte, as stored in the ``user.acorn.attr`` extended attribute
+and traditional INF sidecars. PiEconetBridge's ``perm`` byte uses a
+different layout; see :mod:`oaknut.file.pieb`.
 """
 
 from __future__ import annotations

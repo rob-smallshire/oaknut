@@ -81,11 +81,11 @@ class TestReadAcornXattrs:
 
     def test_read_falls_back_to_econet(self, host_file):
         """When user.acorn.* is absent, fall back to user.econet_*."""
-        write_econet_xattrs(host_file, load_address=0xFFFFDD00, exec_address=0xFFFFDD00, attr=0x17)
+        write_econet_xattrs(host_file, load_address=0xFFFFDD00, exec_address=0xFFFFDD00, attr=0x19)
         meta = read_acorn_xattrs(host_file)
         assert meta is not None
         assert meta.load_address == 0xFFFFDD00
-        assert meta.access == 0x17
+        assert meta.access == 0x19
 
     def test_acorn_takes_precedence_over_econet(self, host_file):
         """When both are present, user.acorn.* wins."""
@@ -108,16 +108,16 @@ class TestWriteEconetXattrs:
             host_file,
             load_address=0x1900,
             exec_address=0x8023,
-            attr=0x17,
+            attr=0x1B,
         )
         meta = read_econet_xattrs(host_file)
-        assert meta.access == 0x17
+        assert meta.access == 0x1B  # locked survives the PiEB layout (#70)
 
     def test_default_perm(self, host_file):
-        """When attr is None, write_econet_xattrs uses 0x17 default."""
+        """When attr is None, the file gets PiEB's default for a new file, WR/R."""
         write_econet_xattrs(host_file, load_address=0x1900, exec_address=0x8023)
         meta = read_econet_xattrs(host_file)
-        assert meta.access == 0x17
+        assert meta.access == 0x13
 
 
 class TestReadEconetXattrs:
@@ -139,11 +139,17 @@ class TestRoundTrip:
         assert meta.access == 0x0B
 
     def test_econet_round_trip(self, host_file):
-        write_econet_xattrs(host_file, load_address=0xFFFFDD00, exec_address=0x12345, attr=0x17)
+        write_econet_xattrs(host_file, load_address=0xFFFFDD00, exec_address=0x12345, attr=0x1B)
         meta = read_econet_xattrs(host_file)
         assert meta.load_address == 0xFFFFDD00
         assert meta.exec_address == 0x12345
-        assert meta.access == 0x17
+        assert meta.access == 0x1B
+
+    def test_econet_execute_alongside_read_is_not_kept(self, host_file):
+        # PiEB can store execute only as "execute only" (run-only), so E
+        # beside R does not survive the PiEB layout.
+        write_econet_xattrs(host_file, load_address=0x1900, exec_address=0x1900, attr=0x17)
+        assert read_econet_xattrs(host_file).access == 0x13
 
     def test_access_flags_round_trip(self, host_file):
         flags = Access.R | Access.W | Access.L
