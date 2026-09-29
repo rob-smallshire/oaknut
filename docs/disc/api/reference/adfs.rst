@@ -76,6 +76,19 @@ the image in a 22-byte ``.dsc`` sidecar, or a richer BeebSCSI/Pi1MHz
 .. autofunction:: oaknut.adfs.write_cfg
 
 
+Access
+------
+
+An ADFS directory entry carries owner read, write, execute and locked
+bits and public read and write bits. The ADFS access convention maps
+them to and from the :class:`~oaknut.file.Access` word (see
+:class:`~oaknut.file.AccessConvention`).
+
+.. autoclass:: oaknut.adfs.ADFSAccessConvention
+
+.. autodata:: oaknut.adfs.ADFS_ACCESS
+
+
 See also
 --------
 

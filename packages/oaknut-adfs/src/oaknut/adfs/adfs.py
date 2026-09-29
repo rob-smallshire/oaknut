@@ -23,6 +23,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Iterator, Union
 
 import oaknut.basic as basic
+from oaknut.adfs.access import ADFS_ACCESS
 from oaknut.adfs.directory import (
     ADFS_BIG_NAME_GRAMMAR,
     ADFS_NAME_GRAMMAR,
@@ -63,7 +64,7 @@ from oaknut.adfs.new_map import (
 )
 from oaknut.discimage.surface import DiscImage, SurfaceSpec
 from oaknut.discimage.unified_disc import UnifiedDisc
-from oaknut.file import AcornMeta, AcornPath, MetaFormat, resolving_io
+from oaknut.file import AccessContext, AcornMeta, AcornPath, MetaFormat, resolving_io
 from oaknut.file.host_bridge import (
     DEFAULT_EXPORT_META_FORMAT,
     DEFAULT_IMPORT_META_FORMATS,
@@ -562,21 +563,23 @@ class ADFSStat:
 
     @property
     def access(self) -> Access:
-        """Access flags as an ``Access`` IntFlag, suitable for ``chmod()``."""
-        flags = Access(0)
-        if self.owner_read:
-            flags |= Access.R
-        if self.owner_write:
-            flags |= Access.W
-        if self.owner_execute:
-            flags |= Access.E
-        if self.locked:
-            flags |= Access.L
-        if self.public_read:
-            flags |= Access.PR
-        if self.public_write:
-            flags |= Access.PW
-        return flags
+        """Access flags as an ``Access`` IntFlag, suitable for ``chmod()``.
+
+        Read through the ADFS access convention.
+        """
+        return ADFS_ACCESS.to_canonical(
+            _ADFSRawAttributes(
+                owner_read=self.owner_read,
+                owner_write=self.owner_write,
+                locked=self.locked,
+                directory=self.is_directory,
+                owner_execute=self.owner_execute,
+                public_read=self.public_read,
+                public_write=self.public_write,
+                public_execute=self.public_execute,
+                private=False,
+            )
+        )
 
     @property
     def date(self) -> None:
@@ -589,12 +592,12 @@ def _coerce_access_to_locked(access: "Access | None") -> bool:
 
     write_bytes only sets the locked bit at the catalogue-write
     layer; richer flags (R/W/E/PR/PW) are applied later via
-    :meth:`chmod`. ``None`` (the default) maps to unlocked; an
-    :class:`Access` value is masked against ``Access.L``.
+    :meth:`chmod`. ``None`` (the default) maps to unlocked; otherwise
+    the lock bit is the one the ADFS access convention writes.
     """
     if access is None:
         return False
-    return bool(int(access) & int(Access.L))
+    return ADFS_ACCESS.from_canonical(Access(int(access))).locked
 
 
 def _entry_to_stat(entry: _ADFSDirectoryEntry) -> ADFSStat:
@@ -3196,18 +3199,12 @@ class ADFS:
         if existing is None:
             raise ADFSPathError(f"'{filename}' not found")
 
-        # Replace R, W, E, L, PR, PW from the Access flags;
-        # preserve D, public_execute, and private from the existing entry
-        updated_attrs = _ADFSRawAttributes(
-            owner_read=bool(access & Access.R),
-            owner_write=bool(access & Access.W),
-            locked=bool(access & Access.L),
-            directory=existing.attributes.directory,
-            owner_execute=bool(access & Access.E),
-            public_read=bool(access & Access.PR),
-            public_write=bool(access & Access.PW),
-            public_execute=existing.attributes.public_execute,
-            private=existing.attributes.private,
+        # The convention replaces R, W, E, L, PR, PW and keeps D,
+        # public_execute and private from the existing entry.
+        updated_attrs = ADFS_ACCESS.from_canonical(
+            Access(int(access)),
+            AccessContext(is_directory=existing.attributes.directory),
+            current=existing.attributes,
         )
 
         updated_entry = _ADFSDirectoryEntry(

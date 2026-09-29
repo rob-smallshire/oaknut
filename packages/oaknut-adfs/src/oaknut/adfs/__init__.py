@@ -7,6 +7,7 @@ medium (M), and large (L) floppy layouts plus hard-disc images.
 
 __version__ = "12.19.0"
 
+from oaknut.adfs.access import ADFS_ACCESS, ADFSAccessConvention
 from oaknut.adfs.adfs import (
     ADFS,
     ADFS_D,
@@ -30,6 +31,8 @@ from oaknut.adfs.adfs import (
 )
 
 __all__ = [
+    "ADFS_ACCESS",
+    "ADFSAccessConvention",
     "ADFS",
     "ADFS_D",
     "ADFS_E",

@@ -16,6 +16,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 from datetime import datetime, timedelta
 
+from oaknut.adfs.access import ADFS_ACCESS
 from oaknut.adfs.adfs import ADFS as _ADFSDisc
 from oaknut.adfs.directory import ADFS_NAME_GRAMMAR
 from oaknut.adfs.exceptions import ADFSError
@@ -121,6 +122,9 @@ class _ADFSMount(AcornWildcards):
     Implements the core plus ``HierarchicalDirectories``, ``AcornMetadata``,
     ``Titled``, ``Bootable``, ``FreeSpace`` and ``RegionHost``.
     """
+
+    #: How this filing system's access maps to and from the canonical word.
+    access_convention = ADFS_ACCESS
 
     #: ADFS load/exec are full 32-bit fields; display them as eight hex
     #: digits, as RISC OS ``*Info`` does.
