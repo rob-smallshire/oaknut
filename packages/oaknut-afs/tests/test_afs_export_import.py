@@ -54,12 +54,14 @@ class TestImportFile:
     def test_import_with_inf_sidecar_round_trips_metadata(self, tmp_path: Path) -> None:
         adfs = build_synthetic_adfs_with_afs()
         afs = adfs.afs_partition
-        host = tmp_path / "Hello"
+        # (The synthetic image already holds a locked "Hello", which may not be
+        # overwritten, so import under another name.)
+        host = tmp_path / "Greeting"
         host.write_bytes(b"Hello AFS")
         inf = host.with_suffix(host.suffix + ".inf")
         # Traditional INF: filename load exec length access
-        inf.write_text("Hello 00001900 00008023 00000009 03\n")
-        path = afs.root / "Hello"
+        inf.write_text("Greeting 00001900 00008023 00000009 03\n")
+        path = afs.root / "Greeting"
         path.import_file(host)
         assert path.read_bytes() == b"Hello AFS"
         st = path.stat()

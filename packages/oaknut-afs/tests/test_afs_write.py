@@ -221,16 +221,31 @@ class TestTouch:
     def test_touch_default_exist_ok_is_true(self) -> None:
         adfs = build_synthetic_adfs_with_afs()
         afs = adfs.afs_partition
-        (afs.root / "Hello").write_bytes(b"keep")
-        (afs.root / "Hello").touch()
-        assert (afs.root / "Hello").read_bytes() == b"keep"
+        (afs.root / "Kept").write_bytes(b"keep")
+        (afs.root / "Kept").touch()
+        assert (afs.root / "Kept").read_bytes() == b"keep"
 
     def test_touch_exist_ok_false_raises_when_file_exists(self) -> None:
         adfs = build_synthetic_adfs_with_afs()
         afs = adfs.afs_partition
-        (afs.root / "Hello").write_bytes(b"x")
+        (afs.root / "Existing").write_bytes(b"x")
         with pytest.raises(AFSDirectoryEntryExistsError):
-            (afs.root / "Hello").touch(exist_ok=False)
+            (afs.root / "Existing").touch(exist_ok=False)
+
+    def test_touch_updates_a_locked_file(self) -> None:
+        # Touching changes only the date, so a locked file allows it (#62).
+        from oaknut.afs.types import AfsDate
+        from oaknut.file import Access
+
+        adfs = build_synthetic_adfs_with_afs()
+        afs = adfs.afs_partition
+        hello = afs.root / "Hello"  # the synthetic image's file, locked LR/R
+        assert hello.stat().access & Access.L
+        before = hello.read_bytes()
+        hello.touch(date=AfsDate(datetime.date(1990, 6, 1)))
+        assert hello.read_bytes() == before
+        assert hello.stat().access & Access.L
+        assert hello.directory_entry().date == AfsDate(datetime.date(1990, 6, 1))
 
     def test_touch_raises_when_path_is_existing_directory(self) -> None:
         adfs = build_synthetic_adfs_with_afs()

@@ -44,6 +44,7 @@ from oaknut.afs.directory import (
 from oaknut.afs.exceptions import (
     AFSDirectoryFullError,
     AFSError,
+    AFSFileLockedError,
     AFSInfoSectorError,
     AFSPathError,
 )
@@ -930,6 +931,9 @@ class AFS:
             existing = parent_dir[name]
             if existing.is_directory:
                 raise AFSPathError(f"cannot overwrite directory {name!r} with a file")
+            if existing.access.is_locked:
+                # A locked file may not be overwritten, as with *SAVE.
+                raise AFSFileLockedError(f"{name!r} is locked (L bit set)")
             self._delete_object(existing.sin)
             updated_parent = _delete_entry_bytes(parent_raw, name)
             self._write_object_bytes(parent_dir_sin, updated_parent)

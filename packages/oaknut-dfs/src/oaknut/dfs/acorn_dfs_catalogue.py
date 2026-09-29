@@ -10,7 +10,7 @@ from oaknut.dfs.catalogue import (
     ParsedFilename,
     expand_host_address,
 )
-from oaknut.dfs.exceptions import CatalogFullError, DFSValidationError
+from oaknut.dfs.exceptions import CatalogFullError, DFSValidationError, FileLocked
 from oaknut.discimage import BYTES_PER_SECTOR
 from oaknut.discimage.surface import Surface
 
@@ -410,7 +410,7 @@ class AcornDFSCatalogue(Catalogue):
             raise FileNotFoundError(f"File not found: {filename}")
 
         if entry.locked:
-            raise PermissionError(f"File is locked: {filename}")
+            raise FileLocked(f"File is locked: {filename}")
 
         # Get all files except the one to remove
         target = _name_key(filename)

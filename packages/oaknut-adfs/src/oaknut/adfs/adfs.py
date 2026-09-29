@@ -2899,6 +2899,10 @@ class ADFS:
                 f"Directory full: maximum {self._dir_format.max_entries} entries"
             )
 
+        # A locked file may not be overwritten, as with *SAVE ("Locked").
+        if existing is not None and existing.attributes.locked:
+            raise ADFSFileLockedError(f"'{filename}' is locked")
+
         # Free the old data (honouring fragment sharing), then allocate and
         # write the new — possibly sharing a small file into a sibling fragment.
         if existing is not None:

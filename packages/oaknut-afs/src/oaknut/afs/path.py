@@ -451,15 +451,9 @@ class AFSPath(AcornPath):
                 raise AFSPathError(f"{self.path!r} is a directory, cannot touch")
             if not exist_ok:
                 raise AFSDirectoryEntryExistsError(f"file {self.path!r} already exists")
-            new_date = date if date is not None else AfsDate(datetime.date.today())
-            entry = self.directory_entry()
-            self.write_bytes(
-                self.read_bytes(),
-                load_address=entry.load_address,
-                exec_address=entry.exec_address,
-                access=entry.access,
-                date=new_date,
-            )
+            # Only the date changes, so rewrite the entry rather than the
+            # data; a locked file can be touched like any other.
+            self.set_date(date if date is not None else AfsDate(datetime.date.today()))
             return
         if date is None:
             date = AfsDate(datetime.date.today())

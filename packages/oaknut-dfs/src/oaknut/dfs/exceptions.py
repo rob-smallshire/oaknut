@@ -77,11 +77,13 @@ class DiscFullError(DFSError):
     _exit_code = ExitCode.CANT_CREATE
 
 
-class FileLocked(DFSError):
+class FileLocked(DFSError, PermissionError):
     """Operation not permitted on locked file.
 
-    Raised when attempting to delete, rename, or modify a file
-    that has the locked attribute set.
+    Raised when attempting to delete, rename, or overwrite a file
+    that has the locked attribute set. It is also a
+    :class:`PermissionError`, which the catalogue raised before it used
+    this class.
     """
 
     _exit_code = ExitCode.NO_PERM
