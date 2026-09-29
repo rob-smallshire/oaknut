@@ -26,14 +26,14 @@ class TestParseInfLineTraditional:
     def test_with_locked_letter(self):
         """Handle the 'L' marker used by some ADFS exporters."""
         source, meta = parse_inf_line("SECRET   00001900 00008023 00000100 L")
-        assert meta.access is not None
-        assert meta.access & 0x08  # L bit set
+        # A bare lock marker says only "locked", which on the DFS-era tools
+        # that write it also means read-only: LR (#68).
+        assert meta.access == 0x09
 
     def test_with_locked_word(self):
         """Handle the 'Locked' marker used by some DFS exporters."""
         source, meta = parse_inf_line("$.HELLO 00001900 00008023 00000100 Locked")
-        assert meta.access is not None
-        assert meta.access & 0x08  # L bit set
+        assert meta.access == 0x09  # LR
 
     def test_with_symbolic_access_wr(self):
         # DFS-style symbolic access in the attribute field. The valid

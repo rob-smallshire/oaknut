@@ -77,9 +77,11 @@ def _parse_trad_inf(parts: list[str]) -> tuple[str, AcornMeta] | None:
     if len(parts) > 4:
         token = parts[4]
         if token == "L" or token == "Locked":
-            # A bare lock marker means a locked-but-normal file (LWR), not
-            # a file with only the lock bit and no read/write.
-            attr = int(Access.LWR)
+            # A bare lock marker says only that the file is locked. On the
+            # DFS-era tools that write it, locked also means read-only, so
+            # it reads as LR (&09) — not a file with only the lock bit and
+            # no read access.
+            attr = int(Access.L | Access.R)
         else:
             # The attribute may be a hex byte (03) or a symbolic access
             # string (WR, LWR/R). parse_access handles both; an attr we
