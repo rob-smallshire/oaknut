@@ -57,16 +57,15 @@ def _access(compound_path: str) -> int:
 #     (source access, access after cp to dfs, adfs, afs, romfs)
 _CP_MATRIX = {
     ("dfs", None): (0x03, {"dfs": 0x03, "adfs": 0x03, "afs": 0x03, "romfs": 0x00}),
-    # A locked DFS file reads as LWR (&0B); it should be LR (&09) — #57.
-    ("dfs", "L"): (0x0B, {"dfs": 0x0B, "adfs": 0x0B, "afs": 0x0B, "romfs": 0x00}),
+    # A locked DFS file is read-only too: LR (&09), not LWR (#57).
+    ("dfs", "L"): (0x09, {"dfs": 0x09, "adfs": 0x09, "afs": 0x09, "romfs": 0x00}),
     ("adfs", "WR/R"): (0x13, {"dfs": 0x03, "adfs": 0x13, "afs": 0x13, "romfs": 0x00}),
-    ("adfs", "LWR/R"): (0x1B, {"dfs": 0x0B, "adfs": 0x1B, "afs": 0x1B, "romfs": 0x00}),
+    ("adfs", "LWR/R"): (0x1B, {"dfs": 0x09, "adfs": 0x1B, "afs": 0x1B, "romfs": 0x00}),
     ("adfs", "WR/WR"): (0x33, {"dfs": 0x03, "adfs": 0x33, "afs": 0x33, "romfs": 0x00}),
     # AFS has no execute bit, so E is lost on the way in.
     ("adfs", "EWR/"): (0x07, {"dfs": 0x03, "adfs": 0x07, "afs": 0x03, "romfs": 0x00}),
     ("afs", "WR/"): (0x03, {"dfs": 0x03, "adfs": 0x03, "afs": 0x03, "romfs": 0x00}),
-    # Arriving on DFS, LR/R reads back as LWR — #57.
-    ("afs", "LR/R"): (0x19, {"dfs": 0x0B, "adfs": 0x19, "afs": 0x19, "romfs": 0x00}),
+    ("afs", "LR/R"): (0x19, {"dfs": 0x09, "adfs": 0x19, "afs": 0x19, "romfs": 0x00}),
     # An ordinary ROMFS file reads as no access at all, and lands on ADFS
     # and AFS unreadable (&00); a run-only file loses run-only there — #60.
     ("romfs", None): (0x00, {"dfs": 0x03, "adfs": 0x00, "afs": 0x00, "romfs": 0x00}),

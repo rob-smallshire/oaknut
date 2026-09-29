@@ -13,11 +13,12 @@ from oaknut.file import FILE_CONTEXT, Access, AccessContext, AccessConvention
 
 
 class AcornDFSAccessConvention(AccessConvention[bool]):
-    """DFS access: a lone locked flag.
+    """DFS access: a lone locked flag, which also means read-only.
 
-    Reading gives owner read and write, plus ``L`` when locked. Writing
-    keeps only the lock bit (``attr AND &08``); DFS has nowhere to store
-    the rest.
+    Reading gives owner read and write for an unlocked file (``WR``,
+    ``&03``) and owner read with ``L`` for a locked one (``LR``, ``&09``):
+    ``access%=(access% OR 3) EOR (access% DIV 4)``. Writing keeps only the
+    lock bit (``attr AND &08``); DFS has nowhere to store the rest.
     """
 
     name = "acorn-dfs"
@@ -29,10 +30,9 @@ class AcornDFSAccessConvention(AccessConvention[bool]):
     )
 
     def to_canonical(self, native: bool, context: AccessContext = FILE_CONTEXT) -> Access:
-        access = Access.R | Access.W
         if native:
-            access |= Access.L
-        return access
+            return Access.L | Access.R
+        return Access.R | Access.W
 
     def from_canonical(
         self,

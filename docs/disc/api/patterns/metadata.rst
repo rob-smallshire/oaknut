@@ -46,6 +46,22 @@ slot. The :func:`~oaknut.file.parse_access` and matching
 helpers convert to and from the textual forms (``"LWR/R"``, ``"0B"``,
 etc.) that show up in INF sidecars and CLI output.
 
+Each filing system stores access its own way, and its access convention
+(see :class:`~oaknut.file.AccessConvention`) maps it to and from this
+word:
+
+- **DFS** records only a lock bit, which also means read-only: an
+  unlocked file reads as ``WR`` (``&03``) and a locked one as ``LR``
+  (``&09``). Writing keeps only the lock bit.
+- **ADFS** stores owner read, write, execute and locked, and public read
+  and write, each as its own bit.
+- **AFS** stores owner and public read and write and the lock bit in its
+  own byte layout (:class:`~oaknut.afs.AFSAccess`); it has no execute bit.
+- **ROMFS** records only whether a file is ``*RUN``-only.
+
+Copying a file from one filing system to another keeps as much of its
+access as the destination can store.
+
 
 BootOption
 ----------

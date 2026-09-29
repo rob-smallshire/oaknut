@@ -98,10 +98,11 @@ def _coerce_access_to_locked(access: "Access | None") -> bool:
 class DFSStat:
     """DFS file/directory metadata, analogous to os.stat_result.
 
-    Conforms to :class:`oaknut.file.Stat` — :attr:`access` is
-    synthesised from :attr:`locked` plus DFS's implicit always-WR
-    base, and :attr:`date` is always ``None`` because DFS does not
-    store per-file date stamps.
+    Conforms to :class:`oaknut.file.Stat` — :attr:`access` is read
+    from :attr:`locked` by the DFS access convention (``WR`` unlocked,
+    ``LR`` locked, since a locked DFS file is also read-only), and
+    :attr:`date` is always ``None`` because DFS does not store per-file
+    date stamps.
     """
 
     length: int

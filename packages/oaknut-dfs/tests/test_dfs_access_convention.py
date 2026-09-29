@@ -17,8 +17,8 @@ def test_is_an_access_convention():
     ("locked", "expected"),
     [
         (False, Access.R | Access.W),
-        # Should be L|R: the DFS lock bit also means read-only — #57.
-        (True, Access.L | Access.R | Access.W),
+        # The DFS lock bit also means read-only (BeebWiki; J.G. Harston).
+        (True, Access.L | Access.R),
     ],
 )
 def test_to_canonical(locked, expected):
