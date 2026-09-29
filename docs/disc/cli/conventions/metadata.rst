@@ -166,7 +166,61 @@ explicit load address::
     disc put 'hello.ssd:$.PROG' build/prog.bin --load 0x1900 --exec 0x1900
 
 These override whatever the chosen ``--meta-format`` would have
-read.
+read. ``--access`` does the same for the file's access; see
+`File access`_ below.
+
+
+File access
+-----------
+
+Access is written as an *access string*: the owner's rights to the left
+of a ``/``, the public's (other users of a file server) to the right.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 10 90
+
+   * - Letter
+     - Meaning
+   * - ``R``
+     - may be read (and ``*RUN``)
+   * - ``W``
+     - may be written
+   * - ``E``
+     - execute (owner only)
+   * - ``L``
+     - locked: may not be deleted, renamed or overwritten (owner only)
+   * - ``X``
+     - ``*RUN``-only (ROMFS copy protection; owner only)
+
+So ``WR/R`` is owner read and write with public read, and ``LR/`` a
+locked, read-only file other users cannot read. The same value can be
+given as the hex access byte (``0x13``, ``19``), which ``disc ls -H``
+displays.
+
+Each filing system stores what it can. DFS records only a lock bit,
+which also means read-only, so a DFS file reads as ``WR/`` or ``LR/``
+and writing to DFS keeps only ``L``. ADFS stores owner ``R``, ``W``,
+``E`` and ``L`` and public ``R`` and ``W``; AFS the same without ``E``;
+ROMFS only ``X``. A copy between filing systems keeps as much as the
+destination can store — so a file copied from DFS arrives with no public
+access.
+
+To change access:
+
+- ``disc chmod`` (Acorn alias ``*ACCESS``) sets it on existing files,
+  with wildcards and ``-r``; ``--dry-run`` lists what would change.
+- ``--access`` on ``disc cp`` and ``disc put`` sets it as the files are
+  written.
+
+Both take an absolute string (``R/R``, ``0x19``), which replaces the
+access, or an incremental one starting with ``+`` or ``-``, which edits
+it: ``+/R`` grants public read, ``-W`` removes owner write, and clauses
+combine (``+L-W``). On a Level 3 File Server, binaries other users run —
+the contents of ``$.Library``, shared games — need public read::
+
+    disc cp -r 'game.dsd::0.G' 'scsi0.dat:afs:$.EliteGame' --access +/R
+    disc chmod 'scsi0.dat:afs:$.Library.Elite*' R/R
 
 
 Where the in-image name comes from

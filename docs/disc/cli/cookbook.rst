@@ -568,7 +568,7 @@ initialisation::
 ``NAME`` matches a ``--user`` or a built-in; set a password later with
 ``disc afs passwd IMAGE NAME --password VALUE``.
 
-**7. Copy files into a user's directory.**
+**7. Copy files into a user's directory and the library.**
 
 .. cli-example:: l3fs_disc
    :section: populate_afs
@@ -580,6 +580,14 @@ cp`` creates ``Saves`` on the way. The selector ends with a colon:
 ``scsi0.dat:afs.RJS.Saves.MAX`` names an ADFS path whose first
 directory is called ``afs``, and ``disc`` warns when it sees one (see
 :doc:`conventions/paths`).
+
+A file copied from DFS arrives owner-only (``WR/``): DFS has no public
+access to carry across. That suits a user's own files, but anything
+other users run — a library command, a shared game — needs public read,
+or they get "Insufficient access". ``--access R/R`` sets it as the file
+is copied into ``$.Library``; ``disc chmod 'scsi0.dat:afs:$.Library.*'
+R/R`` does the same afterwards (see
+:doc:`conventions/metadata`, *File access*).
 
 **8. Verify the dual-partition shape and walk the disc.**
 
