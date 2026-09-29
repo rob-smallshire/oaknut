@@ -2194,6 +2194,8 @@ def _destination_access(mount, access, *, is_directory: bool = False, override=N
     """
     from oaknut.file import Access, AccessContext, translate_access
 
+    from .console import print_warning
+
     convention = getattr(mount, "access_convention", None)
     if convention is None:
         result = Access(access)
@@ -2204,6 +2206,7 @@ def _destination_access(mount, access, *, is_directory: bool = False, override=N
             destination=convention,
             context=AccessContext(is_directory=is_directory),
             override=override,
+            warn=lambda message: print_warning(f"warning: {message}"),
         )
     )
 

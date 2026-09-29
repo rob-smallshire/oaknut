@@ -109,3 +109,60 @@ class TestTranslateAccess:
             translate_access(Access.WR, destination=LockOnly(), override=parse_access_spec("+/R"))
             == Access.WR
         )
+
+
+class RunOnlyCapable(AccessConvention[int]):
+    """A toy that can store execute, so run-only survives."""
+
+    name = "toy-execute"
+    family = "toy"
+    representable = Access.R | Access.W | Access.E | Access.L
+    source = "test double"
+
+    def to_canonical(self, native: int, context: AccessContext = FILE_CONTEXT) -> Access:
+        return Access(native) & self.representable
+
+    def from_canonical(
+        self, access: Access, context: AccessContext = FILE_CONTEXT, current: int | None = None
+    ) -> int:
+        return int(access & self.representable)
+
+
+class TestRunOnlyWithoutExecute:
+    """A destination that cannot store execute makes a run-only file readable (#69)."""
+
+    def test_run_only_becomes_readable(self):
+        warnings = []
+        result = translate_access(Access.E, destination=OwnerPublic(), warn=warnings.append)
+        assert result == Access.R
+        assert len(warnings) == 1
+        assert "run-only" in warnings[0]
+
+    def test_other_bits_are_kept(self):
+        result = translate_access(Access.E | Access.L | Access.PR, destination=OwnerPublic())
+        assert result == Access.R | Access.L | Access.PR
+
+    def test_run_only_survives_where_execute_is_stored(self):
+        warnings = []
+        result = translate_access(Access.E, destination=RunOnlyCapable(), warn=warnings.append)
+        assert result == Access.E
+        assert warnings == []
+
+    def test_readable_files_are_untouched_and_silent(self):
+        warnings = []
+        result = translate_access(
+            Access.E | Access.R, destination=OwnerPublic(), warn=warnings.append
+        )
+        assert result == Access.R
+        assert warnings == []
+
+    def test_an_explicit_run_only_override_is_treated_the_same(self):
+        warnings = []
+        result = translate_access(
+            Access.WR,
+            destination=OwnerPublic(),
+            override=parse_access_spec("E"),
+            warn=warnings.append,
+        )
+        assert result == Access.R
+        assert len(warnings) == 1

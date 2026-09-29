@@ -207,7 +207,10 @@ and writing to DFS keeps only ``L``. ADFS stores owner ``R``, ``W``,
 ``E`` and ``L`` and public ``R`` and ``W``; AFS the same without ``E``;
 ROMFS whether a file is readable (``R/``) or ``*RUN``-only (``E/``). A copy between filing systems keeps as much as the
 destination can store — so a file copied from DFS arrives with no public
-access.
+access. A ``*RUN``-only file (``E/``) copied to a filing system that cannot
+store execute — AFS, DFS, or a New-format (D, E, F) ADFS disc — becomes
+readable (``R/``) there instead, and ``disc`` warns that the copy protection
+was not kept.
 
 To change access:
 

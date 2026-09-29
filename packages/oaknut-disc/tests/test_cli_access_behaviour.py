@@ -64,14 +64,15 @@ _CP_MATRIX = {
     ("adfs", "WR/WR"): (0x33, {"dfs": 0x03, "adfs": 0x33, "afs": 0x33, "romfs": 0x01}),
     # AFS has no execute bit, so E is lost on the way in.
     ("adfs", "EWR/"): (0x07, {"dfs": 0x03, "adfs": 0x07, "afs": 0x03, "romfs": 0x01}),
-    # ADFS E without R is run-only, which ROMFS keeps.
-    ("adfs", "E/"): (0x04, {"dfs": 0x03, "adfs": 0x04, "afs": 0x00, "romfs": 0x04}),
+    # ADFS E without R is run-only, which ROMFS keeps. AFS and DFS cannot
+    # store execute, so the file becomes readable there, with a warning (#69).
+    ("adfs", "E/"): (0x04, {"dfs": 0x03, "adfs": 0x04, "afs": 0x01, "romfs": 0x04}),
     ("afs", "WR/"): (0x03, {"dfs": 0x03, "adfs": 0x03, "afs": 0x03, "romfs": 0x01}),
     ("afs", "LR/R"): (0x19, {"dfs": 0x09, "adfs": 0x19, "afs": 0x19, "romfs": 0x01}),
     # An ordinary ROMFS file is readable. A run-only one (E without R) stays
-    # run-only on ADFS; AFS has no execute bit, so it arrives with no access.
+    # run-only on ADFS; AFS has no execute bit, so it becomes readable (#69).
     ("romfs", None): (0x01, {"dfs": 0x03, "adfs": 0x01, "afs": 0x01, "romfs": 0x01}),
-    ("romfs", "E"): (0x04, {"dfs": 0x03, "adfs": 0x04, "afs": 0x00, "romfs": 0x04}),
+    ("romfs", "E"): (0x04, {"dfs": 0x03, "adfs": 0x04, "afs": 0x01, "romfs": 0x04}),
 }
 
 
@@ -163,3 +164,21 @@ def test_put_defaults_addresses_to_zero_from_stdin_and_host_files(tmp_path, kind
         with resolve_mount(f"{destination}:{_inner(kind, leaf)}") as resolved:
             meta = resolved.mount.acorn_meta(resolved.path)
         assert (meta.load_address, meta.exec_address) == (0, 0), leaf
+
+
+@pytest.mark.parametrize(("kind", "disc_format"), [("afs", None), ("adfs", "f")])
+def test_cp_of_a_run_only_file_warns_where_execute_cannot_be_stored(tmp_path, kind, disc_format):
+    source = _image(tmp_path, "romfs", "source")
+    _run("put", f"{source}:GAME", "-", input="game")
+    _run("chmod", f"{source}:GAME", "E")
+    if disc_format is None:
+        destination = _image(tmp_path, kind, "destination")
+        target = f"{destination}:{_inner(kind, 'GAME')}"
+    else:
+        destination = tmp_path / "destination.adf"
+        _run("create", destination, "--geometry", disc_format)
+        target = f"{destination}:$.GAME"
+    result = CliRunner().invoke(cli, ["cp", f"{source}:GAME", target])
+    assert result.exit_code == 0, result.output
+    assert "run-only" in result.stderr
+    assert _access(target) == 0x01

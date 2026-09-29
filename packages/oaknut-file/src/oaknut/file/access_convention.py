@@ -107,19 +107,33 @@ def translate_access(
     context: AccessContext = FILE_CONTEXT,
     grant_public: bool = False,
     override: Callable[[Access], Access] | None = None,
+    warn: Callable[[str], None] | None = None,
 ) -> Access:
     """The access a file copied with *access* will hold on *destination*.
 
     *access* is the source's canonical access. With *grant_public* the
     owner's read and write rights are extended to the public (``WR`` to
     ``WR/WR``, ``LR`` to ``LR/R``). *override* — typically a transform
-    from :func:`~oaknut.file.parse_access_spec` — is applied next. The
-    result is then settled by the destination convention, so it reports
-    what the destination can actually store.
+    from :func:`~oaknut.file.parse_access_spec` — is applied next.
+
+    A run-only file (owner ``E`` without ``R``) copied to a destination
+    that cannot store execute becomes readable instead: the copy
+    protection cannot be kept, and a file no one can run or read is of no
+    use. *warn*, when given, is called with a message saying so.
+
+    The result is then settled by the destination convention, so it
+    reports what the destination can actually store.
     """
     result = Access(access)
     if grant_public:
         result = _with_public(result)
     if override is not None:
         result = override(result)
+    if result.is_run_only and not destination.representable & Access.E:
+        result = (result & ~Access.E) | Access.R
+        if warn is not None:
+            warn(
+                f"run-only access cannot be stored on {destination.name}, "
+                "so the file is readable there instead"
+            )
     return destination.settle(result, context)
