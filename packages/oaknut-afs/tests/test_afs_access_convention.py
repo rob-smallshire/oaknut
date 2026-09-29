@@ -46,3 +46,23 @@ def test_afs_access_translation_methods_agree():
     for byte in range(0x40):
         native = AFSAccess.from_byte(byte)
         assert native.to_acorn() == AFS_ACCESS.to_canonical(native)
+
+
+def test_replacing_a_file_without_access_keeps_its_access():
+    # The ROM preserves a file's access when it is replaced (#63).
+    from helpers.afs_image import build_synthetic_adfs_with_afs
+
+    afs = build_synthetic_adfs_with_afs().afs_partition
+    path = afs.root / "Shared"
+    path.write_bytes(b"one", access=AFSAccess.from_string("WR/R"))
+    path.write_bytes(b"two")
+    assert path.read_bytes() == b"two"
+    assert path.stat().access == Access(0x13)
+
+
+def test_a_new_file_without_access_gets_the_default():
+    from helpers.afs_image import build_synthetic_adfs_with_afs
+
+    afs = build_synthetic_adfs_with_afs().afs_partition
+    (afs.root / "Fresh").write_bytes(b"x")
+    assert (afs.root / "Fresh").stat().access == Access(0x03)  # WR/, the ROM's ACCDEF

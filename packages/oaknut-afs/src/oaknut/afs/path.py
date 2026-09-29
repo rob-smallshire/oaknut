@@ -374,7 +374,8 @@ class AFSPath(AcornPath):
 
         ``access`` accepts:
 
-          - ``None``: filesystem default — owner R+W, no public, unlocked.
+          - ``None``: a replaced file keeps its access; a new file gets the
+            filesystem default — owner R+W, no public, unlocked.
           - :class:`oaknut.file.Access` (canonical wire form): translated
             to the AFS on-disc layout via
             :meth:`oaknut.afs.access.AFSAccess.from_acorn`. ``Access.LWR``
@@ -393,9 +394,17 @@ class AFSPath(AcornPath):
         if self.is_root():
             raise AFSPathError("cannot write_bytes to the root directory")
 
-        # ACCDEF at Uade01:271 — owner R+W, no public, unlocked: the ROM's
-        # create default. Any supplied access is normalised at the boundary.
-        access = AFSAccess.from_string("WR/") if access is None else _to_afs_access(access)
+        # Without an access, a replaced file keeps its own, as the ROM does,
+        # and a new file gets ACCDEF (Uade01:271) — owner R+W, no public,
+        # unlocked. Any supplied access is normalised at the boundary.
+        if access is None:
+            access = (
+                self.directory_entry().access
+                if self.exists() and not self.is_dir()
+                else AFSAccess.from_string("WR/")
+            )
+        else:
+            access = _to_afs_access(access)
         if date is None:
             date = AfsDate(datetime.date.today())
 
