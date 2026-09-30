@@ -151,14 +151,31 @@ on the destination: ``WR/R`` on ADFS, ``WR/`` on AFS and DFS. When a
 sidecar does record access, ``disc put`` and ``disc import`` both apply
 it; ``--access`` on ``put`` overrides it.
 
-A traditional ``.inf`` follows J.G. Harston's INF rules (`Storing
-Acorn/BBC metadata on other systems
-<https://mdfs.net/Docs/Comp/BBC/Filing/Metadata>`_). Fields may be dropped
-from the right, down to ``name load``: a missing exec address is the load
-address, and a missing access field means ``&33`` (``WR/WR``). An access
-field starting with ``L`` — ``L`` or ``Locked``, as DFS-era tools write it —
-means ``&19`` (``LR/R``). A ZIP member without Acorn attributes likewise has
-access ``&33``.
+A traditional ``.inf`` is read and written per the `Stardot INF format
+specification <https://github.com/stardot/inf_format/blob/main/inf_format_full.md>`_,
+with J.G. Harston's choices (`Storing Acorn/BBC metadata on other systems
+<https://mdfs.net/Docs/Comp/BBC/Filing/Metadata>`_) where it leaves room:
+
+- Fields may be dropped from the right, down to ``name load``. A missing
+  exec address is the load address, and a missing access field means
+  ``&33`` (``WR/WR``).
+- A lock marker — ``Locked``, ``LOCKED`` or a bare ``L``, as DFS-era tools
+  write in place of the length or access — means ``&19`` (``LR/R``).
+- A symbolic access field is case-sensitive: upper-case letters are the
+  owner's rights and lower-case the public's, so ``WRr`` is ``WR/R`` and
+  ``LWR`` is ``LWR/``. ``D`` is ignored. The slash form ``disc`` itself
+  uses (``WR/R``) is also accepted, case-insensitively, as on the command
+  line.
+- Six-digit DFS-style addresses such as ``FF0E00`` are widened to
+  ``&FFFF0E00``.
+- Names may be quoted and percent-encoded (``"MY FILE"``, ``"A%22B"``); the
+  old ``TAPE`` prefix, extra fields such as ``CRC=`` and ``OPT4=``, and
+  ``NEXT`` are recognised.
+
+``disc get`` and ``disc export`` write 8-digit addresses and a 2-digit hex
+access byte, and quote and percent-encode any name that needs it. A ZIP
+member without Acorn attributes has access ``&33``, and its bundled
+``.inf`` files are read by the same rules.
 
 To override the cascade, pass ``--meta-format VALUE`` and only
 that format is consulted. Pass ``--meta-format none`` to ignore
