@@ -22,6 +22,7 @@ from oaknut.file import (
     parse_encoded_filename,
     parse_inf_line,
 )
+from oaknut.file.inf import INF_ENCODING
 
 from .models import (
     SPARKFS_DATA_LENGTH,
@@ -100,8 +101,9 @@ def build_inf_index(
             continue
 
         try:
-            content = zf.read(info.filename).decode("ascii", errors="replace")
-            line = content.strip().split("\n")[0].strip()
+            # Latin-1 keeps 8-bit names from older tools; parse_inf_line reads
+            # only the first line, whether it ends in CR, LF or CR LF.
+            line = zf.read(info.filename).decode(INF_ENCODING).lstrip()
         except Exception:
             continue
 

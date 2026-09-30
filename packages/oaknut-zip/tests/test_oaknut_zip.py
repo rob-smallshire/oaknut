@@ -2194,3 +2194,29 @@ class TestHarstonZipDefaults:
     def test_member_with_a_load_suffix_but_no_access_gets_33(self, tmp_path):
         mount = self._mount(tmp_path, {"PROG,ffff1900-ffff8023": b"x"})
         assert mount.acorn_meta("PROG").access == 0x33
+
+
+class TestBundledInfPerStardot:
+    """Bundled .inf members are read like host .inf files (#71)."""
+
+    def _index(self, tmp_path, inf_bytes):
+        import zipfile
+
+        from oaknut.zip.parsing import build_inf_index
+
+        archive = tmp_path / "bundled.zip"
+        with zipfile.ZipFile(archive, "w") as zipped:
+            zipped.writestr("GAME", b"data")
+            zipped.writestr("GAME.inf", inf_bytes)
+        with zipfile.ZipFile(archive) as zipped:
+            index, _consumed = build_inf_index(zipped)
+        return index
+
+    def test_cr_terminated_line(self, tmp_path):
+        index = self._index(tmp_path, b"$.GAME FF0E00 FF8023 Locked\rsecond line")
+        _source, meta = index["GAME"]
+        assert (meta.load_address, meta.access) == (0xFFFF0E00, 0x19)
+
+    def test_eight_bit_name_survives(self, tmp_path):
+        index = self._index(tmp_path, b"CAF\xc9 00001900 00008023")
+        assert index["GAME"][1].name == "CAFÉ"
