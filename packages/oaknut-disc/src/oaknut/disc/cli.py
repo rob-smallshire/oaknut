@@ -2056,8 +2056,9 @@ def cp(
     ``-r``/``--recursive`` copies a directory and everything under it,
     creating intermediate destination directories as needed.  Copies
     across DFS, ADFS, and AFS in any combination; load/exec addresses
-    are preserved and access attributes are mapped best-effort (DFS only
-    has the locked bit). A filetype or datestamp is translated through
+    are preserved and access is translated to what the destination can
+    store (DFS keeps only the lock bit, and a locked DFS file is
+    read-only). A filetype or datestamp is translated through
     each filesystem's own representation — ADFS encodes both in load/exec,
     AFS keeps a native date and no filetype — so a date survives an
     ADFS↔AFS copy. Where ADFS must choose (it cannot hold both a real

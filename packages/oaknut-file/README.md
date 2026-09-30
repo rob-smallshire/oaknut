@@ -37,9 +37,10 @@ not support extended attributes; the xattr functions will raise on use.
 
 ### Access flags
 
-The `Access` IntFlag enum represents the standard Acorn OSFILE attribute byte.
-Bit values match the filing system API convention used by PiEconetBridge and
-the `user.acorn.attr` extended attribute.
+The `Access` IntFlag enum represents the standard Acorn OSFILE attribute byte,
+as stored in traditional `.inf` files and the `user.acorn.attr` extended
+attribute. (PiEconetBridge's own `perm` byte uses a different layout; see
+below.)
 
 ```python
 from oaknut.file import Access
@@ -72,6 +73,21 @@ Two INF sidecar formats are supported. `parse_inf_line()` auto-detects which
 format a line uses, while `format_trad_inf_line()` and `format_pieb_inf_line()`
 let you choose explicitly when writing.
 
+Traditional `.inf` files are read and written per the
+[Stardot INF format specification](https://github.com/stardot/inf_format/blob/main/inf_format_full.md),
+with J.G. Harston's defaults
+([Storing Acorn/BBC metadata on other systems](https://mdfs.net/Docs/Comp/BBC/Filing/Metadata))
+where it leaves room: a missing access field means `&33`, a `Locked` or bare
+`L` marker `&19`, and a missing exec address is the load address. Quoted and
+percent-encoded names, the `TAPE` prefix, extra fields such as `CRC=` and
+`NEXT` are understood, and six-digit DFS-style addresses (`FF0E00`) are
+widened to `&FFFF0E00`.
+
+PiEconetBridge's `perm` byte swaps the lock (`0x04`) and execute-only (`0x08`)
+bits relative to the Acorn byte, and uses `0x80` for hidden. The PiEB INF and
+`user.econet_perm` functions translate it, so callers always see the Acorn
+byte.
+
 ```python
 from oaknut.file import (
     Access,
@@ -98,7 +114,7 @@ pieb = format_pieb_inf_line(
     attr=int(Access.R | Access.W | Access.L | Access.PR),
 )
 print(pieb)
-# 0 ffffdd00 ffffdd00 1b
+# 0 ffffdd00 ffffdd00 17   (LWR/R in PiEB's own perm layout)
 
 # Auto-detect format on parse (returns (source_label, AcornMeta))
 source, meta = parse_inf_line(trad)
@@ -120,8 +136,8 @@ from oaknut.file import parse_encoded_filename
 
 # RISC OS filetype suffix (3 hex digits)
 clean, meta = parse_encoded_filename("PROG,ffb")
-print(clean, meta.infer_filetype())
-# ('PROG', filetype=0xFFB)
+print(clean, hex(meta.infer_filetype()))
+# PROG 0xffb
 
 # MOS load-exec suffix (variable-width hex)
 clean, meta = parse_encoded_filename("PROG,1900-801f")
@@ -164,7 +180,9 @@ print(meta.load_address, meta.exec_address, meta.access)
 
 | Module | Exports |
 |--------|---------|
-| `oaknut.file.access` | `Access`, `format_access_hex`, `format_access_text` |
+| `oaknut.file.access` | `Access`, `parse_access`, `parse_access_spec`, `format_access_hex`, `format_access_text` |
+| `oaknut.file.access_convention` | `AccessConvention`, `AccessContext`, `FILE_CONTEXT`, `DIRECTORY_CONTEXT`, `translate_access` |
+| `oaknut.file.pieb` | `PiEconetBridgeAccessConvention`, `PIEB_ACCESS` |
 | `oaknut.file.meta` | `AcornMeta` |
 | `oaknut.file.formats` | `MetaFormat`, `SOURCE_*` labels |
 | `oaknut.file.inf` | `parse_inf_line`, `format_trad_inf_line`, `format_pieb_inf_line`, `read_inf_file`, `write_inf_file` |

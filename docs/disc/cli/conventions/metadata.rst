@@ -66,11 +66,13 @@ Every host-boundary command accepts the same seven values:
    * - ``inf-trad``
      - filename, load, exec, length, attr
      - ``foo.bin`` plus ``foo.bin.inf`` containing
-       ``$.FOO FFFF1900 FFFF8023 0040 [13]``
+       ``$.FOO FFFF1900 FFFF8023 00000040 13`` (see `Traditional .inf
+       files`_ below)
    * - ``inf-pieb``
-     - load, exec, attr, owner
+     - owner, load, exec, perm
      - ``foo.bin`` plus ``foo.bin.inf`` in the PiEconetBridge form
-       (no filename field; numeric owner instead)
+       ``owner load exec perm [homeof]``: no filename field, and
+       PiEB's own ``perm`` layout (below)
    * - ``xattr-acorn``
      - load, exec, attr
      - ``foo.bin`` plus extended attributes
@@ -80,7 +82,7 @@ Every host-boundary command accepts the same seven values:
      - load, exec, attr, owner
      - ``foo.bin`` plus extended attributes
        ``user.econet_load``, ``user.econet_exec``,
-       ``user.econet_perm``, ``user.econet_owner``
+       ``user.econet_perm`` (PiEB layout), ``user.econet_owner``
    * - ``filename-riscos``
      - load, exec or filetype
      - Filename rewritten: ``foo,xxx`` for a filetype-stamped
@@ -105,7 +107,11 @@ attachments unchanged.
 Use ``inf-pieb`` (when staging files on disc) or ``xattr-pieb``
 (when storing on a Linux filesystem PiEconetBridge will serve
 from). These omit the Acorn filename field but include the Econet
-owner ID — pass ``--owner N`` to set it.
+owner ID — pass ``--owner N`` to set it. PiEconetBridge stores
+permissions in its own ``perm`` byte, which swaps the lock (``&04``)
+and execute-only (``&08``) bits relative to the Acorn access byte and
+uses ``&80`` for hidden; ``disc`` translates it in both directions, so
+access always reads and prints the Acorn way.
 
 **You want zero sidecar clutter and zero filename changes.**
 Use ``xattr-acorn``. The metadata lives in extended attributes
@@ -150,6 +156,9 @@ If none of the three yield metadata, the file is imported with
 on the destination: ``WR/R`` on ADFS, ``WR/`` on AFS and DFS. When a
 sidecar does record access, ``disc put`` and ``disc import`` both apply
 it; ``--access`` on ``put`` overrides it.
+
+Traditional .inf files
+~~~~~~~~~~~~~~~~~~~~~~
 
 A traditional ``.inf`` is read and written per the `Stardot INF format
 specification <https://github.com/stardot/inf_format/blob/main/inf_format_full.md>`_,

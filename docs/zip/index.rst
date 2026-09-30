@@ -11,8 +11,10 @@ authority:
 #. **SparkFS** ``ARC0`` **extra fields** embedded in the archive's own
    structure — the most reliable source.
 #. **Bundled** ``.inf`` **sidecars** — both the traditional
-   ``filename load exec length [access]`` form and the PiEconetBridge
-   ``owner load exec perm [homeof]`` form.
+   ``filename load exec length [access]`` form, read per the `Stardot
+   INF format specification
+   <https://github.com/stardot/inf_format/blob/main/inf_format_full.md>`_,
+   and the PiEconetBridge ``owner load exec perm [homeof]`` form.
 #. **Unix filename suffixes** such as ``,xxx`` (filetype) or
    ``,llllllll,eeeeeeee`` (load/exec).
 

@@ -97,11 +97,15 @@ The values are:
      - Format
    * - ``INF_TRAD``
      - Traditional ``.inf`` sidecar — a single text line carrying
-       ``filename load_address exec_address length [attr]``.
+       ``filename load_address exec_address length [attr]``, read and
+       written per the `Stardot INF format specification
+       <https://github.com/stardot/inf_format/blob/main/inf_format_full.md>`_.
        Default for export; widely supported by Acorn-era tooling.
    * - ``INF_PIEB``
-     - PiEconetBridge ``.inf`` flavour — ``load_address
-       exec_address attr owner``, no filename field. Used when
+     - PiEconetBridge ``.inf`` flavour — ``owner load_address
+       exec_address perm [homeof]``, no filename field. ``perm`` is in
+       PiEB's own layout, translated by
+       :class:`~oaknut.file.PiEconetBridgeAccessConvention`. Used when
        interoperating with PiEconetBridge file servers.
    * - ``XATTR_ACORN``
      - Filesystem extended attributes under the ``user.acorn.*``
@@ -110,8 +114,8 @@ The values are:
    * - ``XATTR_PIEB``
      - Filesystem extended attributes under the ``user.econet_*``
        namespace (the PiEconetBridge convention): ``user.econet_load``,
-       ``user.econet_exec``, ``user.econet_perm``, and
-       ``user.econet_owner``.
+       ``user.econet_exec``, ``user.econet_perm`` (PiEB's own layout),
+       and ``user.econet_owner``.
    * - ``FILENAME_RISCOS``
      - Metadata in the filename itself, RISC OS style. Either
        ``name,xxx`` (a 3-digit hex filetype) or

@@ -155,6 +155,11 @@ metadata and the `acorn` codec in `oaknut-file`; BBC BASIC
   Gerald Holdsworth's reference for DFS and other Acorn formats.
 - [INF file format](https://beebwiki.mdfs.net/INF_file_format) —
   the `.inf` sidecar metadata format.
+- [Stardot INF format specification](https://github.com/stardot/inf_format/blob/main/inf_format_full.md) —
+  Tom Seddon's formal grammar for `.inf` files, which oaknut follows.
+- [Storing Acorn/BBC metadata on other systems](https://mdfs.net/Docs/Comp/BBC/Filing/Metadata) —
+  J.G. Harston's INF and ZIP metadata rules, used where the Stardot
+  specification leaves room.
 
 ## License
 
