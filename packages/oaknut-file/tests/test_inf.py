@@ -169,8 +169,10 @@ class TestHarstonDefaults:
         _source, meta = parse_inf_line(line)
         assert meta.access == 0x33
 
-    @pytest.mark.parametrize("token", ["L", "Locked", "LOCKED", "LWR"])
-    def test_a_token_starting_with_l_is_19(self, token):
+    # A multi-letter symbolic field such as LWR follows the Stardot
+    # specification instead (see test_inf_stardot.py): LWR is &0B.
+    @pytest.mark.parametrize("token", ["L", "Locked", "LOCKED"])
+    def test_a_lock_marker_is_19(self, token):
         _source, meta = parse_inf_line(f"$.F 00001900 00008023 00000100 {token}")
         assert meta.access == 0x19
 
