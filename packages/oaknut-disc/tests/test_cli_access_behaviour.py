@@ -67,6 +67,10 @@ _CP_MATRIX = {
     # ADFS E without R is run-only, which ROMFS keeps. AFS and DFS cannot
     # store execute, so the file becomes readable there, with a warning (#69).
     ("adfs", "E/"): (0x04, {"dfs": 0x03, "adfs": 0x04, "afs": 0x01, "romfs": 0x04}),
+    # Public execute and private (bit 7) survive ADFS to ADFS and are
+    # dropped where they cannot be stored (#60 step 4).
+    ("adfs", "WR/RE"): (0x53, {"dfs": 0x03, "adfs": 0x53, "afs": 0x13, "romfs": 0x01}),
+    ("adfs", "PLWR/R"): (0x9B, {"dfs": 0x09, "adfs": 0x9B, "afs": 0x1B, "romfs": 0x01}),
     ("afs", "WR/"): (0x03, {"dfs": 0x03, "adfs": 0x03, "afs": 0x03, "romfs": 0x01}),
     ("afs", "LR/R"): (0x19, {"dfs": 0x09, "adfs": 0x19, "afs": 0x19, "romfs": 0x01}),
     # An ordinary ROMFS file is readable. A run-only one (E without R) stays
@@ -182,3 +186,12 @@ def test_cp_of_a_run_only_file_warns_where_execute_cannot_be_stored(tmp_path, ki
     assert result.exit_code == 0, result.output
     assert "run-only" in result.stderr
     assert _access(target) == 0x01
+
+
+def test_ls_shows_public_execute_and_private(tmp_path):
+    image = _image(tmp_path, "adfs", "image")
+    _run("put", f"{image}:$.F", "-", input="data")
+    _run("chmod", f"{image}:$.F", "PWR/E")
+    rows = _run("ls", "--as", "tsv", f"{image}:$").output.splitlines()
+    row = next(r for r in rows if r.startswith("F\t"))
+    assert "PWR/E" in row.split("\t")

@@ -14,16 +14,18 @@ from oaknut.file import FILE_CONTEXT, Access, AccessContext, AccessConvention
 
 
 class ADFSAccessConvention(AccessConvention[_ADFSRawAttributes]):
-    """ADFS access: owner R/W/E/L and public R/W map to the canonical bits.
+    """ADFS access: owner R/W/E/L and public R/W/E map to the canonical bits.
 
-    Public execute, the private bit and the directory bit have no place
-    in the canonical word yet, so reading drops them and writing keeps
-    them from the entry's current attributes.
+    The private bit is canonical bit 7, ``PL``. The directory bit says
+    what an object is rather than who may use it, so writing keeps it
+    from the entry's current attributes.
     """
 
     name = "adfs"
     family = "adfs"
-    representable = Access.R | Access.W | Access.E | Access.L | Access.PR | Access.PW
+    representable = (
+        Access.R | Access.W | Access.E | Access.L | Access.PR | Access.PW | Access.PE | Access.PL
+    )
     source = "Acorn ADFS directory formats; BeebWiki, File access"
 
     def to_canonical(
@@ -42,6 +44,10 @@ class ADFSAccessConvention(AccessConvention[_ADFSRawAttributes]):
             access |= Access.PR
         if native.public_write:
             access |= Access.PW
+        if native.public_execute:
+            access |= Access.PE
+        if native.private:
+            access |= Access.PL
         return access
 
     def from_canonical(
@@ -59,8 +65,8 @@ class ADFSAccessConvention(AccessConvention[_ADFSRawAttributes]):
             owner_execute=bool(access & Access.E),
             public_read=bool(access & Access.PR),
             public_write=bool(access & Access.PW),
-            public_execute=current.public_execute if current is not None else False,
-            private=current.private if current is not None else False,
+            public_execute=bool(access & Access.PE),
+            private=bool(access & Access.PL),
         )
 
 
@@ -69,8 +75,8 @@ class ADFSNewDirectoryAccessConvention(ADFSAccessConvention):
 
     The ``NewDirAtts`` byte stores owner read, write and locked, public
     read and write, and the directory bit — but no owner execute, public
-    execute or private bit. Writing therefore drops ``E``, so a run-only
-    file cannot be represented.
+    execute or private bit. Writing therefore drops ``E``, ``PE`` and
+    ``PL``, so a run-only file cannot be represented.
     """
 
     name = "adfs-new-directory"

@@ -564,6 +564,8 @@ class ADFSStat:
     public_write: bool
     public_execute: bool
     is_directory: bool
+    #: The private bit, canonical ``PL`` (bit 7).
+    private: bool = False
 
     @property
     def access(self) -> Access:
@@ -581,7 +583,7 @@ class ADFSStat:
                 public_read=self.public_read,
                 public_write=self.public_write,
                 public_execute=self.public_execute,
-                private=False,
+                private=self.private,
             )
         )
 
@@ -605,6 +607,7 @@ def _entry_to_stat(entry: _ADFSDirectoryEntry) -> ADFSStat:
         public_write=entry.attributes.public_write,
         public_execute=entry.attributes.public_execute,
         is_directory=entry.attributes.directory,
+        private=entry.attributes.private,
     )
 
 
@@ -3203,8 +3206,8 @@ class ADFS:
         if existing is None:
             raise ADFSPathError(f"'{filename}' not found")
 
-        # The convention replaces R, W, E, L, PR, PW and keeps D,
-        # public_execute and private from the existing entry.
+        # The convention replaces the access bits and keeps D from the
+        # existing entry.
         updated_attrs = self.access_convention.from_canonical(
             Access(int(access)),
             AccessContext(is_directory=existing.attributes.directory),

@@ -37,9 +37,9 @@ def test_is_an_access_convention():
         ({"owner_read": True, "locked": True, "public_read": True}, Access(0x19)),
         ({"owner_execute": True}, Access.E),
         ({"public_write": True}, Access.PW),
-        # Not expressible in the canonical word yet (#60 step 4).
-        ({"public_execute": True}, Access(0)),
-        ({"private": True}, Access(0)),
+        ({"public_execute": True}, Access.PE),
+        # The private bit is bit 7 (BeebWiki: "cannot be deleted ... by public").
+        ({"private": True}, Access.PL),
         ({"directory": True}, Access(0)),
     ],
 )
@@ -47,18 +47,21 @@ def test_to_canonical(flags, expected):
     assert ADFS_ACCESS.to_canonical(replace(_PLAIN, **flags)) == expected
 
 
-def test_from_canonical_sets_the_six_bits():
-    raw = ADFS_ACCESS.from_canonical(Access(0x3F))
+def test_from_canonical_sets_the_eight_bits():
+    raw = ADFS_ACCESS.from_canonical(Access(0xFF))
     assert (raw.owner_read, raw.owner_write, raw.owner_execute, raw.locked) == (True,) * 4
-    assert (raw.public_read, raw.public_write) == (True, True)
-    assert not (raw.directory or raw.public_execute or raw.private)
+    assert (raw.public_read, raw.public_write, raw.public_execute) == (True,) * 3
+    assert raw.private
+    assert not raw.directory
 
 
-def test_from_canonical_preserves_what_the_word_cannot_express():
+def test_from_canonical_preserves_the_directory_bit():
     current = replace(_PLAIN, directory=True, public_execute=True, private=True, owner_read=True)
     raw = ADFS_ACCESS.from_canonical(Access.L, DIRECTORY_CONTEXT, current=current)
     assert raw.locked and not raw.owner_read
-    assert raw.directory and raw.public_execute and raw.private
+    assert raw.directory
+    # Public execute and private are now in the word, so it decides them.
+    assert not (raw.public_execute or raw.private)
 
 
 def test_from_canonical_takes_directory_from_context_without_current():
@@ -67,7 +70,7 @@ def test_from_canonical_takes_directory_from_context_without_current():
 
 
 def test_round_trip_for_every_representable_value():
-    for value in range(0x40):
+    for value in range(0x100):
         access = Access(value)
         assert ADFS_ACCESS.settle(access) == access
 
@@ -160,3 +163,25 @@ def test_replacing_a_file_with_access_sets_it():
     path.write_bytes(b"one", access=Access(0x33))
     path.write_bytes(b"two", access=Access(0x03))
     assert path.stat().access == Access(0x03)
+
+
+# -- Public execute and private through the disc (#60 step 4) --
+
+
+def test_old_directory_disc_keeps_public_execute_and_private():
+    adfs = ADFS.create(ADFS_L)
+    path = adfs.root / "F"
+    path.write_bytes(b"x", access=Access(0xD3))  # PE | PL | PR | W | R
+    assert path.stat().access == Access(0xD3)
+
+
+def test_chmod_sets_public_execute():
+    adfs = ADFS.create(ADFS_S)
+    path = adfs.root / "F"
+    path.write_bytes(b"x")
+    path.chmod(Access(0x43))
+    assert path.stat().access == Access(0x43)
+
+
+def test_new_directory_disc_cannot_store_them():
+    assert ADFS_NEW_DIRECTORY_ACCESS.settle(Access(0xD3)) == Access(0x13)
