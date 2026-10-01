@@ -549,8 +549,8 @@ class NameGrammar:
     def validate(self, name: str) -> None:
         """Raise :class:`ValueError` if *name* cannot be stored.
 
-        Liberal: enforces only length, the :attr:`forbidden` set, codec
-        round-tripping, and the seven-bit / control-character bounds. The
+        Liberal: enforces only length, the :attr:`forbidden` set, the
+        seven-bit / control-character bounds, and codec round-tripping. The
         bounds apply to the bytes the :attr:`codec` stores, so a character
         the codec maps into seven bits (``£`` as ``&60`` in ``acorn``)
         passes.
@@ -562,12 +562,6 @@ class NameGrammar:
         for char in name:
             if char in self.forbidden:
                 raise ValueError(f"Forbidden character '{char}' in filename '{name}'")
-        if self.codec is not None:
-            try:
-                name.encode(self.codec)
-            except (UnicodeEncodeError, LookupError) as exc:
-                raise ValueError(f"Filename contains invalid characters: {exc}")
-        for char in name:
             code_point = self._stored_code(char)
             if self.seven_bit and code_point > 127:
                 raise ValueError(
@@ -575,12 +569,20 @@ class NameGrammar:
                 )
             if not self.allow_control and code_point < 32:
                 raise ValueError(f"Control character (code {code_point}) not allowed in '{name}'")
+        if self.codec is not None:
+            try:
+                name.encode(self.codec)
+            except (UnicodeEncodeError, LookupError) as exc:
+                raise ValueError(f"Filename contains invalid characters: {exc}")
 
     def _stored_code(self, char: str) -> int:
-        """The byte *char* is stored as, or its code point without a codec."""
+        """The byte the :attr:`codec` stores *char* as, else its code point."""
         if self.codec is None:
             return ord(char)
-        stored = char.encode(self.codec)
+        try:
+            stored = char.encode(self.codec)
+        except (UnicodeEncodeError, LookupError):
+            return ord(char)
         return stored[0] if len(stored) == 1 else ord(char)
 
     def summary(self) -> str:
