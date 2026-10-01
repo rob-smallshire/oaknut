@@ -33,7 +33,7 @@ from oaknut.romfs.exceptions import (
 )
 from oaknut.romfs.romfs import ROMFS, ROMFSFile, ROMFSFragment, ROMFSSet
 
-__version__ = "13.1.0"
+__version__ = "13.1.1"
 
 __all__ = [
     "ACORN_ROMFS_ACCESS",
