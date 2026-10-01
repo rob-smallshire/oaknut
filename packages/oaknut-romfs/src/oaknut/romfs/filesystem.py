@@ -33,6 +33,7 @@ from oaknut.filesystem import (
     Identification,
     ImageReader,
     InvalidNameError,
+    InvalidTitleError,
     NameGrammar,
 )
 from oaknut.filesystem.exceptions import ReadOnlyFilesystemError
@@ -81,6 +82,25 @@ def _validate_romfs_name(name: str) -> None:
         ROMFS_NAME_GRAMMAR.validate(name)
     except InvalidNameError as exc:
         raise ROMFSError(str(exc), exit_code=exc.exit_code) from exc
+
+
+def _check_title(title: str) -> str:
+    """The title block name for *title*, ``*title*``; raise if it cannot be stored.
+
+    The title is stored as the name of a title block, wrapped in asterisks,
+    so the name rules (length, character set, forbidden characters) apply.
+    """
+    wrapped = f"*{title}*"
+    if len(wrapped) > MAX_NAME_LENGTH:
+        raise InvalidTitleError(
+            f"ROMFS title is too long: {title!r} would not fit in "
+            f"{MAX_NAME_LENGTH} characters once wrapped in asterisks"
+        )
+    try:
+        ROMFS_NAME_GRAMMAR.validate(wrapped)
+    except InvalidNameError as exc:
+        raise InvalidTitleError(f"ROMFS title {title!r} cannot be stored: {exc}") from None
+    return wrapped
 
 
 def _linear_geometry(size: int) -> Geometry:
@@ -321,12 +341,7 @@ class _ROMFSMount(AcornWildcards):
         return self._romfs.title
 
     def set_title(self, title: str) -> None:
-        wrapped = f"*{title}*"
-        if len(wrapped) > MAX_NAME_LENGTH:
-            raise ROMFSError(
-                f"ROMFS title is too long: {title!r} would not fit in "
-                f"{MAX_NAME_LENGTH} characters once wrapped in asterisks"
-            )
+        wrapped = _check_title(title)
         title_block = ROMFSFile(wrapped, 0, 0, True, b"")
         files = self._romfs.files
         if self._romfs.title_block is not None:
@@ -405,7 +420,12 @@ class AcornROMFS(Filesystem):
     ) -> None:
         # ROMFS images have no hard-disc geometry sidecar; *sidecars* is ignored.
         # The title block is stored as `*title*`, so it is capped shorter than
-        # a full CFS name; fall back to the file's stem, and truncate.
-        name = (title or filepath.stem)[:MAX_TITLE_LENGTH] or "ROMFS"
+        # a full CFS name. A given title must fit; one derived from the file's
+        # stem is truncated to fit.
+        if title:
+            _check_title(title)
+            name = title
+        else:
+            name = filepath.stem[:MAX_TITLE_LENGTH] or "ROMFS"
         image = build_rom_image(title=name, size=geometry.image_size)
         filepath.write_bytes(image)

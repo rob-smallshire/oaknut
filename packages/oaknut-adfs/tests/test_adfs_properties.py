@@ -2,6 +2,7 @@
 
 import pytest
 from oaknut.adfs import ADFS, ADFS_S
+from oaknut.filesystem import InvalidTitleError
 
 
 class TestTitleSetter:
@@ -22,10 +23,13 @@ class TestTitleSetter:
         assert adfs.title == "Changed"
         assert (adfs.root / "File").read_bytes() == b"data"
 
-    def test_title_truncated_to_19_chars(self):
+    def test_title_over_19_chars_is_refused(self):
+        # Refused rather than silently truncated (#80).
         adfs = ADFS.create(ADFS_S)
-        adfs.title = "A" * 30
-        assert len(adfs.title) <= 19
+        adfs.title = "OLD"
+        with pytest.raises(InvalidTitleError, match="too long"):
+            adfs.title = "A" * 30
+        assert adfs.title == "OLD"
 
     def test_validate_after_title_change(self):
         adfs = ADFS.create(ADFS_S)

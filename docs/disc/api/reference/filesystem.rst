@@ -220,4 +220,6 @@ Exceptions
 
 .. autoexception:: oaknut.filesystem.InvalidNameError
 
+.. autoexception:: oaknut.filesystem.InvalidTitleError
+
 .. autoexception:: oaknut.filesystem.FilesystemExtensionError

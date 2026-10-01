@@ -887,9 +887,10 @@ class DFS:
             )
             buffer_size = max(buffer_size, end)
 
+        catalogue_class = Catalogue._registry[disc_format.catalogue_name]
+        catalogue_class.validate_title(title)
         buffer = memoryview(bytearray(buffer_size))
         disc = DiscImage(buffer, specs)
-        catalogue_class = Catalogue._registry[disc_format.catalogue_name]
 
         # Format every surface (see create_file): a double-sided image has
         # an independent volume per side. The title names side 0 only.
@@ -967,6 +968,9 @@ class DFS:
                 + spec.sectors_per_track * spec.bytes_per_sector
             )
             file_size = max(file_size, end)
+
+        # Refuse an unstorable title before writing the file.
+        Catalogue._registry[disc_format.catalogue_name].validate_title(title)
 
         # Write a blank file of the correct size
         with open(filepath, "wb") as f:

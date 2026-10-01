@@ -23,6 +23,18 @@ class InvalidNameError(FilesystemError, ValueError):
     _exit_code = ExitCode.USAGE
 
 
+class InvalidTitleError(FilesystemError, ValueError):
+    """A filesystem cannot store a title: too long, a character outside its
+    character set, or its terminator.
+
+    Raised before anything is written, so a refused title leaves the disc
+    unchanged. Like :class:`InvalidNameError` it exits with
+    :data:`ExitCode.USAGE` and is also a :class:`ValueError`.
+    """
+
+    _exit_code = ExitCode.USAGE
+
+
 class GeometryError(FilesystemError):
     """A geometry specification could not be parsed, or is invalid."""
 

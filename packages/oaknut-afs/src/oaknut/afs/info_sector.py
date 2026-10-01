@@ -40,6 +40,7 @@ from dataclasses import dataclass, field
 
 from oaknut.afs.exceptions import AFSInfoSectorError
 from oaknut.afs.types import AfsDate, SystemInternalName
+from oaknut.filesystem import InvalidTitleError
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -83,12 +84,14 @@ def _encode_disc_name(name: str) -> bytes:
     the name, length 1..16. Spaces are used only as trailing pad.
     """
     if not name:
-        raise ValueError("disc name must not be empty")
+        raise InvalidTitleError("disc name must not be empty")
     if len(name) > _DISC_NAME_LENGTH:
-        raise ValueError(f"disc name {name!r} exceeds {_DISC_NAME_LENGTH} characters")
+        raise InvalidTitleError(
+            f"disc name {name!r} is too long (max {_DISC_NAME_LENGTH} characters)"
+        )
     for ch in name:
         if not (0x21 <= ord(ch) <= 0x7E):
-            raise ValueError(
+            raise InvalidTitleError(
                 f"disc name {name!r} contains non-printable or space "
                 f"character {ch!r}; only printable ASCII (no spaces) is allowed"
             )

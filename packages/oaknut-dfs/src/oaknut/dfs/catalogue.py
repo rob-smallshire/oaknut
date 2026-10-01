@@ -453,8 +453,9 @@ class Catalogue(ABC):
         """
         pass
 
+    @classmethod
     @abstractmethod
-    def validate_title(self, title: str) -> None:
+    def validate_title(cls, title: str) -> None:
         """
         Validate disk title.
 

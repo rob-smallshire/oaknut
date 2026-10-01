@@ -31,6 +31,7 @@ from oaknut.adfs.access import (
 from oaknut.adfs.directory import (
     ADFS_BIG_NAME_GRAMMAR,
     ADFS_NAME_GRAMMAR,
+    DIRECTORY_TITLE_LENGTH,
     Access,
     ADFSDirectoryFormat,
     BigDirectoryFormat,
@@ -39,6 +40,7 @@ from oaknut.adfs.directory import (
     _ADFSDirectory,
     _ADFSDirectoryEntry,
     _ADFSRawAttributes,
+    check_title,
 )
 from oaknut.adfs.exceptions import (
     ADFSDirectoryError,
@@ -141,6 +143,22 @@ class ADFSFormat:
     def __post_init__(self):
         if not self.surface_specs:
             raise ValueError("At least one surface_spec is required")
+
+    def validate_title(self, title: str) -> None:
+        """Raise unless a disc of this format can store *title* as its title.
+
+        The rules match :attr:`ADFS.title`: a Big-directory disc's title is
+        its 10-character disc name; otherwise it is the root directory's
+        19-character title, ASCII in Old directories and Latin-1 in New ones.
+
+        Raises:
+            InvalidTitleError: If *title* cannot be stored.
+        """
+        if self.big_directories:
+            _check_disc_name(title)
+        else:
+            codec = "latin-1" if self.new_map or self.new_directory else "ascii"
+            check_title(title, max_length=DIRECTORY_TITLE_LENGTH, codec=codec)
 
 
 def _single_sided_spec(num_tracks: int) -> SurfaceSpec:
@@ -543,6 +561,15 @@ def write_cfg(
     Path(filepath).write_text(config.render())
 
 
+#: The length of a disc record's disc name, the title of a Big-directory disc.
+_DISC_NAME_LENGTH = 10
+
+
+def _check_disc_name(name: str) -> None:
+    """Raise unless the disc record's Latin-1, NUL-padded disc name can hold *name*."""
+    check_title(name, max_length=_DISC_NAME_LENGTH, codec="latin-1", what="disc name")
+
+
 # --- Public value type ---
 
 
@@ -766,7 +793,10 @@ class ADFSPath(AcornPath):
 
         Raises:
             ADFSPathError: If this path is a file, not a directory.
+            InvalidTitleError: If the directory format cannot store *value*.
+            TitleNotSupportedError: If the directory format has no title.
         """
+        self._adfs._dir_format.validate_title(value)
         if self._path == "$":
             disc_address = self._adfs._root_address
         else:
@@ -1469,6 +1499,8 @@ def _create_image_file(
     boot_option: int,
 ) -> Iterator[ADFS]:
     """Write a blank image file, initialise ADFS structures, and yield an ADFS handle."""
+    # Refuse an unstorable title before writing the file.
+    fmt.validate_title(title)
     with open(filepath, "wb") as f:
         f.write(b"\x00" * fmt.total_bytes)
 
@@ -1601,6 +1633,8 @@ def _create_hard_disc_file(
         geometry.cylinders * geometry.heads * geometry.sectors_per_track * _ADFS_BYTES_PER_SECTOR
     )
     fmt = _hard_disc_format(geometry, total_bytes)
+    # Refuse an unstorable title before writing any file.
+    fmt.validate_title(title)
 
     dat_filepath = filepath.with_suffix(".dat")
     if SIDECAR_DSC in sidecars:
@@ -1944,6 +1978,7 @@ class ADFS:
         Returns:
             ADFS instance backed by an in-memory buffer.
         """
+        adfs_format.validate_title(title)
         buffer = memoryview(bytearray(adfs_format.total_bytes))
         disc_image = DiscImage(buffer, adfs_format.surface_specs)
         unified = UnifiedDisc(disc_image)
@@ -2009,6 +2044,10 @@ class ADFS:
         """
         from oaknut.file.capacity import parse_capacity
 
+        if big_directories:
+            _check_disc_name(title)
+        else:
+            check_title(title, max_length=DIRECTORY_TITLE_LENGTH, codec="latin-1")
         size = parse_capacity(capacity) if isinstance(capacity, str) else capacity
         size = (size // _ADFS_BYTES_PER_SECTOR) * _ADFS_BYTES_PER_SECTOR  # sector-align
         disc_record = hdd_disc_record(
@@ -2163,8 +2202,13 @@ class ADFS:
 
     @title.setter
     def title(self, value: str) -> None:
-        """Set the disc title (see :attr:`title` for where it is stored)."""
+        """Set the disc title (see :attr:`title` for where it is stored).
+
+        Raises:
+            InvalidTitleError: If the disc cannot store *value*.
+        """
         if self._big_directory_disc:
+            _check_disc_name(value)
             self._map.set_disc_name(value)
         else:
             self.root.title = value

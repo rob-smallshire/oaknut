@@ -12,7 +12,8 @@ from dataclasses import dataclass
 from oaknut.adfs.exceptions import ADFSDirectoryError
 from oaknut.discimage.sectors_view import SectorsView
 from oaknut.file import Access  # re-exported for backward compatibility
-from oaknut.filesystem import NameGrammar
+from oaknut.file.exceptions import TitleNotSupportedError
+from oaknut.filesystem import InvalidTitleError, NameGrammar
 
 __all__ = ["Access"]
 
@@ -145,8 +146,48 @@ class _ADFSDirectory:
 # --- Directory format strategy ---
 
 
+#: The length of an Old or New directory's title field.
+DIRECTORY_TITLE_LENGTH = 19
+
+#: The bytes that end a name or title field: NUL and CR.
+_FIELD_TERMINATORS = {0x00: "NUL", 0x0D: "CR"}
+
+
+def check_title(title: str, *, max_length: int, codec: str, what: str = "title") -> None:
+    """Raise :class:`~oaknut.filesystem.InvalidTitleError` unless *title* can be stored.
+
+    The field holds *max_length* bytes in *codec* and ends at the first
+    NUL or CR, so a title must fit, encode, and contain no terminator —
+    otherwise it would be silently truncated, or fail part-way through a
+    write.
+    """
+    try:
+        encoded = title.encode(codec)
+    except UnicodeEncodeError as exc:
+        raise InvalidTitleError(
+            f"ADFS {what} {title!r} contains {title[exc.start]!r}, which the disc cannot store"
+        ) from None
+    if len(encoded) > max_length:
+        raise InvalidTitleError(f"ADFS {what} {title!r} is too long (max {max_length} characters)")
+    for byte in encoded:
+        if byte in _FIELD_TERMINATORS:
+            raise InvalidTitleError(
+                f"ADFS {what} {title!r} contains a {_FIELD_TERMINATORS[byte]}, the field terminator"
+            )
+
+
 class ADFSDirectoryFormat(ABC):
     """Strategy for parsing different ADFS directory formats."""
+
+    @abstractmethod
+    def validate_title(self, title: str) -> None:
+        """Raise unless a directory of this format can store *title*.
+
+        Raises:
+            InvalidTitleError: If *title* cannot be stored.
+            TitleNotSupportedError: If the format has no title field.
+        """
+        ...
 
     @abstractmethod
     def parse(self, data: SectorsView, disc_address: int) -> _ADFSDirectory:
@@ -379,6 +420,9 @@ class OldDirectoryFormat(ADFSDirectoryFormat):
 
     Signature is "Hugo" at offset 0x01 and at the end of the tail.
     """
+
+    def validate_title(self, title: str) -> None:
+        check_title(title, max_length=DIRECTORY_TITLE_LENGTH, codec="ascii")
 
     @property
     def size_in_bytes(self) -> int:
@@ -736,6 +780,9 @@ class NewDirectoryFormat(ADFSDirectoryFormat):
     DirCheckByte is a real ROR-13 checksum.
     """
 
+    def validate_title(self, title: str) -> None:
+        check_title(title, max_length=DIRECTORY_TITLE_LENGTH, codec="latin-1")
+
     @property
     def size_in_bytes(self) -> int:
         return _NEW_DIR_SIZE
@@ -930,6 +977,11 @@ class BigDirectoryFormat(ADFSDirectoryFormat):
     creating a new directory; an existing directory's true size comes from its
     ``BigDirSize`` header field via :meth:`directory_size`.
     """
+
+    def validate_title(self, title: str) -> None:
+        raise TitleNotSupportedError(
+            "Big directories have no title field; the disc title is the disc name"
+        )
 
     @property
     def size_in_bytes(self) -> int:

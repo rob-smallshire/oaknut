@@ -16,6 +16,7 @@ from oaknut.dfs.catalogue import (
 from oaknut.dfs.exceptions import CatalogFullError, DFSValidationError, FileLocked
 from oaknut.discimage import BYTES_PER_SECTOR
 from oaknut.discimage.surface import Surface
+from oaknut.filesystem import InvalidTitleError
 
 _name_key = DFS_NAME_GRAMMAR.name_key
 
@@ -335,7 +336,8 @@ class AcornDFSCatalogue(Catalogue):
         """Validate a new name's directory: one DFS commands can create."""
         check_command_directory(directory)
 
-    def validate_title(self, title: str) -> None:
+    @classmethod
+    def validate_title(cls, title: str) -> None:
         """
         Validate Acorn DFS title constraints.
 
@@ -343,8 +345,8 @@ class AcornDFSCatalogue(Catalogue):
         - Not have top bit set (must be <= 127)
         - Not be control characters (< 32), except null (0) for padding
         """
-        if len(title) > self.MAX_TITLE_LENGTH:
-            raise ValueError(f"Title too long: '{title}' (max {self.MAX_TITLE_LENGTH} chars)")
+        if len(title) > cls.MAX_TITLE_LENGTH:
+            raise InvalidTitleError(f"Title too long: '{title}' (max {cls.MAX_TITLE_LENGTH} chars)")
 
         # Check each character
         for i, char in enumerate(title):
@@ -352,13 +354,13 @@ class AcornDFSCatalogue(Catalogue):
 
             # Check for top-bit set characters
             if code_point > 127:
-                raise ValueError(
+                raise InvalidTitleError(
                     f"Title character '{char}' at position {i} has top bit set (code {code_point})"
                 )
 
             # Check for control characters (except null/space for padding)
             if code_point < 32 and code_point != 0:
-                raise ValueError(
+                raise InvalidTitleError(
                     f"Title contains control character at position {i} (code {code_point})"
                 )
 
@@ -366,7 +368,7 @@ class AcornDFSCatalogue(Catalogue):
         try:
             title.encode("acorn")
         except (UnicodeEncodeError, LookupError) as e:
-            raise ValueError(f"Title contains invalid characters: {e}")
+            raise InvalidTitleError(f"Title contains invalid characters: {e}") from None
 
     def _add_file_entry_impl(
         self,

@@ -144,7 +144,7 @@ class TestConstructorValidation:
             InfoSector(**{**valid_kwargs, "disc_name": ""})
 
     def test_disc_name_too_long(self, valid_kwargs: dict) -> None:
-        with pytest.raises(ValueError, match="exceeds 16 characters"):
+        with pytest.raises(ValueError, match="too long"):
             InfoSector(**{**valid_kwargs, "disc_name": "A" * 17})
 
     def test_disc_name_with_space(self, valid_kwargs: dict) -> None:

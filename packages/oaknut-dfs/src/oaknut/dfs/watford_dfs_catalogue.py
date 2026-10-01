@@ -16,6 +16,7 @@ from oaknut.dfs.catalogue import (
 )
 from oaknut.dfs.exceptions import CatalogFullError, DFSValidationError, FileLocked
 from oaknut.discimage.surface import Surface
+from oaknut.filesystem import InvalidTitleError
 
 _name_key = DFS_NAME_GRAMMAR.name_key
 
@@ -875,7 +876,8 @@ class WatfordDFSCatalogue(Catalogue):
         """
         check_command_directory(directory)
 
-    def validate_title(self, title: str) -> None:
+    @classmethod
+    def validate_title(cls, title: str) -> None:
         """
         Validate title.
 
@@ -883,17 +885,20 @@ class WatfordDFSCatalogue(Catalogue):
             title: Title to validate
 
         Raises:
-            ValueError: If title invalid
+            InvalidTitleError: If title invalid
         """
-        if len(title) > self.MAX_TITLE_LENGTH:
-            raise ValueError(
-                f"Title too long: {len(title)} chars (max {self.MAX_TITLE_LENGTH} for Watford DFS)"
+        if len(title) > cls.MAX_TITLE_LENGTH:
+            raise InvalidTitleError(
+                f"Title too long: {len(title)} chars (max {cls.MAX_TITLE_LENGTH} for Watford DFS)"
             )
-        # Check valid characters
+        # Check valid characters, as the bytes the acorn codec stores.
         for char in title:
-            byte = ord(char)
-            if not self._is_valid_title_char(byte):
-                raise ValueError(f"Invalid title character: {char!r}")
+            try:
+                encoded = char.encode("acorn")
+            except UnicodeEncodeError:
+                raise InvalidTitleError(f"Invalid title character: {char!r}") from None
+            if not cls._is_valid_title_char(encoded[0]):
+                raise InvalidTitleError(f"Invalid title character: {char!r}")
 
     @property
     def max_files(self) -> int:

@@ -1,8 +1,10 @@
 """Tests for ADFSPath.title property on directories."""
 
 import pytest
-from oaknut.adfs import ADFS, ADFS_M, ADFS_S
+from oaknut.adfs import ADFS, ADFS_E_PLUS, ADFS_M, ADFS_S
 from oaknut.adfs.exceptions import ADFSPathError
+from oaknut.file.exceptions import TitleNotSupportedError
+from oaknut.filesystem import InvalidTitleError
 
 
 class TestDirectoryTitleGetter:
@@ -83,10 +85,18 @@ class TestDirectoryTitleSetter:
         adfs.root.title = ""
         assert adfs.root.title == ""
 
-    def test_title_truncated_to_19_chars(self):
+    def test_title_over_19_chars_is_refused(self):
+        # Refused rather than silently truncated (#80).
         adfs = ADFS.create(ADFS_S)
-        adfs.root.title = "A" * 30
-        assert len(adfs.root.title) <= 19
+        with pytest.raises(InvalidTitleError, match="too long"):
+            adfs.root.title = "A" * 30
+        assert adfs.root.title == ""
+
+    def test_a_big_directory_has_no_title_to_set(self):
+        adfs = ADFS.create(ADFS_E_PLUS)
+        (adfs.root / "DIR").mkdir()
+        with pytest.raises(TitleNotSupportedError):
+            (adfs.root / "DIR").title = "HELLO"
 
     def test_set_title_preserves_files(self):
         adfs = ADFS.create(ADFS_S)
