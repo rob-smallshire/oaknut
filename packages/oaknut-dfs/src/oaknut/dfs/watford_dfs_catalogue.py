@@ -4,11 +4,14 @@ from collections.abc import Sequence
 from typing import Optional
 
 from oaknut.dfs.catalogue import (
+    COMMAND_DIRECTORY_CHARS,
     DFS_NAME_GRAMMAR,
     Catalogue,
     DiscInfo,
     FileEntry,
     ParsedFilename,
+    check_command_directory,
+    check_stored_directory,
     expand_host_address,
 )
 from oaknut.dfs.exceptions import CatalogFullError, DFSValidationError, FileLocked
@@ -27,7 +30,7 @@ class WatfordDFSCatalogue(Catalogue):
     CATALOG_NUM_SECTORS = 4  # Sectors 0-3
     MAX_FILENAME_LENGTH = 7
     MAX_TITLE_LENGTH = 10  # vs 12 for Acorn DFS (bytes 10-11 reserved)
-    VALID_DIRECTORY_CHARS = "$ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    VALID_DIRECTORY_CHARS = COMMAND_DIRECTORY_CHARS
 
     def __init__(self, surface: Surface):
         super().__init__(surface)
@@ -352,7 +355,7 @@ class WatfordDFSCatalogue(Catalogue):
         # Validate inputs (case-insensitively); store names as given —
         # DFS preserves case and folds only when matching.
         self.validate_filename(filename)
-        self.validate_directory(directory)
+        check_stored_directory(directory)
 
         # Read current state
         disc_info = self.get_disc_info()
@@ -580,7 +583,7 @@ class WatfordDFSCatalogue(Catalogue):
         Returns:
             FileEntry if found, None otherwise
         """
-        parsed = self.parse_filename(filename)
+        parsed = self.parse_filename(filename, verbatim=True)
         all_files = self.list_files()
 
         # DFS folds case only when matching, so compare case-insensitively
@@ -827,7 +830,7 @@ class WatfordDFSCatalogue(Catalogue):
         cycle_sector = self._surface.sector_range(1, 1)
         cycle_sector[4] = (cycle_sector[4] + 1) & 0xFF
 
-    def parse_filename(self, path: str) -> ParsedFilename:
+    def parse_filename(self, path: str, *, verbatim: bool = False) -> ParsedFilename:
         """
         Parse filename path like '$.FILE' or 'A.FILE'.
 
@@ -842,7 +845,10 @@ class WatfordDFSCatalogue(Catalogue):
 
         # Validate components (case-insensitively); store them as given —
         # DFS preserves case and folds only when matching.
-        self.validate_directory(directory)
+        if verbatim:
+            check_stored_directory(directory)
+        else:
+            self.validate_directory(directory)
         self.validate_filename(filename)
 
         return ParsedFilename(directory=directory, filename=filename)
@@ -859,18 +865,15 @@ class WatfordDFSCatalogue(Catalogue):
 
     def validate_directory(self, directory: str) -> None:
         """
-        Validate directory letter.
+        Validate a new name's directory: one DFS commands can create.
 
         Args:
             directory: Directory to validate
 
         Raises:
-            ValueError: If directory invalid
+            InvalidDirectoryError: If directory invalid
         """
-        if directory.upper() not in self.VALID_DIRECTORY_CHARS:
-            raise ValueError(
-                f"Invalid directory: {directory!r}. Must be one of: {self.VALID_DIRECTORY_CHARS}"
-            )
+        check_command_directory(directory)
 
     def validate_title(self, title: str) -> None:
         """

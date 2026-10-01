@@ -9,6 +9,39 @@ from oaknut.discimage.surface import Surface
 from oaknut.file.integrity import assert_no_duplicate_names
 from oaknut.filesystem import NameGrammar
 
+#: The directories DFS commands (``*SAVE``, ``*DIR``, …) can name.
+COMMAND_DIRECTORY_CHARS = "$ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+
+def check_command_directory(directory: str) -> None:
+    """Raise unless *directory* is one DFS commands can create: ``$`` or a letter."""
+    from oaknut.dfs.exceptions import InvalidDirectoryError
+
+    if len(directory) != 1:
+        raise InvalidDirectoryError(f"Directory must be single character, got: '{directory}'")
+    if directory.upper() not in COMMAND_DIRECTORY_CHARS:
+        raise InvalidDirectoryError(f"Invalid directory '{directory}'. Must be $ or A-Z")
+
+
+def check_stored_directory(directory: str) -> None:
+    """Raise unless a catalogue entry can store *directory* and a path can name it.
+
+    A catalogue entry's directory byte holds any seven-bit character
+    (bit 7 is the lock), so discs carry directories DFS commands cannot
+    create — the Econet Level 1 utilities disc uses ``&``, probably as
+    copy protection. Only ``.`` and ``:``, which a path cannot name as a
+    directory, are refused.
+    """
+    from oaknut.dfs.exceptions import InvalidDirectoryError
+
+    if len(directory) != 1:
+        raise InvalidDirectoryError(f"Directory must be single character, got: '{directory}'")
+    if ord(directory) > 0x7F or directory in ".:":
+        raise InvalidDirectoryError(
+            f"Invalid directory {directory!r}: a DFS catalogue entry cannot hold it"
+        )
+
+
 if TYPE_CHECKING:
     from oaknut.dfs.exceptions import DFSValidationError
 
@@ -37,6 +70,8 @@ DFS_NAME_GRAMMAR = NameGrammar(
         "The wildcard characters * and # are stored literally; address "
         "such a file with --no-wildcards rather than by pattern.",
         "A separator (. or :) in a name cannot yet be expressed through the dotted-path syntax.",
+        "A new file's directory is $ or a letter, as DFS commands allow. A copy "
+        "from another DFS disc keeps any other directory its catalogue holds.",
     ),
 )
 
@@ -254,7 +289,7 @@ class Catalogue(ABC):
         head: list[FileEntry] = []
         positioned: set[str] = set()
         for spec in order:
-            key = _name_key(self.parse_filename(spec).path)
+            key = _name_key(self.parse_filename(spec, verbatim=True).path)
             if key not in by_path:
                 raise FileNotFoundError(f"File not found: {spec}")
             if key in positioned:
@@ -348,7 +383,7 @@ class Catalogue(ABC):
 
         if self.find_file(old_name) is None:
             raise FileNotFoundError(f"File not found: {old_name}")
-        old_key = _name_key(self.parse_filename(old_name).path)
+        old_key = _name_key(self.parse_filename(old_name, verbatim=True).path)
         new_key = _name_key(self.parse_filename(new_name).path)
         if new_key != old_key and self.find_file(new_key) is not None:
             raise DFSFileExistsError(f"'{new_name}' already exists")
@@ -372,12 +407,17 @@ class Catalogue(ABC):
         pass
 
     @abstractmethod
-    def parse_filename(self, path: str) -> ParsedFilename:
+    def parse_filename(self, path: str, *, verbatim: bool = False) -> ParsedFilename:
         """
         Parse and validate filename path.
 
         Args:
             path: Full path (e.g., "$.HELLO") or bare filename (defaults to $ directory)
+            verbatim: The name exists already — it is being looked up, or
+                copied from another catalogue — so its directory need only
+                be one a catalogue entry can store
+                (:func:`check_stored_directory`), not one DFS commands can
+                create (:meth:`validate_directory`).
 
         Returns:
             ParsedFilename with validated components

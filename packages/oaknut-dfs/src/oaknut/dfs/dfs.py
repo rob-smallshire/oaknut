@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Iterator, Union
 
 import oaknut.basic as basic
 from oaknut.dfs.access import ACORN_DFS_ACCESS
-from oaknut.dfs.catalogue import DFS_NAME_GRAMMAR, FileEntry
+from oaknut.dfs.catalogue import COMMAND_DIRECTORY_CHARS, DFS_NAME_GRAMMAR, FileEntry
 from oaknut.dfs.catalogued_surface import CataloguedSurface
 from oaknut.dfs.formats import DiscFormat
 from oaknut.discimage.surface import DiscImage
@@ -28,8 +28,8 @@ if TYPE_CHECKING:
     from oaknut.dfs.exceptions import DFSValidationError
     from oaknut.file import BootOption
 
-# Valid DFS directory characters
-_DFS_DIRECTORY_CHARS = frozenset("$ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+# The directories DFS commands can name; others resolve when catalogued.
+_DFS_DIRECTORY_CHARS = frozenset(COMMAND_DIRECTORY_CHARS)
 _name_key = DFS_NAME_GRAMMAR.name_key
 
 
@@ -313,6 +313,7 @@ class DFSPath(AcornPath):
         exec_address: int = 0,
         access: "Access | None" = None,
         date: object = None,
+        verbatim_name: bool = False,
     ) -> None:
         """Write file contents (*SAVE).
 
@@ -325,8 +326,14 @@ class DFSPath(AcornPath):
         ``date`` is accepted for cross-filesystem signature uniformity
         but silently ignored — DFS does not store per-file dates.
 
+        A new name's directory must be one DFS commands can create, ``$``
+        or a letter. With ``verbatim_name`` the name is copied as-is from
+        another DFS catalogue, so any directory a catalogue entry can store
+        is kept — such as the ``&`` some discs used as copy protection.
+
         Raises:
             ValueError: If this path is a directory or filename is invalid.
+            InvalidDirectoryError: If the directory cannot be used.
         """
         del date  # accepted for signature uniformity only
 
@@ -334,7 +341,9 @@ class DFSPath(AcornPath):
 
         if not self._path or self._is_directory_path():
             raise ValueError(f"Cannot write to directory: '{self._path}'")
-        parsed = self._dfs._catalogued_surface.catalogue.parse_filename(self._path)
+        parsed = self._dfs._catalogued_surface.catalogue.parse_filename(
+            self._path, verbatim=verbatim_name
+        )
         self._dfs._catalogued_surface.write_file(
             parsed.filename, parsed.directory, data, load_address, exec_address, locked_val
         )

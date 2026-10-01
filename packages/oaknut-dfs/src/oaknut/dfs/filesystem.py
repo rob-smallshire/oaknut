@@ -212,8 +212,14 @@ class _DFSMount(AcornWildcards):
     def read_bytes(self, path: str) -> bytes:
         return self._navigate(path).read_bytes()
 
-    def write_bytes(self, path: str, data: bytes) -> None:
-        self._navigate(path).write_bytes(data)
+    def write_bytes(self, path: str, data: bytes, *, verbatim_name: bool = False) -> None:
+        """Write *data* to *path*.
+
+        With *verbatim_name* the name is copied from another DFS catalogue
+        and keeps a directory DFS commands cannot create (see
+        :meth:`DFSPath.write_bytes`).
+        """
+        self._navigate(path).write_bytes(data, verbatim_name=verbatim_name)
 
     def remove(self, path: str, *, force: bool = False) -> None:
         from oaknut.dfs.exceptions import FileLocked

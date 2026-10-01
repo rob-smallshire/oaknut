@@ -56,3 +56,41 @@ class TestNonLetterDirectory:
         path = dfs.path(f"{directory}.PROT")
         assert path.read_bytes() == b"data"
         assert path.stat().load_address == 0x1900
+
+
+# -- Writing: DFS command rules for new names, verbatim for copied ones (#77) --
+
+from oaknut.dfs.exceptions import InvalidDirectoryError  # noqa: E402
+from oaknut.dfs.formats import WATFORD_DFS_40T_SINGLE_SIDED  # noqa: E402
+
+_FORMATS = [ACORN_DFS_40T_SINGLE_SIDED, WATFORD_DFS_40T_SINGLE_SIDED]
+
+
+@pytest.mark.parametrize("disc_format", _FORMATS, ids=["acorn", "watford"])
+class TestWritingOddDirectories:
+    def test_a_new_name_keeps_the_dfs_command_rules(self, disc_format):
+        dfs = DFS.create(disc_format)
+        with pytest.raises(InvalidDirectoryError, match="Invalid directory '&'"):
+            dfs.path("&.NEW").write_bytes(b"x")
+
+    def test_the_refusal_is_still_a_value_error(self, disc_format):
+        dfs = DFS.create(disc_format)
+        with pytest.raises(ValueError):
+            dfs.path("&.NEW").write_bytes(b"x")
+
+    def test_a_verbatim_name_keeps_its_directory(self, disc_format):
+        dfs = DFS.create(disc_format)
+        dfs.path("&.PROT").write_bytes(b"data", load_address=0x1900, verbatim_name=True)
+        assert [(f.directory, f.filename) for f in dfs.files] == [("&", "PROT")]
+
+    def test_a_verbatim_name_reads_back(self, disc_format):
+        dfs = DFS.create(disc_format)
+        dfs.path("&.PROT").write_bytes(b"data", verbatim_name=True)
+        assert dfs.path("&.PROT").read_bytes() == b"data"
+        assert [child.path for child in dfs.path("&").iterdir()] == ["&.PROT"]
+
+    def test_a_verbatim_name_still_needs_a_storable_directory(self, disc_format):
+        # The catalogue byte has seven bits for the directory; bit 7 is the lock.
+        dfs = DFS.create(disc_format)
+        with pytest.raises(InvalidDirectoryError):
+            dfs.path("\xe9.PROT").write_bytes(b"data", verbatim_name=True)

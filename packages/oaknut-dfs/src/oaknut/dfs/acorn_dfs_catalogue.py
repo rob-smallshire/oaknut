@@ -3,11 +3,14 @@
 from collections.abc import Sequence
 
 from oaknut.dfs.catalogue import (
+    COMMAND_DIRECTORY_CHARS,
     DFS_NAME_GRAMMAR,
     Catalogue,
     DiscInfo,
     FileEntry,
     ParsedFilename,
+    check_command_directory,
+    check_stored_directory,
     expand_host_address,
 )
 from oaknut.dfs.exceptions import CatalogFullError, DFSValidationError, FileLocked
@@ -27,7 +30,7 @@ class AcornDFSCatalogue(Catalogue):
     CATALOG_NUM_SECTORS = 2
     MAX_FILENAME_LENGTH = 7
     MAX_TITLE_LENGTH = 12
-    VALID_DIRECTORY_CHARS = "$ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    VALID_DIRECTORY_CHARS = COMMAND_DIRECTORY_CHARS
 
     def __init__(self, surface: Surface):
         super().__init__(surface)
@@ -297,7 +300,7 @@ class AcornDFSCatalogue(Catalogue):
 
         return files
 
-    def parse_filename(self, path: str) -> ParsedFilename:
+    def parse_filename(self, path: str, *, verbatim: bool = False) -> ParsedFilename:
         """Parse and validate an Acorn DFS filename, preserving its case.
 
         DFS stores a name verbatim and folds case only when matching, so
@@ -308,7 +311,10 @@ class AcornDFSCatalogue(Catalogue):
         directory, filename = self._default_parse_filename(path, default_directory="$")
 
         # Validate components (case-insensitively); store them as given.
-        self.validate_directory(directory)
+        if verbatim:
+            check_stored_directory(directory)
+        else:
+            self.validate_directory(directory)
         self.validate_filename(filename)
 
         return ParsedFilename(directory=directory, filename=filename)
@@ -326,12 +332,8 @@ class AcornDFSCatalogue(Catalogue):
         DFS_NAME_GRAMMAR.validate(filename)
 
     def validate_directory(self, directory: str) -> None:
-        """Validate Acorn DFS directory character."""
-        if len(directory) != 1:
-            raise ValueError(f"Directory must be single character, got: '{directory}'")
-
-        if directory.upper() not in self.VALID_DIRECTORY_CHARS:
-            raise ValueError(f"Invalid directory '{directory}'. Must be $ or A-Z")
+        """Validate a new name's directory: one DFS commands can create."""
+        check_command_directory(directory)
 
     def validate_title(self, title: str) -> None:
         """
@@ -380,7 +382,7 @@ class AcornDFSCatalogue(Catalogue):
         # Validate inputs (case-insensitively); store names as given —
         # DFS preserves case and folds only when matching.
         self.validate_filename(filename)
-        self.validate_directory(directory)
+        check_stored_directory(directory)
 
         # Read current state
         disc_info = self.get_disc_info()
