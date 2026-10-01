@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from oaknut.file.access import Access, parse_access
+from oaknut.file.access import ACCESS_BYTE_MASK, Access, parse_access
 from oaknut.file.formats import SOURCE_INF_PIEB, SOURCE_INF_TRAD
 from oaknut.file.meta import AcornMeta
 from oaknut.file.pieb import PIEB_ACCESS, PIEB_DEFAULT_PERM
@@ -317,7 +317,8 @@ def format_trad_inf_line(
 ) -> str:
     """Format a traditional INF line, per the Stardot producer rules.
 
-    Addresses and length are 8-digit hex and the access byte 2-digit hex.
+    Addresses and length are 8-digit hex and the access byte 2-digit hex;
+    attribute bits above the access byte (bits 8–10) are not written.
     A name that is empty, literally ``TAPE``, starts with a double quote,
     or holds a space or any character outside printable 7-bit ASCII is
     quoted, with ``"``, ``%`` and such characters percent-encoded.
@@ -332,7 +333,7 @@ def format_trad_inf_line(
         f"{load_address:08X} {exec_address:08X} {length:08X}"
     )
     if attr is not None:
-        line += f" {attr:02X}"
+        line += f" {attr & ACCESS_BYTE_MASK:02X}"
     return line
 
 

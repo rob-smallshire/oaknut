@@ -124,7 +124,7 @@ class TestFormatAccessText:
 
     def test_bit_six_is_not_run_only(self):
         # 0x40 is public execute in the Acorn byte, not a run-only flag.
-        assert format_access_text(0x40) == "/"
+        assert format_access_text(0x40) == "/E"
 
 
 class TestRunOnly:
@@ -284,3 +284,66 @@ class TestParseAccessSpec:
             parse_access_spec("+")
         with pytest.raises(InvalidAccessError):
             parse_access_spec("+L-")
+
+
+# -- The rest of the canonical word (#60 step 4) --
+
+
+class TestCanonicalWordCompletion:
+    @pytest.mark.parametrize(
+        ("flag", "value"),
+        [
+            (Access.PE, 0x40),
+            (Access.PL, 0x80),
+            (Access.SYSTEM, 0x100),
+            (Access.HIDDEN, 0x200),
+            (Access.ARCHIVE, 0x400),
+        ],
+    )
+    def test_bit_values(self, flag, value):
+        assert int(flag) == value
+
+    @pytest.mark.parametrize(
+        ("text", "value"),
+        [
+            # Public execute, written E after the slash.
+            ("WR/RE", 0x53),
+            ("WR/E", 0x43),
+            ("/e", 0x40),
+            # Bit 7 is written P in the owner part (BeebWiki FNf_access),
+            # or L in the public part ("cannot be deleted by public").
+            ("PLWR/R", 0x9B),
+            ("PWR/", 0x83),
+            ("WR/L", 0x83),
+        ],
+    )
+    def test_parse(self, text, value):
+        assert parse_access(text) == Access(value)
+
+    @pytest.mark.parametrize(
+        ("value", "text"),
+        [
+            # Public E shows only without public R or W, like the owner's E.
+            (0x43, "WR/E"),
+            (0x53, "WR/R"),
+            (0x73, "WR/WR"),
+            (0x40, "/E"),
+            # Bit 7 leads the owner part as P.
+            (0x9B, "PLWR/R"),
+            (0x80, "P/"),
+        ],
+    )
+    def test_format(self, value, text):
+        assert format_access_text(value) == text
+
+    @pytest.mark.parametrize("value", [0x43, 0x9B, 0x80, 0x40, 0xC0])
+    def test_text_round_trip_where_shown(self, value):
+        assert parse_access(format_access_text(value)) == Access(value)
+
+    def test_incremental_spec_edits_the_new_bits(self):
+        assert parse_access_spec("+/E")(Access(0x13)) == Access(0x53)
+        assert parse_access_spec("-P")(Access(0x9B)) == Access(0x1B)
+
+    def test_attribute_bits_are_not_shown_as_text(self):
+        # Bits 8-10 are DOS attributes, not access letters.
+        assert format_access_text(0x713) == "WR/R"

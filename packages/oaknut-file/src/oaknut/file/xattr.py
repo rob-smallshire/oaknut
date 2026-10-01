@@ -22,7 +22,7 @@ import os
 from pathlib import Path
 from typing import Union
 
-from oaknut.file.access import Access
+from oaknut.file.access import ACCESS_BYTE_MASK, Access
 from oaknut.file.meta import AcornMeta
 from oaknut.file.pieb import PIEB_ACCESS, PIEB_DEFAULT_PERM
 
@@ -87,7 +87,7 @@ def write_acorn_xattrs(
         _ACORN_EXEC: f"{exec_address:08X}",
     }
     if attr is not None:
-        attrs[_ACORN_ATTR] = f"{attr:02X}"
+        attrs[_ACORN_ATTR] = f"{attr & ACCESS_BYTE_MASK:02X}"
     _set_xattrs(Path(filepath), attrs)
 
 

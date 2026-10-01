@@ -333,3 +333,11 @@ class TestNameEncoding:
         filepath.write_bytes(b"$.COST` 00001900 00008023\n")
         _source, meta = read_inf_file(filepath, encoding="acorn")
         assert meta.name == "$.COST£"
+
+
+# -- Only the access byte is written (#60 step 4) --
+
+
+def test_attribute_bits_above_the_byte_are_not_written():
+    line = format_trad_inf_line("$.F", 0x1900, 0x8023, 0x100, 0x200 | 0x33)
+    assert line.split()[-1] == "33"

@@ -1,8 +1,10 @@
 """Acorn file access attributes.
 
-The ``Access`` IntFlag enum represents the standard Acorn OSFILE
-attribute byte, as stored in the ``user.acorn.attr`` extended attribute
-and traditional INF sidecars. PiEconetBridge's ``perm`` byte uses a
+The ``Access`` IntFlag enum is the canonical attribute word: the
+standard Acorn OSFILE access byte in bits 0–7, as stored in the
+``user.acorn.attr`` extended attribute and traditional INF sidecars,
+extended with the RISC OS DOSFS / Win95FS System, Hidden and Archive
+attributes in bits 8–10. PiEconetBridge's ``perm`` byte uses a
 different layout; see :mod:`oaknut.file.pieb`.
 """
 
@@ -43,6 +45,18 @@ class Access(IntFlag):
     L = 0x08  # Locked (prevents delete, overwrite, rename — disc filesystems)
     PR = 0x10  # Public read
     PW = 0x20  # Public write
+    PE = 0x40  # Public execute
+    # Bit 7: the public may not delete, rename or overwrite. ADFS calls it
+    # private, and HADFS stores a private bit here; it is not portable
+    # between filing-system families (BeebWiki, File access).
+    PL = 0x80
+
+    # DOS / CP/M attributes, as RISC OS DOSFS and Win95FS hold them. Acorn
+    # filing systems ignore them; only the INF and xattr low byte is the
+    # access byte, so they travel only where a format can hold them.
+    SYSTEM = 0x100
+    HIDDEN = 0x200
+    ARCHIVE = 0x400
 
     # Convenience composites.
     WR = R | W
@@ -60,8 +74,11 @@ class Access(IntFlag):
         return (self & (Access.R | Access.E)) == Access.E
 
 
-_OWNER_LETTERS = {"L": Access.L, "W": Access.W, "R": Access.R, "E": Access.E}
-_PUBLIC_LETTERS = {"W": Access.PW, "R": Access.PR}
+#: The access byte: the bits an access string or an INF access field holds.
+ACCESS_BYTE_MASK = 0xFF
+
+_OWNER_LETTERS = {"P": Access.PL, "L": Access.L, "W": Access.W, "R": Access.R, "E": Access.E}
+_PUBLIC_LETTERS = {"W": Access.PW, "R": Access.PR, "E": Access.PE, "L": Access.PL}
 
 
 def parse_access(text: str) -> Access:
@@ -70,9 +87,11 @@ def parse_access(text: str) -> Access:
     Accepts three forms:
 
     - **Symbolic**: ``"LWR/R"``, ``"WR/WR"``, ``"R/"`` — letters
-      before the slash are owner flags (L, W, R, E), letters after
-      are public flags (W, R). Case-insensitive. A missing slash
-      treats the entire string as owner flags.
+      before the slash are owner flags (P, L, W, R, E), letters after
+      are public flags (W, R, E, L). ``P`` before the slash and ``L``
+      after it are the same bit 7, which :func:`format_access_text`
+      writes as ``P`` (BeebWiki ``FNf_access``). Case-insensitive. A
+      missing slash treats the entire string as owner flags.
     - **Hex with prefix**: ``"0x0B"``, ``"0x33"`` — parsed as an
       integer.
     - **Bare hex**: ``"0B"``, ``"33"`` — two hex digits without
@@ -108,7 +127,8 @@ def _parse_letters(text: str) -> Access:
 
     Shared by the symbolic branch of :func:`parse_access` and by each
     ``+``/``-`` clause of :func:`parse_access_spec`. Letters before the slash
-    are owner flags (L, W, R, E); letters after are public flags (W, R).
+    are owner flags (P, L, W, R, E); letters after are public flags (W, R,
+    E, L).
     """
     if "/" in text:
         owner_part, public_part = text.split("/", 1)
@@ -189,27 +209,32 @@ def _parse_increments(spec: str) -> list[tuple[bool, Access]]:
 
 
 def format_access_hex(attr: int | None) -> str:
-    """Format an attribute byte as a two-digit uppercase hex string.
+    """Format the access byte of *attr* as a two-digit uppercase hex string.
 
+    Bits 8–10 (the DOS attributes) are not part of the access byte.
     Returns empty string for None.
     """
     if attr is None:
         return ""
-    return f"{attr:02X}"
+    return f"{attr & ACCESS_BYTE_MASK:02X}"
 
 
 def format_access_text(attr: int | None) -> str:
     """Format attributes as a human-readable access string.
 
-    Returns ``"owner/public"`` form, e.g. ``"LWR/R"``. The owner ``E`` is
-    shown only when the owner has neither ``R`` nor ``W`` — a run-only
-    file reads ``E/`` — since most filing systems treat a readable file as
-    executable anyway (BeebWiki ``FNf_access``).
+    Returns ``"owner/public"`` form, e.g. ``"LWR/R"``, after BeebWiki's
+    ``FNf_access``. The owner ``E`` is shown only when the owner has
+    neither ``R`` nor ``W`` — a run-only file reads ``E/`` — since most
+    filing systems treat a readable file as executable anyway; the public
+    ``E`` likewise. Bit 7 leads the owner part as ``P``. Bits 8–10 are
+    attributes, not access, and are not shown.
     """
     if attr is None:
         return "/"
 
     owner = ""
+    if attr & Access.PL:
+        owner += "P"
     if attr & Access.L:
         owner += "L"
     if attr & Access.W:
@@ -224,5 +249,7 @@ def format_access_text(attr: int | None) -> str:
         public += "W"
     if attr & Access.PR:
         public += "R"
+    if (attr & (Access.PR | Access.PW | Access.PE)) == Access.PE:
+        public += "E"
 
     return f"{owner}/{public}"
