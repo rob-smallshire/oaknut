@@ -43,3 +43,62 @@ def test_export_writes_every_file(runner: CliRunner, tmp_path):
     assert result.exit_code == 0, result.output
     data_filepaths = [p for p in tmp_path.rglob("*") if p.is_file() and p.suffix != ".inf"]
     assert len(data_filepaths) == 13
+
+
+# -- Copying keeps a directory DFS commands cannot create (#77) --
+
+
+def _new_dfs(runner: CliRunner, tmp_path, name="copy.ssd"):
+    image = tmp_path / name
+    runner.invoke(cli, ["create", str(image), "--title", "T"])
+    return image
+
+
+def _stat(image, path):
+    from oaknut.disc.mount import resolve_mount
+
+    with resolve_mount(f"{image}:{path}") as resolved:
+        meta = resolved.mount.acorn_meta(resolved.path)
+        return resolved.mount.read_bytes(resolved.path), meta
+
+
+def test_cp_of_a_file_keeps_its_directory(runner: CliRunner, tmp_path):
+    copy = _new_dfs(runner, tmp_path)
+    result = runner.invoke(cli, ["cp", f"{_IMAGE_FILEPATH}:&.PROT", f"{copy}:&.PROT"])
+    assert result.exit_code == 0, result.output
+    assert _stat(copy, "&.PROT") == _stat(_IMAGE_FILEPATH, "&.PROT")
+
+
+def test_cp_into_the_root_lands_in_dollar_as_any_file_does(runner: CliRunner, tmp_path):
+    # A single file copied into a DFS root goes to $, whatever its directory.
+    copy = _new_dfs(runner, tmp_path)
+    result = runner.invoke(cli, ["cp", f"{_IMAGE_FILEPATH}:&.PROT", f"{copy}:"])
+    assert result.exit_code == 0, result.output
+    assert _names(runner.invoke(cli, ["ls", "--as", "tsv", f"{copy}:$"]).output) == {"PROT"}
+
+
+def test_cp_of_the_whole_disc_reproduces_every_file(runner: CliRunner, tmp_path):
+    copy = _new_dfs(runner, tmp_path)
+    result = runner.invoke(cli, ["cp", "-r", f"{_IMAGE_FILEPATH}:", f"{copy}:"])
+    assert result.exit_code == 0, result.output
+    listing = runner.invoke(cli, ["ls", "--as", "tsv", f"{copy}:&"]).output
+    assert _names(listing) == _AMPERSAND_FILES
+    assert len(_names(runner.invoke(cli, ["ls", "--as", "tsv", f"{copy}:$"]).output)) == 6
+
+
+def test_cp_to_a_new_odd_directory_is_refused_cleanly(runner: CliRunner, tmp_path):
+    copy = _new_dfs(runner, tmp_path)
+    result = runner.invoke(cli, ["cp", f"{_IMAGE_FILEPATH}:$.FS", f"{copy}:&.FS"])
+    assert result.exit_code != 0
+    assert "Invalid directory '&'" in result.output
+    assert isinstance(result.exception, SystemExit), result.exception
+
+
+def test_put_to_an_odd_directory_is_refused_cleanly(runner: CliRunner, tmp_path):
+    copy = _new_dfs(runner, tmp_path)
+    host = tmp_path / "F"
+    host.write_bytes(b"x")
+    result = runner.invoke(cli, ["put", f"{copy}:&.F", str(host)])
+    assert result.exit_code != 0
+    assert "Invalid directory '&'" in result.output
+    assert isinstance(result.exception, SystemExit), result.exception

@@ -2376,7 +2376,7 @@ def _collect_copy_items(
             else:
                 items.append(_file_item(src_mount, match, sub_dst))
         if dst_is_dfs:
-            _validate_dfs_items(items)
+            _validate_dfs_items(items, src_is_dfs=src_is_dfs)
         return items
 
     # Non-glob: single source.
@@ -2409,7 +2409,7 @@ def _collect_copy_items(
             items.append({"kind": "mkdir", "dst": rel})
         _walk_tree(src_mount, src_bare, rel, items, src_is_dfs=src_is_dfs)
         if dst_is_dfs:
-            _validate_dfs_items(items)
+            _validate_dfs_items(items, src_is_dfs=src_is_dfs)
         return items
 
     # Source is a file.
@@ -2420,7 +2420,7 @@ def _collect_copy_items(
         rel = dst_bare
     items.append(_file_item(src_mount, src_bare, rel))
     if dst_is_dfs:
-        _validate_dfs_items(items)
+        _validate_dfs_items(items, src_is_dfs=src_is_dfs)
     return items
 
 
@@ -2521,9 +2521,25 @@ def _remap_items_for_dfs(items: list[dict]) -> list[dict]:
     return out
 
 
-def _validate_dfs_items(items: list[dict]) -> None:
-    """Mutate ``items`` in place, remapping/dropping for DFS."""
+def _validate_dfs_items(items: list[dict], *, src_is_dfs: bool) -> None:
+    """Mutate ``items`` in place, remapping/dropping for DFS.
+
+    A file copied from DFS that keeps its source's directory is marked
+    ``verbatim_name``: its name exists on a DFS disc already, so it keeps
+    a directory DFS commands cannot create (the ``&`` some discs used as
+    copy protection). A name given a new directory keeps the command rules.
+    """
     items[:] = _remap_items_for_dfs(items)
+    if not src_is_dfs:
+        return
+    for item in items:
+        if item["kind"] == "file":
+            item["verbatim_name"] = _dfs_directory(item["dst"]) == _dfs_directory(item["src"])
+
+
+def _dfs_directory(path: str) -> str:
+    """The directory of a DFS path, ``$`` for a bare name."""
+    return path.split(".", 1)[0] if "." in path else "$"
 
 
 def _walk_tree(
@@ -2579,6 +2595,7 @@ def _file_item(src_mount, src_path: str, rel_dst: str) -> dict:
         load = exec_addr = 0
     item = {
         "kind": "file",
+        "src": src_path,
         "dst": rel_dst,
         "data": src_mount.read_bytes(src_path),
         "load": load,
@@ -2679,7 +2696,10 @@ def _write_copy_item(
             raise click.ClickException(f"'{dst_path}' already exists (use -f to overwrite)")
         dst_mount.remove(dst_path, force=True)
 
-    dst_mount.write_bytes(dst_path, item["data"])
+    if item.get("verbatim_name"):
+        dst_mount.write_bytes(dst_path, item["data"], verbatim_name=True)
+    else:
+        dst_mount.write_bytes(dst_path, item["data"])
     if isinstance(dst_mount, AcornMetadata):
         # Unknown source access keeps the destination's default, which an
         # --access spec may still edit.
