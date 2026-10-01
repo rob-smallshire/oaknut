@@ -2950,7 +2950,8 @@ def chmod(
     symbolic (LWR/R, WR/WR) or hex (0x0B, 33) — replaces the access
     wholesale. An incremental value begins with ``+`` or ``-`` and edits
     the current access: ``+L`` locks, ``-W`` removes owner write, ``+R/R``
-    adds owner and public read, and clauses combine (``+L-W``). DFS only
+    adds owner and public read, and clauses combine (``+L-W``). Owner
+    letters are P, L, W, R and E; public letters W, R and E. DFS only
     supports the L (locked) bit; other flags are ignored.
 
     PATH may contain the filesystem's wildcards (see ``disc

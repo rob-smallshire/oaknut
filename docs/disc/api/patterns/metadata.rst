@@ -2,7 +2,7 @@ File metadata
 =============
 
 Acorn files carry side-channel metadata — a 32-bit load address, a
-32-bit exec address, an access byte (the L/W/R/E/PR/PW flag set),
+32-bit exec address, an access byte (owner and public read, write, execute and lock),
 and (under RISC OS) a 12-bit filetype. None of this travels through
 a plain host ``cp``, so :mod:`oaknut.file` provides:
 
@@ -41,7 +41,9 @@ Access
 The integer value of an :class:`Access` combination is the standard
 Acorn attribute byte (``int(Access.LWR) == 0x0B``), so it can be
 stored directly in xattrs, INF lines, or any other byte-sized
-slot. The :func:`~oaknut.file.parse_access` and matching
+slot. Bits 8–10 (``SYSTEM``, ``HIDDEN``, ``ARCHIVE``) extend it with
+the DOS attributes, as RISC OS DOSFS holds them; Acorn filing systems
+ignore them, and INF lines and xattrs carry only the low byte. The :func:`~oaknut.file.parse_access` and matching
 :func:`~oaknut.file.format_access_text` / :func:`~oaknut.file.format_access_hex`
 helpers convert to and from the textual forms (``"LWR/R"``, ``"0B"``,
 etc.) that show up in INF sidecars and CLI output.
@@ -53,8 +55,9 @@ word:
 - **DFS** records only a lock bit, which also means read-only: an
   unlocked file reads as ``WR`` (``&03``) and a locked one as ``LR``
   (``&09``). Writing keeps only the lock bit.
-- **ADFS** stores owner read, write, execute and locked, and public read
-  and write, each as its own bit.
+- **ADFS** stores owner read, write, execute and locked, public read,
+  write and execute, and a private bit (``PL``, bit 7), each as its own
+  bit. New and Big directories store neither execute bit nor private.
 - **AFS** stores owner and public read and write and the lock bit in its
   own byte layout (:class:`~oaknut.afs.AFSAccess`); it has no execute bit.
 - **ROMFS** records only whether a file is ``*RUN``-only: an ordinary file

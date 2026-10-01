@@ -89,7 +89,7 @@ them to and from the :class:`~oaknut.file.Access` word (see
 .. autodata:: oaknut.adfs.ADFS_ACCESS
 
 New and Big directories (the D, E, F, E+ and F+ formats) have no owner
-execute or private bit, so they use their own convention;
+execute, public execute or private bit, so they use their own convention;
 :attr:`ADFS.access_convention <oaknut.adfs.ADFS.access_convention>`
 gives the one for a disc.
 

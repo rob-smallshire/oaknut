@@ -1,7 +1,8 @@
 # File access: the canonical model and translation conventions
 
-Status: design agreed 2026-09-28. Step 1 (the conventions layer) implemented
-2026-09-29; see *As built* at the end.
+Status: design agreed 2026-09-28. Steps 1–4 implemented 2026-09-29 to
+2026-10-01; steps 5 and 6 are tracked in #75 and #76. See *As built* at the
+end.
 
 This note defines how oaknut represents file access and translates it
 between filing systems, so that every command which moves or displays a
@@ -314,8 +315,17 @@ Where the implementation differs from the design above, and why:
   is rejected with a pointer to `E`, and `format_access_text` shows `E`
   only when the owner has neither `R` nor `W` (BeebWiki `FNf_access`).
   `acorn-romfs` reads an ordinary file as `R` and a run-only one as `E`,
-  and writes run-only exactly when the access is run-only. Adding `PE`,
-  `PL` and bits 8–10 remains.
+  and writes run-only exactly when the access is run-only.
+- **The rest of step 4.** `Access` has `PE` (0x40), `PL` (0x80) and
+  `SYSTEM`, `HIDDEN` and `ARCHIVE` (0x100–0x400). The `adfs` convention maps
+  public execute to `PE` and the private bit to `PL`, so ADFS-to-ADFS copies
+  keep them; `adfs-new-directory` cannot store them. `pieb` maps its hidden
+  bit to `HIDDEN`. Access strings follow BeebWiki `FNf_access`: bit 7 leads
+  the owner part as `P` (`/L` is accepted too), and public `E` is shown only
+  without public `R` or `W`. INF lines and `user.acorn.attr` write the low
+  byte only. Bit 7 is not dropped by `translate_access` when crossing
+  families; each destination's `settle` drops what it cannot store, which
+  for every non-ADFS Acorn convention includes bit 7.
 - **First host convention: `pieb`** (`oaknut.file.pieb`, #70). PiEconetBridge's
   `perm` byte swaps the lock (`0x04`) and execute-only (`0x08`) bits relative
   to the Acorn byte and uses `0x80` for hidden; the PiEB INF and

@@ -6,7 +6,7 @@ modern host filesystem:
 
 - a 32-bit **load address** (where the file goes in memory),
 - a 32-bit **exec address** (where execution starts after load),
-- an **access byte** (the L/W/R/E/PR/PW flags), and
+- an **access byte** (owner and public read, write, execute and lock), and
 - on RISC OS files, a 12-bit **filetype** encoded inside the load
   address.
 
@@ -110,8 +110,9 @@ from). These omit the Acorn filename field but include the Econet
 owner ID — pass ``--owner N`` to set it. PiEconetBridge stores
 permissions in its own ``perm`` byte, which swaps the lock (``&04``)
 and execute-only (``&08``) bits relative to the Acorn access byte and
-uses ``&80`` for hidden; ``disc`` translates it in both directions, so
-access always reads and prints the Acorn way.
+uses ``&80`` for hidden, which ``disc`` holds as the hidden attribute;
+``disc`` translates it in both directions, so access always reads and
+prints the Acorn way.
 
 **You want zero sidecar clutter and zero filename changes.**
 Use ``xattr-acorn``. The metadata lives in extended attributes
@@ -227,23 +228,30 @@ of a ``/``, the public's (other users of a file server) to the right.
    * - ``W``
      - may be written
    * - ``E``
-     - may be executed (owner only); without ``R``, the file is
+     - may be executed; for the owner without ``R``, the file is
        ``*RUN``-only
    * - ``L``
-     - locked: may not be deleted, renamed or overwritten (owner only)
+     - locked: may not be deleted, renamed or overwritten
+   * - ``P``
+     - private, written before the owner's letters: the public may not
+       delete, rename or overwrite it (bit 7 of the access byte, the same
+       as ``L`` after the ``/``)
 
 So ``WR/R`` is owner read and write with public read, and ``LR/`` a
 locked, read-only file other users cannot read. ``E/`` is a ``*RUN``-only
 file: it may be run but not loaded, the copy protection ROMFS and
 cassette files use. Most filing systems treat a readable file as
-executable, so ``E`` is shown only in that run-only case. The same value can be
+executable, so ``E`` is shown only when neither ``R`` nor ``W`` is,
+for the owner and the public alike (``WR/E``). The same value can be
 given as the hex access byte (``0x13``, ``19``), which ``disc ls -H``
 displays.
 
 Each filing system stores what it can. DFS records only a lock bit,
 which also means read-only, so a DFS file reads as ``WR/`` or ``LR/``
 and writing to DFS keeps only ``L``. ADFS stores owner ``R``, ``W``,
-``E`` and ``L`` and public ``R`` and ``W``; AFS the same without ``E``;
+``E`` and ``L``, public ``R``, ``W`` and ``E``, and ``P`` (New-format
+D, E and F discs drop both execute bits and ``P``); AFS stores owner
+and public ``R`` and ``W`` and ``L``;
 ROMFS whether a file is readable (``R/``) or ``*RUN``-only (``E/``). A copy between filing systems keeps as much as the
 destination can store — so a file copied from DFS arrives with no public
 access. A ``*RUN``-only file (``E/``) copied to a filing system that cannot
