@@ -572,8 +572,18 @@ class DFSPath(AcornPath):
     # --- Internal helpers ---
 
     def _is_directory_path(self) -> bool:
-        """Check if this path represents a directory (single letter)."""
-        return len(self._path) == 1 and self._path.upper() in _DFS_DIRECTORY_CHARS
+        """Check if this path represents a directory (a single character).
+
+        ``$`` and the letters always name directories. Any other character
+        names one when the catalogue holds a file in it: a catalogue entry's
+        directory may be any character (the Econet Level 1 utilities disc
+        uses ``&``), and listing must resolve what it yields.
+        """
+        if len(self._path) != 1:
+            return False
+        if self._path.upper() in _DFS_DIRECTORY_CHARS:
+            return True
+        return any(_name_key(f.directory) == _name_key(self._path) for f in self._dfs.files)
 
     def _find_entry(self) -> FileEntry:
         """Find the FileEntry for this path.
