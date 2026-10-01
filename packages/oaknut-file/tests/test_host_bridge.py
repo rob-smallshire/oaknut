@@ -286,3 +286,25 @@ def test_import_default_cascade_finds_inf(tmp_path: Path):
     _, source, meta = import_with_metadata(target)
     assert source == "inf-trad"
     assert meta.load_address == SAMPLE_META.load_address
+
+
+class TestNameEncoding:
+    """Traditional INF names travel in the medium's own name codec (#72)."""
+
+    def test_export_writes_the_medium_byte(self, tmp_path):
+        target = tmp_path / "COST"
+        export_with_metadata(
+            b"data",
+            target,
+            AcornMeta(load_address=0x1900, exec_address=0x8023, access=0x33),
+            filename="$.COST£",
+            name_encoding="acorn",
+        )
+        assert (tmp_path / "COST.inf").read_bytes().startswith(b"$.COST` ")
+
+    def test_import_reads_the_medium_byte(self, tmp_path):
+        source = tmp_path / "COST"
+        source.write_bytes(b"data")
+        (tmp_path / "COST.inf").write_bytes(b"$.COST` 00001900 00008023\n")
+        _path, _label, meta = import_with_metadata(source, name_encoding="acorn")
+        assert meta.name == "$.COST£"

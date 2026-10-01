@@ -25,9 +25,10 @@ from oaknut.file.formats import SOURCE_INF_PIEB, SOURCE_INF_TRAD
 from oaknut.file.meta import AcornMeta
 from oaknut.file.pieb import PIEB_ACCESS, PIEB_DEFAULT_PERM
 
-#: The character encoding of INF files and of the bytes a percent-encoded
-#: name stands for. Latin-1 maps every byte to one character and back, so
-#: 8-bit names from older tools survive.
+#: The character encoding INF file text is read and written in. Latin-1
+#: maps every byte to one character and back, so the line's bytes survive
+#: intact; a name's bytes are then decoded with the medium's own name
+#: codec (the *encoding* arguments below), which defaults to this.
 INF_ENCODING = "latin-1"
 
 _SPACES = " \t"
@@ -76,9 +77,12 @@ def parse_inf_line(line: str, *, encoding: str = INF_ENCODING) -> tuple[str, Aco
     """Parse an INF sidecar line, auto-detecting the format.
 
     Returns ``(source_label, metadata)`` or ``None`` if the line
-    cannot be parsed. Only the first line of *line* is read. *encoding*
-    gives the character set of the bytes a percent-encoded name stands
-    for.
+    cannot be parsed. Only the first line of *line* is read. *line* is
+    INF text in :data:`INF_ENCODING`, one character per byte. *encoding*
+    is the name codec of the medium the file belongs to: a name's bytes,
+    raw or percent-encoded, are decoded with it. Bytes it cannot decode
+    are kept as their Latin-1 characters, for the destination's own name
+    rules to judge.
 
     The *source_label* is ``"inf-trad"`` or ``"inf-pieb"``.
     """
@@ -137,24 +141,25 @@ class _Scanner:
     def string_field(self) -> tuple[str, bool] | None:
         """The next string field and whether it was quoted; ``None`` if malformed."""
         if self.line[self.index] != _DQUOTE:
-            return self.field(), False
+            raw = self.field().encode(INF_ENCODING, errors="replace")
+            return _decode_name(raw, self.encoding), False
         end = self.line.find(_DQUOTE, self.index + 1)
         if end < 0:
             return None  # an unterminated quoted string
-        raw = self.line[self.index + 1 : end]
+        quoted = self.line[self.index + 1 : end]
         self.index = end + 1
-        decoded = _percent_decode(raw, self.encoding)
-        return None if decoded is None else (decoded, True)
+        raw = _percent_decode(quoted)
+        return None if raw is None else (_decode_name(raw, self.encoding), True)
 
 
-def _percent_decode(raw: str, encoding: str) -> str | None:
-    """Decode RFC 3986 percent-encoding; ``None`` for a malformed escape."""
+def _percent_decode(quoted: str) -> bytes | None:
+    """The bytes RFC 3986 percent-encoded *quoted* stands for; ``None`` if malformed."""
     out = bytearray()
     index = 0
-    while index < len(raw):
-        ch = raw[index]
+    while index < len(quoted):
+        ch = quoted[index]
         if ch == "%":
-            digits = raw[index + 1 : index + 3]
+            digits = quoted[index + 1 : index + 3]
             if len(digits) != 2 or not _is_hex(digits):
                 return None
             out.append(int(digits, 16))
@@ -162,7 +167,15 @@ def _percent_decode(raw: str, encoding: str) -> str | None:
         else:
             out += ch.encode(INF_ENCODING, errors="replace")
             index += 1
-    return out.decode(encoding, errors="replace")
+    return bytes(out)
+
+
+def _decode_name(raw: bytes, encoding: str) -> str:
+    """Name bytes in the medium's *encoding*, else as Latin-1 characters."""
+    try:
+        return raw.decode(encoding)
+    except UnicodeDecodeError:
+        return raw.decode(INF_ENCODING)
 
 
 def _address(field: str) -> int:
@@ -267,17 +280,25 @@ def _parse_trad_inf(line: str, encoding: str = INF_ENCODING) -> tuple[str, Acorn
 
 
 def _format_name(name: str, encoding: str) -> str:
-    """*name* as an INF string field, quoted and percent-encoded if it needs it."""
+    """*name* as an INF string field, quoted and percent-encoded if it needs it.
+
+    The field holds the name's bytes in the medium's *encoding*, so the
+    quoting rules apply to those bytes, not to the characters.
+    """
+    try:
+        raw = name.encode(encoding)
+    except UnicodeEncodeError:
+        raw = name.encode(INF_ENCODING, errors="replace")
     needs_quoting = (
-        name == ""
-        or name == "TAPE"
-        or name.startswith(_DQUOTE)
-        or any(not 0x21 <= ord(ch) <= 0x7E for ch in name)
+        raw == b""
+        or raw == b"TAPE"
+        or raw.startswith(b'"')
+        or any(not 0x21 <= byte <= 0x7E for byte in raw)
     )
     if not needs_quoting:
-        return name
+        return raw.decode("ascii")
     encoded = []
-    for byte in name.encode(encoding, errors="replace"):
+    for byte in raw:
         if 0x20 <= byte <= 0x7E and byte not in (0x22, 0x25):
             encoded.append(chr(byte))
         else:
@@ -299,8 +320,11 @@ def format_trad_inf_line(
     Addresses and length are 8-digit hex and the access byte 2-digit hex.
     A name that is empty, literally ``TAPE``, starts with a double quote,
     or holds a space or any character outside printable 7-bit ASCII is
-    quoted, with ``"``, ``%`` and such characters percent-encoded from
-    their *encoding* byte values. Returns a string like
+    quoted, with ``"``, ``%`` and such characters percent-encoded.
+    *encoding* is the name codec of the medium the file comes from: the
+    name is written as its bytes in that codec, and the rules above are
+    applied to those bytes, as the Stardot specification requires.
+    Returns a string like
     ``"HELLO    00001900 00008023 00000100 03"``.
     """
     line = (
@@ -328,11 +352,12 @@ def format_pieb_inf_line(
     return f"{owner:x} {load_address:x} {exec_address:x} {perm:x}"
 
 
-def read_inf_file(filepath: Path) -> tuple[str, AcornMeta] | None:
+def read_inf_file(filepath: Path, *, encoding: str = INF_ENCODING) -> tuple[str, AcornMeta] | None:
     """Read and parse an INF sidecar file.
 
     Returns ``(source_label, metadata)`` or ``None`` if the file
-    does not exist or cannot be parsed.
+    does not exist or cannot be parsed. *encoding* is the name codec of
+    the medium the file is bound for, as for :func:`parse_inf_line`.
     """
     filepath = Path(filepath)
     if not filepath.exists():
@@ -342,7 +367,7 @@ def read_inf_file(filepath: Path) -> tuple[str, AcornMeta] | None:
     text = filepath.read_bytes().decode(INF_ENCODING).lstrip()
     if not text:
         return None
-    return parse_inf_line(text)
+    return parse_inf_line(text, encoding=encoding)
 
 
 def write_inf_file(filepath: Path, content: str) -> None:

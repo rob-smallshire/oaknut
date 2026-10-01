@@ -286,3 +286,50 @@ class TestPiEconetBridgeStillDetected:
         source, meta = parse_inf_line("ABC 00001900 00008023 00001000 19")
         assert source == "inf-trad"
         assert meta.name == "ABC"
+
+
+# -- Names in the original medium's character set (#72) --
+
+
+class TestNameEncoding:
+    """A name is stored in the medium's own bytes, through its name codec.
+
+    The ``acorn`` codec (DFS) maps byte &60 to ``£`` and &7C to ``¦``,
+    where Latin-1 has ````` and ``|``.
+    """
+
+    def test_default_encodes_from_latin_1(self):
+        line = format_trad_inf_line("COST£", 0x1900, 0x8023, 0x100, 0x33)
+        assert line.startswith('"COST%A3" ')
+
+    def test_writes_the_medium_byte(self):
+        # £ is byte &60 on DFS, a printable character needing no quoting.
+        line = format_trad_inf_line("COST£", 0x1900, 0x8023, 0x100, 0x33, encoding="acorn")
+        assert line.split()[0] == "COST`"
+
+    def test_quoting_is_judged_on_the_medium_bytes(self):
+        line = format_trad_inf_line("A £B", 0x1900, 0x8023, 0x100, 0x33, encoding="acorn")
+        assert line.startswith('"A `B" ')
+
+    def test_reads_an_unquoted_name_through_the_codec(self):
+        assert parse_inf_line("COST` 1900 8023", encoding="acorn")[1].name == "COST£"
+
+    def test_reads_a_percent_encoded_name_through_the_codec(self):
+        assert parse_inf_line('"A %60%7C" 1900 8023', encoding="acorn")[1].name == "A £¦"
+
+    def test_a_name_the_codec_cannot_decode_keeps_its_latin_1_bytes(self):
+        # Byte &C9 is not ASCII; keeping it as É lets the destination's
+        # name rules report it rather than losing it.
+        assert parse_inf_line('"CAF%C9" 1900 8023', encoding="ascii")[1].name == "CAFÉ"
+        assert parse_inf_line("CAF\xc9 1900 8023", encoding="ascii")[1].name == "CAFÉ"
+
+    @pytest.mark.parametrize("name", ["COST£", "A ¦B", "$.PLAIN", "50% OFF"])
+    def test_round_trip_through_the_codec(self, name):
+        line = format_trad_inf_line(name, 0x1900, 0x8023, 0x100, 0x33, encoding="acorn")
+        assert parse_inf_line(line, encoding="acorn")[1].name == name
+
+    def test_read_inf_file_takes_the_codec(self, tmp_path):
+        filepath = tmp_path / "F.inf"
+        filepath.write_bytes(b"$.COST` 00001900 00008023\n")
+        _source, meta = read_inf_file(filepath, encoding="acorn")
+        assert meta.name == "$.COST£"

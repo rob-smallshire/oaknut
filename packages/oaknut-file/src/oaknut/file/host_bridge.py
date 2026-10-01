@@ -33,6 +33,7 @@ from oaknut.file.filename_encoding import (
 )
 from oaknut.file.formats import SOURCE_FILENAME, MetaFormat
 from oaknut.file.inf import (
+    INF_ENCODING,
     format_pieb_inf_line,
     format_trad_inf_line,
     read_inf_file,
@@ -117,6 +118,7 @@ def export_with_metadata(
     meta_format: MetaFormat | None = DEFAULT_EXPORT_META_FORMAT,
     owner: int = 0,
     filename: str | None = None,
+    name_encoding: str = INF_ENCODING,
 ) -> Path:
     """Write *data* to *target_filepath* and emit metadata.
 
@@ -134,6 +136,9 @@ def export_with_metadata(
             only by ``MetaFormat.INF_TRAD``, which is the only format
             with a filename field. When omitted, the host filename is
             used.
+        name_encoding: The name codec of the filing system *filename*
+            comes from, so a traditional INF records the name's own
+            bytes on that medium (see :func:`format_trad_inf_line`).
 
     Returns:
         The path that was actually written. For filename-encoded
@@ -159,6 +164,7 @@ def export_with_metadata(
             exec_address=exec_address,
             length=len(data),
             attr=attr,
+            encoding=name_encoding,
         )
         write_inf_file(_sidecar_filepath(target_filepath), line)
         return target_filepath
@@ -221,18 +227,20 @@ def export_with_metadata(
 # --- Import ---------------------------------------------------------------
 
 
-def _try_inf(source_filepath: Path) -> tuple[Path, str, AcornMeta] | None:
+def _try_inf(source_filepath: Path, name_encoding: str) -> tuple[Path, str, AcornMeta] | None:
     sidecar = _find_sidecar_filepath(source_filepath)
     if sidecar is None:
         return None
-    result = read_inf_file(sidecar)
+    result = read_inf_file(sidecar, encoding=name_encoding)
     if result is None:
         return None
     source_label, meta = result
     return source_filepath, source_label, meta
 
 
-def _try_xattr_acorn(source_filepath: Path) -> tuple[Path, str, AcornMeta] | None:
+def _try_xattr_acorn(
+    source_filepath: Path, name_encoding: str
+) -> tuple[Path, str, AcornMeta] | None:
     try:
         meta = read_acorn_xattrs(source_filepath)
     except (OSError, ImportError):
@@ -242,7 +250,9 @@ def _try_xattr_acorn(source_filepath: Path) -> tuple[Path, str, AcornMeta] | Non
     return source_filepath, SOURCE_XATTR_ACORN, meta
 
 
-def _try_xattr_pieb(source_filepath: Path) -> tuple[Path, str, AcornMeta] | None:
+def _try_xattr_pieb(
+    source_filepath: Path, name_encoding: str
+) -> tuple[Path, str, AcornMeta] | None:
     try:
         meta = read_econet_xattrs(source_filepath)
     except (OSError, ImportError):
@@ -252,7 +262,7 @@ def _try_xattr_pieb(source_filepath: Path) -> tuple[Path, str, AcornMeta] | None
     return source_filepath, SOURCE_XATTR_PIEB, meta
 
 
-def _try_filename(source_filepath: Path) -> tuple[Path, str, AcornMeta] | None:
+def _try_filename(source_filepath: Path, name_encoding: str) -> tuple[Path, str, AcornMeta] | None:
     clean_name, meta = parse_encoded_filename(source_filepath.name)
     if meta is None:
         return None
@@ -263,6 +273,8 @@ def _try_filename(source_filepath: Path) -> tuple[Path, str, AcornMeta] | None:
     return clean_filepath, SOURCE_FILENAME, meta
 
 
+# Every reader takes the destination's name codec; only the traditional
+# INF reader has a name field for it to decode.
 _IMPORT_READERS = {
     MetaFormat.INF_TRAD: _try_inf,
     MetaFormat.INF_PIEB: _try_inf,
@@ -277,6 +289,7 @@ def import_with_metadata(
     source_filepath: Path,
     *,
     meta_formats: Sequence[MetaFormat] = DEFAULT_IMPORT_META_FORMATS,
+    name_encoding: str = INF_ENCODING,
 ) -> tuple[Path, str | None, AcornMeta]:
     """Resolve metadata for a host file by trying readers in order.
 
@@ -284,6 +297,9 @@ def import_with_metadata(
         source_filepath: The host data file.
         meta_formats: Ordered cascade of metadata schemes to try.
             First hit wins.
+        name_encoding: The name codec of the filing system the file is
+            bound for, used to decode a traditional INF's name field
+            (see :func:`parse_inf_line`).
 
     Returns:
         ``(clean_source_path, source_label, meta)``.
@@ -307,7 +323,7 @@ def import_with_metadata(
         reader = _IMPORT_READERS.get(fmt)
         if reader is None:
             continue
-        hit = reader(source_filepath)
+        hit = reader(source_filepath, name_encoding)
         if hit is not None:
             return hit
     return source_filepath, None, AcornMeta()

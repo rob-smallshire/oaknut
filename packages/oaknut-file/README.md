@@ -81,7 +81,11 @@ where it leaves room: a missing access field means `&33`, a `Locked` or bare
 `L` marker `&19`, and a missing exec address is the load address. Quoted and
 percent-encoded names, the `TAPE` prefix, extra fields such as `CRC=` and
 `NEXT` are understood, and six-digit DFS-style addresses (`FF0E00`) are
-widened to `&FFFF0E00`.
+widened to `&FFFF0E00`. A name is held in its medium's own character set:
+`format_trad_inf_line`, `parse_inf_line` and `read_inf_file` take that
+codec as `encoding` (for example `"acorn"` for DFS, where `£` is byte `&60`),
+and `export_with_metadata` and `import_with_metadata` take it as
+`name_encoding`. Each defaults to Latin-1.
 
 PiEconetBridge's `perm` byte swaps the lock (`0x04`) and execute-only (`0x08`)
 bits relative to the Acorn byte, and uses `0x80` for hidden. The PiEB INF and
