@@ -3465,6 +3465,11 @@ def title(compound_path: str, new_title: str | None):
     sets that directory's title — an ADFS-only capability, since DFS
     and AFS directories have no title field. Targeting a DFS or AFS
     directory fails with a "no title" error.
+
+    A title the filing system cannot store — too long, a character
+    outside its character set, or (on ADFS) a CR or NUL, which end the
+    field — is refused, leaving the disc unchanged; it is never
+    truncated.
     """
     from asyoulikeit.scalar_data import ScalarContent
     from asyoulikeit.tabular_data import Report, Reports
