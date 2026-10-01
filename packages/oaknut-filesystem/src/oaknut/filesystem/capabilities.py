@@ -18,6 +18,8 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
+from oaknut.filesystem.exceptions import InvalidNameError
+
 if TYPE_CHECKING:
     from datetime import datetime, timedelta
 
@@ -547,7 +549,7 @@ class NameGrammar:
         return name
 
     def validate(self, name: str) -> None:
-        """Raise :class:`ValueError` if *name* cannot be stored.
+        """Raise :class:`InvalidNameError` if *name* cannot be stored.
 
         Liberal: enforces only length, the :attr:`forbidden` set, the
         seven-bit / control-character bounds, and codec round-tripping. The
@@ -556,24 +558,26 @@ class NameGrammar:
         passes.
         """
         if not name:
-            raise ValueError("Filename cannot be empty")
+            raise InvalidNameError("Filename cannot be empty")
         if len(name) > self.max_length:
-            raise ValueError(f"Filename too long: '{name}' (max {self.max_length} chars)")
+            raise InvalidNameError(f"Filename too long: '{name}' (max {self.max_length} chars)")
         for char in name:
             if char in self.forbidden:
-                raise ValueError(f"Forbidden character '{char}' in filename '{name}'")
+                raise InvalidNameError(f"Forbidden character '{char}' in filename '{name}'")
             code_point = self._stored_code(char)
             if self.seven_bit and code_point > 127:
-                raise ValueError(
+                raise InvalidNameError(
                     f"Character '{char}' (code {code_point}) has top bit set in '{name}'"
                 )
             if not self.allow_control and code_point < 32:
-                raise ValueError(f"Control character (code {code_point}) not allowed in '{name}'")
+                raise InvalidNameError(
+                    f"Control character (code {code_point}) not allowed in '{name}'"
+                )
         if self.codec is not None:
             try:
                 name.encode(self.codec)
             except (UnicodeEncodeError, LookupError) as exc:
-                raise ValueError(f"Filename contains invalid characters: {exc}")
+                raise InvalidNameError(f"Filename contains invalid characters: {exc}") from None
 
     def _stored_code(self, char: str) -> int:
         """The byte the :attr:`codec` stores *char* as, else its code point."""

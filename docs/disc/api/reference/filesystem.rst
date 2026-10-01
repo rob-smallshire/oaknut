@@ -218,4 +218,6 @@ Exceptions
 
 .. autoexception:: oaknut.filesystem.ReadOnlyFilesystemError
 
+.. autoexception:: oaknut.filesystem.InvalidNameError
+
 .. autoexception:: oaknut.filesystem.FilesystemExtensionError

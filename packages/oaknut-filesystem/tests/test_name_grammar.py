@@ -2,7 +2,8 @@
 write validation and its ``describe-filesystem`` reporting."""
 
 import pytest
-from oaknut.filesystem import NameGrammar
+from oaknut.exception import DataError
+from oaknut.filesystem import InvalidNameError, NameGrammar
 
 # A grammar shaped like the DFS one: seven-bit, seven characters, the two
 # path separators forbidden, names folded to upper case.
@@ -124,3 +125,23 @@ class TestNameKey:
         grammar = NameGrammar(max_length=10, case="sensitive")
         assert grammar.name_key("Hello") != grammar.name_key("HELLO")
         assert grammar.name_key("Hello") == "Hello"
+
+
+class TestInvalidNameError:
+    """A refused name is a data error the CLI renders cleanly (#78)."""
+
+    @pytest.mark.parametrize("name", ["", "TOOLONGNAME", "A:B", "A\xffB", "A\x01B"])
+    def test_refusals_raise_invalid_name_error(self, name):
+        with pytest.raises(InvalidNameError):
+            DFS_LIKE.validate(name)
+
+    def test_it_is_a_data_error_and_a_value_error(self):
+        with pytest.raises(InvalidNameError) as info:
+            DFS_LIKE.validate("TOOLONGNAME")
+        assert isinstance(info.value, DataError)
+        assert isinstance(info.value, ValueError)
+
+    def test_a_codec_refusal_raises_it_too(self):
+        grammar = NameGrammar(max_length=8, seven_bit=False, codec="ascii")
+        with pytest.raises(InvalidNameError, match="invalid characters"):
+            grammar.validate("café")

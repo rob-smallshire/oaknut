@@ -10,6 +10,15 @@ class FilesystemError(DataError):
     """Base for errors raised by the oaknut filesystem layer."""
 
 
+class InvalidNameError(FilesystemError, ValueError):
+    """A filesystem cannot store a name: too long, a forbidden character, …
+
+    Raised by :meth:`NameGrammar.validate`. As a :class:`FilesystemError`
+    the CLI boundary renders it without a traceback; it also subclasses
+    :class:`ValueError`, the historical contract of name validation.
+    """
+
+
 class GeometryError(FilesystemError):
     """A geometry specification could not be parsed, or is invalid."""
 
