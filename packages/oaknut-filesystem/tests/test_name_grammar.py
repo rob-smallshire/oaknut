@@ -56,6 +56,15 @@ class TestValidate:
         with pytest.raises(ValueError, match="invalid characters"):
             grammar.validate("café")
 
+    def test_byte_limits_apply_to_the_codec_bytes(self):
+        # The acorn codec stores £ as byte &60, within seven bits.
+        import oaknut.codecs  # noqa: F401  (registers the acorn codec)
+
+        grammar = NameGrammar(max_length=8, seven_bit=True, codec="acorn")
+        grammar.validate("COST£")  # no raise
+        with pytest.raises(ValueError, match="top bit set"):
+            grammar.validate("CAFÉ")
+
 
 class TestSummary:
     def test_summary_covers_each_rule(self):
