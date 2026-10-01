@@ -64,3 +64,24 @@ class TestCauseChain:
             ("caused by: root cause", True),
             ("a note on the root", True),
         ]
+
+
+class TestRepeatedCause:
+    """A wrapper re-raising a cause with the same message prints it once (#78)."""
+
+    def test_a_cause_repeating_the_message_is_skipped(self) -> None:
+        exc = DataError("Filename too long")
+        exc.__cause__ = ValueError("Filename too long")
+        assert _lines(exc) == [("Filename too long", False)]
+
+    def test_a_differing_cause_further_down_is_still_shown(self) -> None:
+        exc = DataError("cannot write")
+        middle = ValueError("cannot write")
+        middle.__cause__ = OSError("disc full")
+        exc.__cause__ = middle
+        assert _lines(exc) == [("cannot write", False), ("caused by: disc full", True)]
+
+    def test_a_differing_cause_is_shown(self) -> None:
+        exc = DataError("cannot write")
+        exc.__cause__ = ValueError("bad name")
+        assert _lines(exc) == [("cannot write", False), ("caused by: bad name", True)]

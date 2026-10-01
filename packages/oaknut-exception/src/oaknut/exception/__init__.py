@@ -165,20 +165,26 @@ def render_error(exc: BaseException) -> Iterator[tuple[str, bool]]:
     ``is_continuation=False``. Any ``__notes__`` (PEP 678, Python 3.11+)
     follow with ``is_continuation=True``. If the exception was raised
     with ``raise X from Y``, the cause chain is walked and rendered
-    recursively, each line prefixed with ``"caused by: "``.
+    recursively, each line prefixed with ``"caused by: "``. A cause whose
+    message repeats the one before it — a wrapper re-raising the same
+    message as its own error type — is skipped, so it prints once.
 
     Callers feed each ``(line, is_continuation)`` pair to a
     :data:`Printer` and the printer decides the styling — the splitting
     is the same regardless of whether the printer is colour-aware,
     pipe-friendly, or JSON.
     """
-    yield str(exc) or type(exc).__name__, False
+    message = str(exc) or type(exc).__name__
+    yield message, False
     for note in getattr(exc, "__notes__", ()):
         yield str(note), True
 
     cause = exc.__cause__
     while cause is not None:
-        yield f"caused by: {cause or type(cause).__name__}", True
+        cause_message = str(cause) or type(cause).__name__
+        if cause_message != message:
+            yield f"caused by: {cause_message}", True
+        message = cause_message
         for note in getattr(cause, "__notes__", ()):
             yield str(note), True
         cause = cause.__cause__
