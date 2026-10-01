@@ -36,7 +36,7 @@ def test_is_an_access_convention():
         (0x05, Access.L | Access.R),  # LR/
         (0x17, Access(0x1B)),  # LWR/R — what oaknut used to write as its "default"
         (0x08, Access.E),  # execute only: run-only
-        (0x80 | 0x13, Access(0x13)),  # hidden has no canonical bit
+        (0x80 | 0x13, Access.HIDDEN | Access(0x13)),  # hidden is the HIDDEN attribute
     ],
 )
 def test_to_canonical(perm, canonical):
@@ -58,8 +58,16 @@ def test_from_canonical(canonical, perm):
     assert PIEB_ACCESS.from_canonical(canonical) == perm
 
 
-def test_from_canonical_keeps_the_hidden_bit_of_the_current_perm():
-    assert PIEB_ACCESS.from_canonical(Access(0x13), current=0x80) == 0x93
+def test_from_canonical_writes_the_hidden_attribute():
+    assert PIEB_ACCESS.from_canonical(Access.HIDDEN | Access(0x13)) == 0x93
+
+
+def test_from_canonical_takes_hidden_from_the_word_not_the_current_perm():
+    assert PIEB_ACCESS.from_canonical(Access(0x13), current=0x80) == 0x13
+
+
+def test_hidden_round_trips():
+    assert PIEB_ACCESS.settle(Access.HIDDEN | Access.WR) == Access.HIDDEN | Access.WR
 
 
 def test_run_only_is_run_only_after_reading():

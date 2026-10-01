@@ -40,13 +40,15 @@ class PiEconetBridgeAccessConvention(AccessConvention[int]):
 
     Owner and other read and write map to the canonical owner and public
     bits. The PiEB lock bit (``0x04``) is ``L``; its execute-only bit
-    (``0x08``) is run-only, owner ``E`` without ``R``. The hidden bit has
-    no canonical counterpart, so writing keeps it from the current value.
+    (``0x08``) is run-only, owner ``E`` without ``R``; its hidden bit
+    (``0x80``) is the ``HIDDEN`` attribute.
     """
 
     name = "pieb"
     family = "pieb"
-    representable = Access.R | Access.W | Access.E | Access.L | Access.PR | Access.PW
+    representable = (
+        Access.R | Access.W | Access.E | Access.L | Access.PR | Access.PW | Access.HIDDEN
+    )
     source = "PiEconetBridge utilities/fs.c (FS_PERM_*)"
 
     def to_canonical(self, native: int, context: AccessContext = FILE_CONTEXT) -> Access:
@@ -63,6 +65,8 @@ class PiEconetBridgeAccessConvention(AccessConvention[int]):
             access |= Access.PR
         if native & _PERM_OTHER_WRITE:
             access |= Access.PW
+        if native & _PERM_HIDDEN:
+            access |= Access.HIDDEN
         return access
 
     def from_canonical(
@@ -72,7 +76,7 @@ class PiEconetBridgeAccessConvention(AccessConvention[int]):
         current: int | None = None,
     ) -> int:
         access = Access(access)
-        perm = current & _PERM_HIDDEN if current is not None else 0
+        perm = 0
         if access & Access.R:
             perm |= _PERM_OWNER_READ
         if access & Access.W:
@@ -85,6 +89,8 @@ class PiEconetBridgeAccessConvention(AccessConvention[int]):
             perm |= _PERM_OTHER_READ
         if access & Access.PW:
             perm |= _PERM_OTHER_WRITE
+        if access & Access.HIDDEN:
+            perm |= _PERM_HIDDEN
         return perm
 
 
