@@ -2440,8 +2440,7 @@ class ADFS:
                     entries=(),
                     sequence_number=0,
                 )
-                dir_data = self._disc.sector_range(start_sector, dir_sectors)
-                self._dir_format.serialize(subdir, dir_data)
+                self._serialize_into(subdir, self._disc.sector_range(start_sector, dir_sectors))
 
                 # Add entry to parent
                 entry = _ADFSDirectoryEntry(
@@ -2638,8 +2637,19 @@ class ADFS:
         num_sectors = (
             self._dir_format.serialized_size(directory) + _ADFS_BYTES_PER_SECTOR - 1
         ) // _ADFS_BYTES_PER_SECTOR
-        data = self._disc.sector_range(sector, num_sectors)
-        self._dir_format.serialize(directory, data)
+        self._serialize_into(directory, self._disc.sector_range(sector, num_sectors))
+
+    def _serialize_into(self, directory: _ADFSDirectory, data) -> None:
+        """Serialise *directory* into the sectors *data*, all or nothing.
+
+        The serialisers write field by field, so one failing part-way (a
+        title the format cannot encode) must not leave a half-written
+        directory on disc: serialise into a scratch copy and write it back
+        only once complete.
+        """
+        scratch = bytearray(data)
+        self._dir_format.serialize(directory, scratch)
+        data[:] = scratch
 
     def _persist_directory(
         self, directory: _ADFSDirectory, disc_address: int, dir_path_parts: list[str]
