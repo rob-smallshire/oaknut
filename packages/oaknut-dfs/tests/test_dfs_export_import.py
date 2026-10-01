@@ -359,3 +359,13 @@ class TestMetaFormatRoundTrip:
         dfs2 = _make_dfs(_blank_buffer())
         (dfs2.root / "$" / "SEC").import_file(target)
         assert (dfs2.root / "$" / "SEC").stat().locked
+
+
+class TestExportNameEncoding:
+    """The INF name holds the DFS catalogue byte, not a Latin-1 one (#72)."""
+
+    def test_pound_sign_is_written_as_the_catalogue_byte(self, tmp_path):
+        dfs = _make_dfs(_blank_buffer())
+        (dfs.root / "$" / "COST£").write_bytes(b"data", load_address=0x1900, exec_address=0x8023)
+        (dfs.root / "$" / "COST£").export_file(tmp_path / "COST")
+        assert (tmp_path / "COST.inf").read_bytes().startswith(b"$.COST` ")

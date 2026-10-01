@@ -138,6 +138,9 @@ class _ROMFSMount(AcornWildcards):
     #: How this filing system's access maps to and from the canonical word.
     access_convention = ACORN_ROMFS_ACCESS
 
+    #: The codec this filing system's names are stored in, for INF name fields.
+    name_encoding = ROMFS_NAME_GRAMMAR.codec
+
     def __init__(self, romfs: ROMFS, reader: ImageReader):
         self._romfs = romfs
         self._reader = reader

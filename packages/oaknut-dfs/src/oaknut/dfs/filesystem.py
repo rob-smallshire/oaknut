@@ -155,6 +155,9 @@ class _DFSMount(AcornWildcards):
     #: How this filing system's access maps to and from the canonical word.
     access_convention = ACORN_DFS_ACCESS
 
+    #: The codec this filing system's names are stored in, for INF name fields.
+    name_encoding = DFS_NAME_GRAMMAR.codec
+
     #: DFS load/exec are 18-bit; MOS ``*INFO`` shows six hex digits.
     address_hex_digits = 6
     #: ...and only six: an I/O-processor address is the OSFILE value

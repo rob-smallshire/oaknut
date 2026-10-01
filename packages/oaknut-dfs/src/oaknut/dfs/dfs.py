@@ -505,6 +505,7 @@ class DFSPath(AcornPath):
             meta_format=meta_format,
             owner=owner,
             filename=entry.path,
+            name_encoding=DFS_NAME_GRAMMAR.codec,
         )
 
     def import_file(

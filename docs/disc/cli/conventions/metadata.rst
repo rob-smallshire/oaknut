@@ -182,7 +182,11 @@ with J.G. Harston's choices (`Storing Acorn/BBC metadata on other systems
   ``NEXT`` are recognised.
 
 ``disc get`` and ``disc export`` write 8-digit addresses and a 2-digit hex
-access byte, and quote and percent-encode any name that needs it. A ZIP
+access byte, and quote and percent-encode any name that needs it. A name
+is written in the image's own character set, as its bytes are stored on
+the disc: on DFS, ``£`` is byte ``&60``, so the sidecar for ``$.COST£``
+holds that byte, not Latin-1's ``&A3``. ``disc put`` and ``disc import`` decode a sidecar name in the
+destination image's character set. A ZIP
 member without Acorn attributes has access ``&33``, and its bundled
 ``.inf`` files are read by the same rules.
 

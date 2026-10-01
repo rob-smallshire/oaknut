@@ -1538,6 +1538,7 @@ def get(
         meta_format=resolved_meta_format,
         owner=owner,
         filename=entry.name,
+        name_encoding=_name_encoding(mount),
     )
 
 
@@ -1821,30 +1822,36 @@ def put(
         data = sys.stdin.buffer.read()
         resolved_load = parse_address(load_address) if load_address else _DEFAULT_ADDR
         resolved_exec = parse_address(exec_address) if exec_address else _DEFAULT_ADDR
-    elif host_path is not None:
-        # Try to import with metadata.
-        from oaknut.file import DEFAULT_IMPORT_META_FORMATS, MetaFormat, import_with_metadata
-
-        if meta_format is not None and meta_format != "none":
-            meta_formats = (MetaFormat(meta_format),)
-        else:
-            meta_formats = DEFAULT_IMPORT_META_FORMATS
-
-        _clean_path, _label, meta = import_with_metadata(
-            host_path,
-            meta_formats=meta_formats,
-        )
-        data = host_path.read_bytes()
-        resolved_load = parse_address(load_address) if load_address else (meta.load_address or 0)
-        resolved_exec = parse_address(exec_address) if exec_address else (meta.exec_address or 0)
-        sidecar_name = meta.name
-        sidecar_access = meta.access
-        host_leaf = host_path.name.split(",", 1)[0]
-    else:
+    elif host_path is None:
         raise click.ClickException("HOST_PATH is required (or use - for stdin)")
 
     with resolve_mount(compound_path, writable=True) as resolved:
         mount = resolved.mount
+        if not read_stdin:
+            # Try to import with metadata, decoding a sidecar's name with
+            # the destination's name codec.
+            from oaknut.file import DEFAULT_IMPORT_META_FORMATS, MetaFormat, import_with_metadata
+
+            if meta_format is not None and meta_format != "none":
+                meta_formats = (MetaFormat(meta_format),)
+            else:
+                meta_formats = DEFAULT_IMPORT_META_FORMATS
+
+            _clean_path, _label, meta = import_with_metadata(
+                host_path,
+                meta_formats=meta_formats,
+                name_encoding=_name_encoding(mount),
+            )
+            data = host_path.read_bytes()
+            resolved_load = (
+                parse_address(load_address) if load_address else (meta.load_address or 0)
+            )
+            resolved_exec = (
+                parse_address(exec_address) if exec_address else (meta.exec_address or 0)
+            )
+            sidecar_name = meta.name
+            sidecar_access = meta.access
+            host_leaf = host_path.name.split(",", 1)[0]
         target = _put_target(
             mount,
             resolved.path,
@@ -2182,6 +2189,16 @@ def _iter_target_paths(mount, pattern: str, *, recursive: bool, wildcards: bool 
             yield from _walk_post_order_mount(mount, seed)
         else:
             yield seed
+
+
+def _name_encoding(mount) -> str:
+    """The codec *mount* stores names in, for INF name fields.
+
+    A filesystem without one gets the INF default, Latin-1.
+    """
+    from oaknut.file.inf import INF_ENCODING
+
+    return getattr(mount, "name_encoding", None) or INF_ENCODING
 
 
 def _destination_access(mount, access, *, is_directory: bool = False, override=None) -> int:
@@ -3749,6 +3766,7 @@ def _export_recursive(
                 meta_format=meta_format,
                 owner=owner,
                 filename=child.name,
+                name_encoding=_name_encoding(mount),
             )
             if verbose:
                 click.echo(child.name, err=True)
@@ -3844,7 +3862,9 @@ def _import_host_dir(
         if entry.suffix.lower() == ".inf":
             continue  # Skip INF sidecar files.
         if entry.is_file():
-            _clean, _label, meta = import_with_metadata(entry, meta_formats=meta_formats)
+            _clean, _label, meta = import_with_metadata(
+                entry, meta_formats=meta_formats, name_encoding=_name_encoding(mount)
+            )
             # Prefer the Acorn name the metadata source carries (an INF
             # filename field, or a filename-encoded name) — it recovers a
             # name the host filename may have transliterated — falling back

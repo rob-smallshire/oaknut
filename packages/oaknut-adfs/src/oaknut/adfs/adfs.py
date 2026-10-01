@@ -1101,6 +1101,7 @@ class ADFSPath(AcornPath):
             meta_format=meta_format,
             owner=owner,
             filename=self.name,
+            name_encoding=self._adfs._name_grammar.codec,
         )
 
     def import_file(

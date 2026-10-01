@@ -86,6 +86,9 @@ class _AFSMount(AcornWildcards):
     #: How this filing system's access maps to and from the canonical word.
     access_convention = AFS_ACCESS
 
+    #: The codec this filing system's names are stored in, for INF name fields.
+    name_encoding = AFS_NAME_GRAMMAR.codec
+
     #: AFS load/exec are full 32-bit fields; display them as eight hex
     #: digits, as RISC OS ``*Info`` does.
     address_hex_digits = 8

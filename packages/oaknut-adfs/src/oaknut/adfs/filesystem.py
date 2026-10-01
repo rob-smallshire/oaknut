@@ -146,6 +146,15 @@ class _ADFSMount(AcornWildcards):
         """
         return self._adfs.access_convention
 
+    @property
+    def name_encoding(self) -> str:
+        """The codec this disc's names are stored in, for INF name fields.
+
+        Depends on the directory format: ASCII for Old and New
+        directories, Latin-1 for Big ones.
+        """
+        return self._adfs._name_grammar.codec
+
     def path_root(self) -> str:
         return "$"
 

@@ -811,6 +811,7 @@ class AFSPath(AcornPath):
             meta_format=meta_format,
             owner=owner,
             filename=self.name,
+            name_encoding=AFS_NAME_GRAMMAR.codec,
         )
 
     @resolving_io
