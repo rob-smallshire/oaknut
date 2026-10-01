@@ -55,8 +55,19 @@ templates_path = [str((Path(__file__).resolve().parent / "_templates"))]
 autodoc_member_order = "bysource"
 autodoc_typehints = "description"
 
+# Each inventory is tried online first, then from a committed copy, so an
+# outage at the source (docs.python.org returned 503 during the 13.1.1
+# release) cannot fail a build that treats warnings as errors: a fallback
+# that works turns the failure into an informational message. Refresh the
+# copy occasionally with
+#   curl -o docs/_shared/intersphinx/python.inv https://docs.python.org/3/objects.inv
+_INTERSPHINX_DIRPATH = Path(__file__).resolve().parent / "intersphinx"
+
 intersphinx_mapping = {
-    "python": ("https://docs.python.org/3", None),
+    "python": (
+        "https://docs.python.org/3",
+        (None, str(_INTERSPHINX_DIRPATH / "python.inv")),
+    ),
 }
 
 exclude_patterns = ["_build"]
