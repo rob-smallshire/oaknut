@@ -32,6 +32,7 @@ from oaknut.filesystem import (
     GeometryGrammar,
     Identification,
     ImageReader,
+    InvalidNameError,
     NameGrammar,
 )
 from oaknut.filesystem.exceptions import ReadOnlyFilesystemError
@@ -71,13 +72,15 @@ _name_key = ROMFS_NAME_GRAMMAR.name_key
 def _validate_romfs_name(name: str) -> None:
     """Validate *name* against :data:`ROMFS_NAME_GRAMMAR`.
 
-    The grammar raises :class:`ValueError`; re-raise it as a
-    :class:`ROMFSError` so the filesystem's error type is unchanged.
+    The grammar raises :class:`~oaknut.filesystem.InvalidNameError`;
+    re-raise it as a :class:`ROMFSError`, keeping its exit code, so the
+    filesystem's error type is unchanged and a refused name exits with
+    ``USAGE``.
     """
     try:
         ROMFS_NAME_GRAMMAR.validate(name)
-    except ValueError as exc:
-        raise ROMFSError(str(exc)) from exc
+    except InvalidNameError as exc:
+        raise ROMFSError(str(exc), exit_code=exc.exit_code) from exc
 
 
 def _linear_geometry(size: int) -> Geometry:

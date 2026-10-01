@@ -34,6 +34,7 @@ from oaknut.file.host_bridge import (
     DEFAULT_EXPORT_META_FORMAT,
     DEFAULT_IMPORT_META_FORMATS,
 )
+from oaknut.filesystem import InvalidNameError
 
 if TYPE_CHECKING:
     from os import PathLike
@@ -76,8 +77,10 @@ def _validate_part(part: str) -> None:
 
     The root marker passes unconditionally; otherwise the shared grammar
     decides (length, the ``.`` / ``:`` / space exclusions, the seven-bit
-    ASCII bound). The grammar raises :class:`ValueError`; re-raise it as
-    an :class:`AFSPathError` so the path layer's contract is unchanged.
+    ASCII bound). The grammar raises
+    :class:`~oaknut.filesystem.InvalidNameError`; re-raise it as an
+    :class:`AFSPathError`, keeping its exit code, so the path layer's
+    contract is unchanged and a refused name exits with ``USAGE``.
     """
     if not part:
         raise AFSPathError("path component must not be empty")
@@ -85,8 +88,8 @@ def _validate_part(part: str) -> None:
         return  # the root marker is always valid
     try:
         AFS_NAME_GRAMMAR.validate(part)
-    except ValueError as exc:
-        raise AFSPathError(str(exc)) from exc
+    except InvalidNameError as exc:
+        raise AFSPathError(str(exc), exit_code=exc.exit_code) from exc
 
 
 class AFSPath(AcornPath):

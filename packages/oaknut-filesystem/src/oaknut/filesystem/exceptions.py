@@ -14,9 +14,13 @@ class InvalidNameError(FilesystemError, ValueError):
     """A filesystem cannot store a name: too long, a forbidden character, …
 
     Raised by :meth:`NameGrammar.validate`. As a :class:`FilesystemError`
-    the CLI boundary renders it without a traceback; it also subclasses
-    :class:`ValueError`, the historical contract of name validation.
+    the CLI boundary renders it without a traceback, exiting with
+    :data:`ExitCode.USAGE`, the code for name-validation failures; it also
+    subclasses :class:`ValueError`, the historical contract of name
+    validation.
     """
+
+    _exit_code = ExitCode.USAGE
 
 
 class GeometryError(FilesystemError):

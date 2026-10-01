@@ -2,7 +2,7 @@
 write validation and its ``describe-filesystem`` reporting."""
 
 import pytest
-from oaknut.exception import DataError
+from oaknut.exception import DataError, ExitCode
 from oaknut.filesystem import InvalidNameError, NameGrammar
 
 # A grammar shaped like the DFS one: seven-bit, seven characters, the two
@@ -140,6 +140,12 @@ class TestInvalidNameError:
             DFS_LIKE.validate("TOOLONGNAME")
         assert isinstance(info.value, DataError)
         assert isinstance(info.value, ValueError)
+
+    def test_it_exits_as_a_usage_error(self):
+        # The exit-code conventions: name-validation failures are USAGE (64).
+        with pytest.raises(InvalidNameError) as info:
+            DFS_LIKE.validate("TOOLONGNAME")
+        assert info.value.exit_code == ExitCode.USAGE
 
     def test_a_codec_refusal_raises_it_too(self):
         grammar = NameGrammar(max_length=8, seven_bit=False, codec="ascii")

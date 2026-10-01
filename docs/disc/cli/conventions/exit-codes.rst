@@ -33,7 +33,9 @@ At a glance
      - Command-line usage error: missing argument, unknown option,
        bad option type, malformed in-image name. Emitted by Click
        before any command logic runs, or by oaknut for name-validation
-       failures.
+       failures on any filing system — a name too long, a forbidden
+       character, or a new DFS file outside ``$`` and the letter
+       directories.
    * - ``65``
      - ``DATA_ERR``
      - Invalid data on the disc itself — a corrupted catalogue,

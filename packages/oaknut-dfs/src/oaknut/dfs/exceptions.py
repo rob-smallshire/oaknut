@@ -36,9 +36,12 @@ class InvalidDirectoryError(DFSError, ValueError):
     A new name's directory must be one DFS commands can create (``$`` or
     a letter); a name copied verbatim from another catalogue needs only a
     directory its catalogue entry can store. As a :class:`DFSError` the
-    CLI boundary renders it without a traceback; it also subclasses
+    CLI boundary renders it without a traceback, exiting with
+    :data:`ExitCode.USAGE` like any name refusal; it also subclasses
     :class:`ValueError`, the historical contract of name validation.
     """
+
+    _exit_code = ExitCode.USAGE
 
 
 class CatalogError(DFSError):

@@ -76,6 +76,7 @@ from oaknut.file.host_bridge import (
     import_with_metadata,
 )
 from oaknut.file.integrity import assert_no_duplicate_names
+from oaknut.filesystem import InvalidNameError
 
 if TYPE_CHECKING:
     from oaknut.file import BootOption
@@ -91,13 +92,15 @@ def _validate_adfs_leaf(name: str, grammar=ADFS_NAME_GRAMMAR) -> None:
     Applied only when *creating* a name (write, mkdir, rename target) —
     never on navigation or read, so a byte-edited disc whose names break
     these rules still lists and reads. Big directory discs pass the longer
-    :data:`ADFS_BIG_NAME_GRAMMAR`. The grammar raises :class:`ValueError`;
-    re-raise it as an :class:`ADFSPathError`.
+    :data:`ADFS_BIG_NAME_GRAMMAR`. The grammar raises
+    :class:`~oaknut.filesystem.InvalidNameError`; re-raise it as an
+    :class:`ADFSPathError` keeping its exit code, so a refused name exits
+    with ``USAGE`` on every filing system.
     """
     try:
         grammar.validate(name)
-    except ValueError as exc:
-        raise ADFSPathError(str(exc)) from exc
+    except InvalidNameError as exc:
+        raise ADFSPathError(str(exc), exit_code=exc.exit_code) from exc
 
 
 _ADFS_SECTORS_PER_TRACK = 16

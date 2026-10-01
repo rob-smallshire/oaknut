@@ -1,4 +1,8 @@
-"""Invalid filenames are reported cleanly, once, on every filing system (#78)."""
+"""Invalid filenames are reported cleanly, once, on every filing system (#78).
+
+Every name refusal exits with ``USAGE`` (64), the code the exit-code
+conventions give to name-validation failures.
+"""
 
 from __future__ import annotations
 
@@ -36,7 +40,7 @@ def _image(runner: CliRunner, tmp_path: Path, kind: str) -> Path:
 
 def _assert_clean_once(result, message: str) -> None:
     assert isinstance(result.exception, SystemExit), result.exception
-    assert result.exit_code != 0
+    assert result.exit_code == ExitCode.USAGE, result.output
     assert result.output.count(message) == 1, result.output
 
 
@@ -52,7 +56,11 @@ class TestDFS:
         image = _image(runner, tmp_path, "dfs")
         result = runner.invoke(cli, ["put", f"{image}:{name}", str(_host_file(tmp_path))])
         _assert_clean_once(result, message)
-        assert result.exit_code == ExitCode.DATA_ERR
+
+    def test_put_to_a_directory_dfs_commands_cannot_make_refuses_cleanly(self, runner, tmp_path):
+        image = _image(runner, tmp_path, "dfs")
+        result = runner.invoke(cli, ["put", f"{image}:&.F", str(_host_file(tmp_path))])
+        _assert_clean_once(result, "Invalid directory '&'")
 
     def test_mv_refuses_cleanly(self, runner, tmp_path):
         image = _image(runner, tmp_path, "dfs")
@@ -79,3 +87,16 @@ def test_adfs_mkdir_reports_the_refusal_once(runner, tmp_path):
     image = _image(runner, tmp_path, "adfs")
     result = runner.invoke(cli, ["mkdir", f"{image}:$.ABCDEFGHIJKL"])
     _assert_clean_once(result, "Filename too long")
+
+
+@pytest.mark.parametrize(
+    ("kind", "path"),
+    [
+        ("adfs", "$.CAF\u00c9"),
+        ("afs", "afs:$.CAF\u00c9"),
+    ],
+)
+def test_a_top_bit_name_is_a_usage_error(runner, tmp_path, kind, path):
+    image = _image(runner, tmp_path, kind)
+    result = runner.invoke(cli, ["put", f"{image}:{path}", str(_host_file(tmp_path))])
+    _assert_clean_once(result, "has top bit set")
