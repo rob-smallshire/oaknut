@@ -83,7 +83,7 @@ from oaknut.filesystem.identification import (
 )
 from oaknut.filesystem.reader import ImageReader, ImageSource, reader_for
 
-__version__ = "13.1.2"
+__version__ = "13.1.3"
 
 __all__ = [
     # contract
