@@ -10,7 +10,10 @@ Sections:
 
   envelope     Create the empty ADFS hard-disc envelope.
   install_fs   Copy the file-server binary across from its SSD.
-  boot         Write !BOOT and set the boot option (read + set).
+  startup      Tokenise and store StartFS, a BASIC program that answers
+               the server's start-up questions unattended. Its source is
+               sources/StartFS.bas, shown on the page by literalinclude.
+  boot         Write a !BOOT that chains StartFS; set the boot option.
   plan_afs     Dry-run sizing of the AFS partition (afs-plan).
   init_afs     Carve out the AFS partition for real (afs-init).
   inspect_afs  Confirm the resulting user list (afs-users).
@@ -36,9 +39,13 @@ from cli_example_helper import in_tmp_dir, section, show  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 SOURCE = REPO_ROOT / "tests" / "data" / "images" / "cookbook" / "l3v126.ssd"
+# The start-up program's host source; the cookbook page shows this same
+# file with a literalinclude, so the text cannot drift from what runs.
+STARTFS_SOURCE = Path(__file__).resolve().parent / "sources" / "StartFS.bas"
 
 with in_tmp_dir():
     shutil.copy(SOURCE, "l3v126.ssd")
+    shutil.copy(STARTFS_SOURCE, "StartFS.bas")
 
     section("envelope")
     show("disc create scsi0.dat --geometry capacity=10MB --title Server")
@@ -46,8 +53,14 @@ with in_tmp_dir():
     section("install_fs")
     show("disc cp 'l3v126.ssd:$.FS' 'scsi0.dat:$.FS3v126'")
 
+    section("startup")
+    show(
+        "oaknut-basic tokenise StartFS.bas"
+        " | disc put 'scsi0.dat:$.StartFS' --load 0xFFFF1900 --exec 0xFFFF8023"
+    )
+
     section("boot")
-    show("printf '*RUN $.FS3v126\\r' | disc put 'scsi0.dat:$.!BOOT' -")
+    show("printf 'CHAIN\"StartFS\"\\r' | disc put 'scsi0.dat:$.!BOOT' -")
     show("disc opt scsi0.dat")
     show("disc opt scsi0.dat EXEC")
 

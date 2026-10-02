@@ -449,169 +449,108 @@ could hold, which is exactly why the four discs became one.
 Creating a Level 3 File Server disc
 -----------------------------------
 
-The full walkthrough builds a bootable L3FS hard disc from a fresh
-ADFS envelope plus the Level 3 File Server executable. It uses version
-1.26 from the `mmbeeb/L3V126 <https://github.com/mmbeeb/L3V126>`_
-repository, the canonical source: download ``l3v126.ssd`` from its
-`Version 1.26 release
-<https://github.com/mmbeeb/L3V126/releases/tag/MML3V126>`_. On that disc
-the executable is ``$.FS``; the recipe installs it on the server disc as
-``$.FS3v126``, the name the community conventionally gives the 1.26 file
-server so its version is plain from a catalogue.
+This recipe builds a hard disc that boots straight into a running Level
+3 File Server. It uses version 1.26: download ``l3v126.ssd`` from the
+`mmbeeb/L3V126 release
+<https://github.com/mmbeeb/L3V126/releases/tag/MML3V126>`_. The
+executable on that disc is ``$.FS``; the recipe installs it as
+``$.FS3v126``, the name conventionally given to the 1.26 server.
 
-**1. Lay down an empty ADFS hard-disc envelope.**
+**1. Create an empty ADFS hard disc.**
 
 .. cli-example:: l3fs_disc
    :section: envelope
 
-Here ``disc create`` reserves the file on the host and writes the
-ADFS catalogue + free-space map. The ``.dat`` extension selects ADFS;
-``--geometry capacity=10MB`` sizes the hard disc (``disc`` derives a
-cylinders/heads/sectors layout for that capacity); and ``--title``
-sets the on-disc title that ``*CAT`` will display.
+The ``.dat`` extension selects ADFS, and ``--geometry capacity=10MB``
+sizes the disc.
 
-The command is silent on success — see :doc:`conventions/exit-codes`
-for the broader contract.
-
-**2. Install the file-server binary onto the new disc.**
+**2. Install the file server.**
 
 .. cli-example:: l3fs_disc
    :section: install_fs
 
-A classic cross-format ``disc cp`` — the source ``$.FS`` lives on
-the release's DFS floppy, and the copy lands as ``$.FS3v126`` on the
-ADFS partition of the hard disc we just created. Load and exec
-addresses survive the crossing; see :doc:`/api/patterns/metadata`
-for the attribute-mapping table.
+The copy from the DFS floppy preserves the load and exec addresses.
 
-**3. Write a !BOOT command file and turn on autoboot.**
+**3. Add a start-up program that answers the server's questions.**
+
+On start-up the file server asks for the ``Number of drives:``, a
+``Command :`` (``S`` to start, with no :kbd:`RETURN`), and the number
+of ``Stations:``. This BASIC program places the answers in the keyboard
+buffer, then runs the server:
+
+.. literalinclude:: ../../../scripts/cli-examples/sources/StartFS.bas
+   :language: bbcbasic
+   :caption: StartFS.bas
+
+Line 80 defines soft key 0 as the answers, with ``|M`` for
+:kbd:`RETURN`. Line 90, ``*FX138,0,128``, inserts soft key 0's code
+into the keyboard buffer, so the server reads the answers as if
+:kbd:`f0` had been pressed. Line 100 runs the server (``*/`` is short
+for ``*RUN``). The date comes from the real-time clock dongle the
+server checks for, which doubles as its copy protection. Line 70 guards
+against running without the 6502 Second Processor the server requires.
+
+Tokenise the program onto the disc with the addresses a saved BASIC
+program carries:
+
+.. cli-example:: l3fs_disc
+   :section: startup
+
+**4. Chain the start-up program at boot.**
 
 .. cli-example:: l3fs_disc
    :section: boot
 
-The ``!BOOT`` command file, which will be ``*EXEC``-uted at boot,
-contains ``*RUN $.FS3v126\r`` — the ``*RUN`` invocation plus the
-Acorn carriage-return line ending — so that loading the disc
-launches the file-server executable. Here ``printf`` builds those
-bytes on stdout, the shell pipes them in, and the trailing hyphen
-tells ``disc put`` to read from stdin (the standard Unix
-convention). We use ``printf`` rather than ``echo`` because ``echo``
-appends ``\n`` on every common shell, and we need ``\r`` — see
-:doc:`getting-started` for the line-ending rationale.
+The ``!BOOT`` file holds ``CHAIN"StartFS"`` with an Acorn ``\r`` line
+ending, which is why the recipe uses ``printf`` rather than ``echo``.
+Boot option ``EXEC`` makes :kbd:`SHIFT-BREAK` ``*EXEC`` it. Avoid
+starting ``!BOOT`` with ``*ADFS``: changing filing system closes the
+``*EXEC`` file before the ``CHAIN`` is read.
 
-With no value, ``disc opt scsi0.dat`` reads the current boot option
-(``0`` / ``OFF`` on a freshly-created disc); passing ``EXEC`` sets
-it. Symbolic names (``OFF`` / ``LOAD`` / ``RUN`` / ``EXEC``) are
-accepted alongside the numeric forms (``0`` / ``1`` / ``2`` /
-``3``); ``disc opt --help`` lists the full mapping.
-
-``EXEC`` is the right choice here because ``!BOOT`` is a command
-file, not a binary — pressing :kbd:`SHIFT-BREAK` runs
-``*EXEC $.!BOOT``, which effectively types the ``*RUN $.FS3v126``
-line at the OS prompt.
-
-**4. Plan the AFS partition (optional).**
+**5. Plan the AFS partition (optional).**
 
 .. cli-example:: l3fs_disc
    :section: plan_afs
 
-The ``afs plan`` command is a dry-run that shows the disc's geometry,
-how many sectors ADFS currently occupies, and what an AFS partition built
-from the remaining free space would look like. Nothing is written
-— the step is there to let you review the proposed shape before
-committing. Skip it if you know what you want.
+This dry run shows the AFS partition that the free space after ADFS
+would hold. Nothing is written.
 
-**5. Initialise the AFS partition.**
+**6. Initialise the AFS partition.**
 
 .. cli-example:: l3fs_disc
    :section: init_afs
 
-The ``afs init`` command carves out the AFS partition for real, adds
-an ``RJS`` regular user, omits the provided-by-default ``Welcome``
-account, and emplaces two shipped library images.
+The ``afs init`` command claims the free space ``afs plan`` proposed
+(pass ``--cylinders`` for less), adds user ``RJS``, drops the built-in
+``Welcome`` account, and emplaces two shipped libraries. The
+``--emplace`` option also accepts the path to any ADFS ``.adl``.
 
-Note the absence of ``--cylinders``: when omitted, ``afs init``
-claims the existing free space, which is exactly what ``afs plan``
-suggested. Pass an explicit value if you want a smaller AFS region
-and ADFS retained beyond what is strictly necessary.
-
-The ``--emplace`` option accepts a shipped name (``Library``,
-``Library1``, ``ArthurLib``) or a path to any ADFS ``.adl``; the
-contents land in a directory of the same name on the AFS partition.
-
-**6. Inspect the new AFS partition.**
+**7. Check the accounts.**
 
 .. cli-example:: l3fs_disc
    :section: inspect_afs
 
-The ``disc afs users`` command confirms the resulting account list:
-``Syst``, ``Boot``, and ``RJS`` are present; ``Welcome`` is not. The
-``Syst`` and ``Boot`` accounts are not created explicitly — they
-are built-ins and arrive for free with every freshly-initialised
-AFS partition (``Welcome`` would too, but for the explicit
-omission). To change a built-in's quota instead of dropping it,
-supply ``--user NAME:QUOTA`` and the spec overrides the default.
+The ``Syst`` and ``Boot`` accounts are built in. No account has a password
+until you set one, with ``--user-password NAME=VALUE`` on ``afs init``
+or later with ``disc afs passwd``.
 
-No account has a password unless you ask for one — a freshly
-initialised disc leaves even the system account ``Syst`` open. The
-Level 3 File Server stores passwords as up to six cleartext ASCII
-characters (there is no encryption), so the only thing guarding the
-file on a real disc is its hidden access byte. Passwords live outside
-the ``--user`` spec — a password may itself contain a colon, which the
-colon-delimited spec could not represent — and are set with their own
-``--user-password NAME=VALUE`` option, split once on the first ``=``.
-To ship the disc with the system account already protected, add it at
-initialisation::
-
-    disc afs init scsi0.dat --disc-name Server --user-password Syst=secret
-
-``NAME`` matches a ``--user`` or a built-in; set a password later with
-``disc afs passwd IMAGE NAME --password VALUE``.
-
-**7. Copy files into a user's directory and the library.**
+**8. Copy files into the AFS partition.**
 
 .. cli-example:: l3fs_disc
    :section: populate_afs
 
-A user's files live in the AFS partition, so the destination path
-starts with the ``afs:`` partition selector. Here a file on a DFS
-floppy goes into a ``Saves`` directory in ``RJS``'s user root; ``disc
-cp`` creates ``Saves`` on the way. The selector ends with a colon:
-``scsi0.dat:afs.RJS.Saves.MAX`` names an ADFS path whose first
-directory is called ``afs``, and ``disc`` warns when it sees one (see
-:doc:`conventions/paths`).
+The ``afs:`` selector addresses the AFS partition, and ``disc cp``
+creates ``Saves`` on the way. Files from DFS arrive owner-only
+(``WR/``), so anything other users run, such as a library command,
+needs ``--access R/R`` or a later ``disc chmod``.
 
-A file copied from DFS arrives owner-only (``WR/``): DFS has no public
-access to carry across. That suits a user's own files, but anything
-other users run — a library command, a shared game — needs public read,
-or they get "Insufficient access". ``--access R/R`` sets it as the file
-is copied into ``$.Library``; ``disc chmod 'scsi0.dat:afs:$.Library.*'
-R/R`` does the same afterwards (see
-:doc:`conventions/metadata`, *File access*).
-
-**8. Verify the dual-partition shape and walk the disc.**
+**9. Verify the disc.**
 
 .. cli-example:: l3fs_disc
    :section: verify
 
-The ``stat`` report confirms the three-block layout — a ``Disc``
-envelope carrying the physical geometry, then ``Partition 1: ADFS``
-holding the boot configuration and the FS binary, then
-``Partition 2: AFS`` ready to serve files over Econet. The
-single-partition collapsed form documented in
-:doc:`conventions/output-formats` does not apply here because the
-two partitions genuinely carry different things; the envelope is
-the natural umbrella.
-
-Walking the whole image with ``disc tree`` then exposes both
-halves. The ADFS half is tiny — just ``!BOOT`` and the file-server
-executable ``FS3v126``, which is all the boot needs to load before handing
-off to AFS.
-
-The AFS half shows ``RJS``'s ``Saves`` directory from step 7 and the
-two emplaced library trees in full, with the BBC-era utilities
-(``LCAT``, ``NETMON``, ``PROT``, ``USERS``, …) that the Level 3 File
-Server's clients reach for via ``*<command>`` once the server is up.
+The ADFS partition holds just the boot files; the AFS partition holds
+the users' directories and the libraries the server's clients use.
 
 
 A checksum table for every file on a disc
