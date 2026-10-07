@@ -3551,6 +3551,13 @@ def _detect_directory_layout(unified: UnifiedDisc) -> tuple[ADFSDirectoryFormat,
     sig2 = bytes(unified.sector_range(_OLD_MAP_ROOT_SECTOR, 1)[1:5])
     sig4 = bytes(unified.sector_range(_D_MAP_ROOT_SECTOR, 1)[1:5])
     raise ADFSError(
-        "Unrecognised ADFS directory format. Expected a valid Old directory at "
-        f"0x200 (got signature {sig2!r}) or New directory at 0x400 (got {sig4!r})."
+        "no ADFS root directory: expected 'Hugo' at &201 or 'Hugo'/'Nick' at &401, "
+        f"found {_show_signature(sig2)} and {_show_signature(sig4)}"
     )
+
+
+def _show_signature(signature: bytes) -> str:
+    """*signature* quoted when printable ASCII, else as hex bytes."""
+    if all(0x20 <= byte < 0x7F for byte in signature):
+        return f"'{signature.decode('ascii')}'"
+    return " ".join(f"{byte:02X}" for byte in signature)

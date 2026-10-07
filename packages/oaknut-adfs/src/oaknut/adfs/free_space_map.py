@@ -108,16 +108,16 @@ class OldFreeSpaceMap:
         calculated_0 = _calculate_old_map_checksum(self._data, 0x000)
         if expected_0 != calculated_0:
             errors.append(
-                f"Sector 0 checksum mismatch: expected 0x{expected_0:02X}, "
-                f"calculated 0x{calculated_0:02X}"
+                f"free-space map sector 0 checksum is &{expected_0:02X} "
+                f"but the sector sums to &{calculated_0:02X}"
             )
 
         expected_1 = self._data[_CHECK_1_OFFSET]
         calculated_1 = _calculate_old_map_checksum(self._data, 0x100)
         if expected_1 != calculated_1:
             errors.append(
-                f"Sector 1 checksum mismatch: expected 0x{expected_1:02X}, "
-                f"calculated 0x{calculated_1:02X}"
+                f"free-space map sector 1 checksum is &{expected_1:02X} "
+                f"but the sector sums to &{calculated_1:02X}"
             )
 
         return errors

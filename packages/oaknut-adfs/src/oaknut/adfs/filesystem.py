@@ -36,6 +36,7 @@ from oaknut.filesystem import (
     ImageReader,
     Lens,
     Partition,
+    Rejection,
     floppy_geometry,
 )
 from oaknut.filesystem.wildcards import ACORN_WILDCARDS, AcornWildcards
@@ -379,9 +380,13 @@ class ADFS(Filesystem):
     #: disc by afs-init, not by `disc create`).
     creates = frozenset({".adf", ".ads", ".adm", ".adl", ".dat"})
 
-    def probe(self, reader: ImageReader) -> Identification | None:
+    def probe(self, reader: ImageReader) -> Identification | Rejection:
         if reader.size < _MAP_BYTES:
-            return None
+            return Rejection(
+                self.name,
+                f"image too small for an ADFS free-space map: {reader.size} bytes, "
+                f"needs {_MAP_BYTES}",
+            )
 
         # Recognise exactly what ``open`` can read: the content detector
         # handles every layout (Old map with Old or New directories, and the
@@ -392,8 +397,9 @@ class ADFS(Filesystem):
         # from what the reader actually supports.
         try:
             adfs = _ADFSDisc.from_buffer(reader.buffer())
-        except ADFSError:
-            return None
+        except ADFSError as exc:
+            # The reader's own reason for refusing the disc is the user's.
+            return Rejection(self.name, str(exc))
 
         if adfs.is_new_map:
             dr = adfs._map.disc_record
