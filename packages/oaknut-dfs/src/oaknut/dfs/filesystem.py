@@ -126,6 +126,14 @@ def _propose_geometry(
     # 400 whole sectors plus a 128-byte trailer) to the declared 400. When
     # the declared total is implausible (Owlet writes 3), fall back to
     # flooring the physical length to whole sectors as before.
+    # No single-sided DFS floppy holds more than 800 sectors, so a longer
+    # image is double-sided: an 80-track DSD trimmed short of a full disc
+    # (the PanOS 1.40 installation discs stop at 407040 bytes) or carrying a
+    # trailer. Each side's catalogue declares only that side's size, so the
+    # declared count cannot say this.
+    if size // BYTES_PER_SECTOR > _GEOMETRY_PRESETS["80t-ss"].image_size // BYTES_PER_SECTOR:
+        return _GEOMETRY_PRESETS["80t-ds"], ()
+
     if declared_sectors >= 10 and declared_sectors % 10 == 0:
         sectors = declared_sectors
     else:
