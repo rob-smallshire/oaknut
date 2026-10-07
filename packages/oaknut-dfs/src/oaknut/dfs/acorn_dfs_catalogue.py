@@ -22,7 +22,7 @@ from oaknut.dfs.exceptions import (
 )
 from oaknut.discimage import BYTES_PER_SECTOR
 from oaknut.discimage.surface import Surface
-from oaknut.filesystem import InvalidTitleError
+from oaknut.filesystem import Fix, InvalidTitleError
 
 _name_key = DFS_NAME_GRAMMAR.name_key
 
@@ -586,6 +586,20 @@ class AcornDFSCatalogue(Catalogue):
         disc_info = self.get_disc_info()
         sector1[4] = (disc_info.cycle_number + 1) & 0xFF
 
+    def set_total_sectors(self, total_sectors: int) -> None:
+        """Rewrite the catalogue's sector-count field as *total_sectors*.
+
+        Writes the 10-bit count Acorn DFS reads (sector 1 bytes 6–7),
+        clearing the reserved bits of &106 and keeping the boot option, as
+        the repair for a malformed count.
+        """
+        if not 0 < total_sectors < 1024:
+            raise ValueError(f"a DFS side holds 1-1023 sectors, not {total_sectors}")
+        sector1 = self._surface.sector_range(1, 1)
+        sector1[6] = (sector1[6] & 0x30) | ((total_sectors >> 8) & 0x03)
+        sector1[7] = total_sectors & 0xFF
+        sector1[4] = (sector1[4] + 1) & 0xFF  # cycle number, as any catalogue change
+
     def set_boot_option(self, option: int) -> None:
         """Set boot option (0-3)."""
         if not 0 <= option <= 3:
@@ -751,10 +765,13 @@ class AcornDFSCatalogue(Catalogue):
         """
         errors: list[DFSValidationError] = []
 
-        defect = sector_count_defect(
-            self._surface.sector_range(1, 1), side_sectors=self._surface.num_sectors
-        )
+        side_sectors = self._surface.num_sectors
+        defect = sector_count_defect(self._surface.sector_range(1, 1), side_sectors=side_sectors)
         if defect is not None:
+            defect.fix = Fix(
+                f"set the sector count from {defect.declared} to {side_sectors}",
+                lambda: self.set_total_sectors(side_sectors),
+            )
             errors.append(defect)
 
         disc_info = self.get_disc_info()

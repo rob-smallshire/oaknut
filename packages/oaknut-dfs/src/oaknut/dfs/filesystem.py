@@ -453,6 +453,11 @@ class AcornDFS(_BaseDFS):
     _confidence = Confidence.PROBABLE
     #: The default creator for plain DFS floppies.
     creates = frozenset({".ssd", ".dsd"})
+    repairs = (
+        "A malformed sector count (reserved bits of &106 set, a total that is "
+        "not a positive multiple of ten, or one files run past) is set to the "
+        "side's true size.",
+    )
 
 
 class WatfordDFS(_BaseDFS):
