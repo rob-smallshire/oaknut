@@ -19,7 +19,7 @@ from collections.abc import Iterable
 
 from oaknut.dfs.access import ACORN_DFS_ACCESS
 from oaknut.dfs.acorn_dfs_catalogue import AcornDFSCatalogue
-from oaknut.dfs.catalogue import DFS_NAME_GRAMMAR
+from oaknut.dfs.catalogue import DFS_NAME_GRAMMAR, Mismatch
 from oaknut.dfs.dfs import DFS
 from oaknut.dfs.watford_dfs_catalogue import WatfordDFSCatalogue
 from oaknut.discimage import BYTES_PER_SECTOR, DiscFormat, DiscImage, SurfaceSpec
@@ -34,6 +34,7 @@ from oaknut.filesystem import (
     Identification,
     ImageReader,
     Lens,
+    Rejection,
     Volume,
     floppy_geometry,
 )
@@ -333,15 +334,19 @@ class _BaseDFS(Filesystem):
     _catalogue: type = AcornDFSCatalogue
     _confidence: Confidence = Confidence.PROBABLE
 
-    def probe(self, reader: ImageReader) -> Identification | None:
+    def probe(self, reader: ImageReader) -> Identification | Rejection:
         surface = _flat_surface(reader)
         if surface is None:
-            return None
-        # match_evidence() is the single source of truth: None means "not this
-        # catalogue", otherwise it returns the verified signals to report.
-        evidence = self._catalogue.match_evidence(surface)
-        if evidence is None:
-            return None
+            return Rejection(
+                self.name,
+                f"image too small for a DFS catalogue: {reader.size} bytes, "
+                f"needs {_MIN_SECTORS * BYTES_PER_SECTOR}",
+            )
+        # assess() is the single source of truth: a Mismatch says which check
+        # failed; otherwise it returns the verified signals to report.
+        evidence = self._catalogue.assess(surface)
+        if isinstance(evidence, Mismatch):
+            return Rejection(self.name, evidence.reason)
         geometry, ambiguities = _propose_geometry(reader.size, _declared_total_sectors(surface))
         return Identification(
             filesystem=self.name,

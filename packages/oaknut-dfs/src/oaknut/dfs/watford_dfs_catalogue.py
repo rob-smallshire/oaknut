@@ -9,6 +9,7 @@ from oaknut.dfs.catalogue import (
     Catalogue,
     DiscInfo,
     FileEntry,
+    Mismatch,
     ParsedFilename,
     check_command_directory,
     check_stored_directory,
@@ -84,17 +85,21 @@ class WatfordDFSCatalogue(Catalogue):
         sectors[0x307] = sectors[0x107]  # Sector count low
 
     @classmethod
-    def match_evidence(cls, surface: Surface) -> list[str] | None:
-        """Identification evidence for Watford DFS, or ``None``.
+    def assess(cls, surface: Surface) -> list[str] | Mismatch:
+        """Identification evidence for Watford DFS, or why not.
 
         Looks for the distinctive 8-byte 0xAA marker (0x200) and a
         well-formed two-section extended catalogue, while excluding standard
-        Acorn DFS. Each disqualifying check returns ``None``; a match returns
-        the verified signals. :meth:`matches` derives from this.
+        Acorn DFS. Each disqualifying check returns a :class:`Mismatch`
+        naming the field and its value; a match returns the verified
+        signals. :meth:`match_evidence` and :meth:`matches` derive from this.
         """
         # Need at least 4 sectors for Watford DFS
         if surface.num_sectors < 4:
-            return None
+            return Mismatch(
+                f"image too small for a Watford DFS catalogue: "
+                f"{surface.num_sectors} sector(s), needs 4"
+            )
 
         # Read all 4 catalog sectors
         sector0 = surface.sector_range(0, 1)
@@ -102,48 +107,51 @@ class WatfordDFSCatalogue(Catalogue):
         sector2 = surface.sector_range(2, 1)
         sector3 = surface.sector_range(3, 1)
 
-        # Check 1: Validate title chars in sector 0 (bytes 1-9)
-        for i in range(1, 10):
-            if not cls._is_valid_title_char(sector0[i]):
-                return None
+        # The Watford marker is the decisive signal, so check it first: an
+        # Acorn disc's reason is then "no marker", not a title quibble.
+        if not all(sector2[i] == 0xAA for i in range(8)):
+            return Mismatch("no Watford marker: sector 2 does not start with eight &AA bytes")
 
-        # Check 2: Validate title continuation in sector 1 (bytes 0-3)
-        for i in range(4):
-            if not cls._is_valid_title_char(sector1[i]):
-                return None
+        # Checks 1 & 2: title chars in sector 0 (bytes 1-9) and sector 1 (0-3)
+        title_bytes = [(i, sector0[i]) for i in range(1, 10)]
+        title_bytes += [(0x100 + i, sector1[i]) for i in range(4)]
+        for offset, byte in title_bytes:
+            if not cls._is_valid_title_char(byte):
+                return Mismatch(
+                    f"catalogue title byte &{byte:02X} at &{offset:03X} is not a title character"
+                )
 
         # Check 3: File count validation in section 1
         num_files_byte = sector1[5]
         if num_files_byte & 0x07:  # Bits 0,1,2 must be clear
-            return None
+            return Mismatch(f"file count byte &{num_files_byte:02X} at &105 is not a multiple of 8")
         num_files = num_files_byte // 8
-        if num_files > 31:  # Each section max 31 files
-            return None
 
         # Check 4: Boot option / sector count byte validation
         boot_sectors_byte = sector1[6]
         if boot_sectors_byte & 0xCC:  # Bits 2,3,6,7 should be clear
-            return None
+            return Mismatch(
+                f"boot option byte &{boot_sectors_byte:02X} at &106 has reserved bits set "
+                f"(&{boot_sectors_byte & 0xCC:02X})"
+            )
 
         # Check 5: Total sectors validation
         total_sectors = ((boot_sectors_byte & 0x03) << 8) | sector1[7]
-        if total_sectors < 4:  # Minimum sectors
-            return None
-        if total_sectors % 10 != 0:  # Must be multiple of 10 (sectors per track)
-            return None
+        if total_sectors < 4 or total_sectors % 10 != 0:
+            return Mismatch(
+                f"catalogue declares {total_sectors} sectors, not a positive multiple of ten"
+            )
         # A truncated image declares its full size though the file holds only
         # the used sectors; the filing system reads it transparently
         # (issue #1), so a declared total exceeding the surface is accepted.
 
-        # WATFORD-SPECIFIC: 0x200 holds 8 bytes of 0xAA (DiscImage.pdf p9/p11).
-        # The marker occupies section 2's 8-byte title slot only; the 31 file
-        # entries begin at 0x208, so a populated section 2 overwrites bytes 8+.
-        if not all(sector2[i] == 0xAA for i in range(8)):
-            return None
+        # WATFORD-SPECIFIC: 0x200 holds 8 bytes of 0xAA (DiscImage.pdf p9/p11),
+        # checked first above. The marker occupies section 2's 8-byte title
+        # slot only; the 31 file entries begin at 0x208.
 
         # WATFORD-SPECIFIC: Check sector 3 starts with 4 null bytes
         if not all(sector3[i] == 0x00 for i in range(4)):
-            return None
+            return Mismatch("sector 3 does not start with four zero bytes")
 
         # WATFORD-SPECIFIC: section 2 carries its OWN file count, independent
         # of section 1 — the two sections hold files 1-31 and 32-62, so a disc
@@ -152,13 +160,18 @@ class WatfordDFSCatalogue(Catalogue):
         # files), never against section 1's.
         section2_count_byte = sector3[5]
         if section2_count_byte & 0x07:  # Bits 0,1,2 must be clear
-            return None
-        if section2_count_byte // 8 > 31:  # Each section max 31 files
-            return None
+            return Mismatch(
+                f"second section's file count byte &{section2_count_byte:02X} at &305 "
+                "is not a multiple of 8"
+            )
         # Disc-wide metadata (boot option + total sectors) IS mirrored in both
         # section headers, so those bytes must agree.
         if sector3[6] != sector1[6] or sector3[7] != sector1[7]:
-            return None
+            return Mismatch(
+                f"the two catalogue sections disagree on boot option and size "
+                f"(&{sector1[6]:02X}{sector1[7]:02X} at &106, "
+                f"&{sector3[6]:02X}{sector3[7]:02X} at &306)"
+            )
 
         # WATFORD-SPECIFIC: the top bits of filename chars 0x005 and 0x006 carry
         # Watford's >256KB extension — length bit 18 and start-sector bit 10
@@ -169,10 +182,10 @@ class WatfordDFSCatalogue(Catalogue):
         for entries_sector, count_byte in ((sector0, sector1[5]), (sector2, sector3[5])):
             for index in range(count_byte // 8):
                 name_offset = 8 + index * 8
-                if entries_sector[name_offset + 5] & 0x80:
-                    return None
-                if entries_sector[name_offset + 6] & 0x80:
-                    return None
+                if entries_sector[name_offset + 5] & 0x80 or entries_sector[name_offset + 6] & 0x80:
+                    return Mismatch(
+                        "a file entry uses the >256 KB extension, which oaknut does not support"
+                    )
 
         # All checks passed — collect the verified signals as evidence.
         total_files = num_files + section2_count_byte // 8

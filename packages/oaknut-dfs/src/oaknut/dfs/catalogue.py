@@ -138,6 +138,17 @@ class DiscInfo:
 
 
 @dataclass(frozen=True)
+class Mismatch:
+    """Why a surface is not a given catalogue format: the first check it failed.
+
+    The :attr:`reason` names the field and its value in terms a user can
+    act on (``"file count byte &0D at &105 is not a multiple of 8"``).
+    """
+
+    reason: str
+
+
+@dataclass(frozen=True)
 class ParsedFilename:
     """Validated and parsed filename components."""
 
@@ -217,21 +228,28 @@ class Catalogue(ABC):
 
     @classmethod
     @abstractmethod
-    def match_evidence(cls, surface: "Surface") -> list[str] | None:
-        """Identification evidence for *surface*, or ``None`` if it is not
-        this catalogue format.
+    def assess(cls, surface: "Surface") -> list[str] | Mismatch:
+        """Identification evidence for *surface*, or why it is not this format.
 
         This is the **single source of truth** for identification: one pass
-        that both gates the match (``None`` ⇒ not this format) and collects
-        the human-readable signals reported by ``disc identify``. The
-        boolean :meth:`matches` is derived from it, so the decision and its
-        evidence can never drift apart.
+        that gates the match, collects the human-readable signals reported
+        by ``disc identify``, and — when a check fails — says which, for the
+        user told an image is unrecognised. :meth:`match_evidence` and
+        :meth:`matches` derive from it, so the decision, its evidence and
+        its reason can never drift apart.
 
-        A non-``None`` result is the list of verified signals (magic bytes,
-        structural checks, per-disc details). Each disqualifying check
-        returns ``None`` instead of contributing evidence.
+        A list is the verified signals (magic bytes, structural checks,
+        per-disc details); a :class:`Mismatch` names the first
+        disqualifying check.
         """
         raise NotImplementedError
+
+    @classmethod
+    def match_evidence(cls, surface: "Surface") -> list[str] | None:
+        """Identification evidence for *surface*, or ``None`` if it is not
+        this catalogue format. Derived from :meth:`assess`."""
+        verdict = cls.assess(surface)
+        return None if isinstance(verdict, Mismatch) else verdict
 
     @classmethod
     def matches(cls, surface: "Surface") -> bool:

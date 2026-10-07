@@ -8,6 +8,7 @@ from oaknut.dfs.catalogue import (
     Catalogue,
     DiscInfo,
     FileEntry,
+    Mismatch,
     ParsedFilename,
     check_command_directory,
     check_stored_directory,
@@ -64,13 +65,14 @@ class AcornDFSCatalogue(Catalogue):
         sector1[7] = total_sectors & 0xFF
 
     @classmethod
-    def match_evidence(cls, surface: Surface) -> list[str] | None:
-        """Identification evidence for standard Acorn DFS, or ``None``.
+    def assess(cls, surface: Surface) -> list[str] | Mismatch:
+        """Identification evidence for standard Acorn DFS, or why not.
 
         Uses the heuristics from "Guide to Disc Formats.pdf" to identify
         Acorn DFS while excluding Watford DFS and other variants. Each
-        disqualifying check returns ``None``; a well-formed catalogue
-        returns the verified signals. :meth:`matches` derives from this.
+        disqualifying check returns a :class:`Mismatch` naming the field
+        and its value; a well-formed catalogue returns the verified
+        signals. :meth:`match_evidence` and :meth:`matches` derive from this.
         """
         # The Acorn catalogue is sectors 0-1, so two sectors is the
         # minimum — a blank disc truncated to just its catalogue is a
@@ -79,7 +81,9 @@ class AcornDFSCatalogue(Catalogue):
         # with fewer than four sectors the image cannot be Watford anyway
         # (its extended catalogue lives there), so nothing is lost.
         if surface.num_sectors < 2:
-            return None
+            return Mismatch(
+                f"image too small for a DFS catalogue: {surface.num_sectors} sector(s), needs 2"
+            )
 
         # Read catalogue sectors
         sector0 = surface.sector_range(0, 1)
@@ -93,32 +97,33 @@ class AcornDFSCatalogue(Catalogue):
         # decorative form-feed, CR and LF — so it does not disqualify on
         # its own; instead it falls back to corroborating the catalogue
         # against the real surface (Check 5b), like an implausible total.
-        needs_corroboration = False
-        for i in range(1, 10):
-            kind = cls._title_char_kind(sector0[i])
+        soft_signals: list[str] = []
+        title_bytes = [(i, sector0[i]) for i in range(1, 10)]
+        title_bytes += [(0x100 + i, sector1[i]) for i in range(4)]
+        for offset, byte in title_bytes:
+            kind = cls._title_char_kind(byte)
             if kind == "reject":
-                return None
-            if kind == "control":
-                needs_corroboration = True
-        for i in range(4):
-            kind = cls._title_char_kind(sector1[i])
-            if kind == "reject":
-                return None
-            if kind == "control":
-                needs_corroboration = True
+                return Mismatch(
+                    f"catalogue title byte &{byte:02X} at &{offset:03X} has its top bit set"
+                )
+            if kind == "control" and not soft_signals:
+                soft_signals.append(
+                    f"title byte &{byte:02X} at &{offset:03X} is a control character"
+                )
 
         # Check 3: Offset 0x105 - bits 0,1,2 should be clear (multiple of 8)
         num_files_byte = sector1[5]
         if num_files_byte & 0x07:  # Bits 0,1,2 set
-            return None
+            return Mismatch(f"file count byte &{num_files_byte:02X} at &105 is not a multiple of 8")
         num_files = num_files_byte // 8
-        if num_files > cls.MAX_FILES:  # Should be <= 31 for Acorn DFS
-            return None
 
         # Check 4: Offset 0x106 - bits 2,3,6,7 should be clear
         boot_sectors_byte = sector1[6]
         if boot_sectors_byte & 0xCC:  # Bits 2,3,6,7 set
-            return None
+            return Mismatch(
+                f"boot option byte &{boot_sectors_byte:02X} at &106 has reserved bits set "
+                f"(&{boot_sectors_byte & 0xCC:02X})"
+            )
 
         # Check 5: Total sectors plausibility. The declared count is a
         # 10-bit field across the boot/sectors byte and sector1[7]; a
@@ -131,7 +136,9 @@ class AcornDFSCatalogue(Catalogue):
         # surface (Check 5b) rather than rejecting outright.
         total_sectors = ((boot_sectors_byte & 0x03) << 8) | sector1[7]
         if total_sectors < 10 or total_sectors % 10 != 0:
-            needs_corroboration = True
+            soft_signals.append(
+                f"catalogue declares {total_sectors} sectors, not a multiple of ten"
+            )
 
         # Check 5b: when a soft signal is off — an implausible declared
         # total or a control character in the title — the file table must
@@ -139,8 +146,10 @@ class AcornDFSCatalogue(Catalogue):
         # file, every entry living in the data area (sector >= 2) and
         # ending within the surface. Random data almost never satisfies
         # this on top of the count/flag/7-bit checks already passed.
-        if needs_corroboration and not cls._file_table_fits_surface(surface, sector1, num_files):
-            return None
+        if soft_signals:
+            misfit = cls._file_table_misfit(surface, sector1, num_files)
+            if misfit is not None:
+                return Mismatch(f"{'; '.join(soft_signals)}, and {misfit}")
 
         # A truncated image declares its full (untruncated) sector count
         # while the file holds only the used sectors; the filing system
@@ -158,7 +167,7 @@ class AcornDFSCatalogue(Catalogue):
 
             # If sector 2 starts with 8 bytes of 0xAA, it's Watford
             if all(sector2[i] == 0xAA for i in range(8)):
-                return None
+                return Mismatch("sector 2 carries the Watford DFS marker (eight &AA bytes)")
 
             # If sector 3 starts with 4 bytes of 0x00 AND has matching
             # boot/sectors then it's Watford
@@ -168,7 +177,7 @@ class AcornDFSCatalogue(Catalogue):
                 and sector3[6] == sector1[6]  # matches boot/sectors high
                 and sector3[7] == sector1[7]
             ):  # matches sectors low
-                return None
+                return Mismatch("sector 3 carries a Watford DFS second catalogue section")
 
         # All checks passed - this is standard Acorn DFS.
         plural = "" if num_files == 1 else "s"
@@ -192,8 +201,8 @@ class AcornDFSCatalogue(Catalogue):
         return "control"
 
     @staticmethod
-    def _file_table_fits_surface(surface: Surface, sector1: Sequence[int], num_files: int) -> bool:
-        """Whether every catalogue entry lives within the actual surface.
+    def _file_table_misfit(surface: Surface, sector1: Sequence[int], num_files: int) -> str | None:
+        """Why the catalogue entries do not fit the actual surface, or ``None``.
 
         Used to corroborate a catalogue whose self-declared total-sector
         count is implausible: each of *num_files* entries must start in
@@ -203,7 +212,7 @@ class AcornDFSCatalogue(Catalogue):
         catalogue.
         """
         if num_files == 0:
-            return False
+            return "there are no files to corroborate the catalogue"
         for i in range(num_files):
             entry_offset = 8 + (i * 8)
             extra_byte = sector1[entry_offset + 6]
@@ -215,10 +224,13 @@ class AcornDFSCatalogue(Catalogue):
             start_sector = sector1[entry_offset + 7] | ((extra_byte & 0x03) << 8)
             length_sectors = (length + BYTES_PER_SECTOR - 1) // BYTES_PER_SECTOR
             if start_sector < 2:
-                return False
+                return f"file {i + 1} starts in sector {start_sector}, inside the catalogue"
             if start_sector + length_sectors > surface.num_sectors:
-                return False
-        return True
+                return (
+                    f"file {i + 1} runs to sector {start_sector + length_sectors}, "
+                    f"past the image's {surface.num_sectors}"
+                )
+        return None
 
     @property
     def max_files(self) -> int:
