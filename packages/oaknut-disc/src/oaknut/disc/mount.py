@@ -188,6 +188,8 @@ def resolve_mount(
                 )
             ambiguities = _ambiguities(force_geometry, proposed)
             surface, geometry, in_path = filesystem.split_volume(in_path, geometry, ambiguities)
+            if writable:
+                reader = _grown_to_geometry(reader, outer_filepath, geometry)
             mount = filesystem.open(reader, geometry, surface=surface)
             chosen_name = partition_name = force_filesystem
         else:
@@ -197,15 +199,6 @@ def resolve_mount(
             if selector is None:
                 _warn_if_misplaced_selector(in_path, host)
             filesystem = create_filesystem(chosen.filesystem)
-            if region is None:
-                region_view = reader
-            else:
-                # A reserved region is a logical-sector run of the host;
-                # read it through the host geometry (a window on a linear
-                # host, de-interleaved on a floppy).
-                region_view = region_reader(
-                    reader, host.geometry, region.start_sector, region.num_sectors
-                )
             geometry = _geometry(filesystem, force_geometry, chosen.geometry)
             if geometry is None and region is None:
                 # The whole-image host's geometry — a hard disc records its
@@ -219,6 +212,17 @@ def resolve_mount(
             # a forced geometry is pinned, so no ambiguities are offered.
             ambiguities = _ambiguities(force_geometry, chosen)
             surface, geometry, in_path = filesystem.split_volume(in_path, geometry, ambiguities)
+            if region is None:
+                if writable:
+                    reader = _grown_to_geometry(reader, outer_filepath, geometry)
+                region_view = reader
+            else:
+                # A reserved region is a logical-sector run of the host;
+                # read it through the host geometry (a window on a linear
+                # host, de-interleaved on a floppy).
+                region_view = region_reader(
+                    reader, host.geometry, region.start_sector, region.num_sectors
+                )
             mount = filesystem.open(region_view, geometry, surface=surface)
             chosen_name = chosen.filesystem
             partition_name = chosen.partition.selector
@@ -336,6 +340,24 @@ def _geometry_from_sidecar(outer_filepath: Path) -> Geometry | None:
         except (GeometryError, OSError):
             pass
     return None
+
+
+def _grown_to_geometry(reader, outer_filepath: Path, geometry: Geometry | None):
+    """A writable reader over the whole of *geometry*, growing a trimmed image.
+
+    Many writers stop an image at the last file's last byte. Opened short,
+    the filesystem pads it in memory, so a write would land in the pad and
+    be lost. Writing therefore first grows the file with zeros to the full
+    disc, and returns a reader mapping all of it; an image already that
+    long (or longer) is returned as it is. Reading never comes here, so an
+    image is not modified just by being read.
+    """
+    if geometry is None or reader.size >= geometry.image_size:
+        return reader
+    reader.close()
+    with open(outer_filepath, "r+b") as image_file:
+        image_file.truncate(geometry.image_size)
+    return reader_for(outer_filepath, writable=True)
 
 
 def _identify_or_explain(
