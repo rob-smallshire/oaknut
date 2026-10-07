@@ -98,6 +98,14 @@ protocol.
 .. autoclass:: oaknut.filesystem.Validatable
    :members:
 
+A finding a filesystem knows how to correct carries a
+:class:`~oaknut.filesystem.Fix`, which ``disc repair`` applies.
+
+.. autoclass:: oaknut.filesystem.Fix
+   :members:
+
+.. autofunction:: oaknut.filesystem.fix_of
+
 .. autoclass:: oaknut.filesystem.StatusReporting
    :members:
 

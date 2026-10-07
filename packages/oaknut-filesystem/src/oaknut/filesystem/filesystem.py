@@ -66,6 +66,10 @@ class Filesystem(Extension):
     #: does not yet advertise its grammar. Reading is always liberal,
     #: independent of this.
     name_grammar: NameGrammar | None = None
+    #: What ``disc repair`` can fix on this filesystem, one line per kind of
+    #: finding, reported by ``disc describe-filesystem``. Empty when the
+    #: filesystem's findings carry no fixes.
+    repairs: tuple[str, ...] = ()
 
     @classmethod
     def _kind(cls) -> str:

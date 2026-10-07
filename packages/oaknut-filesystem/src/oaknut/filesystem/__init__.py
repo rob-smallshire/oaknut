@@ -23,6 +23,7 @@ from oaknut.filesystem.capabilities import (
     DiscGeometry,
     Entry,
     Filetyped,
+    Fix,
     FreeMap,
     FreeMapData,
     FreeSpace,
@@ -41,6 +42,7 @@ from oaknut.filesystem.capabilities import (
     Validatable,
     WildcardMatching,
     WildcardSyntax,
+    fix_of,
 )
 from oaknut.filesystem.coordinator import (
     create_filesystem,
@@ -114,6 +116,8 @@ __all__ = [
     "DiscGeometry",
     "Compactable",
     "Validatable",
+    "Fix",
+    "fix_of",
     "UserDatabase",
     "RegionHost",
     "StatusReporting",

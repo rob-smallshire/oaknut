@@ -14,7 +14,7 @@ refined as the concrete filesystems are wrapped (Phase B).
 from __future__ import annotations
 
 import enum
-from collections.abc import Iterable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
@@ -372,9 +372,32 @@ class Validatable(Protocol):
 
         The entries are the filesystem's own validation-error objects,
         rendered by the CLI's error formatter; the caller treats them
-        opaquely.
+        opaquely, except for a :class:`Fix` a finding may carry as its
+        ``fix`` attribute, which ``disc repair`` applies.
         """
         ...
+
+
+@dataclass(frozen=True)
+class Fix:
+    """How to repair one validation finding.
+
+    A filesystem's ``validate`` attaches a ``Fix`` to a finding it knows
+    how to correct, as the finding's ``fix`` attribute. Repair runs the
+    same validation and applies the fixes its findings carry, so finding
+    a defect and repairing it share one analysis and cannot drift apart.
+    """
+
+    #: What the repair changes, for the user (``"set the sector count to 800"``).
+    description: str
+    #: Makes the change, on the mount the finding came from.
+    apply: Callable[[], None]
+
+
+def fix_of(finding: object) -> Fix | None:
+    """The :class:`Fix` a validation *finding* carries, or ``None``."""
+    fix = getattr(finding, "fix", None)
+    return fix if isinstance(fix, Fix) else None
 
 
 @runtime_checkable
