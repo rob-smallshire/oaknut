@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pytest
 from oaknut.file import Access, AcornMeta
-from oaknut.filesystem import Confidence, filesystem_names, identify, reader_for
+from oaknut.filesystem import Confidence, Rejection, filesystem_names, identify, reader_for
 from oaknut.filesystem.exceptions import ReadOnlyFilesystemError
 from oaknut.romfs.filesystem import AcornROMFS
 from oaknut.romfs.romfs import ROMFS
@@ -45,7 +45,7 @@ def test_identify_hopper():
 
 
 def test_probe_rejects_non_romfs():
-    assert AcornROMFS().probe(reader_for(b"\x00" * 16384)) is None
+    assert isinstance(AcornROMFS().probe(reader_for(b"\x00" * 16384)), Rejection)
 
 
 def test_mount_lists_data_files_not_title_block():

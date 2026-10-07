@@ -37,6 +37,8 @@ from oaknut.filesystem import (
     ImageReader,
     Lens,
     ReadOnlyFilesystemError,
+    Rejection,
+    describe_bytes,
 )
 from oaknut.filesystem.wildcards import ACORN_WILDCARDS, AcornWildcards
 
@@ -190,10 +192,14 @@ class Zip(Filesystem):
     wildcard_syntax = ACORN_WILDCARDS
     extensions = frozenset({".zip"})
 
-    def probe(self, reader: ImageReader) -> Identification | None:
-        kind = _SIGNATURES.get(reader.read(0, 4))
+    def probe(self, reader: ImageReader) -> Identification | Rejection:
+        found = reader.read(0, 4)
+        kind = _SIGNATURES.get(found)
         if kind is None:
-            return None
+            return Rejection(
+                self.name,
+                f"no ZIP signature at offset 0: found {describe_bytes(found)}, not 'PK'",
+            )
         return Identification(
             filesystem=self.name,
             confidence=Confidence.CERTAIN,

@@ -35,6 +35,7 @@ from oaknut.filesystem import (
     InvalidNameError,
     InvalidTitleError,
     NameGrammar,
+    Rejection,
 )
 from oaknut.filesystem.exceptions import ReadOnlyFilesystemError
 from oaknut.filesystem.wildcards import ACORN_WILDCARDS, AcornWildcards
@@ -369,11 +370,11 @@ class AcornROMFS(Filesystem):
     def __init__(self, name: str = "acorn-romfs", **kwargs):
         super().__init__(name=name, **kwargs)
 
-    def probe(self, reader: ImageReader) -> Identification | None:
+    def probe(self, reader: ImageReader) -> Identification | Rejection:
         try:
             romfs = ROMFS.from_bytes(reader.read(0, reader.size))
-        except (NotAROMFSError, CRCError, TruncatedROMError):
-            return None
+        except (NotAROMFSError, CRCError, TruncatedROMError) as exc:
+            return Rejection(self.name, str(exc))
 
         data_files = romfs.data_files
         evidence = [

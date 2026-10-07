@@ -214,15 +214,23 @@ def _find_data_start(buf: bytes) -> int:
     ROM-specific length, so its start cannot be assumed at a fixed offset;
     it is located by scanning for the first well-formed block.
     """
+    candidates = 0
     pos = buf.find(bytes([SYNC_BYTE]), _TITLE_OFFSET)
     while pos >= 0:
+        candidates += 1
         try:
             BlockHeader.parse(buf, pos)
             return pos
         except (CRCError, TruncatedROMError):
             pass
         pos = buf.find(bytes([SYNC_BYTE]), pos + 1)
-    raise NotAROMFSError("no valid ROMFS block found in image")
+    if not candidates:
+        raise NotAROMFSError(f"no ROMFS block: no &{SYNC_BYTE:02X} sync byte after the ROM header")
+    plural = "byte starts" if candidates == 1 else "bytes starts"
+    raise NotAROMFSError(
+        f"no ROMFS block: none of the {candidates} &{SYNC_BYTE:02X} sync {plural} "
+        "a block with a valid header CRC"
+    )
 
 
 def _read_data(buf: bytes, offset: int, length: int) -> tuple[bytes, int]:

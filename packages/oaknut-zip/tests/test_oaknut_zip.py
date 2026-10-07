@@ -2220,3 +2220,14 @@ class TestBundledInfPerStardot:
     def test_eight_bit_name_survives(self, tmp_path):
         index = self._index(tmp_path, b"CAF\xc9 00001900 00008023")
         assert index["GAME"][1].name == "CAFÉ"
+
+
+# -- Why an image is not a ZIP (#82) --
+
+
+def test_a_non_zip_image_is_rejected_with_what_was_found():
+    from oaknut.filesystem import Rejection, create_filesystem, reader_for
+
+    with reader_for(b"\x00" * 1024) as reader:
+        verdict = create_filesystem("zip").probe(reader)
+    assert verdict == Rejection("zip", "no ZIP signature at offset 0: found 00 00 00 00, not 'PK'")
