@@ -14,12 +14,77 @@ from oaknut.dfs.catalogue import (
     check_stored_directory,
     expand_host_address,
 )
-from oaknut.dfs.exceptions import CatalogFullError, DFSValidationError, FileLocked
+from oaknut.dfs.exceptions import (
+    CatalogFullError,
+    DFSValidationError,
+    FileLocked,
+    MalformedSectorCountError,
+)
 from oaknut.discimage import BYTES_PER_SECTOR
 from oaknut.discimage.surface import Surface
 from oaknut.filesystem import InvalidTitleError
 
 _name_key = DFS_NAME_GRAMMAR.name_key
+
+
+#: Bits of sector 1 byte 6 that hold no Acorn DFS field. Bits 2–3 extend
+#: the sector count on other DFSes (Opus DDOS's 11-bit count), so a disc
+#: carrying them is malformed rather than foreign; bits 6–7 disqualify.
+_SECTOR_COUNT_EXTENSION_BITS = 0x0C
+_FOREIGN_BITS = 0xC0
+
+
+def _file_extent(sector1: Sequence[int]) -> int:
+    """The first sector past the last file, or 2 (past the catalogue) with none."""
+    extent = 2
+    for i in range(sector1[5] // 8):
+        offset = 8 + i * 8
+        extra = sector1[offset + 6]
+        length = sector1[offset + 4] | (sector1[offset + 5] << 8) | ((extra & 0x30) << 12)
+        start = sector1[offset + 7] | ((extra & 0x03) << 8)
+        extent = max(extent, start + (length + BYTES_PER_SECTOR - 1) // BYTES_PER_SECTOR)
+    return extent
+
+
+def sector_count_defect(
+    sector1: Sequence[int], *, side_sectors: int | None = None
+) -> MalformedSectorCountError | None:
+    """The finding for a malformed sector-count field, or ``None`` if it is sound.
+
+    The single analysis of the field (sector 1 bytes 6–7): recognition
+    treats a finding as a soft signal, sizing falls back to the side's
+    true size, and validation reports it. The field is malformed when a
+    reserved bit of &106 extends it, when it is not a positive multiple
+    of ten, or when files run past it. A declared count *larger* than the
+    image is sound: a truncated image keeps its full disc's count.
+    *side_sectors*, the side's true size when known, is named in the
+    finding.
+    """
+    byte6, low = sector1[6], sector1[7]
+    extension = byte6 & _SECTOR_COUNT_EXTENSION_BITS
+    declared = (((byte6 & 0x0F) if extension else (byte6 & 0x03)) << 8) | low
+    extent = _file_extent(sector1)
+    if extension:
+        cause = MalformedSectorCountError.EXTENSION_BITS
+        problem = f"reserved bits &{extension:02X} of &106 are set"
+    elif declared < 10 or declared % 10:
+        cause = MalformedSectorCountError.IMPLAUSIBLE
+        problem = "that is not a positive multiple of ten"
+    elif declared < extent and (side_sectors is None or declared < side_sectors):
+        # Files running past a count that already covers the whole side
+        # are the files' defect (validated separately), not the count's.
+        cause = MalformedSectorCountError.FILES_RUN_PAST
+        problem = f"files run to sector {extent}"
+    else:
+        return None
+    holds = f"; the side holds {side_sectors}" if side_sectors is not None else ""
+    return MalformedSectorCountError(
+        f"catalogue declares {declared} sectors (&{byte6:02X}{low:02X} at &106), "
+        f"but {problem}{holds}",
+        cause=cause,
+        declared=declared,
+        side_sectors=side_sectors,
+    )
 
 
 class AcornDFSCatalogue(Catalogue):
@@ -117,28 +182,23 @@ class AcornDFSCatalogue(Catalogue):
             return Mismatch(f"file count byte &{num_files_byte:02X} at &105 is not a multiple of 8")
         num_files = num_files_byte // 8
 
-        # Check 4: Offset 0x106 - bits 2,3,6,7 should be clear
+        # Check 4: Offset 0x106 - bits 6,7 hold no field on any DFS.
         boot_sectors_byte = sector1[6]
-        if boot_sectors_byte & 0xCC:  # Bits 2,3,6,7 set
+        if boot_sectors_byte & _FOREIGN_BITS:
             return Mismatch(
                 f"boot option byte &{boot_sectors_byte:02X} at &106 has reserved bits set "
-                f"(&{boot_sectors_byte & 0xCC:02X})"
+                f"(&{boot_sectors_byte & _FOREIGN_BITS:02X})"
             )
 
-        # Check 5: Total sectors plausibility. The declared count is a
-        # 10-bit field across the boot/sectors byte and sector1[7]; a
-        # conventional disc reports a positive multiple of ten (ten
-        # sectors per track). Some writers, however, stamp a bogus total
-        # while laying out an otherwise well-formed catalogue: Owlet
-        # (bbcmicrobot.com) writes 3 here. A self-declared total is not
-        # trustworthy enough to disqualify on its own, so an implausible
-        # value falls back to corroborating the catalogue against the real
-        # surface (Check 5b) rather than rejecting outright.
-        total_sectors = ((boot_sectors_byte & 0x03) << 8) | sector1[7]
-        if total_sectors < 10 or total_sectors % 10 != 0:
-            soft_signals.append(
-                f"catalogue declares {total_sectors} sectors, not a multiple of ten"
-            )
+        # Check 5: the sector-count field. Writers stamp malformed counts on
+        # otherwise well-formed catalogues — Owlet (bbcmicrobot.com) writes
+        # 3; the PanOS 1.40 installation discs set bit 2 of &106 (Opus's
+        # 11-bit form) to declare 1600 — so a malformed count is not
+        # trustworthy enough to disqualify on its own. It falls back to
+        # corroborating the catalogue against the real surface (Check 5b).
+        defect = sector_count_defect(sector1)
+        if defect is not None and defect.doubts_the_catalogue:
+            soft_signals.append(str(defect))
 
         # Check 5b: when a soft signal is off — an implausible declared
         # total or a control character in the title — the file table must
@@ -181,7 +241,10 @@ class AcornDFSCatalogue(Catalogue):
 
         # All checks passed - this is standard Acorn DFS.
         plural = "" if num_files == 1 else "s"
-        return [f"well-formed Acorn DFS catalogue ({num_files} file{plural} in sectors 0–1)"]
+        evidence = [f"well-formed Acorn DFS catalogue ({num_files} file{plural} in sectors 0–1)"]
+        if defect is not None:
+            evidence.append(f"malformed sector count: {defect}")
+        return evidence
 
     @staticmethod
     def _title_char_kind(byte: int) -> str:
@@ -255,6 +318,10 @@ class AcornDFSCatalogue(Catalogue):
         sector_count_low = sector1[7]
 
         total_sectors = sector_count_low | ((extra_byte & 0x03) << 8)
+        # A malformed count does not describe the side; size it by the
+        # surface, which a rewrite of the catalogue then records.
+        if sector_count_defect(sector1, side_sectors=self._surface.num_sectors) is not None:
+            total_sectors = self._surface.num_sectors
         boot_option = (extra_byte >> 4) & 0x03
 
         return DiscInfo(
@@ -683,6 +750,12 @@ class AcornDFSCatalogue(Catalogue):
         present every defect rather than aborting on the first.
         """
         errors: list[DFSValidationError] = []
+
+        defect = sector_count_defect(
+            self._surface.sector_range(1, 1), side_sectors=self._surface.num_sectors
+        )
+        if defect is not None:
+            errors.append(defect)
 
         disc_info = self.get_disc_info()
         if disc_info.num_files > self.MAX_FILES:

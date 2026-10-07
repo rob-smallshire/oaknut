@@ -133,3 +133,45 @@ class DFSValidationError(DFSError):
     """
 
     _exit_code = ExitCode.DATA_ERR
+
+
+class MalformedSectorCountError(DFSValidationError):
+    """The catalogue's sector-count field does not describe the side.
+
+    The field (sector 1 bytes 6–7) is a 10-bit count of the side's
+    sectors, a positive multiple of ten covering every file. Some discs
+    carry a value that is not: reserved bits of &106 set (the PanOS 1.40
+    installation discs declare 1600 using Opus DDOS's 11-bit form), a
+    bogus small total (Owlet writes 3), or a count the files run past.
+    A real DFS reads such a disc but cannot write to it. oaknut sizes the
+    side by the image instead, and reports this finding.
+    """
+
+    #: :attr:`cause` when reserved bits of &106 extend the count.
+    EXTENSION_BITS = "extension-bits"
+    #: :attr:`cause` when the count is not a positive multiple of ten.
+    IMPLAUSIBLE = "implausible"
+    #: :attr:`cause` when files run past a plausible count.
+    FILES_RUN_PAST = "files-run-past"
+
+    def __init__(
+        self, message: str, *, cause: str, declared: int, side_sectors: int | None
+    ) -> None:
+        super().__init__(message)
+        #: Why the field is malformed: one of the class's cause constants.
+        self.cause = cause
+        #: The count the field holds, read as far as its set bits reach.
+        self.declared = declared
+        #: The side's true sector count, when known.
+        self.side_sectors = side_sectors
+
+    @property
+    def doubts_the_catalogue(self) -> bool:
+        """Whether this cause casts doubt on the catalogue as DFS at all.
+
+        An extended or implausible count is how random data might also
+        read, so recognition then asks the file table to corroborate. A
+        plausible count that files run past says nothing about whether the
+        catalogue is DFS.
+        """
+        return self.cause != self.FILES_RUN_PAST
