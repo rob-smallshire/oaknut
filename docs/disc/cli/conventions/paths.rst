@@ -159,10 +159,19 @@ host, so a combined ADFS+AFS disc opens at its ADFS root). Because
 detection reads the bytes, an image whose extension is missing or wrong
 still opens correctly.
 
-If nothing recognises the image, the error lists what is installed:
+If nothing recognises the image, the error gives each installed
+filesystem's reason for declining it — the check the image failed:
 
 .. cli-example:: partition_selectors
    :section: unrecognised
+
+If you know what the image is, open it as that filesystem with
+``--filesystem``, adding ``--geometry`` when its extension implies no
+layout. Every command that opens an image accepts them; ``cp`` and
+``gather`` force each side separately with ``--source-filesystem`` and
+``--dest-filesystem``. Writing to an image that is not really that
+filesystem can damage it. ``disc identify`` shows the same reasons, and
+why each other filesystem declined an image that *was* recognised.
 
 If you ask for a partition the image does not have, the error names the
 ones it does:

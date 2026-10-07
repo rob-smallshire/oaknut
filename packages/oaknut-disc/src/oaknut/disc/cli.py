@@ -187,41 +187,63 @@ cli.add_command(list_filesystems_command(), name="list-filesystems")
 cli.add_command(describe_filesystem_command(), name="describe-filesystem")
 
 
-def force_options(func):
-    """Add the ``--filesystem`` / ``--geometry`` interpretation overrides.
+def _force_option_pair(func, *, prefix: str = "", image: str = "the image"):
+    """Add a ``--{prefix}filesystem`` / ``--{prefix}geometry`` override pair.
 
-    Content-based identification is the default, but a read command may
-    be handed an image that no installed filesystem recognises (a
-    non-standard catalogue, a raw dump). These options bypass detection:
-    ``--filesystem`` names the filesystem to open the image as, and
-    ``--geometry`` pins the physical layout when the extension cannot
-    imply one. Both feed :func:`resolve_mount`'s forcing path; a command
-    receives them as ``force_filesystem`` / ``force_geometry`` keywords.
+    The options reach the command as ``{prefix}force_filesystem`` /
+    ``{prefix}force_geometry`` keywords (with ``-`` in *prefix* as ``_``).
     """
+    keyword = prefix.replace("-", "_")
     func = click.option(
-        "--filesystem",
-        "force_filesystem",
+        f"--{prefix}filesystem",
+        f"{keyword}force_filesystem",
         default=None,
         metavar="NAME",
         help=(
-            "Open the image as this filesystem instead of identifying it "
-            "by content (e.g. acorn-dfs, adfs). Run `disc list-filesystems` "
-            "to see the installed names."
+            f"Open {image} as this filesystem instead of identifying it by "
+            "content (e.g. acorn-dfs, adfs), for an image detection rejects. "
+            "Writing to an image that is not really that filesystem can "
+            "damage it. Run `disc list-filesystems` for the installed names."
         ),
     )(func)
     func = click.option(
-        "--geometry",
-        "force_geometry",
+        f"--{prefix}geometry",
+        f"{keyword}force_geometry",
         default=None,
         metavar="SPEC",
         help=(
-            "Pin the physical geometry when forcing a filesystem on an "
+            f"Pin {image}'s physical geometry when forcing a filesystem on an "
             "extension that implies none (a preset like 80t-ds, or a "
             "parameterised form). Run `disc describe-filesystem NAME` for a "
             "filesystem's geometries."
         ),
     )(func)
     return func
+
+
+def force_options(func):
+    """Add the ``--filesystem`` / ``--geometry`` interpretation overrides.
+
+    Content-based identification is the default, but a command may be
+    handed an image that no installed filesystem recognises (a
+    non-standard catalogue, a raw dump). These options bypass detection:
+    ``--filesystem`` names the filesystem to open the image as, and
+    ``--geometry`` pins the physical layout when the extension cannot
+    imply one. Both feed :func:`resolve_mount`'s forcing path; a command
+    receives them as ``force_filesystem`` / ``force_geometry`` keywords.
+    """
+    return _force_option_pair(func)
+
+
+def source_dest_force_options(func):
+    """Add ``--source-*`` and ``--dest-*`` overrides for a multi-image command.
+
+    Each side of a copy is forced independently; the command receives
+    ``source_force_filesystem`` / ``source_force_geometry`` and
+    ``dest_force_filesystem`` / ``dest_force_geometry`` keywords.
+    """
+    func = _force_option_pair(func, prefix="source-", image="the source image(s)")
+    return _force_option_pair(func, prefix="dest-", image="the destination image")
 
 
 #: How to read the 32-bit load/exec fields for display. On most Acorn
@@ -991,7 +1013,8 @@ _alias("*TYPE", "type")
 @cli.command()
 @click.argument("compound_path", metavar="OUTER_PATH:INNER_PATH")
 @report_output(reports={"matches": "Paths matching the wildcard pattern."})
-def find(compound_path: str):
+@force_options
+def find(compound_path: str, force_filesystem: str | None, force_geometry: str | None):
     """Find files matching a wildcard pattern.
 
     Accepts an ``OUTER_PATH`` (lists every file) or a ``COMPOUND_PATH``
@@ -1021,6 +1044,11 @@ def find(compound_path: str):
         # mount resolution validates it ("no such partition" otherwise).
         selectors = [selector]
         emit_prefix = True
+    elif force_filesystem is not None:
+        # Forcing opens the image as one filesystem, without identifying
+        # its partitions; search that one mount.
+        selectors = [""]
+        emit_prefix = False
     else:
         # No prefix: search every identified partition. A multi-partition
         # image labels each hit with its selector so a result feeds back
@@ -1031,7 +1059,11 @@ def find(compound_path: str):
 
     rows: list[dict] = []
     for sel in selectors:
-        resolved = resolve_mount(f"{outer_filepath}:{sel}:")
+        resolved = resolve_mount(
+            f"{outer_filepath}:{sel}:" if sel else f"{outer_filepath}:",
+            force_filesystem=force_filesystem,
+            force_geometry=force_geometry,
+        )
         mount = resolved.mount
         prefix = f"{sel}:" if emit_prefix else ""
         _find_recursive(mount, mount.path_root(), bare_pattern, prefix, rows)
@@ -1078,7 +1110,14 @@ _FOR_EACH_MODES = ("content", "inner-path", "compound-path", "materialise")
 @report_output(
     reports={"results": "Per-file capture: path and the command's stdout, one row per match."}
 )
-def for_each(compound_path: str, command_argv: tuple[str, ...], mode: str):
+@force_options
+def for_each(
+    compound_path: str,
+    command_argv: tuple[str, ...],
+    mode: str,
+    force_filesystem: str | None,
+    force_geometry: str | None,
+):
     """Run a command for each file matching an inner-path pattern.
 
     Use ``--`` to separate ``disc``'s options from the command's, so
@@ -1132,13 +1171,21 @@ def for_each(compound_path: str, command_argv: tuple[str, ...], mode: str):
     if selector is not None:
         selectors = [selector]
         emit_prefix = True
+    elif force_filesystem is not None:
+        # Forcing opens the image as one filesystem; search that one mount.
+        selectors = [""]
+        emit_prefix = False
     else:
         selectors = partition_selectors(outer_filepath)
         emit_prefix = len(selectors) > 1
 
     matches: list[tuple[str, object]] = []
     for sel in selectors:
-        resolved = resolve_mount(f"{outer_filepath}:{sel}:")
+        resolved = resolve_mount(
+            f"{outer_filepath}:{sel}:" if sel else f"{outer_filepath}:",
+            force_filesystem=force_filesystem,
+            force_geometry=force_geometry,
+        )
         mount = resolved.mount
         prefix = f"{sel}:" if emit_prefix else ""
         _collect_matches(mount, mount.path_root(), bare_pattern, prefix, matches)
@@ -1245,7 +1292,13 @@ def _materialise(content: bytes, tmp_dir: Path, source_path: str, ordinal: int) 
 @cli.command(name="materialise")
 @click.argument("compound_path", metavar="OUTER_PATH:INNER_PATH")
 @click.argument("command_argv", nargs=-1, required=True, metavar="-- COMMAND...")
-def materialise(compound_path: str, command_argv: tuple[str, ...]) -> None:
+@force_options
+def materialise(
+    compound_path: str,
+    command_argv: tuple[str, ...],
+    force_filesystem: str | None,
+    force_geometry: str | None,
+) -> None:
     """Materialise one file to a host temp file, run a command on it, clean up.
 
     The single-file primitive behind ``for-each --mode materialise``:
@@ -1272,7 +1325,9 @@ def materialise(compound_path: str, command_argv: tuple[str, ...]) -> None:
     if not inner_path:
         raise click.UsageError("INNER_PATH is required (e.g. img:$.HELLO)")
 
-    with resolve_mount(compound_path) as resolved:
+    with resolve_mount(
+        compound_path, force_filesystem=force_filesystem, force_geometry=force_geometry
+    ) as resolved:
         mount = resolved.mount
         if not mount.exists(resolved.path):
             raise FSError(f"path not found: {resolved.path}", exit_code=ExitCode.OS_FILE)
@@ -1293,7 +1348,8 @@ def materialise(compound_path: str, command_argv: tuple[str, ...]) -> None:
 
 @cli.command()
 @click.argument("compound_path", metavar="OUTER_PATH:INNER_PATH")
-def freemap(compound_path: str) -> None:
+@force_options
+def freemap(compound_path: str, force_filesystem: str | None, force_geometry: str | None) -> None:
     """Show the free-space map as a sector matrix.
 
     Accepts a ``COMPOUND_PATH``; a partition prefix scopes the map to that
@@ -1304,7 +1360,9 @@ def freemap(compound_path: str) -> None:
 
     from oaknut.filesystem import FreeMap
 
-    with resolve_mount(compound_path) as resolved:
+    with resolve_mount(
+        compound_path, force_filesystem=force_filesystem, force_geometry=force_geometry
+    ) as resolved:
         mount = resolved.mount
         if not isinstance(mount, FreeMap):
             raise click.ClickException(f"{resolved.filesystem} provides no free-space map")
@@ -1331,7 +1389,8 @@ def freemap(compound_path: str) -> None:
 @cli.command(name="storage-order")
 @click.argument("compound_path", metavar="OUTER_PATH:INNER_PATH")
 @report_output(reports={"paths": "File paths in physical (storage) order."})
-def storage_order(compound_path: str):
+@force_options
+def storage_order(compound_path: str, force_filesystem: str | None, force_geometry: str | None):
     """List a partition's files in physical storage order.
 
     Files come out in the order their data lies on the medium — the
@@ -1348,7 +1407,9 @@ def storage_order(compound_path: str):
     from asyoulikeit.tabular_data import Report, Reports, TableContent
     from oaknut.filesystem import StorageOrdered
 
-    with resolve_mount(compound_path) as resolved:
+    with resolve_mount(
+        compound_path, force_filesystem=force_filesystem, force_geometry=force_geometry
+    ) as resolved:
         mount = resolved.mount
         if not isinstance(mount, StorageOrdered):
             raise click.ClickException(f"{resolved.filesystem} has no defined storage order")
@@ -1402,7 +1463,8 @@ def _render_free_map_lines(data, width: int) -> list[str]:
 
 @cli.command()
 @click.argument("image", type=click.Path(exists=True, path_type=Path))
-def validate(image: Path) -> None:
+@force_options
+def validate(image: Path, force_filesystem: str | None, force_geometry: str | None) -> None:
     """Check disc image structure for inconsistencies.
 
     On a clean image, prints nothing and exits 0 — the silence-is-golden
@@ -1423,7 +1485,9 @@ def validate(image: Path) -> None:
 
     from .console import print_error
 
-    with resolve_mount(str(image)) as resolved:
+    with resolve_mount(
+        str(image), force_filesystem=force_filesystem, force_geometry=force_geometry
+    ) as resolved:
         mount = resolved.mount
         if not isinstance(mount, Validatable):
             # A filesystem with no structural checks (AFS) is reported
@@ -1468,11 +1532,14 @@ def validate(image: Path) -> None:
     help="Metadata sidecar format.",
 )
 @click.option("--owner", type=int, default=0, help="Econet owner ID for PiEB formats.")
+@force_options
 def get(
     compound_path: str,
     host_path: str | None,
     meta_format: str,
     owner: int,
+    force_filesystem: str | None,
+    force_geometry: str | None,
 ) -> None:
     """Export a file from the image to the host filesystem.
 
@@ -1500,7 +1567,9 @@ def get(
     if not path:
         raise click.UsageError("PATH is required")
     host_path = Path(host_path) if host_path is not None else None
-    resolved = resolve_mount(compound_path)
+    resolved = resolve_mount(
+        compound_path, force_filesystem=force_filesystem, force_geometry=force_geometry
+    )
     mount = resolved.mount
     target = resolved.path or mount.path_root()
     if not mount.exists(target):
@@ -1735,6 +1804,7 @@ def _access_override(access_spec: str | None):
 @_typestamp_options
 @_access_option
 @click.option("-f", "--force", is_flag=True, help="Replace the destination even if it is locked.")
+@force_options
 def put(
     compound_path: str,
     host_path: str | None,
@@ -1746,6 +1816,8 @@ def put(
     datestamp: str | None,
     access_spec: str | None,
     force: bool,
+    force_filesystem: str | None,
+    force_geometry: str | None,
 ) -> None:
     """Import a host file into the image.
 
@@ -1825,7 +1897,12 @@ def put(
     elif host_path is None:
         raise click.ClickException("HOST_PATH is required (or use - for stdin)")
 
-    with resolve_mount(compound_path, writable=True) as resolved:
+    with resolve_mount(
+        compound_path,
+        writable=True,
+        force_filesystem=force_filesystem,
+        force_geometry=force_geometry,
+    ) as resolved:
         mount = resolved.mount
         if not read_stdin:
             # Try to import with metadata, decoding a sidecar's name with
@@ -1913,6 +1990,7 @@ _wildcards_option = click.option(
 @click.option("-r", "--recursive", is_flag=True, help="Remove directories recursively.")
 @click.option("--dry-run", is_flag=True, help="Print what would be removed.")
 @_wildcards_option
+@force_options
 def rm(
     compound_path: str,
     paths: tuple[str, ...],
@@ -1920,6 +1998,8 @@ def rm(
     recursive: bool,
     dry_run: bool,
     wildcards: bool,
+    force_filesystem: str | None,
+    force_geometry: str | None,
 ) -> None:
     """Delete file(s) from the image (Acorn alias: *DELETE).
 
@@ -1944,7 +2024,12 @@ def rm(
     bare_patterns = [split_selector(p)[1] for p in all_paths]
     prefix = f"{selector}:" if selector else ""
 
-    with resolve_mount(f"{outer_filepath}:{prefix}", writable=not dry_run) as resolved:
+    with resolve_mount(
+        f"{outer_filepath}:{prefix}",
+        writable=not dry_run,
+        force_filesystem=force_filesystem,
+        force_geometry=force_geometry,
+    ) as resolved:
         mount = resolved.mount
         for pattern in bare_patterns:
             # --force downgrades "no matches" to a no-op.
@@ -1975,7 +2060,10 @@ _alias("*DELETE", "rm")
 @click.argument("src")
 @click.argument("dst")
 @click.option("-f", "--force", is_flag=True, help="Overwrite existing destination.")
-def mv(src: str, dst: str, force: bool) -> None:
+@force_options
+def mv(
+    src: str, dst: str, force: bool, force_filesystem: str | None, force_geometry: str | None
+) -> None:
     """Rename or move a file within the image (Acorn alias: *RENAME).
 
     Takes a source ``COMPOUND_PATH`` and a destination. mv is
@@ -2009,7 +2097,9 @@ def mv(src: str, dst: str, force: bool) -> None:
             f"{dst_selector!r} does not match {source_partition}"
         )
 
-    with resolve_mount(src, writable=True) as resolved:
+    with resolve_mount(
+        src, writable=True, force_filesystem=force_filesystem, force_geometry=force_geometry
+    ) as resolved:
         mount = resolved.mount
         bare_src = resolved.path
         # Pre-check existence so the "path not found" diagnostic carries
@@ -2044,8 +2134,18 @@ _alias("*RENAME", "mv")
 )
 @_wildcards_option
 @_access_option
+@source_dest_force_options
 def cp(
-    src: str, dst: str, force: bool, recursive: bool, wildcards: bool, access_spec: str | None
+    src: str,
+    dst: str,
+    force: bool,
+    recursive: bool,
+    wildcards: bool,
+    access_spec: str | None,
+    source_force_filesystem: str | None,
+    source_force_geometry: str | None,
+    dest_force_filesystem: str | None,
+    dest_force_geometry: str | None,
 ) -> None:
     """Copy file(s) or a tree within or between disc images.
 
@@ -2084,6 +2184,10 @@ def cp(
         recursive=recursive,
         wildcards=wildcards,
         access_override=access_override,
+        source_force_filesystem=source_force_filesystem,
+        source_force_geometry=source_force_geometry,
+        dest_force_filesystem=dest_force_filesystem,
+        dest_force_geometry=dest_force_geometry,
     )
 
 
@@ -2237,6 +2341,8 @@ def _mutate_access(
     verb,
     transform,
     wildcards: bool = True,
+    force_filesystem: str | None = None,
+    force_geometry: str | None = None,
 ) -> None:
     """Apply an access-byte *transform* to every target of *compound_path*.
 
@@ -2253,7 +2359,12 @@ def _mutate_access(
     _outer_filepath, path = parse_compound_path(compound_path)
     if not path:
         raise click.UsageError("PATH is required")
-    with resolve_mount(compound_path, writable=not dry_run) as resolved:
+    with resolve_mount(
+        compound_path,
+        writable=not dry_run,
+        force_filesystem=force_filesystem,
+        force_geometry=force_geometry,
+    ) as resolved:
         mount = resolved.mount
         if not isinstance(mount, AcornMetadata):
             raise FSError(
@@ -2293,6 +2404,10 @@ def _cp_dispatch(
     recursive: bool,
     wildcards: bool = True,
     access_override=None,
+    source_force_filesystem: str | None = None,
+    source_force_geometry: str | None = None,
+    dest_force_filesystem: str | None = None,
+    dest_force_geometry: str | None = None,
 ) -> None:
     """Orchestrate a cp invocation.
 
@@ -2304,8 +2419,19 @@ def _cp_dispatch(
     bytes before any write.
     """
     with (
-        resolve_mount(src_spec) as src_resolved,
-        resolve_mount(dst_spec, writable=True) as dst_resolved,
+        resolve_mount(
+            src_spec,
+            force_filesystem=source_force_filesystem,
+            force_geometry=source_force_geometry,
+            force_option="--source-filesystem",
+        ) as src_resolved,
+        resolve_mount(
+            dst_spec,
+            writable=True,
+            force_filesystem=dest_force_filesystem,
+            force_geometry=dest_force_geometry,
+            force_option="--dest-filesystem",
+        ) as dst_resolved,
     ):
         src_mount = src_resolved.mount
         dst_mount = dst_resolved.mount
@@ -2793,6 +2919,10 @@ def gather(
     into: str | None = None,
     name_from: str = "stem",
     force: bool = False,
+    source_force_filesystem: str | None = None,
+    source_force_geometry: str | None = None,
+    dest_force_filesystem: str | None = None,
+    dest_force_geometry: str | None = None,
 ) -> list[tuple[str, str]]:
     """Copy each source disc image's tree into its own directory in *destination*.
 
@@ -2803,6 +2933,11 @@ def gather(
     and placed under *into* (default: the destination root). The
     destination is opened once for the whole run.
 
+    *source_force_filesystem* / *source_force_geometry* open every source
+    as a given filesystem, and *dest_force_filesystem* /
+    *dest_force_geometry* the destination, instead of identifying them by
+    content (see ``--filesystem`` on ``disc``'s commands).
+
     Returns a list of ``(source, directory)`` pairs recording where each
     source landed. Raises :class:`click.ClickException` if the destination
     is flat.
@@ -2810,7 +2945,13 @@ def gather(
     from oaknut.filesystem import HierarchicalDirectories, Titled, create_filesystem
 
     results: list[tuple[str, str]] = []
-    with resolve_mount(str(destination), writable=True) as dst_resolved:
+    with resolve_mount(
+        str(destination),
+        writable=True,
+        force_filesystem=dest_force_filesystem,
+        force_geometry=dest_force_geometry,
+        force_option="--dest-filesystem",
+    ) as dst_resolved:
         dst_mount = dst_resolved.mount
         if not isinstance(dst_mount, HierarchicalDirectories):
             raise click.ClickException(
@@ -2823,7 +2964,12 @@ def gather(
         _ensure_dir_chain(dst_mount, base)
         used: set[str] = set()
         for source in sources:
-            with resolve_mount(str(source)) as src_resolved:
+            with resolve_mount(
+                str(source),
+                force_filesystem=source_force_filesystem,
+                force_geometry=source_force_geometry,
+                force_option="--source-filesystem",
+            ) as src_resolved:
                 src_mount = src_resolved.mount
                 title = src_mount.title if isinstance(src_mount, Titled) else ""
                 name = _gather_dir_name(src_resolved.image, title, name_from, grammar, used)
@@ -2873,7 +3019,18 @@ def gather(
     help="Overwrite files that already exist in the destination.",
 )
 @report_output(reports={"gathered": "Each source and the directory it was copied into."})
-def gather_cmd(destination, sources, into, name_from, force):
+@source_dest_force_options
+def gather_cmd(
+    destination,
+    sources,
+    into,
+    name_from,
+    force,
+    source_force_filesystem,
+    source_force_geometry,
+    dest_force_filesystem,
+    dest_force_geometry,
+):
     """Gather many disc images into one, each under its own directory.
 
     Copies every SOURCE image's files into its own directory of
@@ -2895,7 +3052,17 @@ def gather_cmd(destination, sources, into, name_from, force):
     """
     from asyoulikeit.tabular_data import Report, Reports, TableContent
 
-    mapping = gather(destination, list(sources), into=into, name_from=name_from, force=force)
+    mapping = gather(
+        destination,
+        list(sources),
+        into=into,
+        name_from=name_from,
+        force=force,
+        source_force_filesystem=source_force_filesystem,
+        source_force_geometry=source_force_geometry,
+        dest_force_filesystem=dest_force_filesystem,
+        dest_force_geometry=dest_force_geometry,
+    )
 
     table = TableContent(title="gathered")
     table.add_column("source", "Source", header=True)
@@ -2918,7 +3085,14 @@ def gather_cmd(destination, sources, into, name_from, force):
     default=None,
     help="Set the new directory's title (ADFS only; DFS/AFS directories have none).",
 )
-def mkdir(compound_path: str, p: bool, dir_title: str | None) -> None:
+@force_options
+def mkdir(
+    compound_path: str,
+    p: bool,
+    dir_title: str | None,
+    force_filesystem: str | None,
+    force_geometry: str | None,
+) -> None:
     """Create a directory (ADFS/AFS only). Alias: *CDIR.
 
     Accepts a ``COMPOUND_PATH``. ``--title`` additionally sets the new
@@ -2930,7 +3104,12 @@ def mkdir(compound_path: str, p: bool, dir_title: str | None) -> None:
     _outer_filepath, path = parse_compound_path(compound_path)
     if not path:
         raise click.UsageError("PATH is required")
-    with resolve_mount(compound_path, writable=True) as resolved:
+    with resolve_mount(
+        compound_path,
+        writable=True,
+        force_filesystem=force_filesystem,
+        force_geometry=force_geometry,
+    ) as resolved:
         mount = resolved.mount
         # mkdir is available when the filesystem nests directories; a flat
         # catalogue (DFS) does not advertise the capability.
@@ -2955,12 +3134,15 @@ _alias("*CDIR", "mkdir")
     "--dry-run", is_flag=True, help="Print what would change without modifying the image."
 )
 @_wildcards_option
+@force_options
 def chmod(
     compound_path: str,
     access: str,
     recursive: bool,
     dry_run: bool,
     wildcards: bool,
+    force_filesystem: str | None,
+    force_geometry: str | None,
 ) -> None:
     """Set file access permissions (Acorn alias: *ACCESS).
 
@@ -2993,6 +3175,8 @@ def chmod(
         verb=lambda target: f"would chmod {target} {access}",
         transform=transform,
         wildcards=wildcards,
+        force_filesystem=force_filesystem,
+        force_geometry=force_geometry,
     )
 
 
@@ -3006,7 +3190,15 @@ _alias("*ACCESS", "chmod")
     "--dry-run", is_flag=True, help="Print what would change without modifying the image."
 )
 @_wildcards_option
-def lock(compound_path: str, recursive: bool, dry_run: bool, wildcards: bool) -> None:
+@force_options
+def lock(
+    compound_path: str,
+    recursive: bool,
+    dry_run: bool,
+    wildcards: bool,
+    force_filesystem: str | None,
+    force_geometry: str | None,
+) -> None:
     """Lock a file.
 
     Accepts a ``COMPOUND_PATH``.
@@ -3021,6 +3213,8 @@ def lock(compound_path: str, recursive: bool, dry_run: bool, wildcards: bool) ->
         verb=lambda target: f"would lock {target}",
         transform=lambda current: current | Access.L,
         wildcards=wildcards,
+        force_filesystem=force_filesystem,
+        force_geometry=force_geometry,
     )
 
 
@@ -3031,7 +3225,15 @@ def lock(compound_path: str, recursive: bool, dry_run: bool, wildcards: bool) ->
     "--dry-run", is_flag=True, help="Print what would change without modifying the image."
 )
 @_wildcards_option
-def unlock(compound_path: str, recursive: bool, dry_run: bool, wildcards: bool) -> None:
+@force_options
+def unlock(
+    compound_path: str,
+    recursive: bool,
+    dry_run: bool,
+    wildcards: bool,
+    force_filesystem: str | None,
+    force_geometry: str | None,
+) -> None:
     """Unlock a file.
 
     Accepts a ``COMPOUND_PATH``.
@@ -3046,6 +3248,8 @@ def unlock(compound_path: str, recursive: bool, dry_run: bool, wildcards: bool) 
         verb=lambda target: f"would unlock {target}",
         transform=lambda current: current & ~Access.L,
         wildcards=wildcards,
+        force_filesystem=force_filesystem,
+        force_geometry=force_geometry,
     )
 
 
@@ -3057,12 +3261,15 @@ def unlock(compound_path: str, recursive: bool, dry_run: bool, wildcards: bool) 
     "--dry-run", is_flag=True, help="Print what would change without modifying the image."
 )
 @_wildcards_option
+@force_options
 def set_load(
     compound_path: str,
     addr: str,
     recursive: bool,
     dry_run: bool,
     wildcards: bool,
+    force_filesystem: str | None,
+    force_geometry: str | None,
 ) -> None:
     """Set a file's load address.
 
@@ -3086,7 +3293,12 @@ def set_load(
     if not path:
         raise click.UsageError("PATH is required")
     address = parse_address(addr)
-    with resolve_mount(compound_path, writable=not dry_run) as resolved:
+    with resolve_mount(
+        compound_path,
+        writable=not dry_run,
+        force_filesystem=force_filesystem,
+        force_geometry=force_geometry,
+    ) as resolved:
         mount = resolved.mount
         if not isinstance(mount, AcornMetadata):
             raise FSError(
@@ -3121,12 +3333,15 @@ def set_load(
     "--dry-run", is_flag=True, help="Print what would change without modifying the image."
 )
 @_wildcards_option
+@force_options
 def set_exec(
     compound_path: str,
     addr: str,
     recursive: bool,
     dry_run: bool,
     wildcards: bool,
+    force_filesystem: str | None,
+    force_geometry: str | None,
 ) -> None:
     """Set a file's exec address.
 
@@ -3150,7 +3365,12 @@ def set_exec(
     if not path:
         raise click.UsageError("PATH is required")
     address = parse_address(addr)
-    with resolve_mount(compound_path, writable=not dry_run) as resolved:
+    with resolve_mount(
+        compound_path,
+        writable=not dry_run,
+        force_filesystem=force_filesystem,
+        force_geometry=force_geometry,
+    ) as resolved:
         mount = resolved.mount
         if not isinstance(mount, AcornMetadata):
             raise FSError(
@@ -3177,7 +3397,9 @@ def set_exec(
             )
 
 
-def _require_acorn_meta(compound_path: str):
+def _require_acorn_meta(
+    compound_path: str, *, force_filesystem: str | None = None, force_geometry: str | None = None
+):
     """Resolve *compound_path* to an existing file, returning ``(meta, digits)``.
 
     *digits* is the mount's load/exec display width (six for DFS, eight
@@ -3190,7 +3412,9 @@ def _require_acorn_meta(compound_path: str):
     _outer_filepath, path = parse_compound_path(compound_path)
     if not path:
         raise click.UsageError("PATH is required")
-    resolved = resolve_mount(compound_path)
+    resolved = resolve_mount(
+        compound_path, force_filesystem=force_filesystem, force_geometry=force_geometry
+    )
     mount = resolved.mount
     target = resolved.path or mount.path_root()
     if not mount.exists(target):
@@ -3214,7 +3438,8 @@ def _require_acorn_meta(compound_path: str):
         )
     }
 )
-def get_load(compound_path: str):
+@force_options
+def get_load(compound_path: str, force_filesystem: str | None, force_geometry: str | None):
     """Print a file's load address.
 
     Accepts a ``COMPOUND_PATH``.
@@ -3222,7 +3447,9 @@ def get_load(compound_path: str):
     from asyoulikeit.scalar_data import ScalarContent
     from asyoulikeit.tabular_data import Report, Reports
 
-    meta, addr_digits = _require_acorn_meta(compound_path)
+    meta, addr_digits = _require_acorn_meta(
+        compound_path, force_filesystem=force_filesystem, force_geometry=force_geometry
+    )
     return Reports(
         load=Report(
             data=ScalarContent(value=address_cell(meta.load_address, **addr_digits), title="Load"),
@@ -3241,7 +3468,8 @@ def get_load(compound_path: str):
         )
     }
 )
-def get_exec(compound_path: str):
+@force_options
+def get_exec(compound_path: str, force_filesystem: str | None, force_geometry: str | None):
     """Print a file's exec address.
 
     Accepts a ``COMPOUND_PATH``.
@@ -3249,7 +3477,9 @@ def get_exec(compound_path: str):
     from asyoulikeit.scalar_data import ScalarContent
     from asyoulikeit.tabular_data import Report, Reports
 
-    meta, addr_digits = _require_acorn_meta(compound_path)
+    meta, addr_digits = _require_acorn_meta(
+        compound_path, force_filesystem=force_filesystem, force_geometry=force_geometry
+    )
     return Reports(
         exec=Report(
             data=ScalarContent(value=address_cell(meta.exec_address, **addr_digits), title="Exec"),
@@ -3257,7 +3487,14 @@ def get_exec(compound_path: str):
     )
 
 
-def _require_read_target(compound_path: str, capability, noun: str):
+def _require_read_target(
+    compound_path: str,
+    capability,
+    noun: str,
+    *,
+    force_filesystem: str | None = None,
+    force_geometry: str | None = None,
+):
     """Resolve *compound_path* to an existing file, gated on *capability*.
 
     Returns ``(mount, target)``. Raises a clean :class:`FSError` if the
@@ -3266,7 +3503,9 @@ def _require_read_target(compound_path: str, capability, noun: str):
     _outer_filepath, path = parse_compound_path(compound_path)
     if not path:
         raise click.UsageError("PATH is required")
-    resolved = resolve_mount(compound_path)
+    resolved = resolve_mount(
+        compound_path, force_filesystem=force_filesystem, force_geometry=force_geometry
+    )
     mount = resolved.mount
     target = resolved.path or mount.path_root()
     if not mount.exists(target):
@@ -3301,7 +3540,8 @@ def _parse_datestamp(text: str):
         )
     }
 )
-def get_filetype(compound_path: str):
+@force_options
+def get_filetype(compound_path: str, force_filesystem: str | None, force_geometry: str | None):
     """Print a file's RISC OS filetype.
 
     Accepts a ``COMPOUND_PATH``.
@@ -3311,7 +3551,13 @@ def get_filetype(compound_path: str):
     from asyoulikeit.tabular_data import Report, Reports
     from oaknut.filesystem import Filetyped
 
-    mount, target = _require_read_target(compound_path, Filetyped, "filetype")
+    mount, target = _require_read_target(
+        compound_path,
+        Filetyped,
+        "filetype",
+        force_filesystem=force_filesystem,
+        force_geometry=force_geometry,
+    )
     filetype = mount.filetype(target)
     value = (
         filetype_cell(filetype)
@@ -3331,12 +3577,15 @@ def get_filetype(compound_path: str):
     "--dry-run", is_flag=True, help="Print what would change without modifying the image."
 )
 @_wildcards_option
+@force_options
 def set_filetype(
     compound_path: str,
     filetype: str,
     recursive: bool,
     dry_run: bool,
     wildcards: bool,
+    force_filesystem: str | None,
+    force_geometry: str | None,
 ) -> None:
     """Set a file's RISC OS filetype.
 
@@ -3352,7 +3601,12 @@ def set_filetype(
     if not path:
         raise click.UsageError("PATH is required")
     filetype_number = parse_filetype(filetype)
-    with resolve_mount(compound_path, writable=not dry_run) as resolved:
+    with resolve_mount(
+        compound_path,
+        writable=not dry_run,
+        force_filesystem=force_filesystem,
+        force_geometry=force_geometry,
+    ) as resolved:
         mount = resolved.mount
         if not isinstance(mount, Filetyped):
             raise FSError(
@@ -3381,7 +3635,8 @@ def set_filetype(
         )
     }
 )
-def get_datestamp(compound_path: str):
+@force_options
+def get_datestamp(compound_path: str, force_filesystem: str | None, force_geometry: str | None):
     """Print a file's datestamp.
 
     Accepts a ``COMPOUND_PATH``.
@@ -3397,7 +3652,13 @@ def get_datestamp(compound_path: str):
     from asyoulikeit.tabular_data import Report, Reports
     from oaknut.filesystem import Datestamped
 
-    mount, target = _require_read_target(compound_path, Datestamped, "datestamp")
+    mount, target = _require_read_target(
+        compound_path,
+        Datestamped,
+        "datestamp",
+        force_filesystem=force_filesystem,
+        force_geometry=force_geometry,
+    )
     when = mount.datestamp(target)
     value = datestamp_cell(when, mount.datestamp_resolution) if when is not None else ""
     return Reports(
@@ -3413,12 +3674,15 @@ def get_datestamp(compound_path: str):
     "--dry-run", is_flag=True, help="Print what would change without modifying the image."
 )
 @_wildcards_option
+@force_options
 def set_datestamp(
     compound_path: str,
     datetime_text: str,
     recursive: bool,
     dry_run: bool,
     wildcards: bool,
+    force_filesystem: str | None,
+    force_geometry: str | None,
 ) -> None:
     """Set a file's datestamp.
 
@@ -3433,7 +3697,12 @@ def set_datestamp(
     if not path:
         raise click.UsageError("PATH is required")
     when = _parse_datestamp(datetime_text)
-    with resolve_mount(compound_path, writable=not dry_run) as resolved:
+    with resolve_mount(
+        compound_path,
+        writable=not dry_run,
+        force_filesystem=force_filesystem,
+        force_geometry=force_geometry,
+    ) as resolved:
         mount = resolved.mount
         if not isinstance(mount, Datestamped):
             raise FSError(
@@ -3456,7 +3725,13 @@ def set_datestamp(
 @click.argument("compound_path", metavar="OUTER_PATH:INNER_PATH")
 @click.argument("new_title", required=False, default=None)
 @report_output(reports={"title": "Current title (when no new title is supplied)."})
-def title(compound_path: str, new_title: str | None):
+@force_options
+def title(
+    compound_path: str,
+    new_title: str | None,
+    force_filesystem: str | None,
+    force_geometry: str | None,
+):
     """Read or set a disc or directory title (Acorn alias: *TITLE).
 
     Accepts a ``COMPOUND_PATH``. With no in-image path it reads or sets
@@ -3477,7 +3752,12 @@ def title(compound_path: str, new_title: str | None):
     from oaknut.filesystem import DirectoryTitled, Titled
 
     _outer_filepath, _path = parse_compound_path(compound_path)
-    with resolve_mount(compound_path, writable=new_title is not None) as resolved:
+    with resolve_mount(
+        compound_path,
+        writable=new_title is not None,
+        force_filesystem=force_filesystem,
+        force_geometry=force_geometry,
+    ) as resolved:
         mount = resolved.mount
         bare = resolved.path
         # No in-image path → the disc/partition title (every filesystem
@@ -3555,7 +3835,10 @@ class BootOptionParam(click.ParamType):
         )
     }
 )
-def opt(image: Path, boot_option: int | None):
+@force_options
+def opt(
+    image: Path, boot_option: int | None, force_filesystem: str | None, force_geometry: str | None
+):
     """Read or set boot option (Acorn alias: *OPT4).
 
     Omit BOOT_OPTION to report the current setting.
@@ -3571,7 +3854,12 @@ def opt(image: Path, boot_option: int | None):
     from asyoulikeit.tabular_data import Report, Reports
     from oaknut.filesystem import Bootable
 
-    with resolve_mount(str(image), writable=boot_option is not None) as resolved:
+    with resolve_mount(
+        str(image),
+        writable=boot_option is not None,
+        force_filesystem=force_filesystem,
+        force_geometry=force_geometry,
+    ) as resolved:
         mount = resolved.mount
         if not isinstance(mount, Bootable):
             raise click.ClickException(f"{resolved.filesystem} images carry no boot option")
@@ -3696,7 +3984,10 @@ def create(
     "(repeatable). Remaining files follow in their current order — so "
     "--order $.!BOOT,$.LOADER puts the boot files where they load fastest.",
 )
-def compact(image: Path, order: tuple[str, ...]) -> None:
+@force_options
+def compact(
+    image: Path, order: tuple[str, ...], force_filesystem: str | None, force_geometry: str | None
+) -> None:
     """Defragment a disc image, consolidating free space.
 
     With ``--order``, the named files are placed first (in the lowest
@@ -3706,7 +3997,9 @@ def compact(image: Path, order: tuple[str, ...]) -> None:
 
     order_paths = tuple(spec for chunk in order for spec in chunk.split(",") if spec)
 
-    with resolve_mount(str(image), writable=True) as resolved:
+    with resolve_mount(
+        str(image), writable=True, force_filesystem=force_filesystem, force_geometry=force_geometry
+    ) as resolved:
         mount = resolved.mount
         if not isinstance(mount, Compactable):
             raise click.ClickException(f"{resolved.filesystem} images cannot be compacted")
@@ -3745,7 +4038,16 @@ def compact(image: Path, order: tuple[str, ...]) -> None:
 )
 @click.option("--owner", type=int, default=0, help="Econet owner ID for PiEB formats.")
 @click.option("-v", "--verbose", is_flag=True, help="Show extraction progress.")
-def export_cmd(image: Path, host_dir: Path, meta_format: str, owner: int, verbose: bool) -> None:
+@force_options
+def export_cmd(
+    image: Path,
+    host_dir: Path,
+    meta_format: str,
+    owner: int,
+    verbose: bool,
+    force_filesystem: str | None,
+    force_geometry: str | None,
+) -> None:
     """Bulk-export entire image to a host directory."""
     from oaknut.file import MetaFormat
 
@@ -3757,7 +4059,9 @@ def export_cmd(image: Path, host_dir: Path, meta_format: str, owner: int, verbos
 
     host_dir.mkdir(parents=True, exist_ok=True)
 
-    resolved = resolve_mount(str(image))
+    resolved = resolve_mount(
+        str(image), force_filesystem=force_filesystem, force_geometry=force_geometry
+    )
     mount = resolved.mount
     _export_recursive(mount, mount.path_root(), host_dir, resolved_meta_format, owner, verbose)
 
@@ -3820,6 +4124,7 @@ def _export_recursive(
 )
 @click.option("-v", "--verbose", is_flag=True, help="Show import progress.")
 @_typestamp_options
+@force_options
 def import_cmd(
     image: Path,
     host_dir: Path,
@@ -3827,6 +4132,8 @@ def import_cmd(
     verbose: bool,
     filetype: str | None,
     datestamp: str | None,
+    force_filesystem: str | None,
+    force_geometry: str | None,
 ) -> None:
     """Bulk-import a host directory into the image.
 
@@ -3842,7 +4149,9 @@ def import_cmd(
         meta_formats = DEFAULT_IMPORT_META_FORMATS
 
     filetype_number, when = _parse_typestamp_options(filetype, datestamp)
-    with resolve_mount(str(image), writable=True) as resolved:
+    with resolve_mount(
+        str(image), writable=True, force_filesystem=force_filesystem, force_geometry=force_geometry
+    ) as resolved:
         mount = resolved.mount
         # Fail before importing anything if the overrides cannot apply.
         if filetype_number is not None and not isinstance(mount, Filetyped):

@@ -131,11 +131,14 @@ def resolve_mount(
     writable: bool = False,
     force_filesystem: str | None = None,
     force_geometry: str | None = None,
+    force_option: str = "--filesystem",
 ) -> ResolvedMount:
     """Resolve *compound_path* to a mounted partition and in-partition path.
 
     Identifies the image by content and mounts the selected partition.
-    *force_filesystem* / *force_geometry* override detection. With
+    *force_filesystem* / *force_geometry* override detection;
+    *force_option* names the option that sets them, for the hint when
+    nothing recognises the image. With
     *writable* the image is opened for writing and the mount's mutations
     reach the file; the returned :class:`ResolvedMount` then owns a live
     mapping and must be used as a context manager so it is released. A
@@ -174,7 +177,7 @@ def resolve_mount(
             mount = filesystem.open(reader, geometry, surface=surface)
             chosen_name = partition_name = force_filesystem
         else:
-            candidates = _identify_or_explain(outer_filepath)
+            candidates = _identify_or_explain(outer_filepath, force_option)
             host = candidates[0]
             chosen, region = _select(host, selector)
             if selector is None:
@@ -313,15 +316,21 @@ def _geometry_from_sidecar(outer_filepath: Path) -> Geometry | None:
     return None
 
 
-def _identify_or_explain(outer_filepath: Path) -> list[Identification]:
+def _identify_or_explain(
+    outer_filepath: Path, force_option: str = "--filesystem"
+) -> list[Identification]:
     """The candidates for *outer_filepath*; raise, explaining why, if there are none."""
     result = survey(outer_filepath)
     if not result.candidates:
-        raise click.ClickException(_unrecognised_message(outer_filepath.name, result.rejections))
+        raise click.ClickException(
+            _unrecognised_message(outer_filepath.name, result.rejections, force_option)
+        )
     return result.candidates
 
 
-def _unrecognised_message(name: str, rejections: tuple[Rejection, ...]) -> str:
+def _unrecognised_message(
+    name: str, rejections: tuple[Rejection, ...], force_option: str = "--filesystem"
+) -> str:
     """Say that nothing recognised *name*, and why each filesystem declined it."""
     if not rejections:
         return f"no installed filesystem recognises '{name}' (none are installed)"
@@ -332,5 +341,5 @@ def _unrecognised_message(name: str, rejections: tuple[Rejection, ...]) -> str:
     )
     return (
         f"no installed filesystem recognises '{name}':\n{reasons}\n"
-        f"Force one with --filesystem if you know what it is."
+        f"Force one with {force_option} if you know what it is."
     )
