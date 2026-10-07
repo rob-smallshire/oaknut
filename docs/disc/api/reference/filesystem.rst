@@ -185,6 +185,8 @@ others declined.
 .. autoclass:: oaknut.filesystem.Survey
    :members:
 
+.. autofunction:: oaknut.filesystem.describe_bytes
+
 
 The coordinator
 ---------------

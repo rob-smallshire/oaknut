@@ -149,3 +149,14 @@ class Survey:
     candidates: list[Identification]
     #: Why each declining filesystem declined, in filesystem-name order.
     rejections: tuple[Rejection, ...] = ()
+
+
+def describe_bytes(data: bytes) -> str:
+    """*data* for a rejection reason: quoted if printable ASCII, else hex.
+
+    So a reason can say what was found where a signature was expected —
+    ``'Hugo'`` or ``00 00 00 00`` — in a form a user can read.
+    """
+    if data and all(0x20 <= byte < 0x7F for byte in data):
+        return f"'{data.decode('ascii')}'"
+    return " ".join(f"{byte:02X}" for byte in data)

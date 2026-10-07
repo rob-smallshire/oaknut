@@ -78,7 +78,7 @@ from oaknut.file.host_bridge import (
     import_with_metadata,
 )
 from oaknut.file.integrity import assert_no_duplicate_names
-from oaknut.filesystem import InvalidNameError
+from oaknut.filesystem import InvalidNameError, describe_bytes
 
 if TYPE_CHECKING:
     from oaknut.file import BootOption
@@ -3552,12 +3552,5 @@ def _detect_directory_layout(unified: UnifiedDisc) -> tuple[ADFSDirectoryFormat,
     sig4 = bytes(unified.sector_range(_D_MAP_ROOT_SECTOR, 1)[1:5])
     raise ADFSError(
         "no ADFS root directory: expected 'Hugo' at &201 or 'Hugo'/'Nick' at &401, "
-        f"found {_show_signature(sig2)} and {_show_signature(sig4)}"
+        f"found {describe_bytes(sig2)} and {describe_bytes(sig4)}"
     )
-
-
-def _show_signature(signature: bytes) -> str:
-    """*signature* quoted when printable ASCII, else as hex bytes."""
-    if all(0x20 <= byte < 0x7F for byte in signature):
-        return f"'{signature.decode('ascii')}'"
-    return " ".join(f"{byte:02X}" for byte in signature)

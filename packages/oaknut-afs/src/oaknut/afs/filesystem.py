@@ -35,6 +35,8 @@ from oaknut.filesystem import (
     GeometryGrammar,
     Identification,
     ImageReader,
+    Rejection,
+    describe_bytes,
 )
 from oaknut.filesystem.wildcards import ACORN_WILDCARDS, AcornWildcards
 
@@ -46,15 +48,18 @@ from oaknut.filesystem.wildcards import ACORN_WILDCARDS, AcornWildcards
 _INFO_SECTOR_OFFSET = INFO_SECTOR_SIZE
 
 
-def _read_info(reader: ImageReader) -> InfoSector | None:
-    """The AFS info sector at the region's sector 1, or None if not AFS."""
+def _read_info(reader: ImageReader) -> InfoSector | str:
+    """The AFS info sector at the region's sector 1, or why it is not AFS."""
     sector = reader.read(_INFO_SECTOR_OFFSET, INFO_SECTOR_SIZE)
     if sector[:4] != MAGIC:
-        return None
+        return (
+            f"no AFS0 info sector: sector 1 starts with {describe_bytes(sector[:4])}, "
+            f"not {describe_bytes(MAGIC)}"
+        )
     try:
         return InfoSector.from_bytes(sector)
-    except (AFSInfoSectorError, ValueError):
-        return None
+    except (AFSInfoSectorError, ValueError) as exc:
+        return f"AFS0 info sector in sector 1 is malformed: {exc}"
 
 
 def _window_disc(reader: ImageReader) -> UnifiedDisc:
@@ -310,10 +315,10 @@ class AFS(Filesystem):
     name_grammar = AFS_NAME_GRAMMAR
     extensions = frozenset({".dat"})
 
-    def probe(self, reader: ImageReader) -> Identification | None:
+    def probe(self, reader: ImageReader) -> Identification | Rejection:
         info = _read_info(reader)
-        if info is None:
-            return None
+        if isinstance(info, str):
+            return Rejection(self.name, info)
         spc = info.sectors_per_cylinder
         verified = spc > 0 and reader.read(
             (1 + spc) * INFO_SECTOR_SIZE, INFO_SECTOR_SIZE
@@ -332,8 +337,8 @@ class AFS(Filesystem):
         # AFS is a single volume with no per-surface drive; *surface* is
         # accepted for contract uniformity and ignored.
         info = _read_info(reader)
-        if info is None:
-            raise FilesystemError("no AFS info sector found in this region")
+        if isinstance(info, str):
+            raise FilesystemError(info)
         spc = info.sectors_per_cylinder
         # On-disc addresses are absolute physical-disc sectors; the window
         # starts at the region base (start_cylinder * spc), which AFS

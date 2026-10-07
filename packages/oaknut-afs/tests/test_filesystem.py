@@ -7,6 +7,7 @@ from oaknut.filesystem import (
     Confidence,
     HierarchicalDirectories,
     Mount,
+    Rejection,
     Titled,
     UserDatabase,
     create_filesystem,
@@ -116,8 +117,8 @@ class TestWritableRegion:
 
 
 class TestNotAfs:
-    def test_non_afs_region_returns_none(self):
-        # A buffer whose sector 1 is not AFS0 is not AFS.
+    def test_non_afs_region_is_rejected(self):
+        # A buffer whose sector 1 is not AFS0 is not AFS, and says so.
         afs = create_filesystem("afs")
         with reader_for(b"\x00" * 2048) as reader:
-            assert afs.probe(reader) is None
+            assert isinstance(afs.probe(reader), Rejection)

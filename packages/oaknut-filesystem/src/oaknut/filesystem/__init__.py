@@ -83,6 +83,7 @@ from oaknut.filesystem.identification import (
     Rejection,
     Survey,
     Volume,
+    describe_bytes,
 )
 from oaknut.filesystem.reader import ImageReader, ImageSource, reader_for
 
@@ -135,6 +136,7 @@ __all__ = [
     "Confidence",
     "Identification",
     "Rejection",
+    "describe_bytes",
     "Survey",
     "Partition",
     "Volume",
