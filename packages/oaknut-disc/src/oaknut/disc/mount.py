@@ -26,6 +26,7 @@ from oaknut.filesystem import (
     Mount,
     Partition,
     Rejection,
+    Volume,
     create_filesystem,
     geometry_from_cfg,
     geometry_from_dsc,
@@ -61,7 +62,20 @@ class ResolvedMount:
     filesystem: str
     partition: str
     image: Path
+    #: The geometry the partition was opened with, when known.
+    geometry: Geometry | None = None
     _reader: object = None
+
+    @property
+    def volumes(self) -> tuple[Volume, ...]:
+        """The partition's independently addressable volumes, in order.
+
+        Both sides of a double-sided DFS disc (designated ``:0`` and
+        ``:2``); a single, undesignated volume for everything else.
+        """
+        if self.geometry is None:
+            return (Volume("", 0),)
+        return tuple(create_filesystem(self.filesystem).volumes(self.geometry))
 
     def close(self) -> None:
         # Order matters: the mount borrows a memoryview over the reader's
@@ -215,11 +229,19 @@ def resolve_mount(
     if not writable:
         # The mount holds a private copy; the mapping is no longer needed.
         reader.close()
-        return ResolvedMount(mount, in_path, chosen_name, partition_name, outer_filepath)
+        return ResolvedMount(
+            mount, in_path, chosen_name, partition_name, outer_filepath, geometry=geometry
+        )
     # A writable mount maps the file live; keep the reader open until the
     # caller closes the ResolvedMount.
     return ResolvedMount(
-        mount, in_path, chosen_name, partition_name, outer_filepath, _reader=reader
+        mount,
+        in_path,
+        chosen_name,
+        partition_name,
+        outer_filepath,
+        geometry=geometry,
+        _reader=reader,
     )
 
 

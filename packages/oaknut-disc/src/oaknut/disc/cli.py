@@ -1477,30 +1477,45 @@ def validate(image: Path, force_filesystem: str | None, force_geometry: str | No
     DFS, ADFS floppies, and ADFS hard discs are supported. Defects
     surfaced include catalogue overflow, files extending past the end
     of the disc, two files claiming the same sector, duplicate
-    filenames (DFS) and free-space-map checksum or structure problems
-    (ADFS).
+    filenames and a malformed sector count (DFS), and free-space-map
+    checksum or structure problems (ADFS). Each side of a double-sided
+    disc is checked, and its errors are labelled with its drive; a side
+    that was never formatted is skipped.
     """
     from oaknut.exception import render_error
     from oaknut.filesystem import Validatable
+    from oaknut.filesystem.exceptions import VolumeNotFormattedError
 
     from .console import print_error
 
-    with resolve_mount(
-        str(image), force_filesystem=force_filesystem, force_geometry=force_geometry
-    ) as resolved:
-        mount = resolved.mount
-        if not isinstance(mount, Validatable):
+    force = {"force_filesystem": force_filesystem, "force_geometry": force_geometry}
+    with resolve_mount(str(image), **force) as resolved:
+        volumes = resolved.volumes
+        if not isinstance(resolved.mount, Validatable):
             # A filesystem with no structural checks (AFS) is reported
             # clean rather than erroring — nothing to find.
             return
-        errors = mount.validate()
+        findings = [(volumes[0], error) for error in resolved.mount.validate()]
+    # Each further volume — the second side of a double-sided disc — is
+    # validated on its own. One never formatted (a blank back side, common
+    # on a double-sided image of a single-sided disc) has nothing to check.
+    for volume in volumes[1:]:
+        try:
+            side = resolve_mount(f"{image}:{volume.designation}", **force)
+        except VolumeNotFormattedError:
+            continue
+        with side:
+            findings += [(volume, error) for error in side.mount.validate()]
 
-    if not errors:
+    if not findings:
         return
 
-    for err in errors:
-        for line, is_continuation in render_error(err):
-            print_error(line, is_continuation)
+    errors = [error for _volume, error in findings]
+    for volume, error in findings:
+        # Name the drive when the image has more than one.
+        label = f"drive {volume.designation}: " if len(volumes) > 1 else ""
+        for line, is_continuation in render_error(error):
+            print_error(line if is_continuation else label + line, is_continuation)
     plural = "" if len(errors) == 1 else "s"
     click.echo(f"{len(errors)} error{plural} found", err=True)
     raise SystemExit(int(ExitCode.DATA_ERR))

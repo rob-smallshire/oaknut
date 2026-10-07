@@ -1608,8 +1608,8 @@ class TestValidate:
         buffer[256:260] = b"    "
         buffer[260] = 0
         buffer[261] = 8  # 1 file
-        buffer[262] = 0x00
-        buffer[263] = 200
+        buffer[262] = 0x01  # 400 sectors, the whole 40-track surface, so the
+        buffer[263] = 0x90  # sector count is sound and the overflow is the one error
         buffer[8:15] = b"A      "
         buffer[15] = ord("$")
         # Single file claimed at sector 390 with length 5120 bytes (20 sectors).
