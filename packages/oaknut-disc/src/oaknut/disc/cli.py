@@ -1461,6 +1461,46 @@ def _render_free_map_lines(data, width: int) -> list[str]:
     return lines
 
 
+def _volume_mounts(image: Path, force: dict, *, writable: bool = False):
+    """Each formatted volume of *image*'s partition, with its open mount.
+
+    Yields ``(volume, resolved, label)`` for the first volume and each
+    further one — the second side of a double-sided disc — skipping a side
+    that was never formatted (a blank back side, common on a double-sided
+    image of a single-sided disc). *label* names the drive when the image
+    has more than one, for prefixing messages. Each mount is closed (and,
+    when *writable*, flushed) once the caller moves on.
+    """
+    from oaknut.filesystem.exceptions import VolumeNotFormattedError
+
+    first = resolve_mount(str(image), writable=writable, **force)
+    volumes = first.volumes
+
+    def label(volume) -> str:
+        return f"drive {volume.designation}: " if len(volumes) > 1 else ""
+
+    with first:
+        yield volumes[0], first, label(volumes[0])
+    for volume in volumes[1:]:
+        try:
+            side = resolve_mount(f"{image}:{volume.designation}", writable=writable, **force)
+        except VolumeNotFormattedError:
+            continue
+        with side:
+            yield volume, side, label(volume)
+
+
+def _print_findings(findings: list[tuple[str, object]]) -> None:
+    """Print each ``(label, finding)`` as an ``Error:`` line, label first."""
+    from oaknut.exception import render_error
+
+    from .console import print_error
+
+    for label, finding in findings:
+        for line, is_continuation in render_error(finding):
+            print_error(line if is_continuation else label + line, is_continuation)
+
+
 @cli.command()
 @click.argument("image", type=click.Path(exists=True, path_type=Path))
 @force_options
@@ -1480,44 +1520,74 @@ def validate(image: Path, force_filesystem: str | None, force_geometry: str | No
     filenames and a malformed sector count (DFS), and free-space-map
     checksum or structure problems (ADFS). Each side of a double-sided
     disc is checked, and its errors are labelled with its drive; a side
-    that was never formatted is skipped.
+    that was never formatted is skipped. ``disc repair`` fixes the
+    defects it can.
     """
-    from oaknut.exception import render_error
     from oaknut.filesystem import Validatable
-    from oaknut.filesystem.exceptions import VolumeNotFormattedError
-
-    from .console import print_error
 
     force = {"force_filesystem": force_filesystem, "force_geometry": force_geometry}
-    with resolve_mount(str(image), **force) as resolved:
-        volumes = resolved.volumes
-        if not isinstance(resolved.mount, Validatable):
-            # A filesystem with no structural checks (AFS) is reported
-            # clean rather than erroring — nothing to find.
-            return
-        findings = [(volumes[0], error) for error in resolved.mount.validate()]
-    # Each further volume — the second side of a double-sided disc — is
-    # validated on its own. One never formatted (a blank back side, common
-    # on a double-sided image of a single-sided disc) has nothing to check.
-    for volume in volumes[1:]:
-        try:
-            side = resolve_mount(f"{image}:{volume.designation}", **force)
-        except VolumeNotFormattedError:
-            continue
-        with side:
-            findings += [(volume, error) for error in side.mount.validate()]
+    findings: list[tuple[str, object]] = []
+    for _volume, resolved, label in _volume_mounts(image, force):
+        if isinstance(resolved.mount, Validatable):
+            # A filesystem with no structural checks (AFS) has nothing to find.
+            findings += [(label, finding) for finding in resolved.mount.validate()]
 
     if not findings:
         return
+    _print_findings(findings)
+    plural = "" if len(findings) == 1 else "s"
+    click.echo(f"{len(findings)} error{plural} found", err=True)
+    raise SystemExit(int(ExitCode.DATA_ERR))
 
-    errors = [error for _volume, error in findings]
-    for volume, error in findings:
-        # Name the drive when the image has more than one.
-        label = f"drive {volume.designation}: " if len(volumes) > 1 else ""
-        for line, is_continuation in render_error(error):
-            print_error(line if is_continuation else label + line, is_continuation)
-    plural = "" if len(errors) == 1 else "s"
-    click.echo(f"{len(errors)} error{plural} found", err=True)
+
+@cli.command()
+@click.argument("image", type=click.Path(exists=True, path_type=Path))
+@click.option(
+    "--dry-run",
+    "-n",
+    is_flag=True,
+    help="Report the repairs that would be made, without writing the image.",
+)
+@force_options
+def repair(
+    image: Path, dry_run: bool, force_filesystem: str | None, force_geometry: str | None
+) -> None:
+    """Fix the defects ``disc validate`` finds, where a fix is known.
+
+    Runs the same checks as ``disc validate`` on each side of the image
+    and applies the fix each defect carries, printing one line per repair
+    on stdout. What each filesystem can repair is listed by ``disc
+    describe-filesystem``. On a clean image, prints nothing and exits 0.
+    Defects with no fix are printed as ``Error:`` lines and left as they
+    are, and the command exits with code 65 (``EX_DATAERR``).
+
+    With ``--dry-run``, the repairs are reported but nothing is written.
+    """
+    from oaknut.filesystem import Validatable, fix_of
+
+    force = {"force_filesystem": force_filesystem, "force_geometry": force_geometry}
+    remaining: list[tuple[str, object]] = []
+    for _volume, resolved, label in _volume_mounts(image, force, writable=not dry_run):
+        if not isinstance(resolved.mount, Validatable):
+            continue
+        # The same findings validate reports: repair has no analysis of its own.
+        findings = resolved.mount.validate()
+        fixes = [fix for fix in map(fix_of, findings) if fix is not None]
+        for fix in fixes:
+            if dry_run:
+                click.echo(f"{label}would {fix.description}")
+            else:
+                fix.apply()
+                click.echo(f"{label}{fix.description}")
+        # What is left once the fixes are made — re-checked, not assumed.
+        still = findings if dry_run or not fixes else resolved.mount.validate()
+        remaining += [(label, finding) for finding in still if fix_of(finding) is None]
+
+    if not remaining:
+        return
+    _print_findings(remaining)
+    plural = "" if len(remaining) == 1 else "s"
+    click.echo(f"{len(remaining)} error{plural} with no repair", err=True)
     raise SystemExit(int(ExitCode.DATA_ERR))
 
 

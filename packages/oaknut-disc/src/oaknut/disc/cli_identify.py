@@ -192,6 +192,8 @@ def describe_filesystem_command() -> click.Command:
         if filesystem.name_grammar is not None:
             sections.append(f"Filename rules:\n{filesystem.name_grammar.summary()}")
         sections.append(f"Wildcards: {filesystem.wildcard_syntax.summary()}")
+        if filesystem.repairs:
+            sections.append("Repairs:\n" + "\n".join(filesystem.repairs))
         description = "\n\n".join(sections)
         return Reports(
             filesystem=Report(data=ScalarContent(value=description, title=name)),

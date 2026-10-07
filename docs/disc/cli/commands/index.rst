@@ -89,6 +89,11 @@ Inspection
 
    .. cli-example:: cmd_validate
 
+.. oaknut-command:: oaknut.disc.cli:repair
+   :prog: disc repair
+
+   .. cli-example:: cmd_repair
+
 .. oaknut-command:: oaknut.disc.cli:cat
    :prog: disc cat
 
