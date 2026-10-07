@@ -25,13 +25,13 @@ from oaknut.filesystem import (
     Identification,
     Mount,
     Partition,
+    Rejection,
     create_filesystem,
-    filesystem_names,
     geometry_from_cfg,
     geometry_from_dsc,
-    identify,
     reader_for,
     region_reader,
+    survey,
 )
 from oaknut.filesystem.exceptions import GeometryError
 
@@ -174,9 +174,7 @@ def resolve_mount(
             mount = filesystem.open(reader, geometry, surface=surface)
             chosen_name = partition_name = force_filesystem
         else:
-            candidates = identify(outer_filepath)
-            if not candidates:
-                raise click.ClickException(_unrecognised_message(outer_filepath.name))
+            candidates = _identify_or_explain(outer_filepath)
             host = candidates[0]
             chosen, region = _select(host, selector)
             if selector is None:
@@ -229,9 +227,7 @@ def partition_selectors(outer_filepath: Path) -> list[str]:
     (``adfs``, ``afs``, ``afs.1`` …) — the names a prefix would address.
     Raises if nothing recognises the image.
     """
-    candidates = identify(outer_filepath)
-    if not candidates:
-        raise click.ClickException(_unrecognised_message(outer_filepath.name))
+    candidates = _identify_or_explain(outer_filepath)
     host = candidates[0]
     return [host.partition.selector] + [
         c.partition.selector for c in host.contained if c.identified
@@ -247,9 +243,7 @@ def partition_volumes(outer_filepath: Path, selector: str | None = None) -> list
     a single, undesignated volume. Used by ``disc stat`` to list each
     side of a DSD under the designation that addresses it.
     """
-    candidates = identify(outer_filepath)
-    if not candidates:
-        raise click.ClickException(_unrecognised_message(outer_filepath.name))
+    candidates = _identify_or_explain(outer_filepath)
     host = candidates[0]
     chosen, _region = _select(host, selector)
     filesystem = create_filesystem(chosen.filesystem)
@@ -319,10 +313,24 @@ def _geometry_from_sidecar(outer_filepath: Path) -> Geometry | None:
     return None
 
 
-def _unrecognised_message(name: str) -> str:
-    installed = ", ".join(sorted(filesystem_names())) or "(none)"
+def _identify_or_explain(outer_filepath: Path) -> list[Identification]:
+    """The candidates for *outer_filepath*; raise, explaining why, if there are none."""
+    result = survey(outer_filepath)
+    if not result.candidates:
+        raise click.ClickException(_unrecognised_message(outer_filepath.name, result.rejections))
+    return result.candidates
+
+
+def _unrecognised_message(name: str, rejections: tuple[Rejection, ...]) -> str:
+    """Say that nothing recognised *name*, and why each filesystem declined it."""
+    if not rejections:
+        return f"no installed filesystem recognises '{name}' (none are installed)"
+    width = max(len(rejection.filesystem) for rejection in rejections) + 1
+    reasons = "\n".join(
+        f"  {rejection.filesystem + ':':<{width}} {rejection.reason or 'not recognised'}"
+        for rejection in rejections
+    )
     return (
-        f"no installed filesystem recognises '{name}'. "
-        f"Installed filesystems: {installed}. "
+        f"no installed filesystem recognises '{name}':\n{reasons}\n"
         f"Force one with --filesystem if you know what it is."
     )

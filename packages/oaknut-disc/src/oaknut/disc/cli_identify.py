@@ -29,7 +29,7 @@ from oaknut.filesystem import (
     create_filesystem,
     describe_filesystem,
     filesystem_names,
-    identify,
+    survey,
 )
 
 
@@ -56,7 +56,10 @@ def identify_command() -> click.Command:
         type=click.Path(exists=True, dir_okay=False, path_type=Path),
     )
     @report_output(
-        reports={"candidates": "Ranked filesystem-identification candidates with evidence."}
+        reports={
+            "candidates": "Ranked filesystem-identification candidates with evidence.",
+            "rejections": "Why each other installed filesystem declined the image.",
+        }
     )
     def identify_image(image_filepath: Path):
         """Identify a disc image's filesystem(s) by content, best guess first.
@@ -67,8 +70,12 @@ def identify_command() -> click.Command:
         number) down to POSSIBLE — and the evidence behind it. A
         combined disc, such as an ADFS hard disc hosting an AFS tail
         partition, yields more than one row.
+
+        Every other installed filesystem says why it declined the image,
+        which explains an image nothing recognises.
         """
-        candidates = list(_flatten(identify(image_filepath)))
+        result = survey(image_filepath)
+        candidates = list(_flatten(result.candidates))
         table = TableContent(
             title=image_filepath.name,
             description=None if candidates else "no known filesystem recognised",
@@ -85,7 +92,18 @@ def identify_command() -> click.Command:
                 partition=partition,
                 evidence="; ".join(candidate.evidence),
             )
-        return Reports(candidates=Report(data=table))
+        rejections = TableContent(
+            title="Declined by",
+            description=None if result.rejections else "every installed filesystem matched",
+        )
+        rejections.add_column("filesystem", "Filesystem")
+        rejections.add_column("reason", "Reason")
+        for rejection in result.rejections:
+            rejections.add_row(
+                filesystem=rejection.filesystem,
+                reason=rejection.reason or "not recognised",
+            )
+        return Reports(candidates=Report(data=table), rejections=Report(data=rejections))
 
     return identify_image
 
