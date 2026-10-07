@@ -48,6 +48,7 @@ from oaknut.filesystem.coordinator import (
     describe_filesystem,
     filesystem_names,
     identify,
+    survey,
 )
 from oaknut.filesystem.exceptions import (
     BeebScsiConfigError,
@@ -79,6 +80,8 @@ from oaknut.filesystem.identification import (
     Confidence,
     Identification,
     Partition,
+    Rejection,
+    Survey,
     Volume,
 )
 from oaknut.filesystem.reader import ImageReader, ImageSource, reader_for
@@ -131,10 +134,13 @@ __all__ = [
     # identification
     "Confidence",
     "Identification",
+    "Rejection",
+    "Survey",
     "Partition",
     "Volume",
     # coordinator
     "identify",
+    "survey",
     "filesystem_names",
     "describe_filesystem",
     "create_filesystem",

@@ -168,3 +168,60 @@ class TestRegistry:
     def test_create_unknown_raises(self):
         with pytest.raises(FilesystemExtensionError):
             create_filesystem("nonexistent")
+
+
+# -- Why each filesystem declined (#82) --
+
+from oaknut.filesystem import Rejection, Survey, survey  # noqa: E402
+
+
+class _ExplainingFilesystem(_FakeFilesystem):
+    """Like the fake, but says why it declines."""
+
+    def probe(self, reader):
+        found = reader.read(0, len(self._magic))
+        if found == self._magic:
+            return super().probe(reader)
+        return Rejection(self.name, f"expected {self._magic!r} at offset 0, found {found!r}")
+
+
+class TestSurvey:
+    def test_a_declining_filesystem_gives_its_reason(self):
+        fss = _fss(_ExplainingFilesystem("dfs", magic=b"DFS!"))
+        result = survey(b"XXXX" + b"\x00" * 100, filesystems=fss)
+        assert isinstance(result, Survey)
+        assert result.candidates == []
+        assert result.rejections == (
+            Rejection("dfs", "expected b'DFS!' at offset 0, found b'XXXX'"),
+        )
+
+    def test_rejections_are_kept_alongside_a_match(self):
+        fss = _fss(
+            _ExplainingFilesystem("dfs", magic=b"DFS!"),
+            _ExplainingFilesystem("adfs", magic=b"ADFS"),
+        )
+        result = survey(b"DFS!" + b"\x00" * 100, filesystems=fss)
+        assert [c.filesystem for c in result.candidates] == ["dfs"]
+        assert [r.filesystem for r in result.rejections] == ["adfs"]
+
+    def test_a_filesystem_returning_none_is_recorded_without_a_reason(self):
+        # A filesystem that predates rejections still declines, just silently.
+        fss = _fss(_FakeFilesystem("old", magic=b"OLD!"))
+        result = survey(b"XXXX" + b"\x00" * 100, filesystems=fss)
+        assert result.rejections == (Rejection("old", ""),)
+
+    def test_rejections_are_in_name_order(self):
+        fss = _fss(
+            _ExplainingFilesystem("zeta", magic=b"ZZZZ"),
+            _ExplainingFilesystem("alpha", magic=b"AAAA"),
+        )
+        result = survey(b"XXXX" + b"\x00" * 100, filesystems=fss)
+        assert [r.filesystem for r in result.rejections] == ["alpha", "zeta"]
+
+    def test_identify_still_returns_only_the_candidates(self):
+        fss = _fss(_ExplainingFilesystem("dfs", magic=b"DFS!"))
+        assert identify(b"XXXX" + b"\x00" * 100, filesystems=fss) == []
+
+    def test_a_rejection_reads_as_its_filesystem_and_reason(self):
+        assert str(Rejection("dfs", "no catalogue")) == "dfs: no catalogue"
+        assert str(Rejection("old", "")) == "old: not recognised"

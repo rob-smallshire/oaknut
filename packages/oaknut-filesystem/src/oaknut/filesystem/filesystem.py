@@ -17,7 +17,7 @@ from oaknut.extension import Extension, namespace_for
 from oaknut.filesystem.capabilities import Mount, NameGrammar, WildcardSyntax
 from oaknut.filesystem.exceptions import FilesystemError
 from oaknut.filesystem.geometry import Geometry, GeometryGrammar
-from oaknut.filesystem.identification import Identification, Volume
+from oaknut.filesystem.identification import Identification, Rejection, Volume
 from oaknut.filesystem.reader import ImageReader
 from oaknut.filesystem.wildcards import UNIX_WILDCARDS
 
@@ -72,15 +72,19 @@ class Filesystem(Extension):
         return FILESYSTEM_KIND
 
     @abstractmethod
-    def probe(self, reader: ImageReader) -> Identification | None:
-        """Inspect the region in *reader*; identify it, or return ``None``.
+    def probe(self, reader: ImageReader) -> Identification | Rejection | None:
+        """Inspect the region in *reader*; identify it, or say why not.
 
         On a match, return an :class:`Identification` carrying the
         confidence, evidence, the **proposed geometry** (only this
         filesystem can read its own capacity hints), any geometry
         ambiguities the bytes cannot settle, and — for a host filesystem
         — the ``reserved_regions`` for the coordinator to recurse into.
-        Must not raise on data that simply isn't this filesystem.
+
+        Otherwise return a :class:`Rejection` naming the check that failed,
+        so a user told the image is unrecognised learns why; ``None``
+        declines without a reason. Must not raise on data that simply
+        isn't this filesystem.
         """
         raise NotImplementedError
 

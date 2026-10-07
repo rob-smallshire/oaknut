@@ -149,6 +149,8 @@ def resolve_mount(
         if force_filesystem is not None:
             filesystem = create_filesystem(force_filesystem)
             proposed = filesystem.probe(reader)
+            if not isinstance(proposed, Identification):
+                proposed = None  # declined; forcing opens it anyway
             geometry = _geometry(
                 filesystem, force_geometry, proposed.geometry if proposed else None
             )

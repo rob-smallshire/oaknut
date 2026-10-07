@@ -173,6 +173,18 @@ a :class:`~oaknut.filesystem.Confidence` and the
 .. autoclass:: oaknut.filesystem.Volume
    :members:
 
+A filesystem that declines a region returns a
+:class:`~oaknut.filesystem.Rejection` naming the check that failed.
+:func:`~oaknut.filesystem.survey` gathers every filesystem's verdict into a
+:class:`~oaknut.filesystem.Survey`: the candidates, and why each of the
+others declined.
+
+.. autoclass:: oaknut.filesystem.Rejection
+   :members:
+
+.. autoclass:: oaknut.filesystem.Survey
+   :members:
+
 
 The coordinator
 ---------------
@@ -182,6 +194,8 @@ installed filesystem package contributes automatically, so the set grows
 with what is installed; nothing here imports a concrete filesystem.
 
 .. autofunction:: oaknut.filesystem.identify
+
+.. autofunction:: oaknut.filesystem.survey
 
 .. autofunction:: oaknut.filesystem.filesystem_names
 

@@ -27,7 +27,13 @@ from oaknut.filesystem.filesystem import (
     Filesystem,
 )
 from oaknut.filesystem.geometry import Geometry, region_reader
-from oaknut.filesystem.identification import Confidence, Identification, Partition
+from oaknut.filesystem.identification import (
+    Confidence,
+    Identification,
+    Partition,
+    Rejection,
+    Survey,
+)
 from oaknut.filesystem.reader import ImageReader, ImageSource, reader_for
 
 __all__ = [
@@ -104,26 +110,52 @@ def identify(
     Returns the whole-image candidates ranked by confidence (extension
     only a tie-breaker), each with its reserved regions recursively
     identified in :attr:`Identification.contained`. An empty list means
-    no installed filesystem recognised the image.
+    no installed filesystem recognised the image; :func:`survey` says why.
 
     *filesystems* overrides the discovered set — used by tests and to
     simulate a partial install (the extensibility invariant).
     """
+    return survey(source, suffix_hint=suffix_hint, filesystems=filesystems).candidates
+
+
+def survey(
+    source: ImageSource,
+    *,
+    suffix_hint: str | None = None,
+    filesystems: dict[str, Filesystem] | None = None,
+) -> Survey:
+    """Every installed filesystem's verdict on *source*.
+
+    The :attr:`Survey.candidates` are what :func:`identify` returns; the
+    :attr:`Survey.rejections` give each other filesystem's reason for
+    declining the whole image, to explain an unrecognised one.
+    """
     with reader_for(source, suffix_hint=suffix_hint) as reader:
         active = _registered_filesystems() if filesystems is None else filesystems
-        candidates = _probe_region(reader, active, reader.suffix)
+        candidates, rejections = _probe_region(reader, active, reader.suffix)
         whole = Partition(name="", start_sector=0, num_sectors=reader.size // BYTES_PER_SECTOR)
-        return [replace(c, partition=replace(whole, name=c.filesystem)) for c in candidates]
+        return Survey(
+            candidates=[
+                replace(c, partition=replace(whole, name=c.filesystem)) for c in candidates
+            ],
+            rejections=rejections,
+        )
 
 
 def _probe_region(
     reader: ImageReader, filesystems: dict[str, Filesystem], suffix: str | None
-) -> list[Identification]:
-    """Ranked candidates for the region in *reader*, recursion attached."""
+) -> tuple[list[Identification], tuple[Rejection, ...]]:
+    """Ranked candidates for the region in *reader*, recursion attached,
+    and the rejections of the filesystems that declined it."""
     candidates: list[Identification] = []
-    for filesystem in filesystems.values():
+    rejections: list[Rejection] = []
+    for name, filesystem in filesystems.items():
         identification = filesystem.probe(reader)
         if identification is None:
+            rejections.append(Rejection(name))
+            continue
+        if isinstance(identification, Rejection):
+            rejections.append(identification)
             continue
         if identification.reserved_regions:
             identification = identification.with_contained(
@@ -135,7 +167,8 @@ def _probe_region(
                 )
             )
         candidates.append(identification)
-    return _rank(candidates, filesystems, suffix)
+    rejections.sort(key=lambda rejection: rejection.filesystem)
+    return _rank(candidates, filesystems, suffix), tuple(rejections)
 
 
 def _recurse_regions(
@@ -154,7 +187,7 @@ def _recurse_regions(
     counts: dict[str, int] = {}
     for region in regions:
         sub_reader = region_reader(reader, geometry, region.start_sector, region.num_sectors)
-        sub = _probe_region(sub_reader, filesystems, None)
+        sub, _rejections = _probe_region(sub_reader, filesystems, None)
         if sub:
             name = sub[0].filesystem
             index = counts.get(name, 0)

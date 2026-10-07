@@ -113,3 +113,39 @@ class Identification:
     def with_contained(self, contained: tuple["Identification", ...]) -> "Identification":
         """A copy with :attr:`contained` set (this dataclass is frozen)."""
         return replace(self, contained=contained)
+
+
+@dataclass(frozen=True)
+class Rejection:
+    """Why a filesystem declined an image region.
+
+    A probe returns one instead of an :class:`Identification` when the
+    region is not its filesystem, naming the first check that failed in
+    terms a user can act on (``"file count byte &0D is not a multiple of
+    8"``). An empty :attr:`reason` records a filesystem that declined
+    without saying why.
+    """
+
+    #: Filesystem extension key (``"acorn-dfs"``).
+    filesystem: str
+    #: The failed check, user-interpretable; empty if none was given.
+    reason: str = ""
+
+    def __str__(self) -> str:
+        return f"{self.filesystem}: {self.reason or 'not recognised'}"
+
+
+@dataclass(frozen=True)
+class Survey:
+    """Every installed filesystem's verdict on an image.
+
+    :attr:`candidates` are the filesystems that recognised it, best first
+    (what :func:`~oaknut.filesystem.identify` returns); :attr:`rejections`
+    say why each of the others declined, so an unrecognised image can be
+    explained rather than merely reported.
+    """
+
+    #: The whole-image identifications, best candidate first.
+    candidates: list[Identification]
+    #: Why each declining filesystem declined, in filesystem-name order.
+    rejections: tuple[Rejection, ...] = ()
