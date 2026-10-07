@@ -225,3 +225,20 @@ class TestSurvey:
     def test_a_rejection_reads_as_its_filesystem_and_reason(self):
         assert str(Rejection("dfs", "no catalogue")) == "dfs: no catalogue"
         assert str(Rejection("old", "")) == "old: not recognised"
+
+
+class TestDescribeBytes:
+    def test_printable_bytes_are_quoted(self):
+        from oaknut.filesystem import describe_bytes
+
+        assert describe_bytes(b"Hugo") == "'Hugo'"
+
+    def test_other_bytes_are_hex(self):
+        from oaknut.filesystem import describe_bytes
+
+        assert describe_bytes(b"\x00\xff") == "00 FF"
+
+    def test_no_bytes_says_so(self):
+        from oaknut.filesystem import describe_bytes
+
+        assert describe_bytes(b"") == "no bytes"

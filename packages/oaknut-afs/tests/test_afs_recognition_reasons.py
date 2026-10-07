@@ -30,3 +30,9 @@ def test_a_malformed_info_sector_says_so():
     image[256:260] = b"AFS0"
     image[260:276] = b"\x01" * 16  # a disc name of control characters
     assert _reason(image).startswith("AFS0 info sector in sector 1 is malformed: ")
+
+
+def test_too_small_for_an_info_sector():
+    assert _reason(b"not a disc image\n") == (
+        "image too small for an AFS info sector: 17 bytes, needs 512"
+    )

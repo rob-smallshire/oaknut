@@ -50,6 +50,9 @@ _INFO_SECTOR_OFFSET = INFO_SECTOR_SIZE
 
 def _read_info(reader: ImageReader) -> InfoSector | str:
     """The AFS info sector at the region's sector 1, or why it is not AFS."""
+    needed = _INFO_SECTOR_OFFSET + INFO_SECTOR_SIZE
+    if reader.size < needed:
+        return f"image too small for an AFS info sector: {reader.size} bytes, needs {needed}"
     sector = reader.read(_INFO_SECTOR_OFFSET, INFO_SECTOR_SIZE)
     if sector[:4] != MAGIC:
         return (
