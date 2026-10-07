@@ -38,6 +38,12 @@ class TestUnrecognisedError:
         assert "no installed filesystem recognises 'mystery.dsd'" in result.output
         assert set(_reason_lines(result.output)) == set(filesystem_names())
 
+    def test_every_installed_filesystem_gives_a_reason(self, runner: CliRunner, tmp_path):
+        result = runner.invoke(cli, ["ls", str(_unrecognisable(tmp_path))])
+        reasons = _reason_lines(result.output)
+        assert set(reasons) == set(filesystem_names())
+        assert all(reason and reason != "not recognised" for reason in reasons.values()), reasons
+
 
 class TestIdentifyReportsRejections:
     def test_rejections_report_lists_each_declining_filesystem(self, runner: CliRunner, tmp_path):
