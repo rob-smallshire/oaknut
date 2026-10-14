@@ -53,3 +53,28 @@ class TestLinear640kLayout:
             walk(adfs.root)
 
         assert "$.ALib.Lib.xmap" in found
+
+
+_ARC_03 = REFERENCE_IMAGES_DIRPATH / "adfs-8bs" / "arc-03.640.adf"
+
+
+class TestDamagedDiscLayout:
+    """A damaged disc that neither layout reads in full.
+
+    ARC-03 is interleaved, but three of its subdirectories were lost from
+    the disc, so no layout walks its whole tree. The ``.adf`` suffix leans
+    linear, yet the interleaved layout reads eight of its directories to the
+    linear layout's two, and the layout that reads more of the tree is the
+    one the disc was written in.
+    """
+
+    def test_keeps_the_layout_that_reads_more_of_the_tree(self):
+        with ADFS.from_file(_ARC_03, read_only=True) as adfs:
+            # $.!Bank's sectors lie past track 0, where the layouts diverge.
+            names = sorted(entry.name for entry in adfs.root / "!Bank")
+        assert names == ["!Boot", "!Run", "!Runimage", "!SpriteS", "Template"]
+
+    def test_validate_reports_only_the_lost_subdirectories_and_the_stale_root(self):
+        with ADFS.from_file(_ARC_03, read_only=True) as adfs:
+            paths = sorted(str(finding).split(":")[0] for finding in adfs.validate())
+        assert paths == ["$", "$.!Warfarin", "$.!Xchanger", "$.Music"]

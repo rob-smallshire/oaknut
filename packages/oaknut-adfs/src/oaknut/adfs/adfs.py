@@ -1264,20 +1264,23 @@ def _detect_format(buffer_size: int) -> ADFSFormat:
     return fmt
 
 
-def _directory_tree_traverses(buffer: memoryview, fmt: ADFSFormat) -> bool:
-    """Whether the whole directory tree parses under a candidate layout.
+def _directory_tree_reading(buffer: memoryview, fmt: ADFSFormat) -> tuple[int, bool]:
+    """How much of the directory tree parses under a candidate layout.
 
     The two 640K layouts (interleaved ``.adl`` and linear) differ only
     once a directory's sectors cross a track boundary, so the cheapest
     reliable discriminator is to walk every directory and see which layout
     keeps producing valid 'Hugo'/'Nick' signatures and matching tails.
+
+    Returns the number of directories read and whether the whole tree was.
     """
     geom = _FLOPPY_GEOMETRY.get(len(buffer))
     try:
         adfs = ADFS._from_buffer_with_format(buffer, fmt, geom)
     except ADFSDirectoryError:
-        return False
-    return not adfs._directory_tree_errors()
+        return 0, False
+    directories, errors = adfs._walk_directory_tree()
+    return len(directories), not errors
 
 
 def _disambiguate_640k_layout(buffer: memoryview, *, prefer_sequential: bool = False) -> ADFSFormat:
@@ -1289,14 +1292,21 @@ def _disambiguate_640k_layout(buffer: memoryview, *, prefer_sequential: bool = F
     byte-identical) the choice is cosmetic, and *prefer_sequential* — set
     from the image's extension as a tiebreak — decides. The interleaved
     ``.adl`` layout remains the default.
+
+    A damaged disc may traverse under neither; then the layout that reads
+    more of its directories wins, since the wrong one reads past track 0
+    only by chance. A tie again falls to *prefer_sequential*, and the
+    normal parse path surfaces a precise error for what cannot be read.
     """
     ordered = (ADFS_L_SEQUENTIAL, ADFS_L) if prefer_sequential else (ADFS_L, ADFS_L_SEQUENTIAL)
+    directories_read: list[int] = []
     for fmt in ordered:
-        if _directory_tree_traverses(buffer, fmt):
+        count, traverses = _directory_tree_reading(buffer, fmt)
+        if traverses:
             return fmt
-    # Neither traverses — keep the historical default and let the normal
-    # parse path surface a precise error.
-    return ordered[0]
+        directories_read.append(count)
+    # index() finds the first of equals, so the preferred layout wins a tie.
+    return ordered[directories_read.index(max(directories_read))]
 
 
 def _initialise_old_free_space_map(

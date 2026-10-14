@@ -25,6 +25,6 @@ Both are interleaved despite the `.adf` suffix.
 - **A damaged disc.** 8BS notes that ARC-03 has files missing data. Three of
   its root's subdirectories (`!Warfarin`, `!Xchanger`, `Music`) point at
   sectors filled with &A5, so neither 640K layout reads the whole tree.
-  The interleaved layout reads five more subdirectories than the linear one.
-- **BASIC V.** Their `!RunImage` programs are RISC OS BASIC V, swept by the
-  BASIC corpus test.
+  The interleaved layout reads eight directories to the linear layout's two.
+- **BASIC V.** arc-01's `!RunImage` programs are RISC OS BASIC V, swept by
+  the BASIC corpus test.

@@ -47,7 +47,7 @@ _WORKSPACE_ROOT = Path(__file__).resolve().parents[3]
 #     which the ROM crunch (and ours) never produces from text.
 #   * BASIC V — the program is an Arthur / RISC OS BASIC V program (the ADFS
 #     specimens on D_Arthur_Welcome, D_RISCOS310_App1, E_RISCOS310_NewLook and
-#     the 8BS Archimedes discs arc-01 and arc-03).
+#     the 8BS Archimedes disc arc-01).
 #     It carries BASIC V extended tokens (C6/C7/C8) and V-only constructs; the
 #     de-tokeniser reads them via the BASIC V dialect, but re-crunching the
 #     listing under BASIC II rules cannot reproduce the original bytes (one,
