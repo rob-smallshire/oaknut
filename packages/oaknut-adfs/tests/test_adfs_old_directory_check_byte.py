@@ -1,25 +1,39 @@
-"""The DirCheckByte on old-format (S/M/L) directories.
+"""The DirCheckByte on old-format (S/M/L) directories (issue #87).
 
-8-bit ADFS writes zero to the check byte at offset 0x4FF of an old
-directory, but RISC OS FileCore writes the PRM's ROR-13 checksum there when
-it modifies one, and accepts either. A directory carrying the true
-checksum, or zero, must read; any other value marks a broken directory
-(issue #87).
+8-bit ADFS never reads or writes the check byte at offset &4FF of an old
+directory: it creates directories with zero there and otherwise writes back
+whatever it loaded. RISC OS FileCore writes the PRM's ROR-13 checksum there
+when it modifies one. So a RISC OS directory later changed on a BBC keeps a
+stale check byte. Old directories therefore read whatever the byte holds;
+validate reports a stale one, and repair sets it to the true checksum.
+
+The 8BS Archimedes discs ARC-01 and ARC-03 are real instances: subdirectories
+carrying RISC OS checksums, and roots with stale ones.
 """
 
 from __future__ import annotations
 
+import shutil
 import struct
 
 import pytest
 from helpers.adfs_image import make_adfs_s_image, make_old_dir_entry, make_old_directory
 from oaknut.adfs.adfs import ADFS
 from oaknut.adfs.directory import OldDirectoryFormat
-from oaknut.adfs.exceptions import ADFSDirectoryError
 from oaknut.discimage.sectors_view import SectorsView
+from oaknut.filesystem import fix_of
+
+from tests.fixtures import REFERENCE_IMAGES_DIRPATH
 
 _ROOT_OFFSET = 0x200
 _CHECK_BYTE_OFFSET = 0x4FF
+
+_8BS_DIRPATH = REFERENCE_IMAGES_DIRPATH / "adfs-8bs"
+#: Each 8BS disc's root: (stored check byte, true checksum).
+_STALE_ROOTS = {
+    "arc-01.640.adf": (0x9C, 0x30),
+    "arc-03.640.adf": (0xA2, 0x79),
+}
 
 
 def _reference_old_dir_check(block: bytes) -> int:
@@ -64,52 +78,116 @@ def _riscos_style_directory() -> bytearray:
     return block
 
 
+def _view(block: bytearray) -> SectorsView:
+    return SectorsView([memoryview(block)])
+
+
+def _stale_check_byte(block: bytearray) -> tuple[int, int] | None:
+    return OldDirectoryFormat().stale_check_byte(_view(block))
+
+
+def _check_byte_findings(adfs: ADFS) -> list:
+    # ARC-03 also has subdirectories lost from the disc; those are not at issue here.
+    return [finding for finding in adfs.validate() if "check byte" in str(finding)]
+
+
 def _parse(block: bytearray):
-    return OldDirectoryFormat().parse(SectorsView([memoryview(block)]), disc_address=2)
+    return OldDirectoryFormat().parse(_view(block), disc_address=2)
 
 
-def test_zero_check_byte_is_accepted():
-    block = make_old_directory([], title="Acorn")
-    assert _parse(block).title == "Acorn"
+class TestStaleCheckByte:
+    def test_zero_is_not_stale(self):
+        assert _stale_check_byte(make_old_directory([], title="Acorn")) is None
+
+    def test_the_riscos_checksum_is_not_stale(self):
+        assert _stale_check_byte(_riscos_style_directory()) is None
+
+    def test_the_riscos_checksum_on_a_full_directory_is_not_stale(self):
+        entries = [
+            make_old_dir_entry(f"F{i:02d}", length=1, indirect_disc_address=7 + i)
+            for i in range(47)
+        ]
+        block = make_old_directory(entries)
+        block[_CHECK_BYTE_OFFSET] = _reference_old_dir_check(block)
+        assert _stale_check_byte(block) is None
+
+    def test_unused_entry_slots_do_not_contribute(self):
+        block = _riscos_style_directory()
+        # Leftover bytes after the end-of-entries mark are outside the checksum.
+        block[5 + 26 * 3 + 1 : 5 + 26 * 4] = b"\xaa" * 25
+        assert _stale_check_byte(block) is None
+
+    def test_any_other_value_is_stale(self):
+        block = _riscos_style_directory()
+        true_check = block[_CHECK_BYTE_OFFSET]
+        block[_CHECK_BYTE_OFFSET] ^= 0x01
+        assert _stale_check_byte(block) == (true_check ^ 0x01, true_check)
 
 
-def test_correct_riscos_check_byte_is_accepted():
-    directory = _parse(_riscos_style_directory())
-    assert [entry.name for entry in directory.entries] == ["Alpha", "Beta", "T"]
+class TestReading:
+    def test_a_directory_with_a_stale_check_byte_reads(self):
+        block = _riscos_style_directory()
+        block[_CHECK_BYTE_OFFSET] ^= 0x01
+        assert [entry.name for entry in _parse(block).entries] == ["Alpha", "Beta", "T"]
+
+    def test_a_riscos_modified_root_lists_through_the_public_api(self):
+        image = make_adfs_s_image(root_title="RISCOS")
+        entries = [
+            make_old_dir_entry("Text", load_address=0xFFFFFF12, length=0, indirect_disc_address=7)
+        ]
+        root = make_old_directory(entries, title="RISCOS", parent_address=2)
+        root[_CHECK_BYTE_OFFSET] = _reference_old_dir_check(root)
+        assert root[_CHECK_BYTE_OFFSET] != 0
+        image[_ROOT_OFFSET : _ROOT_OFFSET + 1280] = root
+
+        adfs = ADFS.from_buffer(memoryview(image))
+        assert [path.name for path in adfs.root.iterdir()] == ["Text"]
+
+    @pytest.mark.parametrize("image_filename", sorted(_STALE_ROOTS))
+    def test_8bs_disc_with_a_stale_root_opens(self, image_filename):
+        with ADFS.from_file(_8BS_DIRPATH / image_filename, read_only=True) as adfs:
+            assert any(path.name.startswith("!") for path in adfs.root.iterdir())
 
 
-def test_correct_check_byte_on_a_full_directory_is_accepted():
-    entries = [
-        make_old_dir_entry(f"F{i:02d}", length=1, indirect_disc_address=7 + i) for i in range(47)
-    ]
-    block = make_old_directory(entries)
-    block[_CHECK_BYTE_OFFSET] = _reference_old_dir_check(block)
-    assert len(_parse(block).entries) == 47
+class TestValidateAndRepair:
+    @pytest.mark.parametrize("image_filename", sorted(_STALE_ROOTS))
+    def test_validate_reports_only_the_stale_root(self, image_filename):
+        stored, calculated = _STALE_ROOTS[image_filename]
+        # Its subdirectories carry correct RISC OS checksums and pass.
+        with ADFS.from_file(_8BS_DIRPATH / image_filename, read_only=True) as adfs:
+            (finding,) = _check_byte_findings(adfs)
+        message = str(finding)
+        assert message.startswith("$: ")
+        assert f"&{stored:02X}" in message
+        assert f"&{calculated:02X}" in message
 
+    def test_a_stale_check_byte_does_not_stop_traversal(self):
+        # Identification asks only whether the tree can be walked.
+        with ADFS.from_file(_8BS_DIRPATH / "arc-01.640.adf", read_only=True) as adfs:
+            assert adfs._directory_tree_errors() == []
 
-def test_incorrect_non_zero_check_byte_is_rejected():
-    block = _riscos_style_directory()
-    block[_CHECK_BYTE_OFFSET] ^= 0x01
-    with pytest.raises(ADFSDirectoryError, match="check byte"):
-        _parse(block)
+    @pytest.mark.parametrize("image_filename", sorted(_STALE_ROOTS))
+    def test_the_fix_sets_only_the_true_checksum(self, image_filename, tmp_path):
+        _, calculated = _STALE_ROOTS[image_filename]
+        image_filepath = tmp_path / image_filename
+        shutil.copyfile(_8BS_DIRPATH / image_filename, image_filepath)
+        before = image_filepath.read_bytes()
 
+        with ADFS.from_file(image_filepath) as adfs:
+            (finding,) = _check_byte_findings(adfs)
+            fix = fix_of(finding)
+            assert fix is not None
+            assert f"&{calculated:02X}" in fix.description
+            fix.apply()
 
-def test_unused_entry_slots_do_not_contribute_to_the_check_byte():
-    block = _riscos_style_directory()
-    # Stale bytes after the end-of-entries mark are outside the checksum.
-    block[5 + 26 * 3 + 1 : 5 + 26 * 4] = b"\xaa" * 25
-    assert len(_parse(block).entries) == 3
+        after = image_filepath.read_bytes()
+        changed = [i for i in range(len(before)) if before[i] != after[i]]
+        # The root's first track holds &200-&6FF in either layout.
+        assert changed == [_ROOT_OFFSET + _CHECK_BYTE_OFFSET]
+        assert after[_ROOT_OFFSET + _CHECK_BYTE_OFFSET] == calculated
+        with ADFS.from_file(image_filepath, read_only=True) as adfs:
+            assert _check_byte_findings(adfs) == []
 
-
-def test_riscos_modified_root_lists_through_the_public_api():
-    image = make_adfs_s_image(root_title="RISCOS")
-    entries = [
-        make_old_dir_entry("Text", load_address=0xFFFFFF12, length=0, indirect_disc_address=7)
-    ]
-    root = make_old_directory(entries, title="RISCOS", parent_address=2)
-    root[_CHECK_BYTE_OFFSET] = _reference_old_dir_check(root)
-    assert root[_CHECK_BYTE_OFFSET] != 0
-    image[_ROOT_OFFSET : _ROOT_OFFSET + 1280] = root
-
-    adfs = ADFS.from_buffer(memoryview(image))
-    assert [path.name for path in adfs.root.iterdir()] == ["Text"]
+    def test_a_clean_disc_has_no_check_byte_findings(self):
+        image = make_adfs_s_image()
+        assert ADFS.from_buffer(memoryview(image)).validate() == []

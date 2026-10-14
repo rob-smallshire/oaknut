@@ -172,14 +172,13 @@ class TestOldDirectoryFormat:
         with pytest.raises(ADFSDirectoryError, match="Broken directory"):
             fmt.parse(view, 0x200)
 
-    def test_incorrect_nonzero_check_byte_raises(self):
+    def test_stale_check_byte_still_parses(self):
         fmt = OldDirectoryFormat()
-        dir_bytes = _make_old_directory([])
-        # Neither zero nor the checksum RISC OS would write
+        dir_bytes = _make_old_directory([], title="Stale")
+        # Neither zero nor the checksum RISC OS would write; validate reports it.
         dir_bytes[0x4CB + 52] = 0x42
         view = SectorsView([memoryview(dir_bytes)])
-        with pytest.raises(ADFSDirectoryError, match="check byte mismatch"):
-            fmt.parse(view, 0x200)
+        assert fmt.parse(view, 0x200).title == "Stale"
 
     def test_find_case_insensitive(self):
         fmt = OldDirectoryFormat()

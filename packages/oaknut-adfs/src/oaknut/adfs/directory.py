@@ -242,6 +242,18 @@ class ADFSDirectoryFormat(ABC):
         """Byte size to write *directory* as. Fixed except for Big directories."""
         return self.size_in_bytes
 
+    def stale_check_byte(self, data: SectorsView) -> tuple[int, int] | None:
+        """The ``(stored, true)`` check bytes of a directory that reads despite them.
+
+        ``None`` unless the format tolerates a wrong check byte on read; New
+        and Big directories reject one in :meth:`parse` instead.
+        """
+        return None
+
+    def restore_check_byte(self, data: SectorsView) -> None:
+        """Set the directory's check byte to its true value, in place."""
+        raise NotImplementedError(f"{type(self).__name__} has no stale check byte to restore")
+
 
 # --- Old directory format (ADFS S/M/L) ---
 
@@ -467,17 +479,7 @@ class OldDirectoryFormat(ADFSDirectoryFormat):
                 f"Broken directory: StartMasSeq ({start_mas_seq}) != EndMasSeq ({end_mas_seq})"
             )
 
-        # 8-bit ADFS leaves the DirCheckByte zero on old-format directories
-        # (S/M/L); RISC OS FileCore writes the PRM checksum there when it
-        # modifies one, and accepts either.
-        expected_check = data[tail + _OLD_TAIL_CHECK_BYTE]
-        if expected_check != 0:
-            calculated_check = _calculate_old_dir_check(data)
-            if expected_check != calculated_check:
-                raise ADFSDirectoryError(
-                    f"Directory check byte mismatch: stored 0x{expected_check:02X}, "
-                    f"calculated 0x{calculated_check:02X} (or 0x00)"
-                )
+        # The DirCheckByte is not checked here: see stale_check_byte().
 
         # Parse entries
         entries = []
@@ -509,6 +511,27 @@ class OldDirectoryFormat(ADFSDirectoryFormat):
             sequence_number=start_mas_seq,
             signature=bytes(start_name),
         )
+
+    def stale_check_byte(self, data: SectorsView) -> tuple[int, int] | None:
+        """The ``(stored, true)`` check bytes, if the stored one is stale.
+
+        8-bit ADFS never reads or writes the DirCheckByte of an old-format
+        (S/M/L) directory: it creates directories with zero there and
+        otherwise writes back whatever it loaded. RISC OS FileCore writes
+        the PRM checksum there when it modifies one. Zero and the true
+        checksum are both correct; anything else is a checksum RISC OS wrote
+        before the directory was changed on a BBC, and is reported rather
+        than refused, since 8-bit ADFS reads the directory regardless.
+        """
+        stored = data[_OLD_DIR_TAIL_OFFSET + _OLD_TAIL_CHECK_BYTE]
+        if stored == 0:
+            return None
+        calculated = _calculate_old_dir_check(data)
+        return None if stored == calculated else (stored, calculated)
+
+    def restore_check_byte(self, data: SectorsView) -> None:
+        """Set the DirCheckByte to the checksum RISC OS would write."""
+        data[_OLD_DIR_TAIL_OFFSET + _OLD_TAIL_CHECK_BYTE] = _calculate_old_dir_check(data)
 
     def serialize(self, directory: _ADFSDirectory, data: SectorsView) -> None:
         """Serialize an old-format directory to sector data.
@@ -564,7 +587,7 @@ class OldDirectoryFormat(ADFSDirectoryFormat):
         data[tail + _OLD_TAIL_END_MAS_SEQ] = directory.sequence_number & 0xFF
         # EndName
         data[tail + _OLD_TAIL_END_NAME : tail + _OLD_TAIL_END_NAME + 4] = _HUGO
-        # DirCheckByte: zero, as 8-bit ADFS writes it; RISC OS accepts it too.
+        # DirCheckByte: zero, as 8-bit ADFS creates it; RISC OS accepts it too.
         data[tail + _OLD_TAIL_CHECK_BYTE] = 0x00
 
 

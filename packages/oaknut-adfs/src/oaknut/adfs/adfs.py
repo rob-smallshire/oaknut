@@ -78,7 +78,7 @@ from oaknut.file.host_bridge import (
     import_with_metadata,
 )
 from oaknut.file.integrity import assert_no_duplicate_names
-from oaknut.filesystem import InvalidNameError, describe_bytes
+from oaknut.filesystem import Fix, InvalidNameError, describe_bytes
 
 if TYPE_CHECKING:
     from oaknut.file import BootOption
@@ -2351,10 +2351,38 @@ class ADFS:
         """
         errors: list[ADFSValidationError] = []
         errors.extend((self._map if self._map is not None else self._fsm).validate())
-        errors.extend(self._directory_tree_errors())
+        directories, tree_errors = self._walk_directory_tree()
+        errors.extend(tree_errors)
+        for path, disc_address in directories:
+            finding = self._stale_check_byte_finding(path, disc_address)
+            if finding is not None:
+                errors.append(finding)
         return errors
 
+    def _stale_check_byte_finding(self, path: str, disc_address: int) -> ADFSValidationError | None:
+        """A finding, carrying its fix, for a directory whose check byte is stale."""
+        data = self._directory_sectors(disc_address)
+        stale = self._dir_format.stale_check_byte(data)
+        if stale is None:
+            return None
+        stored, calculated = stale
+        finding = ADFSValidationError(
+            f"{path}: directory check byte is &{stored:02X}, neither zero nor "
+            f"its checksum &{calculated:02X}"
+        )
+        finding.fix = Fix(
+            f"set {path}'s directory check byte from &{stored:02X} to &{calculated:02X}",
+            lambda: self._dir_format.restore_check_byte(self._directory_sectors(disc_address)),
+        )
+        return finding
+
     def _directory_tree_errors(self) -> list["ADFSValidationError"]:
+        """The defects that stop the directory tree being walked."""
+        return self._walk_directory_tree()[1]
+
+    def _walk_directory_tree(
+        self,
+    ) -> tuple[list[tuple[str, int]], list["ADFSValidationError"]]:
         """Walk the whole directory tree, collecting one error per defect.
 
         A disc with a valid root and free-space map can still be
@@ -2362,14 +2390,19 @@ class ADFS:
         descended in full rather than stopping at the root. Each
         unreadable directory yields an error and is not recursed into;
         a repeated disc address is reported as a cycle.
+
+        Returns the ``(path, disc address)`` of every directory read, and
+        the errors.
         """
+        directories: list[tuple[str, int]] = []
         errors: list[ADFSValidationError] = []
         try:
             root = self._read_root_directory()
         except ADFSError as exc:
             errors.append(ADFSValidationError(f"Root directory: {exc}"))
-            return errors
+            return directories, errors
 
+        directories.append(("$", self._root_address))
         seen: set[int] = {self._root_address}
 
         def walk(directory: _ADFSDirectory, path: str) -> None:
@@ -2389,10 +2422,11 @@ class ADFS:
                 except ADFSError as exc:
                     errors.append(ADFSValidationError(f"{child_path}: {exc}"))
                     continue
+                directories.append((child_path, address))
                 walk(subdir, child_path)
 
         walk(root, "$")
-        return errors
+        return directories, errors
 
     def compact(self) -> int:
         """Defragment the disc by rebuilding with sequential sector allocation.
@@ -2646,6 +2680,13 @@ class ADFS:
         *disc_address* is an old-map sector number or a New Map indirect
         address; :meth:`_object_disc_sector` resolves both to a sector.
         """
+        data = self._directory_sectors(disc_address)
+        directory = self._dir_format.parse(data, disc_address)
+        _assert_entries_sorted(directory.entries)
+        return directory
+
+    def _directory_sectors(self, disc_address: int):
+        """The live sectors of the directory at *disc_address*."""
         sector = self._object_disc_sector(disc_address)
         # Peek the header to learn the size — Big directories vary; fixed
         # directories ignore the peek and return their constant size.
@@ -2653,10 +2694,7 @@ class ADFS:
         num_sectors = (
             self._dir_format.directory_size(header) + _ADFS_BYTES_PER_SECTOR - 1
         ) // _ADFS_BYTES_PER_SECTOR
-        data = self._disc.sector_range(sector, num_sectors)
-        directory = self._dir_format.parse(data, disc_address)
-        _assert_entries_sorted(directory.entries)
-        return directory
+        return self._disc.sector_range(sector, num_sectors)
 
     def _read_file_data(self, entry: _ADFSDirectoryEntry) -> bytes:
         """Read file data for a directory entry."""

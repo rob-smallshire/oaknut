@@ -379,6 +379,11 @@ class ADFS(Filesystem):
     #: hard-disc .dat (AFS, which also reads .dat, is made inside an ADFS
     #: disc by afs-init, not by `disc create`).
     creates = frozenset({".adf", ".ads", ".adm", ".adl", ".dat"})
+    repairs = (
+        "A stale check byte on an old-format (S/M/L) directory — typically a "
+        "RISC OS checksum that 8-bit ADFS kept when it changed the directory — "
+        "is set to the directory's true checksum.",
+    )
 
     def probe(self, reader: ImageReader) -> Identification | Rejection:
         if reader.size < _MAP_BYTES:

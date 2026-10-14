@@ -46,7 +46,8 @@ _WORKSPACE_ROOT = Path(__file__).resolve().parents[3]
 #   * tokens-after-REM — the program stores keyword tokens after a REM,
 #     which the ROM crunch (and ours) never produces from text.
 #   * BASIC V — the program is an Arthur / RISC OS BASIC V program (the ADFS
-#     specimens on D_Arthur_Welcome, D_RISCOS310_App1 and E_RISCOS310_NewLook).
+#     specimens on D_Arthur_Welcome, D_RISCOS310_App1, E_RISCOS310_NewLook and
+#     the 8BS Archimedes discs arc-01 and arc-03).
 #     It carries BASIC V extended tokens (C6/C7/C8) and V-only constructs; the
 #     de-tokeniser reads them via the BASIC V dialect, but re-crunching the
 #     listing under BASIC II rules cannot reproduce the original bytes (one,
@@ -54,7 +55,7 @@ _WORKSPACE_ROOT = Path(__file__).resolve().parents[3]
 #     out-of-range line number). This is the same class as the BASIC IV
 #     MasterWelcome entries — a property of the program, not our II codec.
 #     Tracked by issue #45 (tokenise/detokenise dialect asymmetry); when a
-#     dialect-aware tokeniser lands, remove the twelve BASIC V entries below
+#     dialect-aware tokeniser lands, remove the BASIC V entries below
 #     so this test enforces byte-exact BASIC V round-tripping.
 #     https://github.com/rob-smallshire/oaknut/issues/45
 KNOWN_LIMITATIONS: frozenset[str] = frozenset(
@@ -71,6 +72,13 @@ KNOWN_LIMITATIONS: frozenset[str] = frozenset(
         "D_RISCOS310_App1.adf:$.!PrinterPS.!RunImage",
         "D_RISCOS310_App1.adf:$.!PrinterPS.Library",
         "E_RISCOS310_NewLook.adf:$.!NewLook.!RunImage",
+        "arc-01.640.adf:$.!Billion.!RunImage",
+        "arc-01.640.adf:$.!CustomVDU.!RunImage",
+        "arc-01.640.adf:$.!Deskfonts.!RunImage",
+        "arc-01.640.adf:$.!Multi.!RunImage",
+        "arc-01.640.adf:$.!Neko.!RunImage",
+        "arc-01.640.adf:$.!Packdir.!RunImage",
+        "arc-01.640.adf:$.!Solitare2.!RunImage",
         "Disc999-SphinxAdventureFIN.ssd:$.SPHINX",
         "L3-Utils.dsd:U.Init",
         "L3FS-ISW.adl:$.COPYF",

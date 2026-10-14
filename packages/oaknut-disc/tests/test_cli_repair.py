@@ -8,12 +8,15 @@ cannot drift apart. The first fix rewrites a malformed DFS sector count
 
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
 
 import pytest
 from click.testing import CliRunner
 from oaknut.disc.cli import cli
 from oaknut.exception import ExitCode
+
+from tests.fixtures import REFERENCE_IMAGES_DIRPATH
 
 _SIDE_1_CATALOGUE = 0xA00
 
@@ -110,3 +113,33 @@ def test_describe_filesystem_lists_the_repairs(runner):
     result = runner.invoke(cli, ["describe-filesystem", "acorn-dfs"])
     assert "Repairs:" in result.output
     assert "sector count" in result.output
+
+
+class TestRepairStaleADFSCheckByte:
+    """An 8BS Archimedes disc whose root keeps a stale RISC OS check byte (#87)."""
+
+    @pytest.fixture
+    def stale_root_adf(self, tmp_path: Path) -> Path:
+        image = tmp_path / "arc-01.640.adf"
+        shutil.copyfile(REFERENCE_IMAGES_DIRPATH / "adfs-8bs" / "arc-01.640.adf", image)
+        return image
+
+    def test_validate_reports_the_stale_check_byte(self, runner, stale_root_adf):
+        result = runner.invoke(cli, ["validate", str(stale_root_adf)])
+        assert result.exit_code == ExitCode.DATA_ERR, result.output
+        assert "check byte is &9C" in result.output
+
+    def test_repair_sets_the_true_checksum(self, runner, stale_root_adf):
+        result = runner.invoke(cli, ["repair", str(stale_root_adf)])
+        assert result.exit_code == 0, result.output
+        (line,) = result.output.splitlines()
+        assert "&9C to &30" in line
+        assert stale_root_adf.read_bytes()[0x200 + 0x4FF] == 0x30
+        result = runner.invoke(cli, ["validate", str(stale_root_adf)])
+        assert (result.exit_code, result.output) == (0, "")
+
+
+def test_describe_filesystem_lists_the_adfs_repairs(runner):
+    result = runner.invoke(cli, ["describe-filesystem", "adfs"])
+    assert "Repairs:" in result.output
+    assert "check byte" in result.output
