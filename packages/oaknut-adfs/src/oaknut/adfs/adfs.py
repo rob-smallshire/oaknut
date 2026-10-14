@@ -1388,7 +1388,7 @@ def _initialise_old_root_directory(
     data[tail + 47] = 0  # Must match StartMasSeq
     # EndName
     data[tail + 48 : tail + 52] = b"Hugo"
-    # DirCheckByte: reserved, must be zero
+    # DirCheckByte: zero, as 8-bit ADFS writes it
     data[tail + 52] = 0x00
 
 

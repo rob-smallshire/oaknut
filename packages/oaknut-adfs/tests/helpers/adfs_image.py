@@ -106,7 +106,7 @@ def make_old_directory(
     # EndName
     buf[tail + 48 : tail + 52] = signature
 
-    # Check byte is reserved (must be zero) on old-format directories
+    # Check byte: zero, as 8-bit ADFS writes it (RISC OS writes a checksum)
     buf[tail + 52] = 0x00
 
     return buf

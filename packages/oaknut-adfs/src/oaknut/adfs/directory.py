@@ -467,14 +467,17 @@ class OldDirectoryFormat(ADFSDirectoryFormat):
                 f"Broken directory: StartMasSeq ({start_mas_seq}) != EndMasSeq ({end_mas_seq})"
             )
 
-        # The DirCheckByte field is reserved (must be zero) on old-format
-        # directories (S/M/L).  The checksum algorithm described in the PRM
-        # applies only to new and big directory formats.
+        # 8-bit ADFS leaves the DirCheckByte zero on old-format directories
+        # (S/M/L); RISC OS FileCore writes the PRM checksum there when it
+        # modifies one, and accepts either.
         expected_check = data[tail + _OLD_TAIL_CHECK_BYTE]
         if expected_check != 0:
-            raise ADFSDirectoryError(
-                f"Reserved check byte is 0x{expected_check:02X}, expected 0x00"
-            )
+            calculated_check = _calculate_old_dir_check(data)
+            if expected_check != calculated_check:
+                raise ADFSDirectoryError(
+                    f"Directory check byte mismatch: stored 0x{expected_check:02X}, "
+                    f"calculated 0x{calculated_check:02X} (or 0x00)"
+                )
 
         # Parse entries
         entries = []
@@ -561,7 +564,7 @@ class OldDirectoryFormat(ADFSDirectoryFormat):
         data[tail + _OLD_TAIL_END_MAS_SEQ] = directory.sequence_number & 0xFF
         # EndName
         data[tail + _OLD_TAIL_END_NAME : tail + _OLD_TAIL_END_NAME + 4] = _HUGO
-        # DirCheckByte: reserved, must be zero
+        # DirCheckByte: zero, as 8-bit ADFS writes it; RISC OS accepts it too.
         data[tail + _OLD_TAIL_CHECK_BYTE] = 0x00
 
 
@@ -574,8 +577,8 @@ class OldDirectoryFormat(ADFSDirectoryFormat):
 #   * object attributes live in a dedicated NewDirAtts byte (entry+0x19), not
 #     in the top bits of the name — so names may use all eight bits;
 #   * the tail is laid out differently and is 0x29 (41) bytes long; and
-#   * the DirCheckByte is a real ROR-13 checksum over the block, not a
-#     reserved zero.
+#   * the DirCheckByte is always a real ROR-13 checksum over the block,
+#     where an Old directory may instead carry zero.
 #
 # For the D format the map remains the Old free-space map and DirIndDiscAdd is
 # still a plain start sector, so file data is read contiguously exactly as for
@@ -610,6 +613,12 @@ _NEW_ATT_LOCKED = 0x04
 _NEW_ATT_DIRECTORY = 0x08
 _NEW_ATT_PUBLIC_READ = 0x10
 _NEW_ATT_PUBLIC_WRITE = 0x20
+
+
+# Old and New directories share the header and entry shape, so the
+# check-byte walk over the used entries is common to both.
+_DIR_ENTRIES_OFFSET = _NEW_DIR_ENTRIES_OFFSET
+_DIR_ENTRY_SIZE = _NEW_DIR_ENTRY_SIZE
 
 
 def _ror13(value: int) -> int:
@@ -678,11 +687,12 @@ def _new_attributes_byte(attributes: _ADFSRawAttributes) -> int:
     return byte
 
 
-def _calculate_new_dir_check(data: SectorsView | bytes) -> int:
-    """Compute the New-directory DirCheckByte (ROR-13 accumulation).
+def _calculate_dir_check(data: SectorsView | bytes, *, tail_offset: int, size: int) -> int:
+    """Compute an Old or New directory's DirCheckByte (ROR-13 accumulation).
 
     Mirrors FileCore's algorithm (as implemented in Gerald Holdsworth's
-    DiscImageManager ``CalculateADFSDirCheck``):
+    DiscImageManager ``CalculateADFSDirCheck``), which is common to both
+    layouts; they differ only in where the tail starts and the block ends:
 
       1. Accumulate whole 32-bit words from the start of the block up to
          the end of the *used* entries (the first zero name-byte marks it).
@@ -694,12 +704,13 @@ def _calculate_new_dir_check(data: SectorsView | bytes) -> int:
 
     Each step folds a value in via ``dircheck = value XOR ROR13(dircheck)``.
     The unused entry slots between the end marker and the tail are not
-    accumulated.
+    accumulated. Both layouts share the 5-byte header and 26-byte entry, and
+    a full directory's end marker is the tail's LastMark byte.
     """
     num_entries = 0
-    while data[_NEW_DIR_ENTRIES_OFFSET + num_entries * _NEW_DIR_ENTRY_SIZE] != 0:
+    while data[_DIR_ENTRIES_OFFSET + num_entries * _DIR_ENTRY_SIZE] != 0:
         num_entries += 1
-    end_of_check = _NEW_DIR_ENTRIES_OFFSET + num_entries * _NEW_DIR_ENTRY_SIZE
+    end_of_check = _DIR_ENTRIES_OFFSET + num_entries * _DIR_ENTRY_SIZE
 
     dircheck = 0
     amt = 0
@@ -710,8 +721,8 @@ def _calculate_new_dir_check(data: SectorsView | bytes) -> int:
         dircheck = data[amt] ^ _ror13(dircheck)
         amt += 1
 
-    amt = _NEW_DIR_TAIL_OFFSET + 1  # skip NewDirLastMark
-    while amt + 3 < _NEW_DIR_SIZE - 4:
+    amt = tail_offset + 1  # skip the LastMark byte
+    while amt + 3 < size - 4:
         dircheck = _read_32bit_le(data, amt) ^ _ror13(dircheck)
         amt += 4
 
@@ -721,6 +732,16 @@ def _calculate_new_dir_check(data: SectorsView | bytes) -> int:
         ^ ((dircheck >> 16) & 0xFF)
         ^ ((dircheck >> 24) & 0xFF)
     )
+
+
+def _calculate_old_dir_check(data: SectorsView | bytes) -> int:
+    """Compute the DirCheckByte RISC OS writes to an Old directory."""
+    return _calculate_dir_check(data, tail_offset=_OLD_DIR_TAIL_OFFSET, size=_OLD_DIR_SIZE)
+
+
+def _calculate_new_dir_check(data: SectorsView | bytes) -> int:
+    """Compute the New-directory DirCheckByte."""
+    return _calculate_dir_check(data, tail_offset=_NEW_DIR_TAIL_OFFSET, size=_NEW_DIR_SIZE)
 
 
 def _parse_new_entry(data: SectorsView, entry_offset: int) -> _ADFSDirectoryEntry | None:
