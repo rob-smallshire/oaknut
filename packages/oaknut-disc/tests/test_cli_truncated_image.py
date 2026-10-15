@@ -6,15 +6,15 @@ command identifies the image first, and identification walks the directory
 tree, so a sector read past the end escaped as a ``ValueError`` traceback
 from all of them.
 
-Listing a readable directory and validating are settled here. What ``export``
-should do with the objects it cannot reach is not yet decided, so its test
-asks only that it does not leak an exception.
+Export takes everything the image holds, warns about each object it cannot
+reach, and exits with a data error.
 """
 
 from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 from click.testing import CliRunner, Result
 from exit_codes import ExitCode
 from oaknut.disc.cli import cli
@@ -60,9 +60,42 @@ def test_validate_reports_the_unreachable_directories(runner: CliRunner) -> None
     assert "$.WIMPS.R" in result.output
 
 
-def test_export_does_not_leak_an_exception(runner: CliRunner, tmp_path: Path) -> None:
-    result = runner.invoke(cli, ["export", str(_WELCOME), str(tmp_path / "out")])
-    _assert_no_leaked_exception(result)
+class TestExport:
+    """Export takes what the image holds and warns about what it does not."""
+
+    #: Objects the image cannot hold, each warned about by its path.
+    UNREACHABLE = ("$.WIMPS.P", "$.WIMPS.R", "$.WIMPS.Pad", "$.LIBRARY.view", "$.WIMPS.Index1")
+
+    @pytest.fixture
+    def exported(self, runner: CliRunner, tmp_path: Path) -> tuple[Result, Path]:
+        out_dirpath = tmp_path / "out"
+        result = runner.invoke(
+            cli, ["export", str(_WELCOME), str(out_dirpath), "--meta-format", "none"]
+        )
+        _assert_no_leaked_exception(result)
+        return result, out_dirpath
+
+    def test_exits_with_a_data_error(self, exported) -> None:
+        result, _ = exported
+        assert result.exit_code == ExitCode.DATA_ERR, result.output
+
+    def test_warns_about_each_unreachable_object(self, exported) -> None:
+        result, _ = exported
+        warnings = [line for line in result.output.splitlines() if line.startswith("warning: ")]
+        assert sorted(line.split(":")[1].strip() for line in warnings) == sorted(self.UNREACHABLE)
+        assert "5 objects could not be exported" in result.output
+
+    def test_exports_everything_readable(self, exported) -> None:
+        _, out_dirpath = exported
+        assert (out_dirpath / "ABC" / "INTER").read_bytes().startswith(b"\r")
+        assert (out_dirpath / "WIMPS" / "Index1").exists() is False
+        # Everything under WELCOME lies within the image.
+        assert (out_dirpath / "WELCOME" / "UTILITIES" / "Pstruc").stat().st_size == 3383
+
+    def test_makes_no_host_entry_for_an_unreachable_object(self, exported) -> None:
+        _, out_dirpath = exported
+        # Every child of $.WIMPS (Index1, P, Pad, R) lies wholly or partly past the end.
+        assert list((out_dirpath / "WIMPS").iterdir()) == []
 
 
 def test_cat_of_a_file_past_the_end_is_a_clean_data_error(runner: CliRunner) -> None:
