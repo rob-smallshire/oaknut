@@ -9,13 +9,16 @@ runs while identifying the disc, so an escaping error breaks every command.
 
 from __future__ import annotations
 
+import shutil
+from pathlib import Path
+
 import pytest
 from helpers.adfs_image import make_adfs_s_image, make_old_dir_entry
 from oaknut.adfs import ADFS
 from oaknut.adfs.exceptions import ADFSBeyondImageError, ADFSError
-from oaknut.filesystem import identify
+from oaknut.filesystem import fix_of, identify
 
-from tests.fixtures import REFERENCE_IMAGES_DIRPATH
+from tests.fixtures import BEEBEM_IMAGES_DIRPATH, REFERENCE_IMAGES_DIRPATH
 
 _WELCOME = REFERENCE_IMAGES_DIRPATH / "adfs-truncated" / "welcome-master-compact.adm"
 
@@ -78,3 +81,132 @@ class TestReadingPastTheEnd:
 
     def test_the_error_is_an_adfs_error(self):
         assert issubclass(ADFSBeyondImageError, ADFSError)
+
+
+#: Each object the Welcome capture cannot hold, and what its finding's fix does.
+_WELCOME_FINDINGS = {
+    "$.WIMPS.P": "remove $.WIMPS.P",
+    "$.WIMPS.R": "remove $.WIMPS.R",
+    "$.WIMPS.Pad": "remove $.WIMPS.Pad",
+    "$.LIBRARY.view": "remove $.LIBRARY.view",
+    "$.WIMPS.Index1": "truncate $.WIMPS.Index1 from 16384 to 4864 bytes",
+}
+_DISC_SIZE_FIX = "set the disc size from 2560 to 1280 sectors"
+
+
+def _welcome_copy(tmp_path) -> Path:
+    image_filepath = tmp_path / _WELCOME.name
+    shutil.copyfile(_WELCOME, image_filepath)
+    return image_filepath
+
+
+def _readable_files(adfs: ADFS) -> dict[str, bytes]:
+    files: dict[str, bytes] = {}
+
+    def walk(path) -> None:
+        for child in path.iterdir():
+            if child.is_dir():
+                walk(child)
+            else:
+                files[child.path] = child.read_bytes()
+
+    walk(adfs.root)
+    return files
+
+
+class TestValidateFindsEveryUnreachableObject:
+    def test_each_object_has_a_finding_with_its_fix(self):
+        with ADFS.from_file(_WELCOME, read_only=True) as adfs:
+            findings = adfs.validate()
+        fixes = {str(finding).split(":")[0]: fix_of(finding) for finding in findings}
+        disc_size_fix = fixes.pop("Disc size")
+        assert disc_size_fix is not None
+        assert disc_size_fix.description.startswith(_DISC_SIZE_FIX)
+        assert sorted(fixes) == sorted(_WELCOME_FINDINGS)
+        for path, fix in fixes.items():
+            assert fix is not None, path
+            assert fix.description.startswith(_WELCOME_FINDINGS[path]), fix.description
+
+    def test_a_disc_matching_its_image_has_no_size_finding(self):
+        adfs = ADFS.from_buffer(memoryview(make_adfs_s_image()))
+        assert adfs.validate() == []
+
+
+class TestRepairingTheWelcomeCapture:
+    @pytest.fixture
+    def repaired(self, tmp_path) -> tuple[Path, bytes]:
+        image_filepath = _welcome_copy(tmp_path)
+        before = image_filepath.read_bytes()
+        with ADFS.from_file(image_filepath) as adfs:
+            for finding in adfs.validate():
+                fix_of(finding).apply()
+        return image_filepath, before
+
+    def test_leaves_a_disc_validate_passes(self, repaired):
+        image_filepath, _ = repaired
+        with ADFS.from_file(image_filepath, read_only=True) as adfs:
+            assert adfs.validate() == []
+
+    def test_keeps_the_image_size(self, repaired):
+        image_filepath, before = repaired
+        assert len(image_filepath.read_bytes()) == len(before)
+
+    def test_keeps_every_readable_file(self, repaired):
+        image_filepath, _ = repaired
+        with ADFS.from_file(_WELCOME, read_only=True) as adfs:
+            files = _readable_files_but(adfs, _WELCOME_FINDINGS)
+        with ADFS.from_file(image_filepath, read_only=True) as adfs:
+            after = _readable_files(adfs)
+        index1 = after.pop("$.WIMPS.Index1")
+        assert after == files
+
+        # The part of Index1 the image holds: sectors 1261-1279.
+        assert index1 == _WELCOME.read_bytes()[1261 * 256 : 1280 * 256]
+
+    def test_describes_the_disc_the_image_holds(self, repaired):
+        image_filepath, _ = repaired
+        with ADFS.from_file(image_filepath, read_only=True) as adfs:
+            assert adfs.total_size == 1280 * 256
+            assert all(
+                (start + length) // 256 <= 1280 for start, length in adfs._fsm.free_space_entries()
+            )
+
+
+def _readable_files_but(adfs: ADFS, unreachable) -> dict[str, bytes]:
+    """Every file of the unrepaired image, skipping those it cannot supply."""
+    files: dict[str, bytes] = {}
+
+    def walk(path) -> None:
+        for child in path.iterdir():
+            if child.path in unreachable:
+                continue
+            if child.is_dir():
+                walk(child)
+            else:
+                files[child.path] = child.read_bytes()
+
+    walk(adfs.root)
+    return files
+
+
+class TestTrimmedIsNotTruncated:
+    """An image short of its disc but holding everything on it is not truncated.
+
+    Hard-disc images, and many floppy images, stop at the last sector in use;
+    the rest of the disc is unwritten. That is how such images are stored,
+    not a defect, so validate reports nothing and repair leaves the disc
+    size alone. Only an image cut short of objects it refers to is truncated.
+    """
+
+    def test_a_trimmed_hard_disc_has_no_disc_size_finding(self):
+        # BeebEm's scsi1.dat: 94 sectors of a 40264-sector disc, all of it in use.
+        with ADFS.from_file(BEEBEM_IMAGES_DIRPATH / "scsi1.dat", read_only=True) as adfs:
+            assert not [f for f in adfs.validate() if str(f).startswith("Disc size")]
+
+    def test_a_truncated_floppy_has_a_disc_size_finding(self):
+        # BeebEm's armdisc3.adl: 800 sectors of an L disc, with files past the end.
+        with ADFS.from_file(BEEBEM_IMAGES_DIRPATH / "armdisc3.adl", read_only=True) as adfs:
+            findings = [str(f) for f in adfs.validate()]
+        assert "Disc size: the free-space map gives 2560 sectors, but the image holds 800" in (
+            findings
+        )

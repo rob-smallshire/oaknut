@@ -383,6 +383,11 @@ class ADFS(Filesystem):
         "A stale check byte on an old-format (S/M/L) directory — typically a "
         "RISC OS checksum that 8-bit ADFS kept when it changed the directory — "
         "is set to the directory's true checksum.",
+        "On an image truncated short of its disc, a directory or file lying "
+        "wholly past the end is removed from its directory, a file running past "
+        "the end is cut to the part the image holds, and the disc size is set to "
+        "the image's. An image that merely stops after its last object in use is "
+        "left alone.",
     )
 
     def probe(self, reader: ImageReader) -> Identification | Rejection:

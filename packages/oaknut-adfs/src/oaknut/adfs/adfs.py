@@ -2368,7 +2368,104 @@ class ADFS:
             finding = self._stale_check_byte_finding(path, disc_address)
             if finding is not None:
                 errors.append(finding)
+        if self._map is None:
+            errors.extend(self._truncation_findings(directories))
         return errors
+
+    def _truncation_findings(self, directories: list[tuple[str, int]]) -> list[ADFSValidationError]:
+        """Findings, with fixes, for an old-map image truncated short of its disc.
+
+        An image is *truncated* when a directory or file lies wholly or
+        partly past its end. Each file whose data lies wholly past the end
+        is removed from its directory; one that runs past the end is
+        truncated to the part the image holds. The disc size is then set to
+        the image's, dropping free space past its end, so the map, the
+        directories and the image agree. (Directories past the end are
+        found, and fixed, by the tree walk.)
+
+        An image that merely stops short of its disc, holding every object
+        on it, is *trimmed*: the usual way hard-disc and many floppy images
+        are stored, with the rest of the disc unwritten. That is no defect,
+        so its disc size is left alone.
+        """
+        image_sectors = self._disc.num_sectors
+        findings: list[ADFSValidationError] = []
+        truncated = False
+        for path, disc_address in directories:
+            for entry in self._read_directory_at(disc_address).entries:
+                if entry.is_directory:
+                    num_sectors = self._dir_format.size_in_sectors
+                else:
+                    num_sectors = (
+                        entry.length + _ADFS_BYTES_PER_SECTOR - 1
+                    ) // _ADFS_BYTES_PER_SECTOR
+                if num_sectors == 0 or entry.start_sector + num_sectors <= image_sectors:
+                    continue
+                truncated = True
+                if entry.is_directory:
+                    continue  # reported, with its fix, by the tree walk
+                child_path = f"{path}.{entry.name}"
+                defect = ADFSBeyondImageError(
+                    "file data", entry.start_sector, num_sectors, image_sectors
+                )
+                finding = ADFSValidationError(f"{child_path}: {defect}")
+                if entry.start_sector >= image_sectors:
+                    finding.fix = self._removal_fix(child_path, disc_address, entry.name)
+                else:
+                    held = (image_sectors - entry.start_sector) * _ADFS_BYTES_PER_SECTOR
+                    finding.fix = Fix(
+                        f"truncate {child_path} from {entry.length} to {held} bytes, "
+                        f"the part the image holds",
+                        lambda address=disc_address, name=entry.name, held=held: (
+                            self._rewrite_entry(address, name, lambda e: replace(e, length=held))
+                        ),
+                    )
+                findings.append(finding)
+
+        disc_sectors = self._fsm.total_sectors
+        if truncated and disc_sectors > image_sectors:
+            finding = ADFSValidationError(
+                f"Disc size: the free-space map gives {disc_sectors} sectors, "
+                f"but the image holds {image_sectors}"
+            )
+            finding.fix = Fix(
+                f"set the disc size from {disc_sectors} to {image_sectors} sectors, "
+                f"the size of the image",
+                lambda: self._fsm.shrink_to(image_sectors),
+            )
+            findings.append(finding)
+        return findings
+
+    def _removal_fix(self, path: str, parent_address: int, name: str) -> Fix:
+        """A fix removing the entry *name*, which the image cannot hold, from its directory.
+
+        Its sectors are not freed: they lie past the end of the image, and
+        setting the disc size to the image's drops them from the map.
+        """
+        return Fix(
+            f"remove {path}, which lies past the end of the image",
+            lambda: self._rewrite_entry(parent_address, name, lambda entry: None),
+        )
+
+    def _rewrite_entry(self, parent_address: int, name: str, transform) -> None:
+        """Rewrite the entry *name* in the directory at *parent_address*.
+
+        *transform* maps the entry to its replacement, or to ``None`` to
+        remove it. The directory is read afresh, so fixes applied one after
+        another each see the others' changes.
+        """
+        parent = self._read_directory_at(parent_address)
+        new_entries = []
+        for entry in parent.entries:
+            if _name_key(entry.name) == _name_key(name):
+                entry = transform(entry)
+                if entry is None:
+                    continue
+            new_entries.append(entry)
+        new_sequence = (parent.sequence_number + 1) & 0xFF
+        self._write_directory_at(
+            self._with_entries(parent, tuple(new_entries), new_sequence), parent_address
+        )
 
     def _stale_check_byte_finding(self, path: str, disc_address: int) -> ADFSValidationError | None:
         """A finding, carrying its fix, for a directory whose check byte is stale."""
@@ -2431,7 +2528,12 @@ class ADFS:
                 try:
                     subdir = self._read_directory_at(address)
                 except ADFSError as exc:
-                    errors.append(ADFSValidationError(f"{child_path}: {exc}"))
+                    finding = ADFSValidationError(f"{child_path}: {exc}")
+                    if isinstance(exc, ADFSBeyondImageError) and self._map is None:
+                        finding.fix = self._removal_fix(
+                            child_path, directory.disc_address, entry.name
+                        )
+                    errors.append(finding)
                     continue
                 directories.append((child_path, address))
                 walk(subdir, child_path)

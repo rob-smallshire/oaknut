@@ -12,6 +12,7 @@ reach, and exits with a data error.
 
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
 
 import pytest
@@ -103,3 +104,35 @@ def test_cat_of_a_file_past_the_end_is_a_clean_data_error(runner: CliRunner) -> 
     _assert_no_leaked_exception(result)
     assert result.exit_code == ExitCode.DATA_ERR, result.output
     assert "past the end of the image" in result.output
+
+
+class TestRepair:
+    @pytest.fixture
+    def welcome_copy(self, tmp_path: Path) -> Path:
+        image = tmp_path / _WELCOME.name
+        shutil.copyfile(_WELCOME, image)
+        return image
+
+    def test_reports_each_repair(self, runner: CliRunner, welcome_copy: Path) -> None:
+        result = runner.invoke(cli, ["repair", str(welcome_copy)])
+        _assert_no_leaked_exception(result)
+        assert result.exit_code == 0, result.output
+        lines = result.output.splitlines()
+        assert len(lines) == 6, result.output
+        assert any("truncate $.WIMPS.Index1" in line for line in lines)
+        assert any("set the disc size from 2560 to 1280 sectors" in line for line in lines)
+
+    def test_leaves_an_image_that_validates_and_exports(
+        self, runner: CliRunner, welcome_copy: Path, tmp_path: Path
+    ) -> None:
+        runner.invoke(cli, ["repair", str(welcome_copy)])
+        result = runner.invoke(cli, ["validate", str(welcome_copy)])
+        assert (result.exit_code, result.output) == (0, "")
+        result = runner.invoke(cli, ["export", str(welcome_copy), str(tmp_path / "out")])
+        assert result.exit_code == 0, result.output
+        assert welcome_copy.stat().st_size == _WELCOME.stat().st_size
+
+    def test_dry_run_changes_nothing(self, runner: CliRunner, welcome_copy: Path) -> None:
+        result = runner.invoke(cli, ["repair", "--dry-run", str(welcome_copy)])
+        assert result.exit_code == 0, result.output
+        assert welcome_copy.read_bytes() == _WELCOME.read_bytes()
