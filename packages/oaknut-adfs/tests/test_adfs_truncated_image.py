@@ -15,7 +15,7 @@ from pathlib import Path
 import pytest
 from helpers.adfs_image import make_adfs_s_image, make_old_dir_entry
 from oaknut.adfs import ADFS
-from oaknut.adfs.exceptions import ADFSBeyondImageError, ADFSError
+from oaknut.adfs.exceptions import ADFSBeyondImageError, ADFSDiscFullError, ADFSError
 from oaknut.filesystem import fix_of, identify
 
 from tests.fixtures import BEEBEM_IMAGES_DIRPATH, REFERENCE_IMAGES_DIRPATH
@@ -210,3 +210,23 @@ class TestTrimmedIsNotTruncated:
         assert "Disc size: the free-space map gives 2560 sectors, but the image holds 800" in (
             findings
         )
+
+
+class TestWritingToATruncatedImage:
+    """Free space past the end of the image is never allocated."""
+
+    def test_a_file_fitting_only_past_the_end_is_refused_without_change(self, tmp_path):
+        image_filepath = _welcome_copy(tmp_path)
+        before = image_filepath.read_bytes()
+        with ADFS.from_file(image_filepath) as adfs:
+            # 79 sectors: more than the 53 free inside the image.
+            with pytest.raises(ADFSDiscFullError, match="past the end of the image"):
+                adfs.path("$.BIG").write_bytes(b"x" * 20000)
+        assert image_filepath.read_bytes() == before
+
+    def test_a_file_fitting_inside_the_image_is_written(self, tmp_path):
+        image_filepath = _welcome_copy(tmp_path)
+        with ADFS.from_file(image_filepath) as adfs:
+            adfs.path("$.SMALL").write_bytes(b"y" * 5000)
+        with ADFS.from_file(image_filepath, read_only=True) as adfs:
+            assert adfs.path("$.SMALL").read_bytes() == b"y" * 5000

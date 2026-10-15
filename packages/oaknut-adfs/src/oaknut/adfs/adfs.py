@@ -2944,7 +2944,18 @@ class ADFS:
             return 0
         num_sectors = (length_bytes + _ADFS_BYTES_PER_SECTOR - 1) // _ADFS_BYTES_PER_SECTOR
         alignment = self._old_map_dir_alignment if sector_aligned else 1
-        return self._fsm.allocate(num_sectors, alignment=alignment)
+        # Only the sectors the image holds can be written; an image shorter
+        # than its disc has map free space past its end that cannot be used.
+        image_sectors = self._disc.num_sectors
+        try:
+            return self._fsm.allocate(num_sectors, alignment=alignment, limit=image_sectors)
+        except ADFSDiscFullError as exc:
+            if self._fsm.total_sectors <= image_sectors:
+                raise
+            raise ADFSDiscFullError(
+                f"{exc}; free space past the end of the image ({image_sectors} of "
+                f"{self._fsm.total_sectors} sectors) cannot be used"
+            ) from None
 
     def _free_object(self, address: int, length_bytes: int) -> None:
         """Release the space previously allocated for an object."""
