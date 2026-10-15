@@ -43,6 +43,7 @@ from oaknut.adfs.directory import (
     check_title,
 )
 from oaknut.adfs.exceptions import (
+    ADFSBeyondImageError,
     ADFSDirectoryError,
     ADFSDirectoryFullError,
     ADFSDirectoryNotEmptyError,
@@ -2680,7 +2681,7 @@ class ADFS:
             return b""
         first_sector = byte_address // _ADFS_BYTES_PER_SECTOR
         end_sector = (byte_address + length + _ADFS_BYTES_PER_SECTOR - 1) // _ADFS_BYTES_PER_SECTOR
-        data = self._disc.sector_range(first_sector, end_sector - first_sector)
+        data = self._sectors_within_image("data", first_sector, end_sector - first_sector)
         start = byte_address - first_sector * _ADFS_BYTES_PER_SECTOR
         return bytes(data[start : start + length])
 
@@ -2700,11 +2701,22 @@ class ADFS:
         sector = self._object_disc_sector(disc_address)
         # Peek the header to learn the size — Big directories vary; fixed
         # directories ignore the peek and return their constant size.
-        header = self._disc.sector_range(sector, 1)
+        header = self._sectors_within_image("directory", sector, 1)
         num_sectors = (
             self._dir_format.directory_size(header) + _ADFS_BYTES_PER_SECTOR - 1
         ) // _ADFS_BYTES_PER_SECTOR
-        return self._disc.sector_range(sector, num_sectors)
+        return self._sectors_within_image("directory", sector, num_sectors)
+
+    def _sectors_within_image(self, what: str, start_sector: int, num_sectors: int):
+        """The live sectors of an object, which must lie within the image.
+
+        Raises:
+            ADFSBeyondImageError: If any of them lie past the image's end.
+        """
+        image_sectors = self._disc.num_sectors
+        if start_sector + num_sectors > image_sectors:
+            raise ADFSBeyondImageError(what, start_sector, num_sectors, image_sectors)
+        return self._disc.sector_range(start_sector, num_sectors)
 
     def _read_file_data(self, entry: _ADFSDirectoryEntry) -> bytes:
         """Read file data for a directory entry."""
@@ -2715,7 +2727,7 @@ class ADFS:
             return self._map.read_object(entry.indirect_disc_address, entry.length)
         start_sector = entry.start_sector
         num_sectors = (entry.length + _ADFS_BYTES_PER_SECTOR - 1) // _ADFS_BYTES_PER_SECTOR
-        data = self._disc.sector_range(start_sector, num_sectors)
+        data = self._sectors_within_image("file data", start_sector, num_sectors)
         return data[: entry.length]
 
     def _write_directory_at(self, directory: _ADFSDirectory, disc_address: int) -> None:
@@ -3534,6 +3546,8 @@ def _new_map_over(unified: UnifiedDisc, disc_record: DiscRecord, base_offset: in
     def _read_physical(physical: int, length: int) -> bytes:
         first = physical // _ADFS_BYTES_PER_SECTOR
         count = (physical + length + _ADFS_BYTES_PER_SECTOR - 1) // _ADFS_BYTES_PER_SECTOR - first
+        if first + count > unified.num_sectors:
+            raise ADFSBeyondImageError("data", first, count, unified.num_sectors)
         data = unified.sector_range(first, count)
         start = physical - first * _ADFS_BYTES_PER_SECTOR
         return bytes(data[start : start + length])

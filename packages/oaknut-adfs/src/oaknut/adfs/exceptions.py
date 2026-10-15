@@ -12,6 +12,7 @@ Hierarchy::
 
     FSError (oaknut.file.exceptions, a DataError)
     └── ADFSError
+        ├── ADFSBeyondImageError
         ├── ADFSDirectoryError
         │   └── ADFSDirectoryFullError    (ExitCode.CANT_CREATE)
         ├── ADFSMapError
@@ -44,6 +45,32 @@ class ADFSFormatError(ADFSError):
     does not uniquely identify a format and no explicit
     :class:`ADFSFormat` argument was supplied.
     """
+
+
+class ADFSBeyondImageError(ADFSError):
+    """An object lies wholly or partly past the end of the disc image.
+
+    Raised when a directory or a file's data is read from sectors the
+    image does not hold -- typically an image captured or trimmed short of
+    the disc its free-space map describes.
+    """
+
+    def __init__(self, what: str, start_sector: int, num_sectors: int, image_sectors: int):
+        self.start_sector = start_sector
+        self.num_sectors = num_sectors
+        self.image_sectors = image_sectors
+        end_sector = start_sector + num_sectors - 1
+        if start_sector >= image_sectors:
+            message = (
+                f"{what} at sector {start_sector} lies past the end of the image "
+                f"({image_sectors} sectors)"
+            )
+        else:
+            message = (
+                f"{what} (sectors {start_sector}-{end_sector}) runs past the end of "
+                f"the image ({image_sectors} sectors)"
+            )
+        super().__init__(message)
 
 
 class ADFSDirectoryError(ADFSError):
