@@ -43,6 +43,7 @@ from oaknut.adfs.directory import (
     check_title,
 )
 from oaknut.adfs.exceptions import (
+    ADFSBeyondImageError,
     ADFSDirectoryError,
     ADFSDirectoryFullError,
     ADFSDirectoryNotEmptyError,
@@ -2367,7 +2368,104 @@ class ADFS:
             finding = self._stale_check_byte_finding(path, disc_address)
             if finding is not None:
                 errors.append(finding)
+        if self._map is None:
+            errors.extend(self._truncation_findings(directories))
         return errors
+
+    def _truncation_findings(self, directories: list[tuple[str, int]]) -> list[ADFSValidationError]:
+        """Findings, with fixes, for an old-map image truncated short of its disc.
+
+        An image is *truncated* when a directory or file lies wholly or
+        partly past its end. Each file whose data lies wholly past the end
+        is removed from its directory; one that runs past the end is
+        truncated to the part the image holds. The disc size is then set to
+        the image's, dropping free space past its end, so the map, the
+        directories and the image agree. (Directories past the end are
+        found, and fixed, by the tree walk.)
+
+        An image that merely stops short of its disc, holding every object
+        on it, is *trimmed*: the usual way hard-disc and many floppy images
+        are stored, with the rest of the disc unwritten. That is no defect,
+        so its disc size is left alone.
+        """
+        image_sectors = self._disc.num_sectors
+        findings: list[ADFSValidationError] = []
+        truncated = False
+        for path, disc_address in directories:
+            for entry in self._read_directory_at(disc_address).entries:
+                if entry.is_directory:
+                    num_sectors = self._dir_format.size_in_sectors
+                else:
+                    num_sectors = (
+                        entry.length + _ADFS_BYTES_PER_SECTOR - 1
+                    ) // _ADFS_BYTES_PER_SECTOR
+                if num_sectors == 0 or entry.start_sector + num_sectors <= image_sectors:
+                    continue
+                truncated = True
+                if entry.is_directory:
+                    continue  # reported, with its fix, by the tree walk
+                child_path = f"{path}.{entry.name}"
+                defect = ADFSBeyondImageError(
+                    "file data", entry.start_sector, num_sectors, image_sectors
+                )
+                finding = ADFSValidationError(f"{child_path}: {defect}")
+                if entry.start_sector >= image_sectors:
+                    finding.fix = self._removal_fix(child_path, disc_address, entry.name)
+                else:
+                    held = (image_sectors - entry.start_sector) * _ADFS_BYTES_PER_SECTOR
+                    finding.fix = Fix(
+                        f"truncate {child_path} from {entry.length} to {held} bytes, "
+                        f"the part the image holds",
+                        lambda address=disc_address, name=entry.name, held=held: (
+                            self._rewrite_entry(address, name, lambda e: replace(e, length=held))
+                        ),
+                    )
+                findings.append(finding)
+
+        disc_sectors = self._fsm.total_sectors
+        if truncated and disc_sectors > image_sectors:
+            finding = ADFSValidationError(
+                f"Disc size: the free-space map gives {disc_sectors} sectors, "
+                f"but the image holds {image_sectors}"
+            )
+            finding.fix = Fix(
+                f"set the disc size from {disc_sectors} to {image_sectors} sectors, "
+                f"the size of the image",
+                lambda: self._fsm.shrink_to(image_sectors),
+            )
+            findings.append(finding)
+        return findings
+
+    def _removal_fix(self, path: str, parent_address: int, name: str) -> Fix:
+        """A fix removing the entry *name*, which the image cannot hold, from its directory.
+
+        Its sectors are not freed: they lie past the end of the image, and
+        setting the disc size to the image's drops them from the map.
+        """
+        return Fix(
+            f"remove {path}, which lies past the end of the image",
+            lambda: self._rewrite_entry(parent_address, name, lambda entry: None),
+        )
+
+    def _rewrite_entry(self, parent_address: int, name: str, transform) -> None:
+        """Rewrite the entry *name* in the directory at *parent_address*.
+
+        *transform* maps the entry to its replacement, or to ``None`` to
+        remove it. The directory is read afresh, so fixes applied one after
+        another each see the others' changes.
+        """
+        parent = self._read_directory_at(parent_address)
+        new_entries = []
+        for entry in parent.entries:
+            if _name_key(entry.name) == _name_key(name):
+                entry = transform(entry)
+                if entry is None:
+                    continue
+            new_entries.append(entry)
+        new_sequence = (parent.sequence_number + 1) & 0xFF
+        self._write_directory_at(
+            self._with_entries(parent, tuple(new_entries), new_sequence), parent_address
+        )
 
     def _stale_check_byte_finding(self, path: str, disc_address: int) -> ADFSValidationError | None:
         """A finding, carrying its fix, for a directory whose check byte is stale."""
@@ -2430,7 +2528,12 @@ class ADFS:
                 try:
                     subdir = self._read_directory_at(address)
                 except ADFSError as exc:
-                    errors.append(ADFSValidationError(f"{child_path}: {exc}"))
+                    finding = ADFSValidationError(f"{child_path}: {exc}")
+                    if isinstance(exc, ADFSBeyondImageError) and self._map is None:
+                        finding.fix = self._removal_fix(
+                            child_path, directory.disc_address, entry.name
+                        )
+                    errors.append(finding)
                     continue
                 directories.append((child_path, address))
                 walk(subdir, child_path)
@@ -2680,7 +2783,7 @@ class ADFS:
             return b""
         first_sector = byte_address // _ADFS_BYTES_PER_SECTOR
         end_sector = (byte_address + length + _ADFS_BYTES_PER_SECTOR - 1) // _ADFS_BYTES_PER_SECTOR
-        data = self._disc.sector_range(first_sector, end_sector - first_sector)
+        data = self._sectors_within_image("data", first_sector, end_sector - first_sector)
         start = byte_address - first_sector * _ADFS_BYTES_PER_SECTOR
         return bytes(data[start : start + length])
 
@@ -2700,11 +2803,22 @@ class ADFS:
         sector = self._object_disc_sector(disc_address)
         # Peek the header to learn the size — Big directories vary; fixed
         # directories ignore the peek and return their constant size.
-        header = self._disc.sector_range(sector, 1)
+        header = self._sectors_within_image("directory", sector, 1)
         num_sectors = (
             self._dir_format.directory_size(header) + _ADFS_BYTES_PER_SECTOR - 1
         ) // _ADFS_BYTES_PER_SECTOR
-        return self._disc.sector_range(sector, num_sectors)
+        return self._sectors_within_image("directory", sector, num_sectors)
+
+    def _sectors_within_image(self, what: str, start_sector: int, num_sectors: int):
+        """The live sectors of an object, which must lie within the image.
+
+        Raises:
+            ADFSBeyondImageError: If any of them lie past the image's end.
+        """
+        image_sectors = self._disc.num_sectors
+        if start_sector + num_sectors > image_sectors:
+            raise ADFSBeyondImageError(what, start_sector, num_sectors, image_sectors)
+        return self._disc.sector_range(start_sector, num_sectors)
 
     def _read_file_data(self, entry: _ADFSDirectoryEntry) -> bytes:
         """Read file data for a directory entry."""
@@ -2715,7 +2829,7 @@ class ADFS:
             return self._map.read_object(entry.indirect_disc_address, entry.length)
         start_sector = entry.start_sector
         num_sectors = (entry.length + _ADFS_BYTES_PER_SECTOR - 1) // _ADFS_BYTES_PER_SECTOR
-        data = self._disc.sector_range(start_sector, num_sectors)
+        data = self._sectors_within_image("file data", start_sector, num_sectors)
         return data[: entry.length]
 
     def _write_directory_at(self, directory: _ADFSDirectory, disc_address: int) -> None:
@@ -2830,7 +2944,18 @@ class ADFS:
             return 0
         num_sectors = (length_bytes + _ADFS_BYTES_PER_SECTOR - 1) // _ADFS_BYTES_PER_SECTOR
         alignment = self._old_map_dir_alignment if sector_aligned else 1
-        return self._fsm.allocate(num_sectors, alignment=alignment)
+        # Only the sectors the image holds can be written; an image shorter
+        # than its disc has map free space past its end that cannot be used.
+        image_sectors = self._disc.num_sectors
+        try:
+            return self._fsm.allocate(num_sectors, alignment=alignment, limit=image_sectors)
+        except ADFSDiscFullError as exc:
+            if self._fsm.total_sectors <= image_sectors:
+                raise
+            raise ADFSDiscFullError(
+                f"{exc}; free space past the end of the image ({image_sectors} of "
+                f"{self._fsm.total_sectors} sectors) cannot be used"
+            ) from None
 
     def _free_object(self, address: int, length_bytes: int) -> None:
         """Release the space previously allocated for an object."""
@@ -3534,6 +3659,8 @@ def _new_map_over(unified: UnifiedDisc, disc_record: DiscRecord, base_offset: in
     def _read_physical(physical: int, length: int) -> bytes:
         first = physical // _ADFS_BYTES_PER_SECTOR
         count = (physical + length + _ADFS_BYTES_PER_SECTOR - 1) // _ADFS_BYTES_PER_SECTOR - first
+        if first + count > unified.num_sectors:
+            raise ADFSBeyondImageError("data", first, count, unified.num_sectors)
         data = unified.sector_range(first, count)
         start = physical - first * _ADFS_BYTES_PER_SECTOR
         return bytes(data[start : start + length])

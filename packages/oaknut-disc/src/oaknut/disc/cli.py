@@ -4133,7 +4133,13 @@ def export_cmd(
     force_filesystem: str | None,
     force_geometry: str | None,
 ) -> None:
-    """Bulk-export entire image to a host directory."""
+    """Bulk-export entire image to a host directory.
+
+    Every readable file is exported. A directory or file the image cannot
+    supply (a corrupt directory, or one lying past the end of a truncated
+    image) is skipped with a warning naming it, and the command then exits
+    with a data error.
+    """
     from oaknut.file import MetaFormat
 
     resolved_meta_format: MetaFormat | None
@@ -4148,7 +4154,13 @@ def export_cmd(
         str(image), force_filesystem=force_filesystem, force_geometry=force_geometry
     )
     mount = resolved.mount
-    _export_recursive(mount, mount.path_root(), host_dir, resolved_meta_format, owner, verbose)
+    unexported = _export_recursive(
+        mount, mount.path_root(), host_dir, resolved_meta_format, owner, verbose
+    )
+    if unexported:
+        plural = "" if unexported == 1 else "s"
+        click.echo(f"{unexported} object{plural} could not be exported", err=True)
+        raise SystemExit(int(ExitCode.DATA_ERR))
 
 
 def _export_recursive(
@@ -4158,18 +4170,38 @@ def _export_recursive(
     meta_format,
     owner: int,
     verbose: bool,
-) -> None:
-    """Recursively export files under *path* in *mount* to the host directory."""
-    from oaknut.file import AcornMeta, export_with_metadata
+) -> int:
+    """Recursively export files under *path* in *mount* to the host directory.
+
+    The host directory is made only once *path* has been listed, so a
+    directory that cannot be read leaves nothing behind. Returns the number
+    of objects that could not be read, each warned about and skipped.
+    """
+    from oaknut.file import AcornMeta, FSError, export_with_metadata
     from oaknut.filesystem import AcornMetadata
 
-    for child in mount.iter_entries(path):
+    from .console import print_warning
+
+    try:
+        children = list(mount.iter_entries(path))
+    except FSError as exc:
+        print_warning(f"warning: {path}: {exc}")
+        return 1
+    host_dir.mkdir(exist_ok=True)
+
+    unexported = 0
+    for child in children:
         if child.is_dir:
-            sub_dir = host_dir / child.name
-            sub_dir.mkdir(exist_ok=True)
-            _export_recursive(mount, child.path, sub_dir, meta_format, owner, verbose)
+            unexported += _export_recursive(
+                mount, child.path, host_dir / child.name, meta_format, owner, verbose
+            )
         else:
-            data = mount.read_bytes(child.path)
+            try:
+                data = mount.read_bytes(child.path)
+            except FSError as exc:
+                print_warning(f"warning: {child.path}: {exc}")
+                unexported += 1
+                continue
             if isinstance(mount, AcornMetadata):
                 meta = mount.acorn_meta(child.path)
             else:
@@ -4185,6 +4217,7 @@ def _export_recursive(
             )
             if verbose:
                 click.echo(child.name, err=True)
+    return unexported
 
 
 @cli.command(name="import")

@@ -299,7 +299,7 @@ class OldFreeSpaceMap:
 
     # --- Mutation ---
 
-    def allocate(self, num_sectors: int, alignment: int = 1) -> int:
+    def allocate(self, num_sectors: int, alignment: int = 1, limit: int | None = None) -> int:
         """Allocate contiguous sectors using first-fit.
 
         Args:
@@ -309,6 +309,9 @@ class OldFreeSpaceMap:
                 directories land on a 1024-byte sector boundary, which RISC OS
                 requires; any non-aligned prefix of the chosen free region is
                 left free for files, which have no alignment requirement.
+            limit: If given, the allocation must end at or before this
+                sector -- the end of an image that holds less of the disc
+                than the map describes. Free space beyond it is passed over.
 
         Returns:
             Start sector of the allocated region.
@@ -329,6 +332,8 @@ class OldFreeSpaceMap:
             aligned_start = ((start + alignment - 1) // alignment) * alignment
             prefix = aligned_start - start
             if prefix + num_sectors > length:
+                continue
+            if limit is not None and aligned_start + num_sectors > limit:
                 continue
 
             suffix_start = aligned_start + num_sectors
