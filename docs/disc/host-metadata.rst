@@ -566,7 +566,8 @@ through the ``--meta-format`` option, described in
    * - ``filename-riscos``
      - ``,xxx`` for typed files, ``,llllllll,eeeeeeee`` for untyped
    * - ``filename-mos``
-     - ``,load-exec``, the LanManFS and ``HostFS`` form
+     - ``,load-exec`` for every file, the LanManFS and ``HostFS``
+       untyped form
 
 ``oaknut.zip`` reads the SparkFS extra field.
 
