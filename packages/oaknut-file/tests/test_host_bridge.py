@@ -183,7 +183,7 @@ def test_xattr_round_trip(xattr_tmp_path: Path, fmt: MetaFormat):
 
 @pytest.mark.parametrize(
     "fmt",
-    [MetaFormat.FILENAME_RISCOS, MetaFormat.FILENAME_MOS],
+    [MetaFormat.FILENAME_RISCOS, MetaFormat.FILENAME_LOADEXEC],
 )
 def test_filename_round_trip(tmp_path: Path, fmt: MetaFormat):
     target = tmp_path / "PROG"

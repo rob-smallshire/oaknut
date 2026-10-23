@@ -328,7 +328,7 @@ class TestMetaFormatRoundTrip:
             MetaFormat.INF_TRAD,
             MetaFormat.INF_PIEB,
             MetaFormat.FILENAME_RISCOS,
-            MetaFormat.FILENAME_MOS,
+            MetaFormat.FILENAME_LOADEXEC,
         ],
     )
     def test_dfs_round_trip_per_format(self, tmp_path, fmt):

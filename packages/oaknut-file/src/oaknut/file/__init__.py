@@ -34,10 +34,12 @@ from oaknut.file.exceptions import (
 )
 from oaknut.file.filename_encoding import (
     build_filename_suffix,
+    build_loadexec_filename_suffix,
     build_mos_filename_suffix,
     parse_encoded_filename,
 )
 from oaknut.file.formats import (
+    DEPRECATED_META_FORMATS,
     SOURCE_DIR,
     SOURCE_FILENAME,
     SOURCE_INF_PIEB,
@@ -87,6 +89,7 @@ __all__ = [
     "BootOption",
     "DEFAULT_EXPORT_META_FORMAT",
     "DEFAULT_IMPORT_META_FORMATS",
+    "DEPRECATED_META_FORMATS",
     "FSError",
     "FilesystemClosedError",
     "InvalidAddressError",
@@ -106,6 +109,7 @@ __all__ = [
     "export_with_metadata",
     "import_with_metadata",
     "build_filename_suffix",
+    "build_loadexec_filename_suffix",
     "build_mos_filename_suffix",
     "format_access_hex",
     "format_access_text",

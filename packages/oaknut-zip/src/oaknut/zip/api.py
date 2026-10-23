@@ -18,7 +18,7 @@ from oaknut.file import (
     AcornMeta,
     MetaFormat,
     build_filename_suffix,
-    build_mos_filename_suffix,
+    build_loadexec_filename_suffix,
     format_pieb_inf_line,
     format_trad_inf_line,
     write_acorn_xattrs,
@@ -213,9 +213,9 @@ def extract_member(
         if verbose:
             rel = output_filepath.relative_to(output_dirpath)
             click.echo(f"    xattr-acorn: {rel}")
-    elif meta_format in (MetaFormat.FILENAME_RISCOS, MetaFormat.FILENAME_MOS):
-        if meta_format == MetaFormat.FILENAME_MOS:
-            suffix = build_mos_filename_suffix(meta)
+    elif meta_format in (MetaFormat.FILENAME_RISCOS, MetaFormat.FILENAME_LOADEXEC):
+        if meta_format == MetaFormat.FILENAME_LOADEXEC:
+            suffix = build_loadexec_filename_suffix(meta)
         else:
             suffix = build_filename_suffix(meta)
         if not output_filepath.name.endswith(suffix):
