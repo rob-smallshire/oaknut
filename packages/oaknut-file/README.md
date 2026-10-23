@@ -47,8 +47,15 @@ from oaknut.file import Access
 
 # Compose flags with bitwise OR
 flags = Access.R | Access.W | Access.L
-print(repr(flags))  # <Access.LWR: 11>
-print(hex(flags))  # 0xb
+print(repr(flags))
+print(hex(flags))
+```
+
+Output:
+
+```text
+<Access.LWR: 11>
+0xb
 ```
 
 | Flag | Value | Meaning |
@@ -95,8 +102,8 @@ byte.
 ```python
 from oaknut.file import (
     Access,
-    format_trad_inf_line,
     format_pieb_inf_line,
+    format_trad_inf_line,
     parse_inf_line,
 )
 
@@ -109,44 +116,72 @@ trad = format_trad_inf_line(
     attr=int(Access.R | Access.W),
 )
 print(trad)
-# HELLO       00001900 00008023 00000100 03
 
-# PiEconetBridge INF: owner load exec perm
+# PiEconetBridge INF: owner load exec perm, in PiEB's own perm layout
 pieb = format_pieb_inf_line(
     load_address=0xFFFFDD00,
     exec_address=0xFFFFDD00,
     attr=int(Access.R | Access.W | Access.L | Access.PR),
 )
 print(pieb)
-# 0 ffffdd00 ffffdd00 17   (LWR/R in PiEB's own perm layout)
 
-# Auto-detect format on parse (returns (source_label, AcornMeta))
+# Auto-detect the dialect on parse; access comes back as the Acorn byte
 source, meta = parse_inf_line(trad)
-print(meta.load_address, meta.exec_address, meta.access)
-# 6400 32803 3
+print(source, hex(meta.load_address), hex(meta.exec_address), hex(meta.access))
 
 source, meta = parse_inf_line(pieb)
-print(hex(meta.load_address), hex(meta.access), hex(meta.infer_filetype()))
-# 0xffffdd00 0x1b 0xfdd
+print(source, hex(meta.load_address), hex(meta.access), hex(meta.infer_filetype()))
+```
+
+Output:
+
+```text
+HELLO       00001900 00008023 00000100 03
+0 ffffdd00 ffffdd00 17
+inf-trad 0x1900 0x8023 0x3
+inf-pieb 0xffffdd00 0x1b 0xfdd
 ```
 
 ### Filename metadata encoding
 
-Three filename suffix conventions are supported for embedding load/exec
-addresses or RISC OS filetypes in host filenames.
+Three filename suffix conventions are read for embedding load/exec
+addresses or RISC OS filetypes in host filenames: `,xxx` (a filetype),
+`,load-exec` (as RISC OS HostFS and LanManFS write untyped files) and
+`,llllllll,eeeeeeee` (as python-zipinfo-riscos writes them). Writing uses
+the first two. A load address such as `&FFFF1900` carries the RISC OS
+filetype marker, so pass `typed_metadata=False` for files from an 8-bit
+filing system to keep their addresses.
 
 ```python
-from oaknut.file import parse_encoded_filename
+from oaknut.file import AcornMeta, build_filename_suffix, parse_encoded_filename
 
 # RISC OS filetype suffix (3 hex digits)
 clean, meta = parse_encoded_filename("PROG,ffb")
 print(clean, hex(meta.infer_filetype()))
-# PROG 0xffb
 
-# MOS load-exec suffix (variable-width hex)
+# Load-exec suffix (variable-width hex), as HostFS and LanManFS write it
 clean, meta = parse_encoded_filename("PROG,1900-801f")
 print(clean, hex(meta.load_address), hex(meta.exec_address))
-# PROG 0x1900 0x801f
+
+# Writing: ,xxx for a filetyped file, ,load-exec otherwise
+print(build_filename_suffix(AcornMeta(load_address=0xFFFFFB00, exec_address=0)))
+print(build_filename_suffix(AcornMeta(load_address=0x1900, exec_address=0x8023)))
+
+# &FFFF1900 carries the filetype marker; say when the words are addresses
+io_meta = AcornMeta(load_address=0xFFFF1900, exec_address=0xFFFF8023)
+print(build_filename_suffix(io_meta))
+print(build_filename_suffix(io_meta, typed_metadata=False))
+```
+
+Output:
+
+```text
+PROG 0xffb
+PROG 0x1900 0x801f
+,ffb
+,1900-8023
+,f19
+,ffff1900-ffff8023
 ```
 
 ### Filetype-stamped load addresses
@@ -159,15 +194,24 @@ from oaknut.file import AcornMeta
 
 meta = AcornMeta(load_address=0xFFFF0E10)
 print(meta.is_filetype_stamped, hex(meta.infer_filetype()))
-# True 0xf0e
+```
+
+Output:
+
+```text
+True 0xf0e
 ```
 
 ### Extended attributes
 
 ```python
-from oaknut.file import write_acorn_xattrs, read_acorn_xattrs
+from pathlib import Path
 
-# Write to user.acorn.* namespace
+from oaknut.file import read_acorn_xattrs, write_acorn_xattrs
+
+Path("myfile.bin").write_bytes(b"data")
+
+# Write to the user.acorn.* namespace
 write_acorn_xattrs(
     "myfile.bin",
     load_address=0x1900,
@@ -177,7 +221,13 @@ write_acorn_xattrs(
 
 # Read back (falls through to user.econet_* if user.acorn.* is absent)
 meta = read_acorn_xattrs("myfile.bin")
-print(meta.load_address, meta.exec_address, meta.access)
+print(hex(meta.load_address), hex(meta.exec_address), hex(meta.access))
+```
+
+Output:
+
+```text
+0x1900 0x8023 0x3
 ```
 
 ## Public API
@@ -188,9 +238,9 @@ print(meta.load_address, meta.exec_address, meta.access)
 | `oaknut.file.access_convention` | `AccessConvention`, `AccessContext`, `FILE_CONTEXT`, `DIRECTORY_CONTEXT`, `translate_access` |
 | `oaknut.file.pieb` | `PiEconetBridgeAccessConvention`, `PIEB_ACCESS` |
 | `oaknut.file.meta` | `AcornMeta` |
-| `oaknut.file.formats` | `MetaFormat`, `SOURCE_*` labels |
+| `oaknut.file.formats` | `MetaFormat`, `DEPRECATED_META_FORMATS`, `SOURCE_*` labels |
 | `oaknut.file.inf` | `parse_inf_line`, `format_trad_inf_line`, `format_pieb_inf_line`, `read_inf_file`, `write_inf_file` |
-| `oaknut.file.filename_encoding` | `parse_encoded_filename`, `build_filename_suffix`, `build_mos_filename_suffix` |
+| `oaknut.file.filename_encoding` | `parse_encoded_filename`, `build_filename_suffix`, `build_loadexec_filename_suffix` (`build_mos_filename_suffix` is a deprecated alias) |
 | `oaknut.file.xattr` | `read_acorn_xattrs`, `write_acorn_xattrs`, `read_econet_xattrs`, `write_econet_xattrs` |
 
 All public symbols are also re-exported from the top-level `oaknut.file` package.

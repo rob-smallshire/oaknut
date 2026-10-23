@@ -1,9 +1,11 @@
 """Build-time helper for CLI example recipes.
 
-Recipes under ``scripts/cli-examples/`` use the three helpers in
-this module to invoke the ``disc`` CLI and produce the
-``$ command``/output transcript that the ``cli-example`` Sphinx
-directive embeds in the manual.
+Recipes under ``scripts/cli-examples/`` use the helpers in this
+module to invoke the ``disc`` CLI and produce the ``$ command``/output
+transcript that the ``cli-example`` Sphinx directive embeds in the
+manual. Package README transcripts (``packages/*/readme/examples/``,
+rendered by ``scripts/render_readme.py``) use them too, for ``disc``
+and ``oaknut-zip`` alike.
 
 Two kinds of invocation:
 
@@ -49,6 +51,7 @@ from pathlib import Path
 __all__ = [
     "show",
     "show_error",
+    "show_xattrs",
     "silent",
     "section",
     "in_tmp_dir",
@@ -118,12 +121,19 @@ _REPORT_SUBCOMMANDS = frozenset(
 )
 
 
+#: The report subcommands of each CLI that shows ``--as`` choices.
+_REPORT_SUBCOMMANDS_BY_PROGRAM = {
+    "disc": _REPORT_SUBCOMMANDS,
+    "oaknut-zip": frozenset({"list"}),
+}
+
+
 def _needs_display_flag(command: str) -> bool:
     """Return True if we should append ``--as display`` to *command*.
 
-    True only when the command is a ``disc`` invocation, its
-    subcommand emits report output, and the caller has not already
-    set ``--as`` themselves.
+    True only when the command is a ``disc`` or ``oaknut-zip``
+    invocation, its subcommand emits report output, and the caller has
+    not already set ``--as`` themselves.
     """
     if "--as" in command:
         return False
@@ -131,12 +141,15 @@ def _needs_display_flag(command: str) -> bool:
         tokens = shlex.split(command)
     except ValueError:
         return False
-    if len(tokens) < 2 or tokens[0] != "disc":
+    if len(tokens) < 2:
+        return False
+    report_subcommands = _REPORT_SUBCOMMANDS_BY_PROGRAM.get(tokens[0])
+    if report_subcommands is None:
         return False
     # A top-level subcommand (`ls`) or a grouped one (`afs plan`).
-    if tokens[1] in _REPORT_SUBCOMMANDS:
+    if tokens[1] in report_subcommands:
         return True
-    return len(tokens) >= 3 and f"{tokens[1]} {tokens[2]}" in _REPORT_SUBCOMMANDS
+    return len(tokens) >= 3 and f"{tokens[1]} {tokens[2]}" in report_subcommands
 
 
 def _capture_env() -> dict[str, str]:
@@ -189,6 +202,27 @@ def show(command: str) -> None:
             f"  exit code: {result.returncode}\n"
         )
         sys.exit(result.returncode)
+
+
+def show_xattrs(filename: str) -> None:
+    """Show a file's extended attributes as ``xattr -l`` lists them.
+
+    Prints ``$ xattr -l FILENAME`` then one ``name: value`` line per
+    attribute, sorted by name. The attributes are read directly rather
+    than by running the macOS ``xattr`` command, so the transcript is the
+    same on Linux, whose equivalent is ``getfattr -d``.
+    """
+    print(f"$ xattr -l {filename}")
+    if hasattr(os, "listxattr"):
+        names = os.listxattr(filename)
+        values = {name: os.getxattr(filename, name) for name in names}
+    else:
+        import xattr
+
+        attributes = xattr.xattr(filename)
+        values = {name: attributes.get(name) for name in attributes.list()}
+    for name in sorted(values):
+        print(f"{name}: {values[name].decode('ascii')}")
 
 
 def show_error(command: str, *, returncode: int | None = None) -> None:

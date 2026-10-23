@@ -25,18 +25,21 @@ repos:
           src/oaknut/<name>/__init__.py instead.
 
       - id: render-readmes
-        name: Render README.md and README-pypi.md
+        name: Render the generated READMEs
         entry: uv run python scripts/render_readme.py
         language: system
         pass_filenames: false
-        files: ^(README\.md|README-pypi\.md|scripts/readme-templates/[^/]+\.j2|scripts/readme-examples/.*\.py|scripts/render_readme\.py|packages/oaknut-[^/]+/pyproject\.toml)$
+        always_run: true
         description: |
           README.md is generated from scripts/readme-templates/README.md.j2
           plus the example scripts in scripts/readme-examples/. README-pypi.md,
           the long description for the `oaknut` namespace placeholder
           distribution, is generated from scripts/readme-templates/README-pypi.md.j2.
-          Both are driven by each oaknut-* sub-package's pyproject.toml.
-          This hook re-runs the renderer on every commit that touches an
-          input or output — if either file changes on disk, pre-commit
-          fails the commit and you re-stage. The renderer also accepts
-          --check for CI.
+          Both are driven by each oaknut-* sub-package's pyproject.toml. A
+          package README with code output or command transcripts is generated
+          from packages/<package>/readme/README.md.j2 plus the examples in
+          packages/<package>/readme/examples/. The examples execute against
+          the workspace's own code, so the hook runs on every commit: a code
+          change that alters an example's output regenerates the README, and
+          pre-commit fails the commit so you re-stage. The renderer also
+          accepts --check for CI.
