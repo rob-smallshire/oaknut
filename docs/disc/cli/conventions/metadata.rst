@@ -16,9 +16,10 @@ address". The four commands that cross the host boundary —
 ``disc get``, ``disc put``, ``disc export``, ``disc import`` —
 therefore accept a ``--meta-format`` option that names how
 metadata is carried over the boundary. The choice has trade-offs,
-and the wrong choice silently loses information. This page is the
-single source of truth on what each format does and when each is
-the right pick.
+and the wrong choice silently loses information. This page describes
+what each format does in ``disc`` and when each is the right pick;
+:doc:`/host-metadata` describes the conventions themselves and where
+they come from.
 
 
 The four commands that cross the host boundary
@@ -123,9 +124,12 @@ SMB/CIFS shares, or most network protocols.
 **You want metadata to survive any host conversion.**
 Use ``filename-riscos`` or ``filename-mos``. The metadata is in
 the filename, so anything that preserves the filename preserves
-the metadata. ``filename-riscos`` is the modern RISC OS convention
-(many emulators and converters speak it); ``filename-mos`` is the
-older BBC MOS form.
+the metadata. ``filename-riscos`` writes ``,xxx`` for a filetyped
+file, the form RISC OS network filing systems and emulators share,
+and ``,llllllll,eeeeeeee`` for a file with load and exec addresses.
+``filename-mos`` writes every file, filetyped or not, in the
+``,load-exec`` form that LanManFS and the RPCEmu and Arculator
+``HostFS`` modules read.
 
 **You explicitly do not want metadata** (the file is plain data and
 will not go back).

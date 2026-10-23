@@ -40,5 +40,6 @@ for programs that consume the on-disc formats directly.
    :hidden:
    :caption: Reference
 
+   host-metadata
    glossary
    changelog
