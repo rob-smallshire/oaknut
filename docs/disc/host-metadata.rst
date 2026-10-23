@@ -333,6 +333,19 @@ and LanManFS do not read this form: they take the text after the
 *last* comma, find eight digits with no hyphen, and keep the whole
 string as the filename.
 
+Filetype or address?
+~~~~~~~~~~~~~~~~~~~~
+
+Every suffix writer decides between ``,xxx`` and a load/exec form by
+the RISC OS marker: a load address whose top twelve bits are ``&FFF``
+is written as a filetype. A BBC Micro file loading at an
+I/O-processor address such as ``&FFFF1900`` carries the same bits, so
+a ``HostFS``-style writer records it as ``,f19`` and its addresses do
+not survive. The ``,load-exec`` form holds any pair of words, so
+writing it for every file keeps such addresses, and a filetyped
+file's datestamp, intact; LanManFS and the ``HostFS`` modules read the
+result as the original load and exec words.
+
 Character translation
 ~~~~~~~~~~~~~~~~~~~~~
 
@@ -564,12 +577,14 @@ through the ``--meta-format`` option, described in
    * - ``xattr-pieb``
      - PiEconetBridge extended attributes
    * - ``filename-riscos``
-     - ``,xxx`` for typed files, ``,llllllll,eeeeeeee`` for untyped
-   * - ``filename-mos``
-     - ``,load-exec`` for every file, the LanManFS and ``HostFS``
-       untyped form
+     - ``,xxx`` for typed files, ``,load-exec`` for untyped, as
+       LanManFS and ``HostFS`` write them
+   * - ``filename-loadexec``
+     - ``,load-exec`` for every file
 
-``oaknut.zip`` reads the SparkFS extra field.
+Import reads all three suffix forms. ``filename-mos`` is a
+deprecated name for ``filename-loadexec``. ``oaknut.zip`` reads the
+SparkFS extra field.
 
 
 References

@@ -15,7 +15,7 @@ CLI. It provides:
 - The `Access` IntFlag enum for Acorn file attribute bytes
 - The `AcornMeta` dataclass for load/exec addresses and attributes
 - INF sidecar file parsing and formatting (traditional and PiEconetBridge variants)
-- Filename metadata encoding (`,xxx`, `,llllllll,eeeeeeee`, `,load-exec`)
+- Filename metadata encoding (`,xxx` and `,load-exec`; `,llllllll,eeeeeeee` read too)
 - Extended attribute read/write under `user.acorn.*` and `user.econet_*`
 
 ## Installation

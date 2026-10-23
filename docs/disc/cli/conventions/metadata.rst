@@ -87,11 +87,11 @@ Every host-boundary command accepts the same seven values:
    * - ``filename-riscos``
      - load, exec or filetype
      - Filename rewritten: ``foo,xxx`` for a filetype-stamped
-       file, ``foo,llllllll,eeeeeeee`` (8+8 lowercase hex) otherwise
-   * - ``filename-mos``
+       file, ``foo,load-exec`` (variable-width lowercase hex) otherwise
+   * - ``filename-loadexec``
      - load, exec
-     - Filename rewritten: ``foo,load-exec`` with variable-width
-       lowercase hex separated by a hyphen
+     - Filename rewritten: ``foo,load-exec`` for every file,
+       filetype-stamped or not
    * - ``none``
      - nothing
      - Just the bytes. Metadata is lost.
@@ -122,14 +122,18 @@ local copies on Linux/macOS but do not cross tar, ZIP, FAT,
 SMB/CIFS shares, or most network protocols.
 
 **You want metadata to survive any host conversion.**
-Use ``filename-riscos`` or ``filename-mos``. The metadata is in
+Use ``filename-riscos`` or ``filename-loadexec``. The metadata is in
 the filename, so anything that preserves the filename preserves
-the metadata. ``filename-riscos`` writes ``,xxx`` for a filetyped
-file, the form RISC OS network filing systems and emulators share,
-and ``,llllllll,eeeeeeee`` for a file with load and exec addresses.
-``filename-mos`` writes every file, filetyped or not, in the
-``,load-exec`` form that LanManFS and the RPCEmu and Arculator
-``HostFS`` modules read.
+the metadata. Both write the forms RISC OS LanManFS and the RPCEmu
+and Arculator ``HostFS`` modules read. ``filename-riscos`` writes
+``,xxx`` for a filetyped file and ``,load-exec`` for one with load
+and exec addresses, the choice for files bound for RISC OS.
+``filename-loadexec`` writes ``,load-exec`` for every file, keeping a
+filetyped file's datestamp and an 8-bit file's I/O-processor
+addresses (see `Cross-host gotchas`_), the choice for BBC Micro files.
+
+``filename-mos`` is a deprecated name for ``filename-loadexec``,
+accepted with a warning.
 
 **You explicitly do not want metadata** (the file is plain data and
 will not go back).
@@ -153,7 +157,7 @@ results:
    namespace before giving up on xattrs. A separate explicit
    ``--meta-format xattr-pieb`` cascade step would therefore be
    unreachable.
-3. **RISC OS filename suffix** — ``,xxx`` or
+3. **Filename suffix** — ``,xxx``, ``,load-exec`` or
    ``,llllllll,eeeeeeee`` at the end of the host filename.
 
 If none of the three yield metadata, the file is imported with
@@ -433,9 +437,16 @@ Cross-host gotchas
   ``filename-riscos`` keeps the count at 1000 — useful for
   filename-sensitive contexts like ZIP archives.
 - **Filename-encoded metadata changes the host filename.** A file
-  saved as ``$.PROG`` exports under ``filename-riscos`` as
-  ``PROG,FFFF1900,FFFF1900`` — handy for round-trip preservation,
-  but you cannot also use the host filename to identify the file.
+  saved as ``$.PROG`` with load address ``&1900`` and exec address
+  ``&8023`` exports under ``filename-riscos`` as ``PROG,1900-8023`` —
+  handy for round-trip preservation, but you cannot also use the host
+  filename to identify the file.
+- **``filename-riscos`` reads I/O-processor addresses as a filetype.**
+  An address such as ``&FFFF1900`` has the top twelve bits RISC OS
+  uses to mark a filetype, so ``filename-riscos`` writes the file as
+  ``PROG,f19`` and its addresses are lost, as RISC OS ``HostFS`` would
+  do. Export BBC Micro files with ``filename-loadexec``
+  (``PROG,ffff1900-ffff8023``) or ``inf-trad``.
 - **The Acorn-side filename is only preserved by ``inf-trad``.**
   All other formats use the host filename as the disc-side
   filename on re-import. If your Acorn filenames contain

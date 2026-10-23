@@ -140,9 +140,9 @@ the `list` and `info` commands, and as `--meta-format` choices for output:
 | `sparkfs`         | SparkFS/ARC0 extra fields in the ZIP structure                       | --- (not an output format)                                  |
 | `inf-trad`        | Bundled traditional `.inf` sidecar files                             | Traditional INF sidecar files                               |
 | `inf-pieb`        | Bundled PiEconetBridge `.inf` sidecar files                          | PiEconetBridge INF sidecar files                            |
-| `filename`        | Metadata encoded in filenames (`,xxx`, `,load,exec`, `,load-exec`)  | --- (not an output format)                                  |
-| `filename-riscos` | ---                                                                  | RISC OS filename encoding (`,xxx` or `,llllllll,eeeeeeee`) |
-| `filename-mos`    | ---                                                                  | MOS filename encoding (`,load-exec`)                        |
+| `filename`        | Metadata encoded in filenames (`,xxx`, `,load-exec`, `,load,exec`)  | --- (not an output format)                                  |
+| `filename-riscos` | ---                                                                  | RISC OS filename encoding (`,xxx` or `,load-exec`)          |
+| `filename-loadexec` | ---                                                                | Load/exec filename encoding (`,load-exec` for every file)   |
 | `xattr-acorn`     | ---                                                                  | Extended attributes (`user.acorn.*`)                        |
 | `xattr-pieb`      | ---                                                                  | Extended attributes (`user.econet_*`, PiEconetBridge)       |
 | `none`            | ---                                                                  | No metadata (raw extraction)                                |
@@ -266,29 +266,28 @@ oaknut-zip extract --meta-format filename-riscos NetUtils.zip
 ```
 
 Encodes metadata directly into the output filenames using comma-separated hex
-suffixes. No sidecar files are created. Filetype-stamped files get a `,xxx`
-suffix (e.g. `FILE,fdd`); files with literal load/exec addresses get
-`,llllllll,eeeeeeee` (e.g. `PROG,00001900,0000801f`).
+suffixes, in the forms RISC OS LanManFS and the RPCEmu and Arculator HostFS
+modules read. No sidecar files are created. Filetype-stamped files get a
+`,xxx` suffix (e.g. `FILE,fdd`); files with literal load/exec addresses get
+`,load-exec` (e.g. `PROG,1900-801f`).
 
 This is the most portable format --- it requires no filesystem-specific
 support and survives transfers between any systems. Files already carrying
 the correct suffix are not double-encoded.
 
-### Format 6: MOS filename encoding
+### Format 6: Load/exec filename encoding
 
 ```
-oaknut-zip extract --meta-format filename-mos NetUtils.zip
+oaknut-zip extract --meta-format filename-loadexec NetUtils.zip
 ```
 
-Encodes metadata into output filenames using the `,load-exec` convention
-documented in the [BeebWiki INF file format](https://beebwiki.mdfs.net/INF_file_format)
-specification. This format uses a comma prefix with load and exec addresses
-separated by a dash, with variable-width hex digits (no zero-padding):
-`,1900-801f`.
-
-This is the convention used by MOS and SparkFS when encoding addresses in
-filenames. Unlike the RISC OS form (Format 4), it always encodes full
-load/exec addresses and does not special-case filetype-stamped files.
+Encodes every file's load and exec addresses into its output filename as
+`,load-exec`: variable-width hex digits separated by a hyphen, with no
+zero-padding (`,1900-801f`). Unlike Format 5, it does not special-case
+filetype-stamped files, so a filetype's datestamp and a BBC Micro file's
+I/O-processor address (such as `&FFFF1900`, which Format 5 would write as
+the filetype `,f19`) survive. `filename-mos` is a deprecated name for this
+format.
 
 ### Format 7: No metadata
 
@@ -385,14 +384,14 @@ addresses for files that are not filetype-stamped:
 | Pattern                         | Example                    | Meaning                     |
 |---------------------------------|----------------------------|-----------------------------|
 | `filename,llllllll,eeeeeeee`    | `PROG,ffff0e10,0000801f`   | Load and exec addresses     |
-| `filename,load-exec`            | `PROG,1900-801f`           | Load and exec (MOS/SparkFS) |
+| `filename,load-exec`            | `PROG,1900-801f`           | Load and exec (HostFS)      |
 
 The first form is used by
 [python-zipinfo-riscos](https://github.com/gerph/python-zipinfo-riscos)
-and requires exactly 8 hex digits per address. The second form, documented
-in the [BeebWiki INF file format](https://beebwiki.mdfs.net/INF_file_format)
-specification, uses variable-width hex digits separated by a dash and is the
-convention used by MOS and SparkFS.
+and requires exactly 8 hex digits per address; oaknut-zip reads it but does
+not write it. The second form, written and read by RISC OS LanManFS and the
+RPCEmu and Arculator HostFS modules, uses variable-width hex digits separated
+by a hyphen.
 
 oaknut-zip strips these suffixes from output filenames during extraction.
 Use `--no-decode-filenames` to preserve the encoded filenames as-is.

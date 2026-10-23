@@ -355,7 +355,7 @@ We follow standard Unix flag spellings so users don't have to learn a parallel v
 
 ### Metadata format option
 
-Every command that exports or imports takes `--meta-format` with the same choices as oaknut-zip (`inf-trad`, `inf-pieb`, `xattr-acorn`, `xattr-pieb`, `filename-riscos`, `filename-mos`, `none`), defaulting to `inf-trad`. `--owner INT` for PiEB variants. No per-command divergence.
+Every command that exports or imports takes `--meta-format` with the same choices as oaknut-zip (`inf-trad`, `inf-pieb`, `xattr-acorn`, `xattr-pieb`, `filename-riscos`, `filename-loadexec`, `none`), generated from `MetaFormat` by `oaknut.cli.MetaFormatChoice`, which also accepts the deprecated `filename-mos` with a warning, defaulting to `inf-trad`. `--owner INT` for PiEB variants. No per-command divergence.
 
 ---
 

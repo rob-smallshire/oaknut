@@ -120,14 +120,18 @@ The values are:
        ``user.econet_exec``, ``user.econet_perm`` (PiEB's own layout),
        and ``user.econet_owner``.
    * - ``FILENAME_RISCOS``
-     - Metadata in the filename itself, RISC OS style. Either
-       ``name,xxx`` (a 3-digit hex filetype) or
-       ``name,llllllll,eeeeeeee`` (8-hex load + 8-hex exec) when
-       the file is not filetype-stamped.
-   * - ``FILENAME_MOS``
-     - Metadata in the filename, BBC MOS style:
-       ``name,load-exec`` with variable-width lowercase hex
-       separated by a hyphen.
+     - Metadata in the filename itself, as RISC OS LanManFS and
+       ``HostFS`` write it: ``name,xxx`` (a 3-digit hex filetype), or
+       ``name,load-exec`` (variable-width lowercase hex) when the file
+       is not filetype-stamped.
+   * - ``FILENAME_LOADEXEC``
+     - Metadata in the filename as ``name,load-exec`` for every file,
+       filetype-stamped or not, so datestamps and I/O-processor
+       addresses survive. ``FILENAME_MOS`` is a deprecated alias.
+
+The retired names, and the formats they now resolve to, are listed in
+:data:`oaknut.file.DEPRECATED_META_FORMATS`.
+:doc:`/host-metadata` describes each convention and its sources.
 
 Two host-side helpers compose the formats with file I/O:
 
@@ -158,7 +162,8 @@ Imports try a cascade in the order
    automatically falls back to ``user.econet_*`` when the
    ``user.acorn.*`` keys are absent on a file, so a separate
    ``XATTR_PIEB`` step in the cascade would be unreachable.
-3. ``FILENAME_RISCOS`` — the RISC OS filename suffix.
+3. ``FILENAME_RISCOS`` — a filename suffix, in any of the forms
+   ``,xxx``, ``,load-exec`` and ``,llllllll,eeeeeeee``.
 
 Callers can pass a different ``meta_formats=`` sequence to
 override the cascade — for example, listing ``XATTR_PIEB`` ahead
