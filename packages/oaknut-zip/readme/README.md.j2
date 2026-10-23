@@ -1,13 +1,16 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/rob-smallshire/oaknut-zip/main/docs/oaknut-zip-logo.png" alt="oaknut-zip" width="300">
+  <img src="https://raw.githubusercontent.com/rob-smallshire/oaknut/master/docs/zip/_static/oaknut-zip-logo.png" alt="oaknut-zip" width="300">
 </p>
 
 # oaknut-zip
 
 [![PyPI version](https://img.shields.io/pypi/v/oaknut-zip)](https://pypi.org/project/oaknut-zip/)
-[![CI](https://github.com/rob-smallshire/oaknut-zip/actions/workflows/tests.yml/badge.svg)](https://github.com/rob-smallshire/oaknut-zip/actions/workflows/tests.yml)
+[![CI](https://github.com/rob-smallshire/oaknut/actions/workflows/ci.yml/badge.svg)](https://github.com/rob-smallshire/oaknut/actions/workflows/ci.yml)
 [![Python versions](https://img.shields.io/pypi/pyversions/oaknut-zip)](https://pypi.org/project/oaknut-zip/)
-[![License: MIT](https://img.shields.io/pypi/l/oaknut-zip)](https://github.com/rob-smallshire/oaknut-zip/blob/main/LICENSE)
+[![License: MIT](https://img.shields.io/pypi/l/oaknut-zip)](https://github.com/rob-smallshire/oaknut/blob/master/packages/oaknut-zip/LICENSE)
+[![Documentation](https://img.shields.io/badge/docs-online-blue)](https://rob-smallshire.github.io/oaknut/zip/)
+
+**[Read the documentation](https://rob-smallshire.github.io/oaknut/zip/)** — getting started and the API reference.
 
 A Python tool for extracting ZIP files containing
 [Acorn computer](https://en.wikipedia.org/wiki/Acorn_Computers) metadata.
@@ -98,38 +101,26 @@ pick up new versions.
 
 ### Commands
 
-```
-$ oaknut-zip --help
-{{ help_output }}
-```
+{{ transcript("help") }}
 
 ## Inspecting an archive
 
 ### list --- tabular view of all entries
 
-```
-$ oaknut-zip list NetUtils.zip
-{{ list_output }}
-```
+{{ transcript("list", {"NetUtils.zip": "packages/oaknut-zip/tests/fixtures/NetUtils.zip"}) }}
 
 The **Source** column shows where the metadata was found (see the
-[format identifier table](#extracting-an-archive) below). The **Type** column
+[format identifier table](#extracting-an-archive) below). The **Filetype** column
 shows the RISC OS filetype extracted from the load address (when the top
 12 bits are `0xFFF`).
 
 ### info --- summary statistics
 
-```
-$ oaknut-zip info NetUtils.zip
-{{ info_output }}
-```
+{{ transcript("info", {"NetUtils.zip": "packages/oaknut-zip/tests/fixtures/NetUtils.zip"}) }}
 
 ## Extracting an archive
 
-```
-$ oaknut-zip extract --help
-{{ extract_help_output }}
-```
+{{ transcript("extract_help") }}
 
 oaknut-zip uses a consistent `<mechanism>-<flavour>` naming scheme for format
 identifiers. The same identifiers appear as metadata source labels in
@@ -155,9 +146,7 @@ oaknut-zip extract NetUtils.zip
 
 Each extracted file gets a companion `.inf` sidecar file:
 
-```
-{{ trad_inf_examples }}
-```
+{{ transcript("inf_trad", {"NetUtils.zip": "packages/oaknut-zip/tests/fixtures/NetUtils.zip"}) }}
 
 The fields are space-separated, with the filename left-padded to 11 characters:
 
@@ -185,9 +174,7 @@ oaknut-zip extract --meta-format inf-pieb NetUtils.zip
 Writes `.inf` sidecar files in the format used by
 [PiEconetBridge](https://github.com/cr12925/PiEconetBridge):
 
-```
-{{ pieb_inf_examples }}
-```
+{{ transcript("inf_pieb", {"NetUtils.zip": "packages/oaknut-zip/tests/fixtures/NetUtils.zip"}) }}
 
 The fields, all lowercase hex:
 
@@ -215,9 +202,7 @@ oaknut-zip extract --meta-format xattr-acorn NetUtils.zip
 Writes metadata directly into the filesystem's extended attributes using the
 `user.acorn.*` namespace, with no sidecar files:
 
-```
-{{ xattr_acorn_examples }}
-```
+{{ transcript("xattr_acorn", {"NetUtils.zip": "packages/oaknut-zip/tests/fixtures/NetUtils.zip"}) }}
 
 The attribute names and value formats:
 
@@ -240,9 +225,7 @@ oaknut-zip extract --meta-format xattr-pieb NetUtils.zip
 Writes metadata using the `user.econet_*` namespace defined by
 [PiEconetBridge](https://github.com/cr12925/PiEconetBridge):
 
-```
-{{ xattr_pieb_examples }}
-```
+{{ transcript("xattr_pieb", {"NetUtils.zip": "packages/oaknut-zip/tests/fixtures/NetUtils.zip"}) }}
 
 The attribute names and value formats match PiEconetBridge's C implementation
 exactly:
@@ -506,3 +489,7 @@ including integration tests against six real-world ZIP fixtures:
   Discussion of the metadata-loss problem that motivated this tool.
 - [INF format discussion](https://www.stardot.org.uk/forums/viewtopic.php?t=31577) ---
   Community discussion on INF format variants and standardisation.
+
+## License
+
+MIT — see [LICENSE](LICENSE).

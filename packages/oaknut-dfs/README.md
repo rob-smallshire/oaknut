@@ -56,7 +56,7 @@ a format explicitly only to override detection.
 from oaknut.dfs import DFS
 
 with DFS.from_file("Zalaga.ssd") as dfs:
-    print(dfs.title)  # 'ZALAG-L'
+    print(dfs.title)
 
     # Navigate with a pathlib-inspired API.
     for entry in dfs.root / "$":
@@ -65,16 +65,37 @@ with DFS.from_file("Zalaga.ssd") as dfs:
 
     # Read file data.
     data = (dfs.root / "$" / "ZALAGA").read_bytes()
+    print(len(data), "bytes")
+```
+
+Output:
+
+```text
+ZALAG-L
+ZALAGA?      11557  load=00003000
+ZALAGA        2816  load=000023EE
+ZALAG-L       3328  load=00001900
+!BOOT           48  load=00000000
+2816 bytes
 ```
 
 ### Creating a new disc
 
 ```python
-from oaknut.dfs import DFS, ACORN_DFS_80T_SINGLE_SIDED
+from oaknut.dfs import ACORN_DFS_80T_SINGLE_SIDED, DFS
 
 with DFS.create_file("demo.ssd", ACORN_DFS_80T_SINGLE_SIDED, title="DEMO") as dfs:
     (dfs.root / "$.HELLO").write_bytes(b"Hello, World!", load_address=0x1900)
     (dfs.root / "$.README").write_bytes(b"oaknut-dfs demo disc")
+
+with DFS.from_file("demo.ssd") as dfs:
+    print(dfs.title, [str(f.path) for f in dfs.files])
+```
+
+Output:
+
+```text
+DEMO ['$.README', '$.HELLO']
 ```
 
 ### Double-sided discs (DSD)
@@ -93,15 +114,40 @@ with DFS.from_file("game.dsd", side=1) as side2:
     print(side2.title)
 ```
 
+Output:
+
+```text
+SIDE0
+SIDE1
+```
+
 ### Walking the disc
 
 DFS directories (`$`, `A`–`Z`) appear as children of a virtual root:
 
 ```python
+from oaknut.dfs import DFS
+
 with DFS.from_file("disc.ssd") as dfs:
     for dirpath, dirnames, filenames in dfs.root.walk():
         for name in filenames:
             print(dirpath / name)
+```
+
+Output:
+
+```text
+$.LOCKED
+$.BINARY
+$.ABCDEFG
+$.X
+$.MULTI
+$.TEXT
+B.FILE2
+B.FILE1
+A.DATA3
+A.DATA2
+A.DATA1
 ```
 
 ## Development

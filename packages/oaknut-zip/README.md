@@ -123,27 +123,27 @@ Commands:
 
 ```
 $ oaknut-zip list NetUtils.zip
-                             NetUtils.zip                              
-┏━━━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━┳━━━━━━┳━━━━━━━━━┓
-┃ Filename   ┃     Load ┃     Exec ┃   Length ┃ Attr ┃ Type ┃ Source  ┃
-┡━━━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━╇━━━━━━╇━━━━━━━━━┩
-│ Free       │ FFFF0E10 │ FFFF0E10 │ 000001E6 │ LR/R │  F0E │ sparkfs │
-│ FSList     │ FFFF0900 │ FFFF0900 │ 00000200 │ LR/R │  F09 │ sparkfs │
-│ PSList     │ FFFF0900 │ FFFF0900 │ 000001B5 │ LR/R │  F09 │ sparkfs │
-│ Notify     │ FFFF0E23 │ FFFF0E23 │ 0000012A │ LR/R │  F0E │ sparkfs │
-│ Remote     │ FFFF0E10 │ FFFF0E10 │ 000001ED │ LR/R │  F0E │ sparkfs │
-│ Servers    │ FFFF0900 │ FFFF091A │ 000001CF │ LR/R │  F09 │ sparkfs │
-│ SetStation │ FFFFDD00 │ FFFFDD00 │ 00000200 │ LR/R │  FDD │ sparkfs │
-│ Stations   │ FFFF08D5 │ FFFF08E1 │ 0000022B │ WR/R │  F08 │ sparkfs │
-│ SJMon      │ FFFF1B00 │ FFFF1B00 │ 00000D7E │  LR/ │  F1B │ sparkfs │
-│ Users      │ FFFF0E23 │ FFFF0E23 │ 00000139 │ LR/R │  F0E │ sparkfs │
-│ View       │ FFFF0900 │ FFFF0904 │ 000001FF │ LR/R │  F09 │ sparkfs │
-│ ReadMe     │ FFFFFF52 │ 2FEEAFD0 │ 00000255 │  R/R │  FFF │ sparkfs │
-└────────────┴──────────┴──────────┴──────────┴──────┴──────┴─────────┘
+                                NetUtils.zip                                 
+┏━━━━━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━━━━┳━━━━━━┳━━━━━━━━━┓
+┃ Filename   ┃ Load       ┃ Exec       ┃ Length ┃ Filetype ┃ Attr ┃ Source  ┃
+┡━━━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━━━━╇━━━━━━╇━━━━━━━━━┩
+│ Free       │ 0xFFFF0E10 │ 0xFFFF0E10 │ 486    │ &F0E     │ LR/R │ sparkfs │
+│ FSList     │ 0xFFFF0900 │ 0xFFFF0900 │ 512    │ &F09     │ LR/R │ sparkfs │
+│ PSList     │ 0xFFFF0900 │ 0xFFFF0900 │ 437    │ &F09     │ LR/R │ sparkfs │
+│ Notify     │ 0xFFFF0E23 │ 0xFFFF0E23 │ 298    │ &F0E     │ LR/R │ sparkfs │
+│ Remote     │ 0xFFFF0E10 │ 0xFFFF0E10 │ 493    │ &F0E     │ LR/R │ sparkfs │
+│ Servers    │ 0xFFFF0900 │ 0xFFFF091A │ 463    │ &F09     │ LR/R │ sparkfs │
+│ SetStation │ 0xFFFFDD00 │ 0xFFFFDD00 │ 512    │ &FDD     │ LR/R │ sparkfs │
+│ Stations   │ 0xFFFF08D5 │ 0xFFFF08E1 │ 555    │ &F08     │ WR/R │ sparkfs │
+│ SJMon      │ 0xFFFF1B00 │ 0xFFFF1B00 │ 3454   │ &F1B     │ LR/  │ sparkfs │
+│ Users      │ 0xFFFF0E23 │ 0xFFFF0E23 │ 313    │ &F0E     │ LR/R │ sparkfs │
+│ View       │ 0xFFFF0900 │ 0xFFFF0904 │ 511    │ &F09     │ LR/R │ sparkfs │
+│ ReadMe     │ 0xFFFFFF52 │ 0x2FEEAFD0 │ 597    │ Text     │ R/R  │ sparkfs │
+└────────────┴────────────┴────────────┴────────┴──────────┴──────┴─────────┘
 ```
 
 The **Source** column shows where the metadata was found (see the
-[format identifier table](#extracting-an-archive) below). The **Type** column
+[format identifier table](#extracting-an-archive) below). The **Filetype** column
 shows the RISC OS filetype extracted from the load address (when the top
 12 bits are `0xFFF`).
 
@@ -249,10 +249,10 @@ Writes `.inf` sidecar files in the format used by
 
 ```
 $ cat SetStation.inf
-0 ffffdd00 ffffdd00 5d
+0 ffffdd00 ffffdd00 15
 
 $ cat ReadMe.inf
-0 ffffff52 2feeafd0 55
+0 ffffff52 2feeafd0 11
 ```
 
 The fields, all lowercase hex:
@@ -319,13 +319,13 @@ $ xattr -l SetStation
 user.econet_exec: FFFFDD00
 user.econet_load: FFFFDD00
 user.econet_owner: 0000
-user.econet_perm: 5D
+user.econet_perm: 15
 
 $ xattr -l ReadMe
 user.econet_exec: 2FEEAFD0
 user.econet_load: FFFFFF52
 user.econet_owner: 0000
-user.econet_perm: 55
+user.econet_perm: 11
 ```
 
 The attribute names and value formats match PiEconetBridge's C implementation

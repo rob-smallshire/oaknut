@@ -1,0 +1,130 @@
+# oaknut-file
+
+[![PyPI version](https://img.shields.io/pypi/v/oaknut-file)](https://pypi.org/project/oaknut-file/)
+[![CI](https://github.com/rob-smallshire/oaknut/actions/workflows/ci.yml/badge.svg)](https://github.com/rob-smallshire/oaknut/actions/workflows/ci.yml)
+[![Python versions](https://img.shields.io/pypi/pyversions/oaknut-file)](https://pypi.org/project/oaknut-file/)
+[![License: MIT](https://img.shields.io/pypi/l/oaknut-file)](https://github.com/rob-smallshire/oaknut/blob/master/packages/oaknut-file/LICENSE)
+
+Acorn file metadata handling for the oaknut package family.
+
+`oaknut-file` is the shared metadata layer used across the
+[oaknut](https://github.com/rob-smallshire/oaknut) family — by
+`oaknut-dfs`, `oaknut-adfs`, `oaknut-afs`, `oaknut-zip`, and the `disc`
+CLI. It provides:
+
+- The `Access` IntFlag enum for Acorn file attribute bytes
+- The `AcornMeta` dataclass for load/exec addresses and attributes
+- INF sidecar file parsing and formatting (traditional and PiEconetBridge variants)
+- Filename metadata encoding (`,xxx` and `,load-exec`; `,llllllll,eeeeeeee` read too)
+- Extended attribute read/write under `user.acorn.*` and `user.econet_*`
+
+## Installation
+
+Using [uv](https://docs.astral.sh/uv/) (recommended):
+
+```bash
+uv add oaknut-file
+```
+
+`pip install oaknut-file` also works.
+
+The `xattr` package is automatically installed on macOS, where it is
+required for extended attribute support. Linux uses `os.setxattr` from
+the standard library and needs no additional dependency. Windows does
+not support extended attributes; the xattr functions will raise on use.
+
+## Quick start
+
+### Access flags
+
+The `Access` IntFlag enum represents the standard Acorn OSFILE attribute byte,
+as stored in traditional `.inf` files and the `user.acorn.attr` extended
+attribute. (PiEconetBridge's own `perm` byte uses a different layout; see
+below.)
+
+{{ example("access_flags") }}
+
+| Flag | Value | Meaning |
+|------|-------|---------|
+| `Access.R`  | 0x01 | Owner read |
+| `Access.W`  | 0x02 | Owner write |
+| `Access.E`  | 0x04 | Owner execute |
+| `Access.L`  | 0x08 | Locked — prevents delete, overwrite, and rename on the disc filing systems |
+| `Access.PR` | 0x10 | Public read |
+| `Access.PW` | 0x20 | Public write |
+
+A `*RUN`-only file — one that may be `*RUN` but not `*LOAD`ed, the
+cassette/ROM copy protection — is owner `E` without `R`, which
+`Access.is_run_only` tests. It is a distinct axis from `Access.L`
+(locked): a delete-locked disc file is not run-only. `Access.WR` and
+`Access.LWR` are provided as convenience composites for the common
+owner-read+write and locked-owner-read+write cases.
+
+### INF sidecar files
+
+Two INF sidecar formats are supported. `parse_inf_line()` auto-detects which
+format a line uses, while `format_trad_inf_line()` and `format_pieb_inf_line()`
+let you choose explicitly when writing.
+
+Traditional `.inf` files are read and written per the
+[Stardot INF format specification](https://github.com/stardot/inf_format/blob/main/inf_format_full.md),
+with J.G. Harston's defaults
+([Storing Acorn/BBC metadata on other systems](https://mdfs.net/Docs/Comp/BBC/Filing/Metadata))
+where it leaves room: a missing access field means `&33`, a `Locked` or bare
+`L` marker `&19`, and a missing exec address is the load address. Quoted and
+percent-encoded names, the `TAPE` prefix, extra fields such as `CRC=` and
+`NEXT` are understood, and six-digit DFS-style addresses (`FF0E00`) are
+widened to `&FFFF0E00`. A name is held in its medium's own character set:
+`format_trad_inf_line`, `parse_inf_line` and `read_inf_file` take that
+codec as `encoding` (for example `"acorn"` for DFS, where `£` is byte `&60`),
+and `export_with_metadata` and `import_with_metadata` take it as
+`name_encoding`. Each defaults to Latin-1.
+
+PiEconetBridge's `perm` byte swaps the lock (`0x04`) and execute-only (`0x08`)
+bits relative to the Acorn byte, and uses `0x80` for hidden. The PiEB INF and
+`user.econet_perm` functions translate it, so callers always see the Acorn
+byte.
+
+{{ example("inf_sidecars") }}
+
+### Filename metadata encoding
+
+Three filename suffix conventions are read for embedding load/exec
+addresses or RISC OS filetypes in host filenames: `,xxx` (a filetype),
+`,load-exec` (as RISC OS HostFS and LanManFS write untyped files) and
+`,llllllll,eeeeeeee` (as python-zipinfo-riscos writes them). Writing uses
+the first two. A load address such as `&FFFF1900` carries the RISC OS
+filetype marker, so pass `typed_metadata=False` for files from an 8-bit
+filing system to keep their addresses.
+
+{{ example("filename_encoding") }}
+
+### Filetype-stamped load addresses
+
+When a load address has its top 12 bits set to `0xFFF`, the next 12 bits
+encode a RISC OS filetype.
+
+{{ example("filetype_stamped") }}
+
+### Extended attributes
+
+{{ example("xattrs") }}
+
+## Public API
+
+| Module | Exports |
+|--------|---------|
+| `oaknut.file.access` | `Access`, `parse_access`, `parse_access_spec`, `format_access_hex`, `format_access_text` |
+| `oaknut.file.access_convention` | `AccessConvention`, `AccessContext`, `FILE_CONTEXT`, `DIRECTORY_CONTEXT`, `translate_access` |
+| `oaknut.file.pieb` | `PiEconetBridgeAccessConvention`, `PIEB_ACCESS` |
+| `oaknut.file.meta` | `AcornMeta` |
+| `oaknut.file.formats` | `MetaFormat`, `DEPRECATED_META_FORMATS`, `SOURCE_*` labels |
+| `oaknut.file.inf` | `parse_inf_line`, `format_trad_inf_line`, `format_pieb_inf_line`, `read_inf_file`, `write_inf_file` |
+| `oaknut.file.filename_encoding` | `parse_encoded_filename`, `build_filename_suffix`, `build_loadexec_filename_suffix` (`build_mos_filename_suffix` is a deprecated alias) |
+| `oaknut.file.xattr` | `read_acorn_xattrs`, `write_acorn_xattrs`, `read_econet_xattrs`, `write_econet_xattrs` |
+
+All public symbols are also re-exported from the top-level `oaknut.file` package.
+
+## License
+
+MIT

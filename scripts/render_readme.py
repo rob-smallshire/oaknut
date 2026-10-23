@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""Render README.md and README-pypi.md from their Jinja2 templates.
+"""Render the workspace's READMEs from their Jinja2 templates.
 
-Both READMEs are generated from each oaknut-* sub-package's pyproject.toml:
+The root README.md and README-pypi.md are generated from each oaknut-*
+sub-package's pyproject.toml:
 
 - README.md is the developer-facing landing page on GitHub. Its template,
   scripts/readme-templates/README.md.j2, also embeds Python example scripts
@@ -13,10 +14,26 @@ Both READMEs are generated from each oaknut-* sub-package's pyproject.toml:
   scripts/readme-templates/README-pypi.md.j2, only lists the family
   members with PyPI links.
 
+A package whose README shows code output or command transcripts keeps a
+template at packages/<package>/readme/README.md.j2, rendered to
+packages/<package>/README.md. Its examples live in
+packages/<package>/readme/examples/.
+
+Templates call two functions, each of which executes an example script in
+a fresh temporary directory, with ``scripts/`` on ``PYTHONPATH``:
+
+- ``example(name, fixtures=...)`` shows a Python example's source and its
+  output.
+- ``transcript(name, fixtures=...)`` shows only the output of a recipe that
+  prints a ``$ command`` transcript using ``cli_example_helper.show``.
+
+*fixtures* maps file names in the temporary directory to repository-relative
+paths copied there first.
+
 Usage:
-    python scripts/render_readme.py          # write both READMEs
-    python scripts/render_readme.py --check  # verify both are fresh;
-                                             # exit 1 if either is stale
+    python scripts/render_readme.py          # write every README
+    python scripts/render_readme.py --check  # verify all are fresh;
+                                             # exit 1 if any is stale
 
 The --check mode is what the pre-commit hook runs.
 """
@@ -24,19 +41,28 @@ The --check mode is what the pre-commit hook runs.
 from __future__ import annotations
 
 import argparse
+import os
+import shutil
 import subprocess
 import sys
+import tempfile
 import tomllib
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
+from functools import partial
 from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-TEMPLATE_DIRPATH = REPO_ROOT / "scripts" / "readme-templates"
-EXAMPLES_DIRPATH = REPO_ROOT / "scripts" / "readme-examples"
+SCRIPTS_DIRPATH = REPO_ROOT / "scripts"
+TEMPLATE_DIRPATH = SCRIPTS_DIRPATH / "readme-templates"
+EXAMPLES_DIRPATH = SCRIPTS_DIRPATH / "readme-examples"
 PACKAGES_DIRPATH = REPO_ROOT / "packages"
+
+#: Per-package template location, relative to the package directory.
+PACKAGE_README_DIRNAME = "readme"
+PACKAGE_EXAMPLES_DIRNAME = "examples"
 
 README_TEMPLATE_FILENAME = "README.md.j2"
 README_OUTPUT_FILEPATH = REPO_ROOT / "README.md"
@@ -92,45 +118,87 @@ def load_packages(order: tuple[str, ...] = PACKAGE_ORDER) -> list[PackageMeta]:
     return ordered
 
 
-def render_example(example_name: str) -> str:
-    """Return a Markdown code block showing an example script and its stdout.
+def _run_example(
+    examples_dirpath: Path, example_name: str, fixtures: Mapping[str, str] | None
+) -> tuple[str, str]:
+    """Execute an example script; return its source and its stdout.
 
-    The example is a standalone .py file under scripts/readme-examples/. We
-    execute it with the workspace python (so local editable installs
-    resolve), capture stdout, and render:
-
-        ```python
-        <source, with the module docstring stripped>
-        ```
-
-        ```text
-        <stdout>
-        ```
+    The script runs with the workspace python (so local editable installs
+    resolve) in a fresh temporary directory, into which each *fixtures*
+    entry — target file name to repository-relative source path — is
+    copied first. ``scripts/`` is on ``PYTHONPATH`` so recipes can import
+    ``cli_example_helper``. A failing example is an error, so a stale one
+    cannot render.
     """
-    example_filepath = EXAMPLES_DIRPATH / f"{example_name}.py"
+    example_filepath = (examples_dirpath / f"{example_name}.py").resolve()
     if not example_filepath.is_file():
         raise FileNotFoundError(f"example not found: {example_filepath}")
 
-    source = example_filepath.read_text()
-    source_for_readme = _strip_module_docstring(source).strip() + "\n"
-
-    result = subprocess.run(
-        [sys.executable, str(example_filepath)],
-        capture_output=True,
-        text=True,
-        check=False,
-        cwd=REPO_ROOT,
-    )
+    env = {
+        **os.environ,
+        "PYTHONPATH": os.pathsep.join(
+            [str(SCRIPTS_DIRPATH), *filter(None, [os.environ.get("PYTHONPATH")])]
+        ),
+        "COLUMNS": "80",
+    }
+    work_dirpath = Path(tempfile.mkdtemp(prefix="oaknut-readme-"))
+    try:
+        for target_filename, source_relpath in (fixtures or {}).items():
+            shutil.copy2(REPO_ROOT / source_relpath, work_dirpath / target_filename)
+        result = subprocess.run(
+            [sys.executable, str(example_filepath)],
+            capture_output=True,
+            text=True,
+            check=False,
+            cwd=work_dirpath,
+            env=env,
+        )
+    finally:
+        shutil.rmtree(work_dirpath, ignore_errors=True)
     if result.returncode != 0:
         raise RuntimeError(
             f"example {example_name!r} failed with exit {result.returncode}:\n"
             f"--- stdout ---\n{result.stdout}"
             f"--- stderr ---\n{result.stderr}"
         )
+    return example_filepath.read_text(), result.stdout
 
-    output = result.stdout.rstrip() + "\n"
 
+def render_example(
+    example_name: str,
+    fixtures: Mapping[str, str] | None = None,
+    *,
+    examples_dirpath: Path = EXAMPLES_DIRPATH,
+) -> str:
+    """Return a Markdown code block showing an example script and its stdout.
+
+    Renders:
+
+        ```python
+        <source, with the module docstring stripped>
+        ```
+
+        Output:
+
+        ```text
+        <stdout>
+        ```
+    """
+    source, stdout = _run_example(examples_dirpath, example_name, fixtures)
+    source_for_readme = _strip_module_docstring(source).strip() + "\n"
+    output = stdout.rstrip() + "\n"
     return f"```python\n{source_for_readme}```\n\nOutput:\n\n```text\n{output}```"
+
+
+def render_transcript(
+    example_name: str,
+    fixtures: Mapping[str, str] | None = None,
+    *,
+    examples_dirpath: Path = EXAMPLES_DIRPATH,
+) -> str:
+    """Return a Markdown code block holding a recipe's ``$ command`` transcript."""
+    _source, stdout = _run_example(examples_dirpath, example_name, fixtures)
+    return f"```\n{stdout.rstrip()}\n```"
 
 
 def _strip_module_docstring(source: str) -> str:
@@ -151,9 +219,9 @@ def _strip_module_docstring(source: str) -> str:
     return leading_ws + after_docstring.lstrip("\n")
 
 
-def _jinja_env() -> Environment:
+def _jinja_env(template_dirpath: Path = TEMPLATE_DIRPATH) -> Environment:
     return Environment(
-        loader=FileSystemLoader(TEMPLATE_DIRPATH),
+        loader=FileSystemLoader(template_dirpath),
         undefined=StrictUndefined,
         keep_trailing_newline=True,
         trim_blocks=False,
@@ -174,6 +242,16 @@ def render_pypi_readme() -> str:
     return template.render(packages=load_packages(order=()))
 
 
+def render_package_readme(package_dirpath: Path) -> str:
+    readme_dirpath = package_dirpath / PACKAGE_README_DIRNAME
+    examples_dirpath = readme_dirpath / PACKAGE_EXAMPLES_DIRNAME
+    template = _jinja_env(readme_dirpath).get_template(README_TEMPLATE_FILENAME)
+    return template.render(
+        example=partial(render_example, examples_dirpath=examples_dirpath),
+        transcript=partial(render_transcript, examples_dirpath=examples_dirpath),
+    )
+
+
 @dataclass(frozen=True)
 class RenderTarget:
     name: str
@@ -181,9 +259,27 @@ class RenderTarget:
     render: Callable[[], str]
 
 
+def _package_targets() -> tuple[RenderTarget, ...]:
+    """A target for each package that keeps a README template."""
+    return tuple(
+        RenderTarget(
+            str(package_dirpath.relative_to(REPO_ROOT) / "README.md"),
+            package_dirpath / "README.md",
+            partial(render_package_readme, package_dirpath),
+        )
+        for package_dirpath in sorted(
+            template_filepath.parent.parent
+            for template_filepath in PACKAGES_DIRPATH.glob(
+                f"oaknut-*/{PACKAGE_README_DIRNAME}/{README_TEMPLATE_FILENAME}"
+            )
+        )
+    )
+
+
 TARGETS: tuple[RenderTarget, ...] = (
     RenderTarget("README.md", README_OUTPUT_FILEPATH, render_readme),
     RenderTarget("README-pypi.md", PYPI_README_OUTPUT_FILEPATH, render_pypi_readme),
+    *_package_targets(),
 )
 
 
@@ -193,7 +289,7 @@ def main() -> int:
         "--check",
         action="store_true",
         help="Verify the generated READMEs are up to date without writing. "
-        "Exits 1 if either is stale.",
+        "Exits 1 if any is stale.",
     )
     args = parser.parse_args()
 
