@@ -24,6 +24,7 @@ from exit_codes import ExitCode
 from natsort import natsort_keygen, ns
 from oaknut.cli import (
     SECTOR_SIZE,
+    MetaFormatChoice,
     address_cell,
     bytes_cell,
     contributed_commands,
@@ -1601,18 +1602,7 @@ def repair(
 @click.argument("host_path", required=False, default=None)
 @click.option(
     "--meta-format",
-    type=click.Choice(
-        [
-            "inf-trad",
-            "inf-pieb",
-            "xattr-acorn",
-            "xattr-pieb",
-            "filename-riscos",
-            "filename-mos",
-            "none",
-        ],
-        case_sensitive=False,
-    ),
+    type=MetaFormatChoice(),
     default="inf-trad",
     help="Metadata sidecar format.",
 )
@@ -1640,7 +1630,7 @@ def get(
     preserved alongside the data file according to ``--meta-format``.
     The default ``inf-trad`` writes a traditional ``HOST_PATH.inf``
     sidecar; ``xattr-acorn`` stashes the metadata in host extended
-    attributes; ``filename-riscos``/``filename-mos`` encode it into
+    attributes; ``filename-riscos``/``filename-loadexec`` encode it into
     the host filename; ``none`` drops it entirely. See
     :doc:`/cli/conventions/metadata` for the full mapping and
     trade-offs.
@@ -1861,18 +1851,7 @@ def _access_override(access_spec: str | None):
 )
 @click.option(
     "--meta-format",
-    type=click.Choice(
-        [
-            "inf-trad",
-            "inf-pieb",
-            "xattr-acorn",
-            "xattr-pieb",
-            "filename-riscos",
-            "filename-mos",
-            "none",
-        ],
-        case_sensitive=False,
-    ),
+    type=MetaFormatChoice(),
     default=None,
     help="Metadata format to read from host file.",
 )
@@ -4106,18 +4085,7 @@ def compact(
 @click.argument("host_dir", type=click.Path(path_type=Path))
 @click.option(
     "--meta-format",
-    type=click.Choice(
-        [
-            "inf-trad",
-            "inf-pieb",
-            "xattr-acorn",
-            "xattr-pieb",
-            "filename-riscos",
-            "filename-mos",
-            "none",
-        ],
-        case_sensitive=False,
-    ),
+    type=MetaFormatChoice(),
     default="inf-trad",
     help="Metadata sidecar format.",
 )
@@ -4225,18 +4193,7 @@ def _export_recursive(
 @click.argument("host_dir", type=click.Path(exists=True, path_type=Path))
 @click.option(
     "--meta-format",
-    type=click.Choice(
-        [
-            "inf-trad",
-            "inf-pieb",
-            "xattr-acorn",
-            "xattr-pieb",
-            "filename-riscos",
-            "filename-mos",
-            "none",
-        ],
-        case_sensitive=False,
-    ),
+    type=MetaFormatChoice(),
     default=None,
     help="Metadata format to read from host files.",
 )

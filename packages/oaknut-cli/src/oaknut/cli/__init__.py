@@ -11,7 +11,9 @@ It provides:
   registered by filesystem packages on the ``oaknut.command`` entry-point
   namespace (see :func:`contributed_commands`); and
 - report-rendering helpers shared between the generic ``disc`` commands
-  and the contributed ones.
+  and the contributed ones; and
+- the ``--meta-format`` choice type the host-boundary commands of
+  ``disc`` and ``zip`` share (see :class:`MetaFormatChoice`).
 
 See ``docs/dev/contributed-commands.md`` for the design.
 """
@@ -28,6 +30,7 @@ from oaknut.cli.help import (
     strip_rst,
     use_plain_help,
 )
+from oaknut.cli.meta_format import META_FORMAT_NONE, MetaFormatChoice
 from oaknut.cli.reports import (
     SECTOR_SIZE,
     address_cell,
@@ -49,6 +52,8 @@ __all__ = [
     "PlainHelpFormatter",
     "strip_rst",
     "use_plain_help",
+    "META_FORMAT_NONE",
+    "MetaFormatChoice",
     "SECTOR_SIZE",
     "address_cell",
     "bytes_cell",
