@@ -1,9 +1,5 @@
-# oaknut-dfs
-
-[![PyPI version](https://img.shields.io/pypi/v/oaknut-dfs)](https://pypi.org/project/oaknut-dfs/)
-[![CI](https://github.com/rob-smallshire/oaknut/actions/workflows/ci.yml/badge.svg)](https://github.com/rob-smallshire/oaknut/actions/workflows/ci.yml)
-[![Python versions](https://img.shields.io/pypi/pyversions/oaknut-dfs)](https://pypi.org/project/oaknut-dfs/)
-[![License: MIT](https://img.shields.io/pypi/l/oaknut-dfs)](https://github.com/rob-smallshire/oaknut/blob/master/packages/oaknut-dfs/LICENSE)
+{% import "package.md.j2" as common -%}
+{{ common.header(package) }}
 
 A Python library for reading, writing, and creating
 [Acorn DFS](https://en.wikipedia.org/wiki/Disc_Filing_System) floppy disc
@@ -129,6 +125,4 @@ metadata and the `acorn` codec in `oaknut-file`; BBC BASIC
   J.G. Harston's INF and ZIP metadata rules, used where the Stardot
   specification leaves room.
 
-## License
-
-MIT — see [LICENSE](LICENSE).
+{{ common.license() }}

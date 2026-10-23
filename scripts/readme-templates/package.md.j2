@@ -1,0 +1,31 @@
+{#- Shared pieces of every package README. Import with:
+      {% import "package.md.j2" as common %}
+-#}
+
+{% macro header(package, docs_summary=None) -%}
+{% if package.docs_body -%}
+<p align="center">
+  <img src="https://raw.githubusercontent.com/rob-smallshire/oaknut/master/docs/{{ package.docs_body }}/_static/{{ package.name }}-logo.png" alt="{{ package.name }}" width="300">
+</p>
+
+{% endif -%}
+# {{ package.name }}
+
+[![PyPI version](https://img.shields.io/pypi/v/{{ package.name }})](https://pypi.org/project/{{ package.name }}/)
+[![CI](https://github.com/rob-smallshire/oaknut/actions/workflows/ci.yml/badge.svg)](https://github.com/rob-smallshire/oaknut/actions/workflows/ci.yml)
+[![Python versions](https://img.shields.io/pypi/pyversions/{{ package.name }})](https://pypi.org/project/{{ package.name }}/)
+[![License: MIT](https://img.shields.io/pypi/l/{{ package.name }})](https://github.com/rob-smallshire/oaknut/blob/master/packages/{{ package.name }}/LICENSE)
+{%- if package.docs_body %}
+[![Documentation](https://img.shields.io/badge/docs-online-blue)](https://rob-smallshire.github.io/oaknut/{{ package.docs_body }}/)
+{%- if docs_summary %}
+
+**[Read the documentation](https://rob-smallshire.github.io/oaknut/{{ package.docs_body }}/)** — {{ docs_summary }}
+{%- endif %}
+{%- endif %}
+{%- endmacro %}
+
+{% macro license() -%}
+## License
+
+MIT — see [LICENSE](LICENSE).
+{%- endmacro %}

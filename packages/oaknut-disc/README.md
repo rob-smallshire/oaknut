@@ -7,7 +7,7 @@
 [![PyPI version](https://img.shields.io/pypi/v/oaknut-disc)](https://pypi.org/project/oaknut-disc/)
 [![CI](https://github.com/rob-smallshire/oaknut/actions/workflows/ci.yml/badge.svg)](https://github.com/rob-smallshire/oaknut/actions/workflows/ci.yml)
 [![Python versions](https://img.shields.io/pypi/pyversions/oaknut-disc)](https://pypi.org/project/oaknut-disc/)
-[![License: MIT](https://img.shields.io/pypi/l/oaknut-disc)](https://github.com/rob-smallshire/oaknut)
+[![License: MIT](https://img.shields.io/pypi/l/oaknut-disc)](https://github.com/rob-smallshire/oaknut/blob/master/packages/oaknut-disc/LICENSE)
 [![Documentation](https://img.shields.io/badge/docs-online-blue)](https://rob-smallshire.github.io/oaknut/disc/)
 
 **[Read the documentation](https://rob-smallshire.github.io/oaknut/disc/)** — full walkthrough, cookbook, and command reference.
@@ -71,4 +71,4 @@ disc tree scsi0.dat
 
 ## License
 
-MIT.
+MIT — see [LICENSE](LICENSE).

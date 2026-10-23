@@ -52,7 +52,7 @@ from dataclasses import dataclass
 from functools import partial
 from pathlib import Path
 
-from jinja2 import Environment, FileSystemLoader, StrictUndefined
+from jinja2 import ChoiceLoader, Environment, FileSystemLoader, StrictUndefined
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SCRIPTS_DIRPATH = REPO_ROOT / "scripts"
@@ -89,6 +89,8 @@ class PackageMeta:
     name: str
     import_path: str
     description: str
+    #: The docs/<body>/ Sphinx manual dedicated to this package, if any.
+    docs_body: str | None = None
 
 
 def load_packages(order: tuple[str, ...] = PACKAGE_ORDER) -> list[PackageMeta]:
@@ -106,8 +108,12 @@ def load_packages(order: tuple[str, ...] = PACKAGE_ORDER) -> list[PackageMeta]:
         project = data["project"]
         name = project["name"]
         description = project["description"].rstrip(".")
-        import_path = "oaknut." + name.removeprefix("oaknut-").replace("-", "_")
-        found[name] = PackageMeta(name=name, import_path=import_path, description=description)
+        short_name = name.removeprefix("oaknut-")
+        import_path = "oaknut." + short_name.replace("-", "_")
+        docs_body = short_name if (REPO_ROOT / "docs" / short_name / "conf.py").is_file() else None
+        found[name] = PackageMeta(
+            name=name, import_path=import_path, description=description, docs_body=docs_body
+        )
 
     ordered = []
     for name in order:
@@ -219,9 +225,11 @@ def _strip_module_docstring(source: str) -> str:
     return leading_ws + after_docstring.lstrip("\n")
 
 
-def _jinja_env(template_dirpath: Path = TEMPLATE_DIRPATH) -> Environment:
+def _jinja_env(*template_dirpaths: Path) -> Environment:
     return Environment(
-        loader=FileSystemLoader(template_dirpath),
+        loader=ChoiceLoader(
+            [FileSystemLoader(dirpath) for dirpath in (*template_dirpaths, TEMPLATE_DIRPATH)]
+        ),
         undefined=StrictUndefined,
         keep_trailing_newline=True,
         trim_blocks=False,
@@ -243,10 +251,18 @@ def render_pypi_readme() -> str:
 
 
 def render_package_readme(package_dirpath: Path) -> str:
+    """Render a package's README from its readme/ template.
+
+    The template sees ``package`` (its :class:`PackageMeta`) and the
+    ``example`` and ``transcript`` functions, and can import the shared
+    header and licence macros from ``scripts/readme-templates/package.md.j2``.
+    """
     readme_dirpath = package_dirpath / PACKAGE_README_DIRNAME
     examples_dirpath = readme_dirpath / PACKAGE_EXAMPLES_DIRNAME
     template = _jinja_env(readme_dirpath).get_template(README_TEMPLATE_FILENAME)
+    package = next(meta for meta in load_packages() if meta.name == package_dirpath.name)
     return template.render(
+        package=package,
         example=partial(render_example, examples_dirpath=examples_dirpath),
         transcript=partial(render_transcript, examples_dirpath=examples_dirpath),
     )
