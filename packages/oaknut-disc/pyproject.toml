@@ -9,6 +9,7 @@ dynamic = ["version"]
 description = "CLI for working with Acorn DFS, ADFS, and AFS disc images."
 readme = "README.md"
 license = "MIT"
+license-files = ["LICENSE"]
 authors = [{ name = "Robert Smallshire", email = "robert@smallshire.org.uk" }]
 classifiers = [
     "Development Status :: 3 - Alpha",
