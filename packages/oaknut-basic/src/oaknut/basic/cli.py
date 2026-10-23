@@ -11,6 +11,8 @@ installed with its ``[cli]`` extra; the library core never imports it.
 
 from __future__ import annotations
 
+import sys
+
 import click
 from asyoulikeit.cli import report_output
 from oaknut.cli.help import use_plain_help
@@ -358,7 +360,7 @@ def detect(ctx: click.Context, inputs, quiet: bool) -> None:
     """
     from oaknut.basic import detect as detect_blob
 
-    streams = inputs if inputs else (click.get_binary_stream("stdin"),)
+    streams = inputs if inputs else (sys.stdin.buffer,)
     all_basic = True
     for stream in streams:
         result = detect_blob(stream.read())

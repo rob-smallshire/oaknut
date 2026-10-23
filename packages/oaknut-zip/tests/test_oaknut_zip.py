@@ -1394,13 +1394,14 @@ class TestExtractMember:
 
 
 class TestCliExtract:
-    def test_default_output_dir(self, tmp_path):
+    def test_default_output_dir(self, tmp_path, monkeypatch):
         zip_filepath = make_zip_file(tmp_path, [("FILE", b"data", None)], name="myarchive.zip")
-        runner = CliRunner()
-        with runner.isolated_filesystem(temp_dir=tmp_path):
-            result = runner.invoke(cli, ["extract", str(zip_filepath)])
-            assert result.exit_code == 0
-            assert Path("myarchive/FILE").is_file()
+        work_dirpath = tmp_path / "work"
+        work_dirpath.mkdir()
+        monkeypatch.chdir(work_dirpath)
+        result = CliRunner().invoke(cli, ["extract", str(zip_filepath)])
+        assert result.exit_code == 0
+        assert (work_dirpath / "myarchive" / "FILE").is_file()
 
     def test_custom_output_dir(self, tmp_path):
         zip_filepath = make_zip_file(tmp_path, [("FILE", b"data", None)])
