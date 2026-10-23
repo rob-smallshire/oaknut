@@ -485,6 +485,7 @@ class DFSPath(AcornPath):
         *,
         meta_format: MetaFormat | None = DEFAULT_EXPORT_META_FORMAT,
         owner: int = 0,
+        typed_metadata: bool | None = None,
     ) -> Path:
         """Export file to host filesystem, emitting Acorn metadata.
 
@@ -494,6 +495,11 @@ class DFSPath(AcornPath):
                 INF sidecar. Pass ``None`` to write only the data.
                 Filename-encoded formats rewrite the target filename.
             owner: Econet owner ID, used only by PiEconetBridge formats.
+            typed_metadata: Whether load/exec words carrying the RISC OS
+                ``&FFF`` marker hold a filetype and datestamp, which
+                ``MetaFormat.FILENAME_RISCOS`` then writes as ``,xxx``.
+                Defaults to ``False``: DFS load/exec are always
+                addresses.
 
         Returns:
             The actual path that was written. Equal to *target_filepath*
@@ -515,6 +521,7 @@ class DFSPath(AcornPath):
             owner=owner,
             filename=entry.path,
             name_encoding=DFS_NAME_GRAMMAR.codec,
+            typed_metadata=bool(typed_metadata),
         )
 
     def import_file(
@@ -1166,6 +1173,7 @@ class DFS:
         *,
         meta_format: MetaFormat | None = DEFAULT_EXPORT_META_FORMAT,
         owner: int = 0,
+        typed_metadata: bool | None = None,
     ) -> None:
         """Export all files in the catalogue to a host directory.
 
@@ -1175,6 +1183,7 @@ class DFS:
                 ``None`` suppresses metadata (data files only). See
                 :func:`oaknut.file.host_bridge.export_with_metadata`.
             owner: Econet owner ID, used only by PiEconetBridge formats.
+            typed_metadata: As for :meth:`DFSPath.export_file`.
 
         Raises:
             OSError: If directory cannot be created or files cannot be written.
@@ -1189,6 +1198,7 @@ class DFS:
                 target_filepath,
                 meta_format=meta_format,
                 owner=owner,
+                typed_metadata=typed_metadata,
             )
 
     # Pythonic protocols

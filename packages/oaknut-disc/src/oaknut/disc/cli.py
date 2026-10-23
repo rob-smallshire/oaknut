@@ -24,6 +24,7 @@ from exit_codes import ExitCode
 from natsort import natsort_keygen, ns
 from oaknut.cli import (
     SECTOR_SIZE,
+    MetaFormatChoice,
     address_cell,
     bytes_cell,
     contributed_commands,
@@ -254,7 +255,9 @@ def source_dest_force_options(func):
 #: ``auto`` (the default) follows the filing system's own preference — DFS and
 #: the 8-bit ADFS shapes present addresses, the Arthur/RISC OS ADFS shapes
 #: present a filetype and datestamp — while ``addresses`` and ``type-date``
-#: force one reading. Display-only; the stored bytes are untouched. The
+#: force one reading. It never changes the stored bytes: the inspection
+#: commands use it for display, and ``get``/``export`` to decide whether
+#: ``--meta-format filename-riscos`` writes a ``,xxx`` filetype suffix. The
 #: ``OAKNUT_DISC_METADATA_LENS`` environment variable sets the default across
 #: commands.
 _METADATA_LENS_CHOICES = ("auto", "addresses", "type-date")
@@ -1601,28 +1604,19 @@ def repair(
 @click.argument("host_path", required=False, default=None)
 @click.option(
     "--meta-format",
-    type=click.Choice(
-        [
-            "inf-trad",
-            "inf-pieb",
-            "xattr-acorn",
-            "xattr-pieb",
-            "filename-riscos",
-            "filename-mos",
-            "none",
-        ],
-        case_sensitive=False,
-    ),
+    type=MetaFormatChoice(),
     default="inf-trad",
     help="Metadata sidecar format.",
 )
 @click.option("--owner", type=int, default=0, help="Econet owner ID for PiEB formats.")
+@_metadata_lens_option
 @force_options
 def get(
     compound_path: str,
     host_path: str | None,
     meta_format: str,
     owner: int,
+    metadata_lens: str,
     force_filesystem: str | None,
     force_geometry: str | None,
 ) -> None:
@@ -1640,13 +1634,17 @@ def get(
     preserved alongside the data file according to ``--meta-format``.
     The default ``inf-trad`` writes a traditional ``HOST_PATH.inf``
     sidecar; ``xattr-acorn`` stashes the metadata in host extended
-    attributes; ``filename-riscos``/``filename-mos`` encode it into
+    attributes; ``filename-riscos``/``filename-loadexec`` encode it into
     the host filename; ``none`` drops it entirely. See
     :doc:`/cli/conventions/metadata` for the full mapping and
     trade-offs.
+
+    Under ``filename-riscos``, ``--metadata-lens`` decides whether a
+    load address carrying the RISC OS filetype marker is written as a
+    ``,xxx`` filetype (the ``type-date`` reading) or as ``,load-exec``.
     """
     from oaknut.file import AcornMeta, MetaFormat, export_with_metadata
-    from oaknut.filesystem import AcornMetadata
+    from oaknut.filesystem import AcornMetadata, Lens
 
     _outer_filepath, path = parse_compound_path(compound_path)
     if not path:
@@ -1693,6 +1691,7 @@ def get(
         owner=owner,
         filename=entry.name,
         name_encoding=_name_encoding(mount),
+        typed_metadata=_resolve_metadata_lens(metadata_lens, False, mount) is Lens.TYPE_DATE,
     )
 
 
@@ -1861,18 +1860,7 @@ def _access_override(access_spec: str | None):
 )
 @click.option(
     "--meta-format",
-    type=click.Choice(
-        [
-            "inf-trad",
-            "inf-pieb",
-            "xattr-acorn",
-            "xattr-pieb",
-            "filename-riscos",
-            "filename-mos",
-            "none",
-        ],
-        case_sensitive=False,
-    ),
+    type=MetaFormatChoice(),
     default=None,
     help="Metadata format to read from host file.",
 )
@@ -4106,23 +4094,13 @@ def compact(
 @click.argument("host_dir", type=click.Path(path_type=Path))
 @click.option(
     "--meta-format",
-    type=click.Choice(
-        [
-            "inf-trad",
-            "inf-pieb",
-            "xattr-acorn",
-            "xattr-pieb",
-            "filename-riscos",
-            "filename-mos",
-            "none",
-        ],
-        case_sensitive=False,
-    ),
+    type=MetaFormatChoice(),
     default="inf-trad",
     help="Metadata sidecar format.",
 )
 @click.option("--owner", type=int, default=0, help="Econet owner ID for PiEB formats.")
 @click.option("-v", "--verbose", is_flag=True, help="Show extraction progress.")
+@_metadata_lens_option
 @force_options
 def export_cmd(
     image: Path,
@@ -4130,6 +4108,7 @@ def export_cmd(
     meta_format: str,
     owner: int,
     verbose: bool,
+    metadata_lens: str,
     force_filesystem: str | None,
     force_geometry: str | None,
 ) -> None:
@@ -4139,8 +4118,13 @@ def export_cmd(
     supply (a corrupt directory, or one lying past the end of a truncated
     image) is skipped with a warning naming it, and the command then exits
     with a data error.
+
+    Under ``filename-riscos``, ``--metadata-lens`` decides whether load
+    addresses carrying the RISC OS filetype marker are written as
+    ``,xxx`` filetypes (the ``type-date`` reading) or as ``,load-exec``.
     """
     from oaknut.file import MetaFormat
+    from oaknut.filesystem import Lens
 
     resolved_meta_format: MetaFormat | None
     if meta_format == "none":
@@ -4154,8 +4138,9 @@ def export_cmd(
         str(image), force_filesystem=force_filesystem, force_geometry=force_geometry
     )
     mount = resolved.mount
+    typed_metadata = _resolve_metadata_lens(metadata_lens, False, mount) is Lens.TYPE_DATE
     unexported = _export_recursive(
-        mount, mount.path_root(), host_dir, resolved_meta_format, owner, verbose
+        mount, mount.path_root(), host_dir, resolved_meta_format, owner, verbose, typed_metadata
     )
     if unexported:
         plural = "" if unexported == 1 else "s"
@@ -4170,6 +4155,7 @@ def _export_recursive(
     meta_format,
     owner: int,
     verbose: bool,
+    typed_metadata: bool,
 ) -> int:
     """Recursively export files under *path* in *mount* to the host directory.
 
@@ -4193,7 +4179,13 @@ def _export_recursive(
     for child in children:
         if child.is_dir:
             unexported += _export_recursive(
-                mount, child.path, host_dir / child.name, meta_format, owner, verbose
+                mount,
+                child.path,
+                host_dir / child.name,
+                meta_format,
+                owner,
+                verbose,
+                typed_metadata,
             )
         else:
             try:
@@ -4214,6 +4206,7 @@ def _export_recursive(
                 owner=owner,
                 filename=child.name,
                 name_encoding=_name_encoding(mount),
+                typed_metadata=typed_metadata,
             )
             if verbose:
                 click.echo(child.name, err=True)
@@ -4225,18 +4218,7 @@ def _export_recursive(
 @click.argument("host_dir", type=click.Path(exists=True, path_type=Path))
 @click.option(
     "--meta-format",
-    type=click.Choice(
-        [
-            "inf-trad",
-            "inf-pieb",
-            "xattr-acorn",
-            "xattr-pieb",
-            "filename-riscos",
-            "filename-mos",
-            "none",
-        ],
-        case_sensitive=False,
-    ),
+    type=MetaFormatChoice(),
     default=None,
     help="Metadata format to read from host files.",
 )

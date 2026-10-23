@@ -16,7 +16,7 @@ from oaknut.file import (
     AcornMeta,
     MetaFormat,
     build_filename_suffix,
-    build_mos_filename_suffix,
+    build_loadexec_filename_suffix,
     format_access_hex,
     format_pieb_inf_line,
     format_trad_inf_line,
@@ -1920,7 +1920,7 @@ class TestBuildFilenameSuffix:
 
     def test_literal_addresses(self):
         meta = AcornMeta(load_address=0x00001900, exec_address=0x0000801F)
-        assert build_filename_suffix(meta) == ",00001900,0000801f"
+        assert build_filename_suffix(meta) == ",1900-801f"
 
     def test_filetype_ffb(self):
         meta = AcornMeta(load_address=0xFFFFB00, exec_address=0, filetype=0xFFB)
@@ -1945,7 +1945,7 @@ class TestCliFilenameFormat:
         assert not (out / "FILE.inf").exists()
 
     def test_extract_literal_load_exec(self, tmp_path):
-        """Non-filetype-stamped files get ,llllllll,eeeeeeee suffix."""
+        """Non-filetype-stamped files get the ,load-exec suffix."""
         extra = build_sparkfs_extra(0x00001900, 0x0000801F, 0x03)
         zip_filepath = make_zip_file(tmp_path, [("PROG", b"\x00" * 8, extra)])
         out = tmp_path / "out"
@@ -1955,7 +1955,7 @@ class TestCliFilenameFormat:
             ["extract", "--meta-format", "filename-riscos", str(zip_filepath), "-d", str(out)],
         )
         assert result.exit_code == 0
-        assert (out / "PROG,00001900,0000801f").is_file()
+        assert (out / "PROG,1900-801f").is_file()
         assert not (out / "PROG").exists()
 
     def test_no_double_encoding(self, tmp_path):
@@ -2009,38 +2009,38 @@ class TestCliFilenameFormat:
 
 
 # =========================================================================
-# MOS filename encoding
+# Load-exec filename encoding
 # =========================================================================
 
 
-class TestBuildMosFilenameSuffix:
+class TestBuildLoadexecFilenameSuffix:
     def test_short_addresses(self):
         meta = AcornMeta(load_address=0x1900, exec_address=0x801F)
-        assert build_mos_filename_suffix(meta) == ",1900-801f"
+        assert build_loadexec_filename_suffix(meta) == ",1900-801f"
 
     def test_full_width_addresses(self):
         meta = AcornMeta(load_address=0xFFFF0E10, exec_address=0xFFFF0E10)
-        assert build_mos_filename_suffix(meta) == ",ffff0e10-ffff0e10"
+        assert build_loadexec_filename_suffix(meta) == ",ffff0e10-ffff0e10"
 
     def test_zero_addresses(self):
         meta = AcornMeta(load_address=0, exec_address=0)
-        assert build_mos_filename_suffix(meta) == ",0-0"
+        assert build_loadexec_filename_suffix(meta) == ",0-0"
 
     def test_filetype_stamped(self):
         meta = AcornMeta(load_address=0xFFFFDD00, exec_address=0xFFFFDD00)
-        assert build_mos_filename_suffix(meta) == ",ffffdd00-ffffdd00"
+        assert build_loadexec_filename_suffix(meta) == ",ffffdd00-ffffdd00"
 
 
-class TestCliMosFilenameFormat:
-    def test_extract_sparkfs_as_mos_filename(self, tmp_path):
-        """SparkFS metadata is written as MOS filename suffix."""
+class TestCliLoadexecFilenameFormat:
+    def test_extract_sparkfs_as_loadexec_filename(self, tmp_path):
+        """SparkFS metadata is written as a ,load-exec filename suffix."""
         extra = build_sparkfs_extra(0x00001900, 0x0000801F, 0x03)
         zip_filepath = make_zip_file(tmp_path, [("PROG", b"\x00" * 8, extra)])
         out = tmp_path / "out"
         runner = CliRunner()
         result = runner.invoke(
             cli,
-            ["extract", "--meta-format", "filename-mos", str(zip_filepath), "-d", str(out)],
+            ["extract", "--meta-format", "filename-loadexec", str(zip_filepath), "-d", str(out)],
         )
         assert result.exit_code == 0
         assert (out / "PROG,1900-801f").is_file()
@@ -2048,20 +2048,20 @@ class TestCliMosFilenameFormat:
         assert not (out / "PROG.inf").exists()
 
     def test_extract_filetype_stamped(self, tmp_path):
-        """Filetype-stamped files still get full load-exec in MOS format."""
+        """Filetype-stamped files still get the full load-exec suffix."""
         extra = build_sparkfs_extra(0xFFFFDD00, 0xFFFFDD00, 0x03)
         zip_filepath = make_zip_file(tmp_path, [("FILE", b"\x00" * 8, extra)])
         out = tmp_path / "out"
         runner = CliRunner()
         result = runner.invoke(
             cli,
-            ["extract", "--meta-format", "filename-mos", str(zip_filepath), "-d", str(out)],
+            ["extract", "--meta-format", "filename-loadexec", str(zip_filepath), "-d", str(out)],
         )
         assert result.exit_code == 0
         assert (out / "FILE,ffffdd00-ffffdd00").is_file()
 
-    def test_no_double_encoding_mos(self, tmp_path):
-        """A file already carrying the correct MOS suffix is not renamed."""
+    def test_no_double_encoding_loadexec(self, tmp_path):
+        """A file already carrying the correct load-exec suffix is not renamed."""
         extra = build_sparkfs_extra(0x1900, 0x801F, 0x03)
         zip_filepath = make_zip_file(tmp_path, [("PROG,1900-801f", b"\x00" * 8, extra)])
         out = tmp_path / "out"
@@ -2071,7 +2071,7 @@ class TestCliMosFilenameFormat:
             [
                 "extract",
                 "--meta-format",
-                "filename-mos",
+                "filename-loadexec",
                 "--no-decode-filenames",
                 str(zip_filepath),
                 "-d",
@@ -2088,10 +2088,24 @@ class TestCliMosFilenameFormat:
         runner = CliRunner()
         result = runner.invoke(
             cli,
-            ["extract", "--meta-format", "filename-mos", str(zip_filepath), "-d", str(out)],
+            ["extract", "--meta-format", "filename-loadexec", str(zip_filepath), "-d", str(out)],
         )
         assert result.exit_code == 0
         assert (out / "README").is_file()
+
+    def test_filename_mos_is_deprecated(self, tmp_path):
+        """The old filename-mos name writes the same suffix and warns."""
+        extra = build_sparkfs_extra(0x00001900, 0x0000801F, 0x03)
+        zip_filepath = make_zip_file(tmp_path, [("PROG", b"\x00" * 8, extra)])
+        out = tmp_path / "out"
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            ["extract", "--meta-format", "filename-mos", str(zip_filepath), "-d", str(out)],
+        )
+        assert result.exit_code == 0
+        assert "deprecated" in result.stderr
+        assert (out / "PROG,1900-801f").is_file()
 
 
 # =========================================================================

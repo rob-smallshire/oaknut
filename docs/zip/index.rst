@@ -16,7 +16,7 @@ authority:
    <https://github.com/stardot/inf_format/blob/main/inf_format_full.md>`_,
    and the PiEconetBridge ``owner load exec perm [homeof]`` form.
 #. **Unix filename suffixes** such as ``,xxx`` (filetype) or
-   ``,llllllll,eeeeeeee`` (load/exec).
+   ``,load-exec`` or ``,llllllll,eeeeeeee`` (load/exec).
 
 Where several sources describe the same member, the higher-authority
 one wins.

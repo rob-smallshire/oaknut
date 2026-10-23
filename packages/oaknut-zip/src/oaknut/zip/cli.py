@@ -6,6 +6,7 @@ from pathlib import Path
 
 import click
 from asyoulikeit.cli import report_output
+from oaknut.cli import MetaFormatChoice
 from oaknut.file import MetaFormat, format_access_text
 
 from . import __version__
@@ -48,26 +49,14 @@ def cli() -> None:
 @click.option("-v", "--verbose", is_flag=True, help="Show extraction progress.")
 @click.option(
     "--meta-format",
-    type=click.Choice(
-        [
-            "inf-trad",
-            "inf-pieb",
-            "xattr-acorn",
-            "xattr-pieb",
-            "filename-riscos",
-            "filename-mos",
-            "none",
-        ],
-        case_sensitive=False,
-    ),
+    type=MetaFormatChoice(),
     default="inf-trad",
-    help="Metadata format: inf-trad, inf-pieb, xattr-acorn, xattr-pieb, "
-    "filename-riscos, filename-mos, or none.",
+    help="Metadata format for the extracted files.",
 )
 @click.option(
     "--no-decode-filenames",
     is_flag=True,
-    help="Do not decode metadata from filename suffixes (,xxx or ,load,exec).",
+    help="Do not decode metadata from filename suffixes (,xxx or ,load-exec).",
 )
 @click.option(
     "--owner",

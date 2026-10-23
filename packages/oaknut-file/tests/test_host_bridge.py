@@ -183,7 +183,7 @@ def test_xattr_round_trip(xattr_tmp_path: Path, fmt: MetaFormat):
 
 @pytest.mark.parametrize(
     "fmt",
-    [MetaFormat.FILENAME_RISCOS, MetaFormat.FILENAME_MOS],
+    [MetaFormat.FILENAME_RISCOS, MetaFormat.FILENAME_LOADEXEC],
 )
 def test_filename_round_trip(tmp_path: Path, fmt: MetaFormat):
     target = tmp_path / "PROG"
@@ -217,6 +217,19 @@ def test_filename_riscos_filetype_stamped(tmp_path: Path):
         meta_format=MetaFormat.FILENAME_RISCOS,
     )
     assert written.name == "DOC,ffd"
+
+
+def test_filename_riscos_untyped_metadata_keeps_words(tmp_path: Path):
+    """With typed_metadata=False, marked words are written as ,load-exec."""
+    target = tmp_path / "DOC"
+    written = export_with_metadata(
+        b"text",
+        target,
+        FILETYPE_META,
+        meta_format=MetaFormat.FILENAME_RISCOS,
+        typed_metadata=False,
+    )
+    assert written.name == f"DOC,{FILETYPE_META.load_address:x}-{FILETYPE_META.exec_address:x}"
 
 
 # --- None: data only -------------------------------------------------------

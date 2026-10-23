@@ -10,7 +10,7 @@ Two schemes are modelled, mirroring ``oaknut_zip``:
 - **Export** takes one :class:`~oaknut.file.MetaFormat` (or ``None`` for
   data-only). The chosen format determines where the metadata lands —
   traditional or PiEconetBridge INF sidecar, xattr on the data file,
-  or a RISC OS / MOS filename suffix.
+  or a filename suffix.
 - **Import** takes an ordered sequence of :class:`~oaknut.file.MetaFormat`
   values and tries each reader in turn, returning the first hit.
   ``DEFAULT_IMPORT_META_FORMATS`` is a sensible cascade that most
@@ -28,7 +28,7 @@ from pathlib import Path
 
 from oaknut.file.filename_encoding import (
     build_filename_suffix,
-    build_mos_filename_suffix,
+    build_loadexec_filename_suffix,
     parse_encoded_filename,
 )
 from oaknut.file.formats import SOURCE_FILENAME, MetaFormat
@@ -119,6 +119,7 @@ def export_with_metadata(
     owner: int = 0,
     filename: str | None = None,
     name_encoding: str = INF_ENCODING,
+    typed_metadata: bool = True,
 ) -> Path:
     """Write *data* to *target_filepath* and emit metadata.
 
@@ -139,6 +140,11 @@ def export_with_metadata(
         name_encoding: The name codec of the filing system *filename*
             comes from, so a traditional INF records the name's own
             bytes on that medium (see :func:`format_trad_inf_line`).
+        typed_metadata: Whether load/exec words carrying the ``&FFF``
+            marker hold a RISC OS filetype and datestamp, used only by
+            ``MetaFormat.FILENAME_RISCOS`` (see
+            :func:`build_filename_suffix`). Pass ``False`` for files from
+            an 8-bit filing system.
 
     Returns:
         The path that was actually written. For filename-encoded
@@ -210,13 +216,13 @@ def export_with_metadata(
         return target_filepath
 
     if meta_format == MetaFormat.FILENAME_RISCOS:
-        suffix = build_filename_suffix(meta)
+        suffix = build_filename_suffix(meta, typed_metadata=typed_metadata)
         encoded_filepath = target_filepath.with_name(target_filepath.name + suffix)
         encoded_filepath.write_bytes(data)
         return encoded_filepath
 
-    if meta_format == MetaFormat.FILENAME_MOS:
-        suffix = build_mos_filename_suffix(meta)
+    if meta_format == MetaFormat.FILENAME_LOADEXEC:
+        suffix = build_loadexec_filename_suffix(meta)
         encoded_filepath = target_filepath.with_name(target_filepath.name + suffix)
         encoded_filepath.write_bytes(data)
         return encoded_filepath
@@ -281,7 +287,7 @@ _IMPORT_READERS = {
     MetaFormat.XATTR_ACORN: _try_xattr_acorn,
     MetaFormat.XATTR_PIEB: _try_xattr_pieb,
     MetaFormat.FILENAME_RISCOS: _try_filename,
-    MetaFormat.FILENAME_MOS: _try_filename,
+    MetaFormat.FILENAME_LOADEXEC: _try_filename,
 }
 
 
@@ -314,7 +320,7 @@ def import_with_metadata(
           ``AcornMeta()`` when no reader matched.
 
     The dialect-equivalent pairs (``INF_TRAD``/``INF_PIEB`` and
-    ``FILENAME_RISCOS``/``FILENAME_MOS``) dispatch to the same reader;
+    ``FILENAME_RISCOS``/``FILENAME_LOADEXEC``) dispatch to the same reader;
     oaknut.file's parsers auto-detect the dialect, so listing both is
     harmless but redundant.
     """

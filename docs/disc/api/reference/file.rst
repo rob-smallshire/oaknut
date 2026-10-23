@@ -119,11 +119,14 @@ Filename encoding
 -----------------
 
 Metadata encoded into the filename itself — the ``name,xxx`` filetype
-suffix and the ``name,llllllll,eeeeeeee`` load/exec forms.
+suffix and the ``name,load-exec`` load/exec form, with the
+``name,llllllll,eeeeeeee`` form read as well. See :doc:`/host-metadata`.
 
 .. autofunction:: oaknut.file.parse_encoded_filename
 
 .. autofunction:: oaknut.file.build_filename_suffix
+
+.. autofunction:: oaknut.file.build_loadexec_filename_suffix
 
 .. autofunction:: oaknut.file.build_mos_filename_suffix
 
@@ -186,6 +189,8 @@ discussed under :doc:`/api/patterns/metadata`.
 .. autodata:: oaknut.file.DEFAULT_EXPORT_META_FORMAT
 
 .. autodata:: oaknut.file.DEFAULT_IMPORT_META_FORMATS
+
+.. autodata:: oaknut.file.DEPRECATED_META_FORMATS
 
 
 Host filesystem helpers
