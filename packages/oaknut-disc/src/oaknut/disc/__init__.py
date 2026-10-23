@@ -1,6 +1,6 @@
 """Unified CLI for Acorn DFS, ADFS, and AFS disc images."""
 
-__version__ = "13.4.0"
+__version__ = "13.5.0"
 
 from oaknut.disc.cli import gather  # noqa: E402  (needs __version__ defined first)
 

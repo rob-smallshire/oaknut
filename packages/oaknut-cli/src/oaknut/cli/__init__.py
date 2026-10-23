@@ -43,7 +43,7 @@ from oaknut.cli.reports import (
     text_cell,
 )
 
-__version__ = "13.4.0"
+__version__ = "13.5.0"
 
 __all__ = [
     "COMMAND_KIND",
