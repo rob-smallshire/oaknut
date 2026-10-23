@@ -1,0 +1,19 @@
+"""A tiny key-value store over Econet — the worked-example application.
+
+`KvServer` is a `Service` plug-in (the ``oaknut.econet.service`` axis, registered
+as ``kvstore``) backed by a dict; `KvClient` is the matching client. Together
+they exercise the whole stack end-to-end and serve as the template an Econet
+application author copies. See ``docs/dev/econet-design.md`` §13.
+"""
+
+from __future__ import annotations
+
+from oaknut.econet.kvstore.client import KvClient
+from oaknut.econet.kvstore.server import KvServer
+
+__version__ = "13.5.0"
+
+__all__ = [
+    "KvClient",
+    "KvServer",
+]

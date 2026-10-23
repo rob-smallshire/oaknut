@@ -1,0 +1,43 @@
+"""AUN transport for oaknut-econet: logical Econet over UDP/IP.
+
+AUN (Acorn Universal Networking) carries Econet traffic over UDP datagrams,
+collapsing the four-way handshake into a two-packet (Unicast + Ack) exchange.
+This package provides:
+
+- the AUN wire codec (:class:`AunPacket` / :class:`AunType`),
+- the mapping between :class:`~oaknut.econet.core.EconetPacket` and AUN packets,
+- :class:`AunTransport`, an :class:`~oaknut.econet.core.EconetTransport` over an
+  ``asyncio`` UDP endpoint, and
+- optional mDNS station advertisement/discovery (the ``_aun._udp`` convention),
+  available with the ``mdns`` extra.
+
+It registers on the ``oaknut.econet.transport`` extension axis as ``aun``.
+"""
+
+from __future__ import annotations
+
+from oaknut.econet.aun.discovery import (
+    AUN_SERVICE_TYPE,
+    TXT_SCHEMA_VERSION,
+    AunService,
+    build_txt,
+    instance_name,
+    parse_txt,
+)
+from oaknut.econet.aun.transport import DEFAULT_AUN_PORT, AunTransport
+from oaknut.econet.aun.wire import AunPacket, AunType
+
+__version__ = "13.5.0"
+
+__all__ = [
+    "AUN_SERVICE_TYPE",
+    "DEFAULT_AUN_PORT",
+    "TXT_SCHEMA_VERSION",
+    "AunPacket",
+    "AunService",
+    "AunTransport",
+    "AunType",
+    "build_txt",
+    "instance_name",
+    "parse_txt",
+]

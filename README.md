@@ -27,6 +27,13 @@ from oaknut.zip import extract_archive
 | [`oaknut-cli`](packages/oaknut-cli/) | `oaknut.cli` | Shared CLI toolkit for the oaknut family: the contributed-command axis and report-rendering helpers a disc command needs, below the filesystem packages |
 | [`oaknut-codecs`](packages/oaknut-codecs/) | `oaknut.codecs` | Text codecs for Acorn computer character sets (BBC Micro / Electron) |
 | [`oaknut-disc`](packages/oaknut-disc/) | `oaknut.disc` | CLI for working with Acorn DFS, ADFS, and AFS disc images |
+| [`oaknut-econet-aun`](packages/oaknut-econet-aun/) | `oaknut.econet_aun` | AUN (Acorn Universal Networking) transport for oaknut-econet: logical Econet over UDP/IP, with optional mDNS station discovery |
+| [`oaknut-econet-core`](packages/oaknut-econet-core/) | `oaknut.econet_core` | Core abstractions for Econet networking in the oaknut family: packet types, addressing, the EconetTransport interface, capabilities, and an in-process test transport |
+| [`oaknut-econet-hat`](packages/oaknut-econet-hat/) | `oaknut.econet_hat` | PiEconetHAT transport for oaknut-econet: a user-space client of the econet-gpio kernel module, with a fake kernel device for hardware-free testing |
+| [`oaknut-econet-host`](packages/oaknut-econet-host/) | `oaknut.econet_host` | The econet-host program: a CLI that configures Econet transports and service plug-ins and runs a station |
+| [`oaknut-econet-kvstore`](packages/oaknut-econet-kvstore/) | `oaknut.econet_kvstore` | A tiny key-value store over Econet — the worked-example oaknut-econet application: a Service plug-in (server) and a matching client |
+| [`oaknut-econet-piconet`](packages/oaknut-econet-piconet/) | `oaknut.econet_piconet` | Piconet transport for oaknut-econet: a Raspberry Pi Pico serial-to-Econet adapter, with a fake Piconet for hardware-free testing |
+| [`oaknut-econet-station`](packages/oaknut-econet-station/) | `oaknut.econet_station` | The Econet service host for oaknut: a Station that dispatches inbound packets by port to registered Services, the foundation for Econet applications |
 | [`oaknut-exception`](packages/oaknut-exception/) | `oaknut.exception` | Categorised exceptions and CLI error-reporting boundary for the oaknut package family |
 | [`oaknut-extension`](packages/oaknut-extension/) | `oaknut.extension` | Entry-point plug-in framework shared by every extensible axis of the oaknut package family |
 | [`oaknut-filesystem`](packages/oaknut-filesystem/) | `oaknut.filesystem` | The pluggable filesystem contract for the oaknut family: detection, capabilities, geometry, partitions, and the identification coordinator |
