@@ -113,19 +113,7 @@ front-end and package manager; the examples use
 The format is auto-detected from the image content (and, where content is
 ambiguous, the file extension). Pass a format only to override detection.
 
-```python
-from oaknut.adfs import ADFS
-
-with ADFS.from_file("RISCOS.adf") as adfs:
-    print(adfs.title)
-
-    # Navigate with a pathlib-inspired API; "$" is the root.
-    for entry in (adfs.root / "$").iterdir():
-        s = entry.stat()
-        print(f"{entry.name:12s} {s.length:7d}  load={s.load_address:08X}")
-
-    data = (adfs.root / "$" / "!Boot").read_bytes()
-```
+{{ example("open_disc", {"RISCOS.adf": "tests/data/images/adfs-riscos/E_RISCOS310_NewLook.adf"}) }}
 
 `from_file` opens the image read/write when host permissions allow; pass
 `read_only=True` to guarantee a shared image cannot be modified.
@@ -134,41 +122,18 @@ with ADFS.from_file("RISCOS.adf") as adfs:
 
 Every floppy format has a module constant. Pass it to `create_file`:
 
-```python
-from oaknut.adfs import ADFS, ADFS_E, ADFS_F_PLUS
-
-# An 800 KB New-map E disc.
-with ADFS.create_file("disc.adf", ADFS_E, title="RISCOS") as adfs:
-    (adfs.root / "$.ReadMe").write_bytes(
-        b"oaknut-adfs demo", load_address=0xFFFFFF00, exec_address=0x00000000
-    )
-    (adfs.root / "$.Apps").mkdir()
-
-# A 1600 KB F+ disc, whose Big directories allow long filenames.
-with ADFS.create_file("big.adf", ADFS_F_PLUS, title="Extended") as adfs:
-    (adfs.root / "$.AVeryLongFileNameIndeed").write_bytes(b"...")
-```
+{{ example("create_discs") }}
 
 ### Hard-disc images
 
-```python
-from oaknut.adfs import ADFS
-
-# Size a New-map hard disc from a capacity; big_directories=True selects
-# the Big directory (E+/F+) layout.
-adfs = ADFS.create_new_map_hard_disc("40MB", title="IDEDisc", big_directories=True)
-```
+{{ example("hard_disc") }}
 
 ### Validating structure
 
 `validate()` walks the whole disc — map, zone checks, and directory tree —
 and returns a list of structural errors (empty when the disc is sound):
 
-```python
-with ADFS.from_file("disc.adf") as adfs:
-    errors = adfs.validate()
-    assert errors == []
-```
+{{ example("validate", setup="create_discs") }}
 
 ## Development
 

@@ -8,3 +8,9 @@ select = ["E", "F", "W", "I"]
 # Tests routinely re-import symbols for readability and occasionally
 # have unused imports for fixtures.
 "**/tests/**/*.py" = ["F401", "E501"]
+# README examples import a package for its side effect (registering a
+# codec) where a reader should see the import plainly, without a noqa,
+# and some are fragments whose names come from an unshown prelude at
+# render time (scripts/render_readme.py), which fails on a name that is
+# truly undefined.
+"**/readme/examples/*.py" = ["F401", "F821"]

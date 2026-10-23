@@ -46,22 +46,7 @@ uv add oaknut-basic              # the importable library
 
 ## Command-line usage
 
-```
-$ oaknut-basic --help
-Usage: oaknut-basic [OPTIONS] COMMAND [ARGS]...
-
-  Tools for BBC BASIC programs and data files.
-
-Options:
-  --version  Show the version and exit.
-  --help     Show this message and exit.
-
-Commands:
-  data        Read and write BBC BASIC data files.
-  detokenise  De-tokenise a stored BBC BASIC program into source text.
-  number      Prepend ascending line numbers to an unnumbered BBC BASIC...
-  tokenise    Tokenise BBC BASIC source text into a stored program.
-```
+{{ transcript("help") }}
 
 The program commands read from a file or standard input and write to a file or
 standard output, so each works file-to-file and as a pipe stage. That makes
@@ -93,13 +78,7 @@ echo '[42, "HELLO", 3.5]' | oaknut-basic data encode - scores.dat
 Programs are handled by the functions `tokenise`, `detokenise`, and
 `number_lines`, all importable from `oaknut.basic`:
 
-```python
-from oaknut.basic import tokenise, detokenise
-
-program = tokenise('10 PRINT "HELLO"\n20 GOTO 10\n')  # str -> bytes
-listing = detokenise(program)  # bytes -> str
-assert tokenise(detokenise(program)) == program  # byte-exact
-```
+{{ example("tokenise") }}
 
 When the program lives in a disc image, prefer the path-object wrappers
 `DFSPath.read_basic` / `write_basic` (and the ADFS equivalents), which compose
@@ -111,18 +90,7 @@ a writer, or a combined object, and accepts a path or a binary stream. The
 polymorphic `write` picks the record type from the Python value; typed
 `read_int` / `read_float` / `read_str` read it back without coercion:
 
-```python
-from oaknut.basic import datafile
-
-with datafile.open("scores.dat", "w") as f:
-    f.write("ALICE")  # str   -> string record
-    f.write(42)  # int   -> integer record
-    f.write(3.5)  # float -> real record
-
-with datafile.open("scores.dat", "r") as f:
-    for value in f:  # yields "ALICE", 42, 3.5
-        print(value)
-```
+{{ example("datafile") }}
 
 Strings use the BBC `acorn` character set by default, and reals convert through
 the packed 5-byte REAL format exposed as `pack_float5` / `unpack_float5`.

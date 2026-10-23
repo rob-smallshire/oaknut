@@ -54,29 +54,11 @@ front-end and package manager; the examples use
 
 ### Creating and populating a filesystem
 
-```python
-from oaknut.afs import AFS, UserSpec
-
-with AFS.create_file(
-    "server.dat",
-    capacity="10MB",
-    disc_name="Server",
-    users=[UserSpec(name="RJS", quota="2MB")],
-) as afs:
-    # Creating the RJS account also creates its home directory, $.RJS.
-    (afs.root / "RJS" / "ReadMe").write_text("Welcome to the file server.\n")
-```
+{{ example("create_server", output=False) }}
 
 ### Reading
 
-```python
-from oaknut.afs import AFS
-
-with AFS.from_file("server.dat") as afs:
-    for entry in afs.root.iterdir():
-        print(entry.name)
-    text = (afs.root / "RJS" / "ReadMe").read_text()
-```
+{{ example("read_server", setup="create_server") }}
 
 For dual ADFS + AFS discs, the
 [`disc`](https://github.com/rob-smallshire/oaknut/tree/master/packages/oaknut-disc)

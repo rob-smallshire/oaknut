@@ -128,7 +128,21 @@ with ADFS.from_file("RISCOS.adf") as adfs:
         s = entry.stat()
         print(f"{entry.name:12s} {s.length:7d}  load={s.load_address:08X}")
 
-    data = (adfs.root / "$" / "!Boot").read_bytes()
+    data = (adfs.root / "$" / "ReadMe").read_bytes()
+    print(len(data), "bytes")
+```
+
+Output:
+
+```text
+0284,401-01
+!NewLook        2048  load=FFFFFD44
+OldTempl        2048  load=FFFFFD44
+ReadMe          1820  load=FFFFFF44
+TemplApp1       2048  load=FFFFFD44
+TemplApp2       2048  load=FFFFFD44
+TemplSupp       2048  load=FFFFFD44
+1820 bytes
 ```
 
 `from_file` opens the image read/write when host permissions allow; pass
@@ -151,6 +165,17 @@ with ADFS.create_file("disc.adf", ADFS_E, title="RISCOS") as adfs:
 # A 1600 KB F+ disc, whose Big directories allow long filenames.
 with ADFS.create_file("big.adf", ADFS_F_PLUS, title="Extended") as adfs:
     (adfs.root / "$.AVeryLongFileNameIndeed").write_bytes(b"...")
+
+for filename in ("disc.adf", "big.adf"):
+    with ADFS.from_file(filename) as adfs:
+        print(filename, adfs.title, [entry.name for entry in (adfs.root / "$").iterdir()])
+```
+
+Output:
+
+```text
+disc.adf RISCOS ['Apps', 'ReadMe']
+big.adf Extended ['AVeryLongFileNameIndeed']
 ```
 
 ### Hard-disc images
@@ -161,6 +186,13 @@ from oaknut.adfs import ADFS
 # Size a New-map hard disc from a capacity; big_directories=True selects
 # the Big directory (E+/F+) layout.
 adfs = ADFS.create_new_map_hard_disc("40MB", title="IDEDisc", big_directories=True)
+print(adfs.title, adfs.total_size, adfs.free_space)
+```
+
+Output:
+
+```text
+IDEDisc 40000000 38955520
 ```
 
 ### Validating structure
@@ -169,9 +201,17 @@ adfs = ADFS.create_new_map_hard_disc("40MB", title="IDEDisc", big_directories=Tr
 and returns a list of structural errors (empty when the disc is sound):
 
 ```python
+from oaknut.adfs import ADFS
+
 with ADFS.from_file("disc.adf") as adfs:
     errors = adfs.validate()
-    assert errors == []
+    print(errors)
+```
+
+Output:
+
+```text
+[]
 ```
 
 ## Development

@@ -11,12 +11,7 @@ is the broken bar `¦`. Importing the package registers the codec under
 the name `"acorn"`, so it works with the standard `str.encode` /
 `bytes.decode` machinery:
 
-```python
-import oaknut.codecs  # registers the "acorn" codec
-
-"COST£100".encode("acorn")  # b'COST\x60100'
-b"COST\x60100".decode("acorn")  # 'COST£100'
-```
+{{ example("acorn_codec") }}
 
 It is the dependency-free bottom layer of the workspace, alongside
 `oaknut-exception`, so that language and file packages can share one

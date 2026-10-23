@@ -80,6 +80,15 @@ with AFS.from_file("server.dat") as afs:
     for entry in afs.root.iterdir():
         print(entry.name)
     text = (afs.root / "RJS" / "ReadMe").read_text()
+    print(text, end="")
+```
+
+Output:
+
+```text
+Passwords
+RJS
+Welcome to the file server.
 ```
 
 For dual ADFS + AFS discs, the

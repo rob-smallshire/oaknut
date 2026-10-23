@@ -69,21 +69,14 @@ arithmetic.
 more `SurfaceSpec`s, validates that the surfaces fit and do not overlap,
 and vends a `Surface` per spec:
 
-```python
-image = DiscImage(buffer, specs)
-side0 = image.surface(0)  # a Surface
-image.num_surfaces  # 1 for SSD, 2 for DSD
-```
+{{ example("disc_image", prelude="prelude_image", output=False) }}
 
 ### `Surface` — one physical side
 
 A single side of the disc. Its job is to resolve a logical sector range
 to the underlying bytes:
 
-```python
-view = side0.sector_range(start_sector=2, num_sectors=1)  # → SectorsView
-side0.num_sectors, side0.num_tracks
-```
+{{ example("surface", prelude="prelude_surface", output=False) }}
 
 ### `SectorsView` — a logical buffer over sectors
 
@@ -91,11 +84,7 @@ Presents one or more (possibly non-contiguous, thanks to track stride)
 memoryviews as a single addressable buffer. It indexes and slices like a
 `bytearray`, and writes pass straight through to the backing image:
 
-```python
-view[0]  # read a byte
-view[0:8] = b"DISK    "  # write — persists to the buffer (and the file)
-view.tobytes()  # a plain bytes copy
-```
+{{ example("sectors_view", prelude="prelude_view", output=False) }}
 
 This is the read/write surface every filing system actually operates on.
 
@@ -107,10 +96,7 @@ with one continuous sector numbering (all of side 0, then all of side
 former view — it maps a unified sector number to the right
 `(surface, sector)` pair and delegates to `Surface`:
 
-```python
-disc = UnifiedDisc(image)
-disc.sector_range(start_sector, num_sectors)  # spans both sides seamlessly
-```
+{{ example("unified_disc", prelude="prelude_unified", output=False) }}
 
 ADFS reads a double-sided floppy through a `UnifiedDisc`; DFS, where each
 side is a separate `*DRIVE`, talks to each `Surface` directly. For a
@@ -140,17 +126,7 @@ the mmap layer), so DFS, ADFS, and AFS all behave identically.
 
 ## Putting it together
 
-```python
-from oaknut.discimage import DiscImage, single_sided_spec
-
-buffer = memoryview(bytearray(b"\x00" * (80 * 10 * 256)))  # 80T × 10 sectors
-image = DiscImage(buffer, [single_sided_spec(num_tracks=80, sectors_per_track=10)])
-
-surface = image.surface(0)
-sector0 = surface.sector_range(0, 1)
-sector0[0:8] = b"MYDISC  "  # write the catalogue title into sector 0
-assert bytes(buffer[0:8]) == b"MYDISC  "  # it landed in the backing buffer
-```
+{{ example("together", output=False) }}
 
 ## ROMFS: a sequential exception
 
