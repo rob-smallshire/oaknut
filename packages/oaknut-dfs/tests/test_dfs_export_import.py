@@ -319,6 +319,30 @@ class TestExportImportRoundTrip:
         assert locked_info.locked
 
 
+class TestFilenameRiscosAddresses:
+    """DFS load/exec are always addresses, so filename-riscos never writes ,xxx."""
+
+    def test_io_processor_address_kept(self, tmp_path):
+        dfs = _make_dfs(_blank_buffer())
+        (dfs.root / "$" / "PROG").write_bytes(
+            b"code", load_address=0xFFFF1900, exec_address=0xFFFF8023
+        )
+        written = (dfs.root / "$" / "PROG").export_file(
+            tmp_path / "PROG", meta_format=MetaFormat.FILENAME_RISCOS
+        )
+        assert written.name == "PROG,ffff1900-ffff8023"
+
+    def test_typed_metadata_override(self, tmp_path):
+        dfs = _make_dfs(_blank_buffer())
+        (dfs.root / "$" / "PROG").write_bytes(
+            b"code", load_address=0xFFFF1900, exec_address=0xFFFF8023
+        )
+        written = (dfs.root / "$" / "PROG").export_file(
+            tmp_path / "PROG", meta_format=MetaFormat.FILENAME_RISCOS, typed_metadata=True
+        )
+        assert written.name == "PROG,f19"
+
+
 class TestMetaFormatRoundTrip:
     """Per-format smoke tests — DFSPath.export_file / import_file."""
 

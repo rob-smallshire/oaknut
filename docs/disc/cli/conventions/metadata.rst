@@ -87,7 +87,8 @@ Every host-boundary command accepts the same seven values:
    * - ``filename-riscos``
      - load, exec or filetype
      - Filename rewritten: ``foo,xxx`` for a filetype-stamped
-       file, ``foo,load-exec`` (variable-width lowercase hex) otherwise
+       file under the type-date lens, ``foo,load-exec``
+       (variable-width lowercase hex) otherwise
    * - ``filename-loadexec``
      - load, exec
      - Filename rewritten: ``foo,load-exec`` for every file,
@@ -127,10 +128,11 @@ the filename, so anything that preserves the filename preserves
 the metadata. Both write the forms RISC OS LanManFS and the RPCEmu
 and Arculator ``HostFS`` modules read. ``filename-riscos`` writes
 ``,xxx`` for a filetyped file and ``,load-exec`` for one with load
-and exec addresses, the choice for files bound for RISC OS.
-``filename-loadexec`` writes ``,load-exec`` for every file, keeping a
-filetyped file's datestamp and an 8-bit file's I/O-processor
-addresses (see `Cross-host gotchas`_), the choice for BBC Micro files.
+and exec addresses, deciding which by the filing system's
+:ref:`metadata lens <metadata-lens>`: a DFS or 8-bit ADFS file is
+always written as ``,load-exec``, so its I/O-processor addresses
+survive. ``filename-loadexec`` writes ``,load-exec`` for every file,
+keeping a filetyped file's datestamp in the name as well.
 
 ``filename-mos`` is a deprecated name for ``filename-loadexec``,
 accepted with a warning.
@@ -374,6 +376,8 @@ such as ``&00031900``, has no separate DFS form: it reads back as
 ``&FFFF1900``.
 
 
+.. _metadata-lens:
+
 Address or datestamp? ``--metadata-lens``
 -----------------------------------------
 
@@ -407,9 +411,16 @@ Override the default with **``--metadata-lens``**:
   defaults to addresses.
 - ``--metadata-lens=auto`` (the default) follows the filing system.
 
-It changes the display only; the stored bytes are untouched. Set
-``OAKNUT_DISC_METADATA_LENS=addresses`` (or ``type-date``) to make a
-reading the default across commands.
+It never changes the stored bytes. On ``disc ls`` and ``disc stat``
+it changes the display. On ``disc get`` and ``disc export`` it decides
+how ``--meta-format filename-riscos`` names a marked file: ``,xxx``
+under the type-date lens, ``,load-exec`` under the addresses lens.
+The ``,load-exec`` form keeps every bit of the load and exec words,
+so a file that RISC OS wrote to an 8-bit disc, read under the default
+addresses lens, loses nothing but a readable filetype in its name;
+pass ``--metadata-lens=type-date`` to get ``,xxx`` names from such a
+disc. Set ``OAKNUT_DISC_METADATA_LENS=addresses`` (or ``type-date``)
+to make a reading the default across commands.
 
 A filing system that keeps its datestamp *outside* load/exec — the
 Acorn File Server, with its native two-byte date — is unaffected by
@@ -441,12 +452,13 @@ Cross-host gotchas
   ``&8023`` exports under ``filename-riscos`` as ``PROG,1900-8023`` —
   handy for round-trip preservation, but you cannot also use the host
   filename to identify the file.
-- **``filename-riscos`` reads I/O-processor addresses as a filetype.**
+- **The type-date lens reads I/O-processor addresses as a filetype.**
   An address such as ``&FFFF1900`` has the top twelve bits RISC OS
-  uses to mark a filetype, so ``filename-riscos`` writes the file as
-  ``PROG,f19`` and its addresses are lost, as RISC OS ``HostFS`` would
-  do. Export BBC Micro files with ``filename-loadexec``
-  (``PROG,ffff1900-ffff8023``) or ``inf-trad``.
+  uses to mark a filetype, so under ``--metadata-lens=type-date``
+  ``filename-riscos`` writes the file as ``PROG,f19`` and its addresses
+  are lost, as RISC OS ``HostFS`` would do. Under the addresses lens,
+  the default for DFS and 8-bit ADFS, it writes
+  ``PROG,ffff1900-ffff8023``.
 - **The Acorn-side filename is only preserved by ``inf-trad``.**
   All other formats use the host filename as the disc-side
   filename on re-import. If your Acorn filenames contain

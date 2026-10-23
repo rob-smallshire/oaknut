@@ -3,7 +3,7 @@
 # Ensure acorn codec is registered
 import oaknut.file.acorn_encoding  # noqa: F401
 import pytest
-from oaknut.adfs import ADFS, ADFS_S
+from oaknut.adfs import ADFS, ADFS_E, ADFS_L, ADFS_S
 from oaknut.file import Access, MetaFormat
 
 
@@ -154,6 +154,35 @@ class TestExportImportRoundTrip:
         adfs2 = ADFS.create(ADFS_S)
         (adfs2.root / "Sec").import_file(export_path)
         assert (adfs2.root / "Sec").stat().locked is True
+
+
+class TestFilenameRiscosLens:
+    """filename-riscos writes ,xxx only on the shapes whose load/exec are typed."""
+
+    def test_8bit_shape_keeps_io_processor_address(self, tmp_path):
+        adfs = ADFS.create(ADFS_L)
+        (adfs.root / "Prog").write_bytes(b"code", load_address=0xFFFF1900, exec_address=0xFFFF8023)
+        written = (adfs.root / "Prog").export_file(
+            tmp_path / "Prog", meta_format=MetaFormat.FILENAME_RISCOS
+        )
+        assert written.name == "Prog,ffff1900-ffff8023"
+
+    def test_risc_os_shape_writes_filetype(self, tmp_path):
+        adfs = ADFS.create(ADFS_E)
+        (adfs.root / "Text").write_bytes(b"text", load_address=0xFFFFFF12, exec_address=0x34567890)
+        written = (adfs.root / "Text").export_file(
+            tmp_path / "Text", meta_format=MetaFormat.FILENAME_RISCOS
+        )
+        assert written.name == "Text,fff"
+
+    def test_typed_metadata_override_on_8bit_shape(self, tmp_path):
+        """An L disc written by RISC OS can still export ,xxx names."""
+        adfs = ADFS.create(ADFS_L)
+        (adfs.root / "Text").write_bytes(b"text", load_address=0xFFFFFF12, exec_address=0x34567890)
+        written = (adfs.root / "Text").export_file(
+            tmp_path / "Text", meta_format=MetaFormat.FILENAME_RISCOS, typed_metadata=True
+        )
+        assert written.name == "Text,fff"
 
 
 class TestMetaFormatRoundTrip:

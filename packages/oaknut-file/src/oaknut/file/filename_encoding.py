@@ -61,14 +61,21 @@ def parse_encoded_filename(filename: str) -> tuple[str, AcornMeta | None]:
     return filename, None
 
 
-def build_filename_suffix(meta: AcornMeta) -> str:
+def build_filename_suffix(meta: AcornMeta, *, typed_metadata: bool = True) -> str:
     """Build a RISC OS filename encoding suffix.
 
     Returns ``,xxx`` for filetype-stamped files, or ``,load-exec`` for
     literal load/exec addresses — the forms RISC OS LanManFS and the
     HostFS modules read.
+
+    The ``&FFF`` filetype marker also matches genuine I/O-processor
+    addresses such as ``&FFFF1900``, so *typed_metadata* says which the
+    words hold: pass ``False`` for a file from an 8-bit filing system,
+    and its words are written as ``,load-exec`` whatever their top bits.
+    Writing ``,load-exec`` for a filetyped file loses nothing, whereas
+    writing ``,xxx`` for a genuine address loses the address.
     """
-    if meta.is_filetype_stamped:
+    if typed_metadata and meta.is_filetype_stamped:
         ft = meta.infer_filetype()
         return f",{ft:03x}"
     return build_loadexec_filename_suffix(meta)

@@ -123,7 +123,11 @@ The values are:
      - Metadata in the filename itself, as RISC OS LanManFS and
        ``HostFS`` write it: ``name,xxx`` (a 3-digit hex filetype), or
        ``name,load-exec`` (variable-width lowercase hex) when the file
-       is not filetype-stamped.
+       is not filetype-stamped. The ``typed_metadata`` argument of the
+       export helpers says whether the ``&FFF`` marker means a filetype;
+       each filing system's :meth:`export_file` sets it from its own
+       reading, so DFS and 8-bit ADFS files are written as
+       ``name,load-exec``.
    * - ``FILENAME_LOADEXEC``
      - Metadata in the filename as ``name,load-exec`` for every file,
        filetype-stamped or not, so datestamps and I/O-processor

@@ -92,3 +92,81 @@ class TestPut:
         assert r.exit_code == 0, r.output
         r = _run(runner, "get-load", f"{image}:$.PROG")
         assert r.output.strip() == str(0x1900)
+
+
+def _dfs_with_io_processor_prog(runner, tmp_path: Path) -> Path:
+    image = tmp_path / "io.ssd"
+    _run(runner, "create", str(image), "--title", "T")
+    host = tmp_path / "payload"
+    host.write_bytes(b"data")
+    r = _run(
+        runner,
+        "put",
+        f"{image}:$.PROG",
+        str(host),
+        "--meta-format",
+        "none",
+        "--load",
+        "0xFFFF1900",
+        "--exec",
+        "0xFFFF8023",
+    )
+    assert r.exit_code == 0, r.output
+    return image
+
+
+class TestMetadataLens:
+    """filename-riscos writes ,xxx only under the type-date lens."""
+
+    def test_get_keeps_io_processor_address_on_dfs(self, runner: CliRunner, tmp_path: Path):
+        image = _dfs_with_io_processor_prog(runner, tmp_path)
+        r = _run(
+            runner,
+            "get",
+            f"{image}:$.PROG",
+            str(tmp_path / "PROG"),
+            "--meta-format",
+            "filename-riscos",
+        )
+        assert r.exit_code == 0, r.output
+        assert (tmp_path / "PROG,ffff1900-ffff8023").is_file()
+
+    def test_get_type_date_lens_writes_filetype(self, runner: CliRunner, tmp_path: Path):
+        image = _dfs_with_io_processor_prog(runner, tmp_path)
+        r = _run(
+            runner,
+            "get",
+            f"{image}:$.PROG",
+            str(tmp_path / "PROG"),
+            "--meta-format",
+            "filename-riscos",
+            "--metadata-lens",
+            "type-date",
+        )
+        assert r.exit_code == 0, r.output
+        assert (tmp_path / "PROG,f19").is_file()
+
+    def test_export_keeps_io_processor_address_on_dfs(self, runner: CliRunner, tmp_path: Path):
+        image = _dfs_with_io_processor_prog(runner, tmp_path)
+        out_dirpath = tmp_path / "out"
+        out_dirpath.mkdir()
+        r = _run(runner, "export", str(image), str(out_dirpath), "--meta-format", "filename-riscos")
+        assert r.exit_code == 0, r.output
+        assert [p.name for p in out_dirpath.rglob("PROG*")] == ["PROG,ffff1900-ffff8023"]
+
+    def test_export_type_date_lens_writes_filetype(self, runner: CliRunner, tmp_path: Path):
+        image = _dfs_with_io_processor_prog(runner, tmp_path)
+        out_dirpath = tmp_path / "out"
+        out_dirpath.mkdir()
+        r = _run(
+            runner,
+            "export",
+            str(image),
+            str(out_dirpath),
+            "--meta-format",
+            "filename-riscos",
+            "--metadata-lens",
+            "type-date",
+        )
+        assert r.exit_code == 0, r.output
+        assert [p.name for p in out_dirpath.rglob("PROG*")] == ["PROG,f19"]

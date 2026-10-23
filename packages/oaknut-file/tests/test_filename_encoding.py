@@ -115,3 +115,23 @@ class TestFilenameEncodingRoundTrip:
         assert clean == "FILE"
         assert parsed.load_address == 0xFFFFFB12
         assert parsed.exec_address == 0x34567890
+
+
+class TestTypedMetadata:
+    """``typed_metadata`` says whether the &FFF marker means a filetype."""
+
+    def test_marker_reads_as_filetype_by_default(self):
+        meta = AcornMeta(load_address=0xFFFF1900, exec_address=0xFFFF8023)
+        assert build_filename_suffix(meta) == ",f19"
+
+    def test_marker_kept_as_addresses_when_untyped(self):
+        meta = AcornMeta(load_address=0xFFFF1900, exec_address=0xFFFF8023)
+        assert build_filename_suffix(meta, typed_metadata=False) == ",ffff1900-ffff8023"
+
+    def test_filetyped_file_keeps_its_words_when_untyped(self):
+        meta = AcornMeta(load_address=0xFFFFFB12, exec_address=0x34567890)
+        assert build_filename_suffix(meta, typed_metadata=False) == ",fffffb12-34567890"
+
+    def test_plain_addresses_unaffected(self):
+        meta = AcornMeta(load_address=0x1900, exec_address=0x8023)
+        assert build_filename_suffix(meta, typed_metadata=False) == ",1900-8023"

@@ -578,11 +578,14 @@ through the ``--meta-format`` option, described in
      - PiEconetBridge extended attributes
    * - ``filename-riscos``
      - ``,xxx`` for typed files, ``,load-exec`` for untyped, as
-       LanManFS and ``HostFS`` write them
+       LanManFS and ``HostFS`` write them; whether a marked file is
+       typed follows the filing system's metadata lens, so DFS and
+       8-bit ADFS files are always written as ``,load-exec``
    * - ``filename-loadexec``
      - ``,load-exec`` for every file
 
-Import reads all three suffix forms. ``filename-mos`` is a
+``oaknut.zip`` has no lens to consult and uses the ``&FFF`` marker
+alone. Import reads all three suffix forms. ``filename-mos`` is a
 deprecated name for ``filename-loadexec``. ``oaknut.zip`` reads the
 SparkFS extra field.
 

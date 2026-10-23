@@ -771,6 +771,7 @@ class AFSPath(AcornPath):
         *,
         meta_format: "MetaFormat | None" = DEFAULT_EXPORT_META_FORMAT,
         owner: int = 0,
+        typed_metadata: bool | None = None,
     ) -> "Path":
         """Export file to host filesystem, emitting Acorn metadata.
 
@@ -787,6 +788,11 @@ class AFSPath(AcornPath):
                 ``None`` to write only the data, with no sidecar / xattr
                 / filename rewrite.
             owner: Econet owner ID, used only by PiEconetBridge formats.
+            typed_metadata: Whether load/exec words carrying the RISC OS
+                ``&FFF`` marker hold a filetype and datestamp, which
+                ``MetaFormat.FILENAME_RISCOS`` then writes as ``,xxx``.
+                Defaults to ``False``, the reading AFS declares no lens
+                to override.
 
         Returns:
             The actual path that was written. Equal to *target_filepath*
@@ -815,6 +821,7 @@ class AFSPath(AcornPath):
             owner=owner,
             filename=self.name,
             name_encoding=AFS_NAME_GRAMMAR.codec,
+            typed_metadata=bool(typed_metadata),
         )
 
     @resolving_io

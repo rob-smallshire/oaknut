@@ -1110,6 +1110,7 @@ class ADFSPath(AcornPath):
         *,
         meta_format: MetaFormat | None = DEFAULT_EXPORT_META_FORMAT,
         owner: int = 0,
+        typed_metadata: bool | None = None,
     ) -> Path:
         """Export file to host filesystem, emitting Acorn metadata.
 
@@ -1119,6 +1120,11 @@ class ADFSPath(AcornPath):
                 INF sidecar. Pass ``None`` to write only the data.
                 Filename-encoded formats rewrite the target filename.
             owner: Econet owner ID, used only by PiEconetBridge formats.
+            typed_metadata: Whether load/exec words carrying the RISC OS
+                ``&FFF`` marker hold a filetype and datestamp, which
+                ``MetaFormat.FILENAME_RISCOS`` then writes as ``,xxx``.
+                Defaults to the disc's shape: ``True`` on the Arthur and
+                RISC OS shapes, ``False`` on the 8-bit S, M and L shapes.
 
         Returns:
             The actual path that was written. Equal to *target_filepath*
@@ -1139,6 +1145,9 @@ class ADFSPath(AcornPath):
             owner=owner,
             filename=self.name,
             name_encoding=self._adfs._name_grammar.codec,
+            typed_metadata=(
+                self._adfs.uses_typed_metadata if typed_metadata is None else typed_metadata
+            ),
         )
 
     def import_file(
@@ -2717,6 +2726,7 @@ class ADFS:
         *,
         meta_format: MetaFormat | None = DEFAULT_EXPORT_META_FORMAT,
         owner: int = 0,
+        typed_metadata: bool | None = None,
     ) -> None:
         """Export entire filesystem preserving directory structure.
 
@@ -2726,6 +2736,7 @@ class ADFS:
                 Defaults to traditional INF sidecars; ``None`` writes data
                 files only.
             owner: Econet owner ID, used only by PiEconetBridge formats.
+            typed_metadata: As for :meth:`ADFSPath.export_file`.
         """
         target = Path(target_dirpath)
         target.mkdir(parents=True, exist_ok=True)
@@ -2742,7 +2753,12 @@ class ADFS:
             for filename in filenames:
                 adfs_path = dirpath / filename
                 host_filepath = host_dir / filename
-                adfs_path.export_file(host_filepath, meta_format=meta_format, owner=owner)
+                adfs_path.export_file(
+                    host_filepath,
+                    meta_format=meta_format,
+                    owner=owner,
+                    typed_metadata=typed_metadata,
+                )
 
     # --- Pythonic protocols ---
 
