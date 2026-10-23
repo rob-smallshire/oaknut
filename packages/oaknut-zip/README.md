@@ -523,16 +523,13 @@ for files served by PiEconetBridge.
 
 ## Development
 
-After cloning, install the pre-commit hooks:
+The package is developed in the [oaknut](https://github.com/rob-smallshire/oaknut)
+workspace. From the repository root:
 
-```
-uv run --group dev pre-commit install
-```
-
-### Running the tests
-
-```
-uv run --group test pytest tests/ -v
+```sh
+uv sync                                 # install all workspace members editable
+uv run pytest packages/oaknut-zip/tests # this package's tests
+uv run ruff check                       # lint
 ```
 
 The test suite covers all parsing, formatting, and extraction logic,

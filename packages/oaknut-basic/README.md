@@ -68,7 +68,8 @@ Options:
   --help     Show this message and exit.
 
 Commands:
-  data        Read and write BBC BASIC data files.
+  data        Read and write BBC BASIC data files...
+  detect      Identify whether each FILE is a tokenised BBC BASIC program.
   detokenise  De-tokenise a stored BBC BASIC program into source text.
   number      Prepend ascending line numbers to an unnumbered BBC BASIC...
   tokenise    Tokenise BBC BASIC source text into a stored program.
@@ -105,11 +106,21 @@ Programs are handled by the functions `tokenise`, `detokenise`, and
 `number_lines`, all importable from `oaknut.basic`:
 
 ```python
-from oaknut.basic import tokenise, detokenise
+from oaknut.basic import detokenise, tokenise
 
 program = tokenise('10 PRINT "HELLO"\n20 GOTO 10\n')  # str -> bytes
 listing = detokenise(program)  # bytes -> str
 assert tokenise(detokenise(program)) == program  # byte-exact
+print(program.hex(" "))
+print(listing, end="")
+```
+
+Output:
+
+```text
+0d 00 0a 0e 20 f1 20 22 48 45 4c 4c 4f 22 0d 00 14 0b 20 e5 20 8d 54 4a 40 0d ff
+10 PRINT "HELLO"
+20 GOTO 10
 ```
 
 When the program lives in a disc image, prefer the path-object wrappers
@@ -131,8 +142,16 @@ with datafile.open("scores.dat", "w") as f:
     f.write(3.5)  # float -> real record
 
 with datafile.open("scores.dat", "r") as f:
-    for value in f:  # yields "ALICE", 42, 3.5
-        print(value)
+    for value in f:
+        print(repr(value))
+```
+
+Output:
+
+```text
+'ALICE'
+42
+3.5
 ```
 
 Strings use the BBC `acorn` character set by default, and reals convert through

@@ -247,4 +247,4 @@ All public symbols are also re-exported from the top-level `oaknut.file` package
 
 ## License
 
-MIT
+MIT — see [LICENSE](LICENSE).

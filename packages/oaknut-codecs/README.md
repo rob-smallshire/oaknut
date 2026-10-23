@@ -18,8 +18,15 @@ the name `"acorn"`, so it works with the standard `str.encode` /
 ```python
 import oaknut.codecs  # registers the "acorn" codec
 
-"COST£100".encode("acorn")  # b'COST\x60100'
-b"COST\x60100".decode("acorn")  # 'COST£100'
+print("COST£100".encode("acorn"))
+print(b"COST\x60100".decode("acorn"))
+```
+
+Output:
+
+```text
+b'COST`100'
+COST£100
 ```
 
 It is the dependency-free bottom layer of the workspace, alongside

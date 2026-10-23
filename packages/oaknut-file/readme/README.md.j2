@@ -1,9 +1,5 @@
-# oaknut-file
-
-[![PyPI version](https://img.shields.io/pypi/v/oaknut-file)](https://pypi.org/project/oaknut-file/)
-[![CI](https://github.com/rob-smallshire/oaknut/actions/workflows/ci.yml/badge.svg)](https://github.com/rob-smallshire/oaknut/actions/workflows/ci.yml)
-[![Python versions](https://img.shields.io/pypi/pyversions/oaknut-file)](https://pypi.org/project/oaknut-file/)
-[![License: MIT](https://img.shields.io/pypi/l/oaknut-file)](https://github.com/rob-smallshire/oaknut/blob/master/packages/oaknut-file/LICENSE)
+{% import "package.md.j2" as common -%}
+{{ common.header(package) }}
 
 Acorn file metadata handling for the oaknut package family.
 
@@ -125,6 +121,4 @@ encode a RISC OS filetype.
 
 All public symbols are also re-exported from the top-level `oaknut.file` package.
 
-## License
-
-MIT
+{{ common.license() }}

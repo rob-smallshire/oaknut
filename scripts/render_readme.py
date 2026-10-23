@@ -28,7 +28,10 @@ a fresh temporary directory, with ``scripts/`` on ``PYTHONPATH``:
   prints a ``$ command`` transcript using ``cli_example_helper.show``.
 
 *fixtures* maps file names in the temporary directory to repository-relative
-paths copied there first.
+paths copied there first. ``setup=`` names an unshown example run first in
+the same directory; ``prelude=`` names unshown source prepended at run time,
+for a fragment that relies on context; ``output=False`` shows an example's
+source without its output.
 
 Usage:
     python scripts/render_readme.py          # write every README
@@ -52,7 +55,7 @@ from dataclasses import dataclass
 from functools import partial
 from pathlib import Path
 
-from jinja2 import Environment, FileSystemLoader, StrictUndefined
+from jinja2 import ChoiceLoader, Environment, FileSystemLoader, StrictUndefined
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SCRIPTS_DIRPATH = REPO_ROOT / "scripts"
@@ -89,6 +92,8 @@ class PackageMeta:
     name: str
     import_path: str
     description: str
+    #: The docs/<body>/ Sphinx manual dedicated to this package, if any.
+    docs_body: str | None = None
 
 
 def load_packages(order: tuple[str, ...] = PACKAGE_ORDER) -> list[PackageMeta]:
@@ -106,8 +111,12 @@ def load_packages(order: tuple[str, ...] = PACKAGE_ORDER) -> list[PackageMeta]:
         project = data["project"]
         name = project["name"]
         description = project["description"].rstrip(".")
-        import_path = "oaknut." + name.removeprefix("oaknut-").replace("-", "_")
-        found[name] = PackageMeta(name=name, import_path=import_path, description=description)
+        short_name = name.removeprefix("oaknut-")
+        import_path = "oaknut." + short_name.replace("-", "_")
+        docs_body = short_name if (REPO_ROOT / "docs" / short_name / "conf.py").is_file() else None
+        found[name] = PackageMeta(
+            name=name, import_path=import_path, description=description, docs_body=docs_body
+        )
 
     ordered = []
     for name in order:
@@ -118,8 +127,20 @@ def load_packages(order: tuple[str, ...] = PACKAGE_ORDER) -> list[PackageMeta]:
     return ordered
 
 
+def _example_filepath(examples_dirpath: Path, example_name: str) -> Path:
+    example_filepath = (examples_dirpath / f"{example_name}.py").resolve()
+    if not example_filepath.is_file():
+        raise FileNotFoundError(f"example not found: {example_filepath}")
+    return example_filepath
+
+
 def _run_example(
-    examples_dirpath: Path, example_name: str, fixtures: Mapping[str, str] | None
+    examples_dirpath: Path,
+    example_name: str,
+    fixtures: Mapping[str, str] | None,
+    *,
+    setup: str | None = None,
+    prelude: str | None = None,
 ) -> tuple[str, str]:
     """Execute an example script; return its source and its stdout.
 
@@ -127,12 +148,17 @@ def _run_example(
     resolve) in a fresh temporary directory, into which each *fixtures*
     entry — target file name to repository-relative source path — is
     copied first. ``scripts/`` is on ``PYTHONPATH`` so recipes can import
-    ``cli_example_helper``. A failing example is an error, so a stale one
-    cannot render.
+    ``cli_example_helper``.
+
+    *setup* names another example run first in the same directory, its
+    output discarded, to create the files this one reads. *prelude* names
+    an example whose source is prepended to this one's at run time but
+    not returned, so a fragment that relies on surrounding context can
+    still run. A failing script is an error, so a stale example cannot
+    render.
     """
-    example_filepath = (examples_dirpath / f"{example_name}.py").resolve()
-    if not example_filepath.is_file():
-        raise FileNotFoundError(f"example not found: {example_filepath}")
+    example_filepath = _example_filepath(examples_dirpath, example_name)
+    source = example_filepath.read_text()
 
     env = {
         **os.environ,
@@ -145,29 +171,42 @@ def _run_example(
     try:
         for target_filename, source_relpath in (fixtures or {}).items():
             shutil.copy2(REPO_ROOT / source_relpath, work_dirpath / target_filename)
-        result = subprocess.run(
-            [sys.executable, str(example_filepath)],
-            capture_output=True,
-            text=True,
-            check=False,
-            cwd=work_dirpath,
-            env=env,
-        )
+        runs = []
+        if setup is not None:
+            runs.append((setup, _example_filepath(examples_dirpath, setup)))
+        run_filepath = example_filepath
+        if prelude is not None:
+            prelude_source = _example_filepath(examples_dirpath, prelude).read_text()
+            run_filepath = work_dirpath / f".{example_name}-with-prelude.py"
+            run_filepath.write_text(prelude_source + "\n" + source)
+        runs.append((example_name, run_filepath))
+        for run_name, run_filepath in runs:
+            result = subprocess.run(
+                [sys.executable, str(run_filepath)],
+                capture_output=True,
+                text=True,
+                check=False,
+                cwd=work_dirpath,
+                env=env,
+            )
+            if result.returncode != 0:
+                raise RuntimeError(
+                    f"example {run_name!r} failed with exit {result.returncode}:\n"
+                    f"--- stdout ---\n{result.stdout}"
+                    f"--- stderr ---\n{result.stderr}"
+                )
     finally:
         shutil.rmtree(work_dirpath, ignore_errors=True)
-    if result.returncode != 0:
-        raise RuntimeError(
-            f"example {example_name!r} failed with exit {result.returncode}:\n"
-            f"--- stdout ---\n{result.stdout}"
-            f"--- stderr ---\n{result.stderr}"
-        )
-    return example_filepath.read_text(), result.stdout
+    return source, result.stdout
 
 
 def render_example(
     example_name: str,
     fixtures: Mapping[str, str] | None = None,
     *,
+    setup: str | None = None,
+    prelude: str | None = None,
+    output: bool = True,
     examples_dirpath: Path = EXAMPLES_DIRPATH,
 ) -> str:
     """Return a Markdown code block showing an example script and its stdout.
@@ -183,21 +222,28 @@ def render_example(
         ```text
         <stdout>
         ```
+
+    With *output* false, only the source block is rendered; the example
+    still runs, so it cannot go stale.
     """
-    source, stdout = _run_example(examples_dirpath, example_name, fixtures)
-    source_for_readme = _strip_module_docstring(source).strip() + "\n"
-    output = stdout.rstrip() + "\n"
-    return f"```python\n{source_for_readme}```\n\nOutput:\n\n```text\n{output}```"
+    source, stdout = _run_example(
+        examples_dirpath, example_name, fixtures, setup=setup, prelude=prelude
+    )
+    source_block = f"```python\n{_strip_module_docstring(source).strip()}\n```"
+    if not output:
+        return source_block
+    return f"{source_block}\n\nOutput:\n\n```text\n{stdout.rstrip()}\n```"
 
 
 def render_transcript(
     example_name: str,
     fixtures: Mapping[str, str] | None = None,
     *,
+    setup: str | None = None,
     examples_dirpath: Path = EXAMPLES_DIRPATH,
 ) -> str:
     """Return a Markdown code block holding a recipe's ``$ command`` transcript."""
-    _source, stdout = _run_example(examples_dirpath, example_name, fixtures)
+    _source, stdout = _run_example(examples_dirpath, example_name, fixtures, setup=setup)
     return f"```\n{stdout.rstrip()}\n```"
 
 
@@ -219,9 +265,11 @@ def _strip_module_docstring(source: str) -> str:
     return leading_ws + after_docstring.lstrip("\n")
 
 
-def _jinja_env(template_dirpath: Path = TEMPLATE_DIRPATH) -> Environment:
+def _jinja_env(*template_dirpaths: Path) -> Environment:
     return Environment(
-        loader=FileSystemLoader(template_dirpath),
+        loader=ChoiceLoader(
+            [FileSystemLoader(dirpath) for dirpath in (*template_dirpaths, TEMPLATE_DIRPATH)]
+        ),
         undefined=StrictUndefined,
         keep_trailing_newline=True,
         trim_blocks=False,
@@ -243,10 +291,18 @@ def render_pypi_readme() -> str:
 
 
 def render_package_readme(package_dirpath: Path) -> str:
+    """Render a package's README from its readme/ template.
+
+    The template sees ``package`` (its :class:`PackageMeta`) and the
+    ``example`` and ``transcript`` functions, and can import the shared
+    header and licence macros from ``scripts/readme-templates/package.md.j2``.
+    """
     readme_dirpath = package_dirpath / PACKAGE_README_DIRNAME
     examples_dirpath = readme_dirpath / PACKAGE_EXAMPLES_DIRNAME
     template = _jinja_env(readme_dirpath).get_template(README_TEMPLATE_FILENAME)
+    package = next(meta for meta in load_packages() if meta.name == package_dirpath.name)
     return template.render(
+        package=package,
         example=partial(render_example, examples_dirpath=examples_dirpath),
         transcript=partial(render_transcript, examples_dirpath=examples_dirpath),
     )
