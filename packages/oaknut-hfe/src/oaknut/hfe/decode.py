@@ -6,7 +6,7 @@ and marks that no byte or word grid would line up with. Each ID address
 mark found becomes a :class:`DecodedSector`, including ones with bad CRCs,
 duplicate or out-of-range IDs, odd sizes, or no data field. Nothing is
 discarded at this level; deciding which sectors make up the logical disc
-is the job of :mod:`oaknut.hfe.flatten`.
+is the job of :mod:`oaknut.hfe.flat`.
 
 An FM half-cell spans two samples at the usual 250 kbit/s HFE rate. The
 samples are combined into half-cells at each possible phase and every

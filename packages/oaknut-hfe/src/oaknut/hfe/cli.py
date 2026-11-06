@@ -30,7 +30,7 @@ def hfe() -> None:
 def _load(image: Path):
     from oaknut.hfe.container import HFEImage
     from oaknut.hfe.decode import decode_image
-    from oaknut.hfe.flatten import flatten
+    from oaknut.hfe.flat import flatten
 
     hfe_image = HFEImage.from_filepath(image)
     disc = decode_image(hfe_image)
@@ -116,11 +116,14 @@ def sectors_command(image: Path, track_number: int | None, anomalies: bool):
 
     Lists each ID address mark found on each physical track, whether or
     not a filesystem would use it: its cylinder, head, record and size
-    code, its ID and data CRCs, and whether its data mark is normal or
-    deleted. Remarks name each departure from the disc's standard layout
-    (IDs claiming another cylinder or head, records out of range, odd
-    sizes, duplicates, CRC errors, deleted or missing data, weak bits,
-    unformatted or extra tracks), which is how copy protection shows up.
+    code, its ID CRC, and its data field: ``ok``, ``bad CRC``,
+    ``deleted`` (a deleted-data mark), or ``none``. Offsets count flux
+    samples from the start of the track, 2 µs each at 250 kbit/s. Remarks
+    name each departure from the disc's standard layout (IDs claiming
+    another cylinder or head, records out of range, odd sizes, duplicates,
+    CRC errors, deleted or missing data, weak bits, unformatted or extra
+    tracks), which is how copy protection shows up. The side column
+    appears only for a double-sided image.
     """
     from oaknut.hfe.report import analyse
 
@@ -140,10 +143,11 @@ def sectors_command(image: Path, track_number: int | None, anomalies: bool):
         ("remarks", "Remarks"),
     ):
         tracks.add_column(key, label)
+    double_sided = disc.num_sides == 2
     sectors = TableContent(title="Sectors")
     for key, label in (
         ("track", "Track"),
-        ("side", "Side"),
+        *((("side", "Side"),) if double_sided else ()),
         ("offset", "Offset"),
         ("encoding", "Enc"),
         ("cylinder", "C"),
@@ -151,8 +155,7 @@ def sectors_command(image: Path, track_number: int | None, anomalies: bool):
         ("record", "R"),
         ("size_code", "N"),
         ("id_crc", "ID CRC"),
-        ("data_mark", "Data"),
-        ("data_crc", "Data CRC"),
+        ("data", "Data"),
         ("remarks", "Remarks"),
     ):
         sectors.add_column(key, label)
@@ -172,7 +175,7 @@ def sectors_command(image: Path, track_number: int | None, anomalies: bool):
             sector = sector_finding.sector
             sectors.add_row(
                 track=finding.track,
-                side=finding.side,
+                **({"side": finding.side} if double_sided else {}),
                 offset=sector.position,
                 encoding=sector.encoding.value,
                 cylinder=sector.id.cylinder,
@@ -180,13 +183,24 @@ def sectors_command(image: Path, track_number: int | None, anomalies: bool):
                 record=sector.id.record,
                 size_code=sector.id.size_code,
                 id_crc="ok" if sector.id_crc_ok else "bad",
-                data_mark=sector.data_mark.value if sector.data_mark else "none",
-                data_crc=""
-                if sector.data_crc_ok is None
-                else ("ok" if sector.data_crc_ok else "bad"),
+                data=_data_field(sector),
                 remarks="; ".join(sector_finding.remarks),
             )
     return Reports(tracks=Report(data=tracks), sectors=Report(data=sectors))
+
+
+def _data_field(sector) -> str:
+    """A sector's data field in a word or two: ok, bad CRC, deleted, none."""
+    from oaknut.hfe.decode import DataMark
+
+    if sector.data_mark is None:
+        return "none"
+    parts = []
+    if sector.data_mark is DataMark.DELETED:
+        parts.append("deleted")
+    if not sector.data_crc_ok:
+        parts.append("bad CRC")
+    return ", ".join(parts) or "ok"
 
 
 @hfe.command(name="flatten")
@@ -212,7 +226,7 @@ def flatten_command(image: Path, output: Path, fill: str, force: bool) -> None:
     from oaknut.hfe.decode import decode_image
     from oaknut.hfe.decoder import flat_image_notes
     from oaknut.hfe.exceptions import HFEError
-    from oaknut.hfe.flatten import flatten
+    from oaknut.hfe.flat import flatten
 
     fill_byte = parse_address(fill)
     if not 0 <= fill_byte <= 0xFF:

@@ -5,7 +5,7 @@ would not: IDs claiming another cylinder or head, records outside the
 usual range, odd sector sizes, duplicate IDs, deliberate CRC errors,
 deleted-data marks, missing data fields, weak bits, and tracks beyond
 the formatted range. :func:`analyse` compares every decoded track and
-sector with the disc's inferred :class:`~oaknut.hfe.flatten.SectorLayout`
+sector with the disc's inferred :class:`~oaknut.hfe.flat.SectorLayout`
 and names each departure from it, so a protection scheme can be read
 off the report.
 """
@@ -16,7 +16,7 @@ from collections import Counter
 from dataclasses import dataclass
 
 from oaknut.hfe.decode import DataMark, DecodedDisc, DecodedSector, DecodedTrack
-from oaknut.hfe.flatten import SectorLayout
+from oaknut.hfe.flat import SectorLayout
 
 __all__ = ["SectorFinding", "TrackFinding", "analyse"]
 

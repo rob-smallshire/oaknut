@@ -11,7 +11,7 @@ from oaknut.hfe.build import (
 )
 from oaknut.hfe.container import HFEImage, write_hfe
 from oaknut.hfe.decode import Encoding, SectorID, decode_image
-from oaknut.hfe.flatten import flatten, flatten_hfe
+from oaknut.hfe.flat import flatten, flatten_hfe
 
 from tests.fixtures import REFERENCE_IMAGES_DIRPATH
 

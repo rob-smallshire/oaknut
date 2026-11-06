@@ -17,4 +17,73 @@ from __future__ import annotations
 
 __version__ = "13.5.0"
 
-__all__: list[str] = []
+from oaknut.hfe.build import (
+    TRACK_SAMPLES_300RPM_250KBPS,
+    FormattedSector,
+    build_track,
+    samples_per_half_cell,
+    track_samples,
+)
+from oaknut.hfe.container import (
+    HFE_V1_SIGNATURE,
+    HFE_V3_SIGNATURE,
+    HFEHeader,
+    HFEImage,
+    TrackEncoding,
+    TrackSamples,
+    write_hfe,
+)
+from oaknut.hfe.decode import (
+    DataMark,
+    DecodedDisc,
+    DecodedSector,
+    DecodedTrack,
+    Encoding,
+    SectorID,
+    decode_image,
+    decode_track,
+)
+from oaknut.hfe.decoder import HFEDecoder
+from oaknut.hfe.exceptions import HFEError, HFEFormatError
+from oaknut.hfe.flat import FlatImage, SectorLayout, flatten, flatten_hfe
+from oaknut.hfe.report import SectorFinding, TrackFinding, analyse
+
+__all__ = [
+    # The container
+    "HFEImage",
+    "HFEHeader",
+    "TrackSamples",
+    "TrackEncoding",
+    "HFE_V1_SIGNATURE",
+    "HFE_V3_SIGNATURE",
+    "write_hfe",
+    # Decoding
+    "Encoding",
+    "DataMark",
+    "SectorID",
+    "DecodedSector",
+    "DecodedTrack",
+    "DecodedDisc",
+    "decode_track",
+    "decode_image",
+    # Flattening
+    "SectorLayout",
+    "FlatImage",
+    "flatten",
+    "flatten_hfe",
+    # The sector report
+    "SectorFinding",
+    "TrackFinding",
+    "analyse",
+    # Building tracks
+    "FormattedSector",
+    "build_track",
+    "track_samples",
+    "samples_per_half_cell",
+    "TRACK_SAMPLES_300RPM_250KBPS",
+    # The oaknut.decoder plug-in
+    "HFEDecoder",
+    # Exceptions
+    "HFEError",
+    "HFEFormatError",
+]

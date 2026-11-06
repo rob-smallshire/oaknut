@@ -12,7 +12,7 @@ from oaknut.filesystem.decoder import DecodedImage, ImageDecoder
 from oaknut.hfe.container import HFE_V1_SIGNATURE, HFE_V3_SIGNATURE, HFEImage
 from oaknut.hfe.decode import decode_image
 from oaknut.hfe.exceptions import HFEError
-from oaknut.hfe.flatten import FlatImage, flatten
+from oaknut.hfe.flat import FlatImage, flatten
 
 __all__ = ["HFEDecoder", "flat_image_notes"]
 
