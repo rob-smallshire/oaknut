@@ -38,10 +38,7 @@ _PTR_SIZE = struct.calcsize("P")
 
 def _ioc(direction: int, nr: int, size: int) -> int:
     return (
-        (direction << _DIRSHIFT)
-        | (size << _SIZESHIFT)
-        | (_MAGIC << _TYPESHIFT)
-        | (nr << _NRSHIFT)
+        (direction << _DIRSHIFT) | (size << _SIZESHIFT) | (_MAGIC << _TYPESHIFT) | (nr << _NRSHIFT)
     )
 
 

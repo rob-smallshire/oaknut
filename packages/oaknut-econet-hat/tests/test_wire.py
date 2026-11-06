@@ -26,7 +26,13 @@ def test_tx_status_values():
 
 def test_encode_known_vector():
     packet = KernelPacket(
-        KernelPacketType.DATA, Address(0, 254), Address(0, 1), control=0x80, port=0x99, seq=4, payload=b"Hi"
+        KernelPacketType.DATA,
+        Address(0, 254),
+        Address(0, 1),
+        control=0x80,
+        port=0x99,
+        seq=4,
+        payload=b"Hi",
     )
     assert packet.encode() == b"\xfe\x00\x01\x00\x02\x99\x80\x00\x04\x00\x00\x00Hi"
 
@@ -62,7 +68,13 @@ def test_padding_byte_is_zero():
 @pytest.mark.parametrize("ttype", list(KernelPacketType))
 def test_round_trips_for_every_type(ttype):
     original = KernelPacket(
-        ttype, Address(1, 254), Address(2, 1), control=0x80, port=0x9C, seq=0xDEADBEEF, payload=b"\x01\x02"
+        ttype,
+        Address(1, 254),
+        Address(2, 1),
+        control=0x80,
+        port=0x9C,
+        seq=0xDEADBEEF,
+        payload=b"\x01\x02",
     )
     assert KernelPacket.decode(original.encode()) == original
 
@@ -86,4 +98,6 @@ def test_rejects_out_of_range_control(control):
 @pytest.mark.parametrize("seq", [-1, 0x1_0000_0000])
 def test_rejects_out_of_range_seq(seq):
     with pytest.raises(ValueError):
-        KernelPacket(KernelPacketType.DATA, Address(0, 1), Address(0, 2), control=0, port=0, seq=seq)
+        KernelPacket(
+            KernelPacketType.DATA, Address(0, 1), Address(0, 2), control=0, port=0, seq=seq
+        )

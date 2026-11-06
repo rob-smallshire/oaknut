@@ -31,7 +31,9 @@ from oaknut.econet.hat.wire import KernelPacket, KernelPacketType, TxStatus
     ],
 )
 def test_kind_and_ttype_round_trip(kind, ttype):
-    packet = EconetPacket(kind, Address(0, 254), Address(0, 1), control=0x80, port=0x99, payload=b"x")
+    packet = EconetPacket(
+        kind, Address(0, 254), Address(0, 1), control=0x80, port=0x99, payload=b"x"
+    )
     kernel = econet_to_kernel(packet, seq=7)
     assert kernel.ttype is ttype
     assert kernel.control == 0x80  # high bit retained
@@ -46,7 +48,9 @@ def test_kind_and_ttype_round_trip(kind, ttype):
     assert restored.seq == 7
 
 
-@pytest.mark.parametrize("ttype", [KernelPacketType.ACK, KernelPacketType.NAK, KernelPacketType.INK])
+@pytest.mark.parametrize(
+    "ttype", [KernelPacketType.ACK, KernelPacketType.NAK, KernelPacketType.INK]
+)
 def test_handshake_artifacts_are_not_delivered(ttype):
     kernel = KernelPacket(ttype, Address(0, 1), Address(0, 2), control=0x80, port=0)
     assert kernel_to_econet(kernel) is None
@@ -115,7 +119,9 @@ def test_is_in_progress():
 
 def test_econet_to_kernel_rejects_nothing_for_valid_kinds():
     # A sanity check that a normal unicast maps without error.
-    packet = EconetPacket(PacketKind.UNICAST, Address(0, 254), Address(0, 1), control=0x80, port=0x99)
+    packet = EconetPacket(
+        PacketKind.UNICAST, Address(0, 254), Address(0, 1), control=0x80, port=0x99
+    )
     assert isinstance(econet_to_kernel(packet), KernelPacket)
 
 

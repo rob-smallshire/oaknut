@@ -31,7 +31,9 @@ class _EchoService(Service):
         return frozenset({0x99})
 
     async def handle(self, request, station):
-        await station.reply(request.src, port=0x90, control=0x80, payload=b"echo:" + request.payload)
+        await station.reply(
+            request.src, port=0x90, control=0x80, payload=b"echo:" + request.payload
+        )
 
 
 def test_service_is_an_extension_on_the_service_axis():

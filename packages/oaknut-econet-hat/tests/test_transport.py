@@ -78,7 +78,12 @@ async def test_inbound_packet_is_delivered():
     device = FakeKernelDevice()
     async with HatTransport(device=device, local_station=Address(0, 1)) as transport:
         incoming = KernelPacket(
-            KernelPacketType.DATA, Address(0, 1), Address(0, 2), control=0x80, port=0x99, payload=b"payload"
+            KernelPacketType.DATA,
+            Address(0, 1),
+            Address(0, 2),
+            control=0x80,
+            port=0x99,
+            payload=b"payload",
         )
         device.inject(incoming.encode())
         received = await asyncio.wait_for(anext(aiter(transport)), timeout=1.0)

@@ -33,9 +33,7 @@ def test_request_round_trips():
 
 
 def test_request_round_trips_with_a_value():
-    request = decode_request(
-        encode_request(reply_port=0xB1, op=KvOp.PUT, key=b"k", value=b"hello")
-    )
+    request = decode_request(encode_request(reply_port=0xB1, op=KvOp.PUT, key=b"k", value=b"hello"))
     assert request == KvRequest(0xB1, KvOp.PUT, b"k", b"hello")
 
 

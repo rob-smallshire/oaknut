@@ -205,9 +205,7 @@ class AunTransport(EconetTransport):
         source = self._reverse.get(addr)
         if source is None:
             return  # unattributable: no peer mapping for this endpoint
-        self._inbound.put_nowait(
-            aun_to_econet(datagram, dst=self._local_station, src=source)
-        )
+        self._inbound.put_nowait(aun_to_econet(datagram, dst=self._local_station, src=source))
         if datagram.type is AunType.UNICAST:
             self._acknowledge(datagram, addr)
 

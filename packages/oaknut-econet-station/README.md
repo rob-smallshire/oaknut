@@ -15,9 +15,9 @@ single-tasking 6502 hardware never could.
 
 ```python
 station = Station(transport, address=Address(0, 254))
-station.register(FileServer(...))      # claims port &99
-station.register(PrintServer(...))     # claims the print ports
-await station.serve()                  # dispatch inbound packets by port
+station.register(FileServer(...))  # claims port &99
+station.register(PrintServer(...))  # claims the print ports
+await station.serve()  # dispatch inbound packets by port
 ```
 
 See `docs/dev/econet-design.md` §13 for the design, including process

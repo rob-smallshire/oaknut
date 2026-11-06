@@ -113,13 +113,13 @@ Sketches below establish *shape and intent*; exact signatures are settled in cod
 ```python
 @dataclass(frozen=True, slots=True)
 class Address:
-    network: int   # 0 == "this network"
-    station: int   # 1..254 ; 255 == broadcast
+    network: int  # 0 == "this network"
+    station: int  # 1..254 ; 255 == broadcast
 
     @property
     def is_broadcast(self) -> bool: ...
     @property
-    def is_local_net(self) -> bool: ...   # network == 0
+    def is_local_net(self) -> bool: ...  # network == 0
 ```
 
 Well-known constants live here: `BROADCAST_STATION = 255`, `LOCAL_NET = 0`, `IMMEDIATE_PORT = 0x00`, and a `Port` enum / constants for `&99`, `&9F`, `&9C`, etc. (named once the NFS/ANFS disassembly confirms them).
@@ -129,19 +129,20 @@ Well-known constants live here: `BROADCAST_STATION = 255`, `LOCAL_NET = 0`, `IMM
 ```python
 class PacketKind(Enum):
     BROADCAST = auto()
-    UNICAST = auto()          # reliable four-way (abstracted)
-    IMMEDIATE = auto()        # two-way request
+    UNICAST = auto()  # reliable four-way (abstracted)
+    IMMEDIATE = auto()  # two-way request
     IMMEDIATE_REPLY = auto()  # two-way reply
+
 
 @dataclass(frozen=True, slots=True)
 class EconetPacket:
     kind: PacketKind
     dst: Address
     src: Address
-    control: int              # 0..255 (AUN representation: high bit clear)
-    port: int                 # 0..255
+    control: int  # 0..255 (AUN representation: high bit clear)
+    port: int  # 0..255
     payload: bytes
-    seq: int | None = None    # transport owns AUN handle/sequence; usually None at the app layer
+    seq: int | None = None  # transport owns AUN handle/sequence; usually None at the app layer
 ```
 
 `ACK`/`NACK` are *not* packet kinds the application sees — they are wire-level outcomes folded into `TransmitOutcome` (below), because inbound packets are already acknowledged (principle 5).
@@ -150,13 +151,14 @@ class EconetPacket:
 
 ```python
 class TransmitOutcome(Enum):
-    ACKNOWLEDGED = auto()     # final-ack received / AUN Ack
-    NOT_LISTENING = auto()    # no scout-ack: destination not listening on that port
-    NO_CLOCK = auto()         # no network clock present
+    ACKNOWLEDGED = auto()  # final-ack received / AUN Ack
+    NOT_LISTENING = auto()  # no scout-ack: destination not listening on that port
+    NO_CLOCK = auto()  # no network clock present
     LINE_JAMMED = auto()
     TIMEOUT = auto()
     HANDSHAKE_FAILED = auto()
-    NETWORK_ERROR = auto()    # collision/underrun/misc
+    NETWORK_ERROR = auto()  # collision/underrun/misc
+
 
 @dataclass(frozen=True, slots=True)
 class TransmitResult:
@@ -178,7 +180,7 @@ class EconetTransport(Extension, abc.ABC):
     rather than `asyncio`'s push (Protocol-callback) interface.
     """
 
-    def _kind(self) -> str:               # oaknut-extension axis
+    def _kind(self) -> str:  # oaknut-extension axis
         return "econet.transport"
 
     @property
@@ -218,11 +220,11 @@ class EconetTransport(Extension, abc.ABC):
 
 ```python
 class TransportCapability(Enum):
-    MONITOR = auto()           # promiscuous receive of all traffic
-    IMMEDIATE_REPLY = auto()   # can send host-generated immediate replies
-    BROADCAST = auto()         # can originate broadcasts
-    MULTI_NET = auto()         # honours network numbers beyond the local net
-    DISCOVERY = auto()         # participates in mDNS advertise/discover
+    MONITOR = auto()  # promiscuous receive of all traffic
+    IMMEDIATE_REPLY = auto()  # can send host-generated immediate replies
+    BROADCAST = auto()  # can originate broadcasts
+    MULTI_NET = auto()  # honours network numbers beyond the local net
+    DISCOVERY = auto()  # participates in mDNS advertise/discover
 ```
 
 Worked example from the validated Piconet findings: a Piconet transport advertises `{BROADCAST, MONITOR}` but **not** `IMMEDIATE_REPLY` (the firmware `REPLY` path is currently non-functional), and it must **reclassify a received port-0 `RX_TRANSMIT` as `PacketKind.IMMEDIATE`** because the firmware never emits `RX_IMMEDIATE` and auto-answers only `MachinePeek`.
@@ -483,12 +485,12 @@ Legacy Acorn networks ran roughly one service per station — `254` the file ser
 **The model.** A **`Station`** is one network identity — an `Address` plus an `EconetTransport` — that hosts one or more **`Service`s**. It owns the inbound loop and dispatches each received packet to the service registered for its **port**:
 
 ```python
-class Service(Extension):                            # axis: "oaknut.econet.service"
+class Service(Extension):  # axis: "oaknut.econet.service"
     """A plug-in handler for one Econet protocol, bound to the ports it claims."""
 
     @property
     @abc.abstractmethod
-    def ports(self) -> frozenset[int]: ...          # e.g. {Port.FS_COMMAND}
+    def ports(self) -> frozenset[int]: ...  # e.g. {Port.FS_COMMAND}
 
     @abc.abstractmethod
     async def handle(self, request: EconetPacket, station: "Station") -> None: ...
@@ -499,17 +501,18 @@ class Station:
 
     def __init__(self, transport: EconetTransport, *, address: Address) -> None: ...
 
-    def register(self, service: Service) -> None: ...           # claims service.ports
-    def register_extension(self, name: str, **kwargs) -> Service: ...   # load a plug-in by name
+    def register(self, service: Service) -> None: ...  # claims service.ports
+    def register_extension(self, name: str, **kwargs) -> Service: ...  # load a plug-in by name
 
     async def serve(self) -> None:
         async with self._transport:
             async for request in self._transport:
                 service = self._services_by_port.get(request.port)
                 if service is not None:
-                    self._spawn(service.handle(request, self))   # concurrent task
+                    self._spawn(service.handle(request, self))  # concurrent task
 
-    async def reply(self, to: Address, *, port: int, control: int, payload: bytes): ...
+    async def reply(self, to: Address, *, port: int, control: int, payload: bytes):
+        ...
         # a fresh transmit back to the client's nominated reply port
 ```
 

@@ -103,9 +103,7 @@ _STATUS_TO_OUTCOME = {
     TxStatus.JAMMED: TransmitOutcome.LINE_JAMMED,
     TxStatus.HANDSHAKE_FAIL: TransmitOutcome.HANDSHAKE_FAILED,
 }
-_IN_PROGRESS = frozenset(
-    {TxStatus.IN_PROGRESS, TxStatus.DATA_PROGRESS, TxStatus.START_WAIT}
-)
+_IN_PROGRESS = frozenset({TxStatus.IN_PROGRESS, TxStatus.DATA_PROGRESS, TxStatus.START_WAIT})
 
 
 def tx_status_to_outcome(status: TxStatus | int) -> TransmitOutcome:

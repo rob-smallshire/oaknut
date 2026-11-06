@@ -50,7 +50,9 @@ def cli(debug: bool) -> None:
 
 
 _CONFIG = click.option(
-    "--config", "config_path", default=None,
+    "--config",
+    "config_path",
+    default=None,
     type=click.Path(exists=True, dir_okay=False, path_type=Path),
     help="Path to a station config TOML file.",
 )

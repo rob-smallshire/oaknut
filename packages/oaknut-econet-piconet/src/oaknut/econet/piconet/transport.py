@@ -54,9 +54,7 @@ class PiconetTransport(EconetTransport):
     decoded to packets and delivered through async iteration.
     """
 
-    _CAPABILITIES = frozenset(
-        {TransportCapability.BROADCAST, TransportCapability.MONITOR}
-    )
+    _CAPABILITIES = frozenset({TransportCapability.BROADCAST, TransportCapability.MONITOR})
 
     @classmethod
     def from_config(cls, *, name: str, address: Address | None, config: dict) -> PiconetTransport:
@@ -130,9 +128,7 @@ class PiconetTransport(EconetTransport):
         return TransmitResult(await self._send_awaiting_result(econet_to_tx_command(packet)))
 
     async def broadcast(self, payload: bytes, *, port: int, control: int) -> None:
-        await self._send_awaiting_result(
-            broadcast_command_for(payload, port=port, control=control)
-        )
+        await self._send_awaiting_result(broadcast_command_for(payload, port=port, control=control))
 
     async def status(self) -> StatusEvent:
         """Query the board: firmware version, station, SR1 (clock state), mode."""

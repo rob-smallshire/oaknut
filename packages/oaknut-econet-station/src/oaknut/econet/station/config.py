@@ -118,7 +118,9 @@ def build_station(config: StationConfig) -> Station:
     name (via ``from_config``) and register them. Constructs only — does not open
     the transport."""
     transport_cls = extension(
-        _TRANSPORT_KIND, namespace_for(_TRANSPORT_KIND), config.transport,
+        _TRANSPORT_KIND,
+        namespace_for(_TRANSPORT_KIND),
+        config.transport,
         exception_type=ConfigurationError,
     )
     transport = transport_cls.from_config(
@@ -127,7 +129,9 @@ def build_station(config: StationConfig) -> Station:
     station = Station(transport, address=config.address)
     for service_config in config.services:
         service_cls = extension(
-            _SERVICE_KIND, namespace_for(_SERVICE_KIND), service_config.name,
+            _SERVICE_KIND,
+            namespace_for(_SERVICE_KIND),
+            service_config.name,
             exception_type=ConfigurationError,
         )
         service = service_cls.from_config(name=service_config.name, config=service_config.config)

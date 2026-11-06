@@ -40,7 +40,9 @@ def test_pad_byte_is_zero():
 
 @pytest.mark.parametrize("aun_type", list(AunType))
 def test_round_trips_for_every_type(aun_type):
-    original = AunPacket(aun_type, port=0x9C, control=0x82, handle=0xDEADBEEF, payload=b"\x01\x02\x03")
+    original = AunPacket(
+        aun_type, port=0x9C, control=0x82, handle=0xDEADBEEF, payload=b"\x01\x02\x03"
+    )
     assert AunPacket.decode(original.encode()) == original
 
 
