@@ -26,9 +26,9 @@ def test_dfs_write_over_locked_raises_file_locked(tmp_path):
         assert path.read_bytes() == b"original"
 
 
-def test_dfs_file_locked_is_still_a_permission_error():
-    # Existing callers catching PermissionError keep working.
-    assert issubclass(FileLocked, PermissionError)
+def test_dfs_file_locked_is_an_fs_error_not_a_host_permission_error():
+    # A catalogue lock is not a host permission failure.
+    assert not issubclass(FileLocked, OSError)
     assert issubclass(FileLocked, FSError)
 
 

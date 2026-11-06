@@ -451,7 +451,7 @@ class DFSPath(AcornPath):
 
         Raises:
             FileNotFoundError: If the file doesn't exist.
-            PermissionError: If the file is locked.
+            FileLocked: If the file is locked.
         """
         if not self._path or self._is_directory_path():
             raise ValueError(f"Cannot unlink directory: '{self._path}'")
