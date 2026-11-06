@@ -204,18 +204,19 @@ def test_decode_image_from_built_hfe():
     assert [s.id for s in track.sectors] == [SectorID(2, 0, r, 1) for r in range(10)]
 
 
-class TestDunjunz:
-    @pytest.fixture(scope="class")
-    def disc(self):
-        return decode_image(HFEImage.from_filepath(DUNJUNZ_S1_FILEPATH))
+@pytest.fixture(scope="module")
+def dunjunz_disc():
+    return decode_image(HFEImage.from_filepath(DUNJUNZ_S1_FILEPATH))
 
-    def test_every_formatted_track_has_ten_good_sectors(self, disc):
+
+class TestDunjunz:
+    def test_every_formatted_track_has_ten_good_sectors(self, dunjunz_disc):
         for track in range(40):
-            sectors = disc.track(track, 0).sectors
+            sectors = dunjunz_disc.track(track, 0).sectors
             assert sorted(s.id.record for s in sectors) == list(range(10)), track
             assert all(s.readable for s in sectors), track
             assert {s.id.cylinder for s in sectors} == {track}
             assert {s.data_mark for s in sectors} == {DataMark.NORMAL}
 
-    def test_track_forty_is_unformatted(self, disc):
-        assert disc.track(40, 0).sectors == ()
+    def test_track_forty_is_unformatted(self, dunjunz_disc):
+        assert dunjunz_disc.track(40, 0).sectors == ()
