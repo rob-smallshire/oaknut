@@ -76,9 +76,18 @@ def identify_command() -> click.Command:
         """
         result = survey(image_filepath)
         candidates = list(_flatten(result.candidates))
+        descriptions = []
+        if result.decoded is not None:
+            decoded = result.decoded
+            details = "; ".join(decoded.notes)
+            descriptions.append(
+                f"decoded from {decoded.format_name}" + (f" ({details})" if details else "")
+            )
+        if not candidates:
+            descriptions.append("no known filesystem recognised")
         table = TableContent(
             title=image_filepath.name,
-            description=None if candidates else "no known filesystem recognised",
+            description="; ".join(descriptions) or None,
         )
         table.add_column("confidence", "Confidence")
         table.add_column("filesystem", "Filesystem")

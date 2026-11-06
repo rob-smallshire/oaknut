@@ -13,6 +13,7 @@ from __future__ import annotations
 import enum
 from dataclasses import dataclass, field, replace
 
+from oaknut.filesystem.decoder import DecodedImage
 from oaknut.filesystem.geometry import Geometry
 
 
@@ -149,6 +150,9 @@ class Survey:
     candidates: list[Identification]
     #: Why each declining filesystem declined, in filesystem-name order.
     rejections: tuple[Rejection, ...] = ()
+    #: The :class:`~oaknut.filesystem.decoder.DecodedImage` surveyed, when an
+    #: image decoder turned the source into a sector image first.
+    decoded: DecodedImage | None = None
 
 
 def describe_bytes(data: bytes) -> str:

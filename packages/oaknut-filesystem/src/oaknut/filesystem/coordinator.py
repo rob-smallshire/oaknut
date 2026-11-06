@@ -145,6 +145,7 @@ def survey(
                 replace(c, partition=replace(whole, name=c.filesystem)) for c in candidates
             ],
             rejections=rejections,
+            decoded=reader.decoded,
         )
 
 
