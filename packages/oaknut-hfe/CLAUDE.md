@@ -43,6 +43,14 @@ Ported from Beebium (`~/Code/beebium`: `HfeFormatHandler`, `IbmDiscFormat`,
 `TrackBuilder`), which is the user's own code, relicensed MIT here. Beebium's
 `TrackDecoder` assumes word-aligned marks and is deliberately not followed.
 
+## Sources of real captures
+
+`docs/references.md` records the `beeb_hfe` archive of HFE captures of
+original BBC discs and the "BBC discs and fingerprints" spreadsheet that
+catalogues them, including per-disc copy-protection notes and the
+capture filename convention. Look there first for a real protected
+fixture.
+
 ## Testing
 
 Fixtures in `tests/data/images/hfe/` (see its README): two sides of the
