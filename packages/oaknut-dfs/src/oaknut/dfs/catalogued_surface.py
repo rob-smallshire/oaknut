@@ -97,9 +97,26 @@ class CataloguedSurface:
         self._catalogue.remove_file_entry(filename)
 
     @property
+    def held_sectors(self) -> int:
+        """The sectors this side of the image physically holds."""
+        return self._surface.num_sectors
+
+    @property
+    def usable_sectors(self) -> int:
+        """The sectors a file may occupy: the catalogue's count, capped by the image.
+
+        A DFS honours its catalogue's sector count, so an image holding
+        more sectors than the catalogue declares offers only the declared
+        ones. An image holding fewer (a trimmed image, or a disc duplicated
+        onto fewer tracks than its catalogue claims) offers only those it
+        has. A malformed count already reads as the side's true size.
+        """
+        return min(self._catalogue.get_disc_info().total_sectors, self.held_sectors)
+
+    @property
     def free_sectors(self) -> int:
         """Get number of free sectors."""
-        total_sectors = self._surface.num_sectors
+        total_sectors = self.usable_sectors
 
         # Count used sectors
         used_sectors = self._catalogue.CATALOG_NUM_SECTORS
@@ -134,7 +151,7 @@ class CataloguedSurface:
         region_start = 0
         region_length = 0
 
-        for sector in range(self._surface.num_sectors):
+        for sector in range(self.usable_sectors):
             if sector in used_sectors:
                 if in_free_region:
                     free_regions.append((region_start, region_length))
@@ -167,7 +184,7 @@ class CataloguedSurface:
             Start sector of the first suitable free space
 
         Raises:
-            IOError: If no contiguous space large enough is found
+            DiscFullError: If no contiguous space large enough is found
         """
         sectors_needed = (bytes_needed + 255) // 256
 
@@ -188,7 +205,7 @@ class CataloguedSurface:
         current_sector = 0
         consecutive_free = 0
 
-        for sector in range(self._surface.num_sectors):
+        for sector in range(self.usable_sectors):
             if sector in used_sectors:
                 consecutive_free = 0
             else:
