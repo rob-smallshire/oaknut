@@ -20,8 +20,8 @@ class TestFreeSpace:
         buffer[256:260] = b"    "
         buffer[260] = 0
         buffer[261] = 0
-        buffer[262] = 0x00
-        buffer[263] = 200
+        buffer[262] = 0x01  # 400 sectors: a 40-track side
+        buffer[263] = 0x90
 
         dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
@@ -37,8 +37,8 @@ class TestFreeSpace:
         buffer[256:260] = b"    "
         buffer[260] = 0
         buffer[261] = 0
-        buffer[262] = 0x00
-        buffer[263] = 200
+        buffer[262] = 0x01  # 400 sectors: a 40-track side
+        buffer[263] = 0x90
 
         dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
@@ -58,8 +58,8 @@ class TestFreeSpace:
         buffer[256:260] = b"    "
         buffer[260] = 0
         buffer[261] = 0
-        buffer[262] = 0x00
-        buffer[263] = 200
+        buffer[262] = 0x01  # 400 sectors: a 40-track side
+        buffer[263] = 0x90
 
         dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
@@ -77,8 +77,8 @@ class TestFreeSpace:
         buffer[256:260] = b"    "
         buffer[260] = 0
         buffer[261] = 0
-        buffer[262] = 0x00
-        buffer[263] = 200
+        buffer[262] = 0x01  # 400 sectors: a 40-track side
+        buffer[263] = 0x90
 
         dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
@@ -104,8 +104,8 @@ class TestFreeSpace:
         buffer[256:260] = b"    "
         buffer[260] = 5  # Cycle number
         buffer[261] = 0
-        buffer[262] = 0x20  # Boot option 2
-        buffer[263] = 200
+        buffer[262] = 0x21  # Boot option 2; 400 sectors
+        buffer[263] = 0x90
 
         dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
@@ -113,7 +113,7 @@ class TestFreeSpace:
 
         assert info["title"] == "TESTINFO"
         assert info["num_files"] == 0
-        assert info["total_sectors"] == 200
+        assert info["total_sectors"] == 400
         assert info["free_sectors"] == 398  # 400 - 2 catalog
         assert info["boot_option"] == 2
 
@@ -129,8 +129,8 @@ class TestFileInfo:
         buffer[256:260] = b"    "
         buffer[260] = 0
         buffer[261] = 0
-        buffer[262] = 0x00
-        buffer[263] = 200
+        buffer[262] = 0x01  # 400 sectors: a 40-track side
+        buffer[263] = 0x90
 
         dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
@@ -156,8 +156,8 @@ class TestFileInfo:
         buffer[256:260] = b"    "
         buffer[260] = 0
         buffer[261] = 0
-        buffer[262] = 0x00
-        buffer[263] = 200
+        buffer[262] = 0x01  # 400 sectors: a 40-track side
+        buffer[263] = 0x90
 
         dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
@@ -176,8 +176,8 @@ class TestValidation:
         buffer[256:260] = b"    "
         buffer[260] = 0
         buffer[261] = 0
-        buffer[262] = 0x00
-        buffer[263] = 200
+        buffer[262] = 0x01  # 400 sectors: a 40-track side
+        buffer[263] = 0x90
 
         dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
@@ -197,8 +197,8 @@ class TestValidation:
         buffer[256:260] = b"    "
         buffer[260] = 0
         buffer[261] = 16  # 2 files
-        buffer[262] = 0x00
-        buffer[263] = 200
+        buffer[262] = 0x01  # 400 sectors: a 40-track side
+        buffer[263] = 0x90
 
         # File 1: $.TEST at sector 2
         buffer[8:15] = b"TEST   "
@@ -229,8 +229,8 @@ class TestCompaction:
         buffer[256:260] = b"    "
         buffer[260] = 0
         buffer[261] = 0
-        buffer[262] = 0x00
-        buffer[263] = 200
+        buffer[262] = 0x01  # 400 sectors: a 40-track side
+        buffer[263] = 0x90
 
         dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
@@ -268,7 +268,8 @@ class TestCompaction:
         """
         buffer = bytearray(102400)
         buffer[0:8] = b"DISK    "
-        buffer[263] = 200
+        buffer[262] = 0x01  # 400 sectors: a 40-track side
+        buffer[263] = 0x90
 
         dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
         (dfs.root / "$" / "FIRST").write_bytes(b"A" * 256)  # sector 2
@@ -286,7 +287,8 @@ class TestCompaction:
         """``--order`` works through locked files too (e.g. a locked !BOOT)."""
         buffer = bytearray(102400)
         buffer[0:8] = b"DISK    "
-        buffer[263] = 200
+        buffer[262] = 0x01  # 400 sectors: a 40-track side
+        buffer[263] = 0x90
 
         dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
         (dfs.root / "$" / "GAME").write_bytes(b"g" * 300)
@@ -306,8 +308,8 @@ class TestCompaction:
         buffer[256:260] = b"    "
         buffer[260] = 0
         buffer[261] = 0
-        buffer[262] = 0x00
-        buffer[263] = 200
+        buffer[262] = 0x01  # 400 sectors: a 40-track side
+        buffer[263] = 0x90
 
         dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
@@ -327,8 +329,8 @@ class TestCompaction:
         buffer[256:260] = b"    "
         buffer[260] = 0
         buffer[261] = 0
-        buffer[262] = 0x00
-        buffer[263] = 200
+        buffer[262] = 0x01  # 400 sectors: a 40-track side
+        buffer[263] = 0x90
 
         dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
@@ -343,8 +345,8 @@ class TestCompaction:
         buffer[256:260] = b"    "
         buffer[260] = 0
         buffer[261] = 0
-        buffer[262] = 0x00
-        buffer[263] = 200
+        buffer[262] = 0x01  # 400 sectors: a 40-track side
+        buffer[263] = 0x90
 
         dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
@@ -367,7 +369,8 @@ class TestCompaction:
     def _three_file_disc(self):
         buffer = bytearray(102400)
         buffer[0:8] = b"DISK    "
-        buffer[263] = 200
+        buffer[262] = 0x01  # 400 sectors: a 40-track side
+        buffer[263] = 0x90
         dfs = DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
         (dfs.root / "$" / "GAME").write_bytes(b"g" * 300)
         (dfs.root / "$" / "LOADER").write_bytes(b"l" * 300)
@@ -415,7 +418,8 @@ class TestCatalogueOrdering:
     def _disc(self):
         buffer = bytearray(102400)
         buffer[0:8] = b"DISK    "
-        buffer[263] = 200
+        buffer[262] = 0x01  # 400 sectors: a 40-track side
+        buffer[263] = 0x90
         return DFS.from_buffer(memoryview(buffer), ACORN_DFS_40T_SINGLE_SIDED)
 
     def test_entries_descending_by_start_sector(self):

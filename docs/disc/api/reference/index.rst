@@ -15,4 +15,5 @@ page per package. Layered bottom-up: read :doc:`file` and
    dfs
    adfs
    afs
+   romfs
    disc

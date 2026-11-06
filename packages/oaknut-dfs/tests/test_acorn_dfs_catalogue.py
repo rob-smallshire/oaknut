@@ -3,6 +3,7 @@
 import pytest
 from oaknut.dfs.acorn_dfs_catalogue import AcornDFSCatalogue
 from oaknut.dfs.catalogue import Catalogue
+from oaknut.dfs.exceptions import FileLocked
 from oaknut.discimage.surface import DiscImage, SurfaceSpec
 
 
@@ -440,7 +441,7 @@ class TestAcornDFSCatalogueRemoveFileEntry:
         catalogue = AcornDFSCatalogue(surface)
 
         # Try to remove locked file
-        with pytest.raises(PermissionError, match="locked"):
+        with pytest.raises(FileLocked, match="locked"):
             catalogue.remove_file_entry("$.LOCKED")
 
     def test_remove_nonexistent_file_raises_error(self):

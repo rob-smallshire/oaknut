@@ -60,6 +60,13 @@ Dependencies flow strictly downward, mirroring oaknut-dfs.
   the single source of truth, as in the DFS unification (`match_evidence()`
   → derive `matches()`). Note the displayed disc title comes from the
   `*…*` title block, not the generic header title (`"ROM Cartridge"`).
+
+  Two guards keep disc images from passing (#94): an image larger than
+  16 KiB, the largest paged-ROM bank, is rejected outright, since in a
+  100 KiB disc some `&2A` almost always starts a block whose header CRC
+  happens to validate, and DFS catalogue bytes can pass for a ROM header.
+  An image without the `(C)` marker, which the MOS insists on before it
+  will page a ROM in, is at most `Confidence.POSSIBLE`.
 - **`open(reader, geometry, surface=0)`** — wrap a `ROMFS` over
   `reader.buffer()` and return `_ROMFSMount`.
 - **`geometry_grammar()`** — ROMFS has no disc geometry; the grammar

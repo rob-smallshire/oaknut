@@ -492,7 +492,7 @@ class WatfordDFSCatalogue(Catalogue):
 
         Raises:
             FileNotFoundError: If file doesn't exist
-            PermissionError: If file is locked
+            FileLocked: If file is locked
         """
         # Find file
         entry = self.find_file(filename)

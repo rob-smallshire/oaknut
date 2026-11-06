@@ -302,7 +302,7 @@ class _DFSMount(AcornWildcards):
 
     # -- Sized --
     def size_bytes(self) -> int:
-        return self._dfs.info["total_sectors"] * 256
+        return self._dfs._catalogued_surface.usable_sectors * 256
 
     # -- FreeMap --
     def free_map(self):
@@ -310,8 +310,25 @@ class _DFSMount(AcornWildcards):
 
         surface = self._dfs._catalogued_surface
         regions = tuple(surface.get_free_map())  # already (start, length) in sectors
-        total = surface.catalogue.get_disc_info().total_sectors
-        return FreeMapData(free_regions=regions, total_sectors=total)
+        return FreeMapData(free_regions=regions, total_sectors=surface.usable_sectors)
+
+    # -- StatusReporting --
+    def status_notes(self) -> tuple[str, ...]:
+        """Say when the catalogue's sector count and the image disagree."""
+        surface = self._dfs._catalogued_surface
+        declared = surface.catalogue.get_disc_info().total_sectors
+        held = surface.held_sectors
+        if declared > held:
+            return (
+                f"the catalogue declares {declared} sectors but the image holds {held}; "
+                f"sizes are those of the image",
+            )
+        if declared < held:
+            return (
+                f"the image holds {held} sectors but the catalogue declares {declared}, "
+                f"which DFS uses",
+            )
+        return ()
 
     # -- StorageOrdered --
     def storage_key(self, path: str) -> int:

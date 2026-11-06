@@ -524,8 +524,5 @@ class Catalogue(ABC):
 
         Returns:
             Number of files compacted
-
-        Raises:
-            PermissionError: If compaction not allowed (e.g., locked files)
         """
         pass
