@@ -1,0 +1,29 @@
+{% import "package.md.j2" as common -%}
+{{ common.header(package) }}
+
+HFE (HxC Floppy Emulator) disc-image support for the
+[oaknut](https://github.com/rob-smallshire/oaknut) family of packages.
+
+An HFE file records each track of a floppy disc as the raw bitstream the
+drive head delivers. It is the native format of the HxC and Gotek floppy
+emulators and a common output of preservation capture hardware such as
+the Greaseweazle. Because it sits below the sector level, an HFE image
+keeps everything an original disc carries, including the non-standard
+sector IDs, deliberate CRC errors, deleted-data marks and extra tracks
+that copy protection relies on.
+
+This package reads HFE v1 and v3 images, decodes their FM and MFM tracks
+into sectors, and flattens a decoded disc into the logical sector image
+that the oaknut filesystems read.
+
+## Status
+
+Pre-alpha, read-only.
+
+## Installation
+
+```sh
+uv add oaknut-hfe
+```
+
+{{ common.license() }}

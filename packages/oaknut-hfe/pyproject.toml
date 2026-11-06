@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "oaknut-hfe"
+dynamic = ["version"]
+authors = [{ name = "Robert Smallshire", email = "robert@smallshire.org.uk" }]
+description = "Python library for reading HFE (HxC Floppy Emulator) flux-level disc images"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.12"
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+]
+dependencies = [
+    "oaknut-exception>=10.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/rob-smallshire/oaknut/tree/master/packages/oaknut-hfe"
+Repository = "https://github.com/rob-smallshire/oaknut"
+Issues = "https://github.com/rob-smallshire/oaknut/issues"
+
+[tool.setuptools.dynamic]
+version = { attr = "oaknut.hfe.__version__" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
