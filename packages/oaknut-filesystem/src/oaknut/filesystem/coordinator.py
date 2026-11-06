@@ -20,6 +20,7 @@ from oaknut.extension import (
     list_extensions,
     load_failure_callback,
 )
+from oaknut.filesystem.decoder import ImageDecoder
 from oaknut.filesystem.exceptions import FilesystemExtensionError
 from oaknut.filesystem.filesystem import (
     FILESYSTEM_KIND,
@@ -104,6 +105,7 @@ def identify(
     *,
     suffix_hint: str | None = None,
     filesystems: dict[str, Filesystem] | None = None,
+    decoders: dict[str, ImageDecoder] | None = None,
 ) -> list[Identification]:
     """Identify the filesystem(s) on *source*, best candidate first.
 
@@ -113,9 +115,12 @@ def identify(
     no installed filesystem recognised the image; :func:`survey` says why.
 
     *filesystems* overrides the discovered set — used by tests and to
-    simulate a partial install (the extensibility invariant).
+    simulate a partial install (the extensibility invariant) — and
+    *decoders* likewise the image decoders (see :func:`reader_for`).
     """
-    return survey(source, suffix_hint=suffix_hint, filesystems=filesystems).candidates
+    return survey(
+        source, suffix_hint=suffix_hint, filesystems=filesystems, decoders=decoders
+    ).candidates
 
 
 def survey(
@@ -123,6 +128,7 @@ def survey(
     *,
     suffix_hint: str | None = None,
     filesystems: dict[str, Filesystem] | None = None,
+    decoders: dict[str, ImageDecoder] | None = None,
 ) -> Survey:
     """Every installed filesystem's verdict on *source*.
 
@@ -130,7 +136,7 @@ def survey(
     :attr:`Survey.rejections` give each other filesystem's reason for
     declining the whole image, to explain an unrecognised one.
     """
-    with reader_for(source, suffix_hint=suffix_hint) as reader:
+    with reader_for(source, suffix_hint=suffix_hint, decoders=decoders) as reader:
         active = _registered_filesystems() if filesystems is None else filesystems
         candidates, rejections = _probe_region(reader, active, reader.suffix)
         whole = Partition(name="", start_sector=0, num_sectors=reader.size // BYTES_PER_SECTOR)
@@ -139,6 +145,7 @@ def survey(
                 replace(c, partition=replace(whole, name=c.filesystem)) for c in candidates
             ],
             rejections=rejections,
+            decoded=reader.decoded,
         )
 
 

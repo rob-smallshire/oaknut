@@ -35,6 +35,7 @@ dependencies = [
     "oaknut-adfs[cli]>=10.0",
     "oaknut-afs[cli]>=10.0",
     "oaknut-romfs[cli]>=13.5",
+    "oaknut-hfe[cli]>=13.5",
     "click>=8.1.7",
     "rich>=13.0",
     "asyoulikeit>=1.5.1",

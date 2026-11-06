@@ -37,7 +37,7 @@ SITE_DIRPATH="_site"
 # has no API-coverage gate.
 api_packages_for_body() {
   case "$1" in
-    disc) echo "oaknut.file oaknut.extension oaknut.discimage oaknut.filesystem oaknut.dfs oaknut.adfs oaknut.afs oaknut.romfs" ;;
+    disc) echo "oaknut.file oaknut.extension oaknut.discimage oaknut.filesystem oaknut.dfs oaknut.adfs oaknut.afs oaknut.romfs oaknut.hfe" ;;
     basic) echo "oaknut.basic" ;;
     zip) echo "oaknut.zip" ;;
     *) echo "" ;;
