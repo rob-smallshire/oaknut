@@ -122,6 +122,9 @@ def _linear_geometry(size: int) -> Geometry:
     return Geometry((spec,), label=f"{kib} KiB ROM" if kib else f"{size}-byte ROM")
 
 
+#: The largest paged-ROM bank, and so the largest ROMFS image.
+_MAX_ROM_SIZE = 16 * 1024
+
 _GEOMETRY_PRESETS = {
     "8k": _linear_geometry(8 * 1024),
     "16k": _linear_geometry(16 * 1024),
@@ -371,6 +374,14 @@ class AcornROMFS(Filesystem):
         super().__init__(name=name, **kwargs)
 
     def probe(self, reader: ImageReader) -> Identification | Rejection:
+        # A paged-ROM bank is at most 16 KiB. A larger image is a disc or
+        # some other medium, in which a chance &2A sync with a valid header
+        # CRC is all but certain to turn up (#94).
+        if reader.size > _MAX_ROM_SIZE:
+            return Rejection(
+                self.name,
+                f"image is {reader.size} bytes; a paged ROM is at most 16 KiB",
+            )
         try:
             romfs = ROMFS.from_bytes(reader.read(0, reader.size))
         except (NotAROMFSError, CRCError, TruncatedROMError) as exc:
@@ -392,12 +403,22 @@ class AcornROMFS(Filesystem):
         # identified and read, but never written. A member of a multi-ROM set
         # sharing a file with a neighbour is well-formed, so it keeps its
         # confidence; the evidence names the shared file.
-        confident = romfs.has_service_entry and romfs.copyright.startswith("(C)")
+        has_copyright = romfs.copyright.startswith("(C)")
+        confident = romfs.has_service_entry and has_copyright
+        if not has_copyright:
+            # The MOS ignores a sideways ROM without its (C) marker, so a
+            # ROM lacking one could never have been mounted as ROMFS.
+            evidence.append("no (C) copyright marker, which the MOS requires")
         if not romfs.is_complete:
             evidence.append("no end marker — incomplete (truncated or damaged); read-only")
         for description in _span_descriptions(romfs):
             evidence.append(f"{description}; read-only")
-        confidence = Confidence.STRONG if (confident and romfs.is_complete) else Confidence.PROBABLE
+        if not has_copyright:
+            confidence = Confidence.POSSIBLE
+        elif confident and romfs.is_complete:
+            confidence = Confidence.STRONG
+        else:
+            confidence = Confidence.PROBABLE
         return Identification(
             filesystem=self.name,
             confidence=confidence,
