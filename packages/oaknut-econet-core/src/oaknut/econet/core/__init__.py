@@ -39,7 +39,7 @@ from oaknut.econet.core.testing import TestTransport
 from oaknut.econet.core.transport import EconetTransport
 from oaknut.econet.core.wellknown import ImmediateOp, Port
 
-__version__ = "13.5.0"
+__version__ = "13.6.0"
 
 __all__ = [
     "Address",

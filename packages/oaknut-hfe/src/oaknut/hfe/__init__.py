@@ -15,7 +15,7 @@ into the logical sector image that the oaknut filesystems read.
 
 from __future__ import annotations
 
-__version__ = "13.5.0"
+__version__ = "13.6.0"
 
 from oaknut.hfe.build import (
     TRACK_SAMPLES_300RPM_250KBPS,
