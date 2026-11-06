@@ -30,7 +30,7 @@ dependencies = [
 # The `cli` extra pulls the shared CLI toolkit so this package can
 # contribute `disc hfe` subcommands. The library core never imports it.
 [project.optional-dependencies]
-cli = ["oaknut-cli>=10.0"]
+cli = ["oaknut-cli>=10.0", "oaknut-file>=10.0"]
 
 [project.urls]
 Homepage = "https://github.com/rob-smallshire/oaknut/tree/master/packages/oaknut-hfe"
@@ -41,6 +41,11 @@ Issues = "https://github.com/rob-smallshire/oaknut/issues"
 # command reading an image opens an HFE file as its flattened sectors.
 [project.entry-points."oaknut.decoder"]
 hfe = "oaknut.hfe.decoder:HFEDecoder"
+
+# Subcommands contributed to the `disc` CLI on the oaknut.command axis:
+# `disc hfe <subcommand>`. Loaded only with the [cli] extra.
+[project.entry-points."oaknut.command"]
+hfe = "oaknut.hfe.cli:hfe"
 
 [tool.setuptools.dynamic]
 version = { attr = "oaknut.hfe.__version__" }

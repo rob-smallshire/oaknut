@@ -27,7 +27,7 @@ _NO_IMAGE = {
     "create",
 }
 # Per-filesystem command groups open images with their own format's reader.
-_GROUPS = {"dfs", "adfs", "afs", "romfs"}
+_GROUPS = {"dfs", "adfs", "afs", "romfs", "hfe"}
 _MULTI_IMAGE = {"cp", "gather"}
 
 
