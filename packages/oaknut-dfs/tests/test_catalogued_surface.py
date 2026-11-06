@@ -291,9 +291,12 @@ class TestCataloguedSurfaceFirstFit:
         with pytest.raises(DiscFullError, match="Not enough contiguous free space"):
             catalogued._first_fit(10 * 256)  # Need 10 sectors but only 8 free
 
-    def test_disc_full_is_still_an_os_error(self):
-        # Callers catching the builtin IOError that used to be raised keep working.
-        assert issubclass(DiscFullError, OSError)
+    def test_disc_full_is_a_data_error_not_a_host_os_error(self):
+        # A full catalogue is a fact about the image, not a host OS failure.
+        from oaknut.exception import DataError
+
+        assert issubclass(DiscFullError, DataError)
+        assert not issubclass(DiscFullError, OSError)
 
 
 class TestCataloguedSurfaceIntegration:
