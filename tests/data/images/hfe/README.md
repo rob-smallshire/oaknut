@@ -8,5 +8,6 @@
 | `Citadel_FSD0174_1.hfe` | Beebium test assets | HFE v3, 80 tracks, 1 side, FM. Acorn DFS "SUPERIOR", 7 files on tracks 0-39; tracks 40-79 are entirely weak (RAND) samples. |
 
 The Dunjunz captures follow the naming of the `beeb_hfe` preservation
-archive and its "BBC discs and fingerprints" spreadsheet; see
-`packages/oaknut-hfe/docs/references.md`.
+archive and are its Bug Byte *Dunjunz* entries (variant 1 of each side).
+The spreadsheet rows, with links to the archived HFE and SuperCard Pro
+captures, are in `packages/oaknut-hfe/docs/references.md`.

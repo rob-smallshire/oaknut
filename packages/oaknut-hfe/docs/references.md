@@ -33,8 +33,26 @@ Captures are named after the spreadsheet's columns:
 `<Title>_<Disc>_<Tracks>_<HFE Grab version>_<CRC32>_<Variant>.hfe`. For
 example, `Dunjunz_D1S1_40T_HG3_8518BF40_1.hfe` is disc 1, side 1, 40
 tracks, grabbed with HFE Grab version 3, fingerprint `8518BF40`,
-variant 1. The two Dunjunz fixtures in `tests/data/images/hfe/` come from this
-effort.
+variant 1.
+
+### The Dunjunz fixtures
+
+The two Dunjunz fixtures in `tests/data/images/hfe/` are the archive's
+Bug Byte *Dunjunz* captures. The spreadsheet lists them as follows
+(the [CSV export](https://docs.google.com/spreadsheets/d/1q006avySqZMcUGuqPlpFOgKLgdRTOzj9gucy3pS2Uks/export?format=csv&gid=0)
+needs no sign-in):
+
+| Disc | DFS title | Cycle | CRC32 | Variant | HFE | SuperCard Pro |
+|---|---|---|---|---|---|---|
+| D1S1 (boot, Master) | MASTER 128 V | 42 | `8518BF40` | 1 | [HFE](https://drive.google.com/file/d/1rye-LddKf8QQbptq_RygSqA7hGh2mgh8/view) | [scp](https://drive.google.com/file/d/1tyOOQzfVwL3qDnAYdPykxH0DaFdNW5OO/view) |
+| D1S2 (model B) | Dunjunz | 59 | `54F4B47A` | 1 | [HFE](https://drive.google.com/file/d/1eIC_chzpCjD2594nZk2JLwPipScQU9TJ/view) | [scp](https://drive.google.com/file/d/1HZ_u0eRBjkUtWCyjsOU-X0jfjlwgbZm5/view) |
+
+Both are 40-track captures made with HFE Grab version 3, submitted by
+VectorEyes, with duplicates from VectorEyes, pumpkin and ip, and no
+birthday. Only variant 1 is listed. The cycle numbers are written in hex
+without a prefix: they match the catalogue cycle bytes &42 and &59. The
+Notes are empty for both sides, which agrees with the decode: neither
+side is protected.
 
 The fingerprint is not the CRC32 of the `.hfe` file, nor of the sector
 image it flattens to (checked on both Dunjunz sides). The spreadsheet
