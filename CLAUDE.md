@@ -22,7 +22,7 @@ Layered strictly bottom-up:
 | `oaknut-dfs` | `oaknut.dfs` | `file`, `discimage`, `basic` | Acorn DFS / Watford DFS / Opus DDOS — flat-catalogue BBC floppies |
 | `oaknut-adfs` | `oaknut.adfs` | `file`, `discimage`, `basic` | ADFS hierarchical directories, free space maps, hard-disc images |
 | `oaknut-afs` | `oaknut.afs` | `file`, `discimage`, `adfs` | Acorn Level 3 File Server private on-disc format (`AFS0` magic). Read/write, `wfsinit` partitioning + initialisation, merge, host-tree import, shipped library images |
-| `oaknut-hfe` | `oaknut.hfe` | `exception` | HFE (HxC Floppy Emulator) flux-level images, read-only: v1/v3 container, FM/MFM track decoding to sectors, flattening to a logical sector image, sector-level report for copy-protected discs |
+| `oaknut-hfe` | `oaknut.hfe` | `exception`, `extension`, `filesystem` | HFE (HxC Floppy Emulator) flux-level images, read-only: v1/v3 container, FM/MFM track decoding to sectors, flattening to a logical sector image, sector-level report for copy-protected discs. Registers an `oaknut.decoder` plug-in, so `reader_for` (and every `disc` command) opens `.hfe` as its flattened sectors |
 | `oaknut-zip` | `oaknut.zip` | `file` | ZIP archives containing Acorn files (SparkFS extras, INF resolution, RISC OS filetypes) |
 
 `oaknut-dfs` and `oaknut-adfs` are independent siblings — `from oaknut.dfs import ADFS` is **intentionally broken**. ADFS lives in `oaknut.adfs`; do not restore the compatibility re-export.
@@ -127,5 +127,7 @@ Package-specific CLAUDE.md files that inherit from this one:
 - `packages/oaknut-dfs/CLAUDE.md` — DFS module layout, layer flow, testing entry points.
 
 - `packages/oaknut-afs/CLAUDE.md` — AFS module architecture, primary sources, testing.
+
+- `packages/oaknut-hfe/CLAUDE.md` — HFE decode pipeline, sampling and opcode facts, Beebium provenance, fixtures.
 
 The other packages (`oaknut-file`, `oaknut-discimage`, `oaknut-adfs`, `oaknut-basic`, `oaknut-zip`) don't currently ship a per-package CLAUDE.md; their scope is described in the layering table above.

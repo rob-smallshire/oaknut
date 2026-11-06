@@ -34,6 +34,7 @@ cli = ["oaknut-cli>=10.0", "oaknut-file>=10.0"]
 
 [project.urls]
 Homepage = "https://github.com/rob-smallshire/oaknut/tree/master/packages/oaknut-hfe"
+Documentation = "https://rob-smallshire.github.io/oaknut/disc/api/reference/hfe.html"
 Repository = "https://github.com/rob-smallshire/oaknut"
 Issues = "https://github.com/rob-smallshire/oaknut/issues"
 
