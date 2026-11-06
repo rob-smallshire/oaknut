@@ -81,11 +81,12 @@ class FileExistsError(CatalogError):
     _exit_code = ExitCode.CANT_CREATE
 
 
-class DiscFullError(DFSError):
+class DiscFullError(DFSError, OSError):
     """Insufficient free space on disc.
 
     Raised when attempting to save a file but there aren't enough
-    free sectors available.
+    free sectors available. It is also an :class:`OSError`, which the
+    allocator raised (as ``IOError``) before it used this class.
     """
 
     _exit_code = ExitCode.CANT_CREATE

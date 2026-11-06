@@ -3,6 +3,7 @@
 import pytest
 from oaknut.dfs.acorn_dfs_catalogue import AcornDFSCatalogue
 from oaknut.dfs.catalogued_surface import CataloguedSurface
+from oaknut.dfs.exceptions import DiscFullError
 from oaknut.discimage.surface import DiscImage, SurfaceSpec
 
 
@@ -287,8 +288,12 @@ class TestCataloguedSurfaceFirstFit:
         catalogued = CataloguedSurface(surface, AcornDFSCatalogue)
 
         # Try to allocate more than available (8 free sectors after catalog)
-        with pytest.raises(IOError, match="Not enough contiguous free space"):
+        with pytest.raises(DiscFullError, match="Not enough contiguous free space"):
             catalogued._first_fit(10 * 256)  # Need 10 sectors but only 8 free
+
+    def test_disc_full_is_still_an_os_error(self):
+        # Callers catching the builtin IOError that used to be raised keep working.
+        assert issubclass(DiscFullError, OSError)
 
 
 class TestCataloguedSurfaceIntegration:

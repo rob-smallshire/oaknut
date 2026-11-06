@@ -3,6 +3,7 @@
 from typing import Type
 
 from oaknut.dfs.catalogue import Catalogue, FileEntry
+from oaknut.dfs.exceptions import DiscFullError
 from oaknut.discimage.surface import Surface
 
 
@@ -198,4 +199,4 @@ class CataloguedSurface:
                 if consecutive_free >= sectors_needed:
                     return current_sector
 
-        raise IOError(f"Not enough contiguous free space ({sectors_needed} sectors needed)")
+        raise DiscFullError(f"Not enough contiguous free space ({sectors_needed} sectors needed)")
