@@ -227,6 +227,19 @@ Reading images
 .. autofunction:: oaknut.filesystem.reader_for
 
 
+Image decoders
+--------------
+
+.. automodule:: oaknut.filesystem.decoder
+   :no-members:
+
+.. autoclass:: oaknut.filesystem.ImageDecoder
+   :members: recognises, decode, extensions
+
+.. autoclass:: oaknut.filesystem.DecodedImage
+   :members:
+
+
 Exceptions
 ----------
 

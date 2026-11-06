@@ -319,6 +319,35 @@ AFS (Acorn Level 3 File Server)
    .. cli-example:: cmd_afs_merge
 
 
+HFE (HxC Floppy Emulator)
+-------------------------
+
+Every command that reads an image opens an HFE flux capture as the
+sector image decoded from it, so ``disc ls``, ``disc get`` and
+``disc export`` work on ``.hfe`` files directly; commands that change an
+image refuse one, since it is read-only. These commands look below the
+sector level, at the capture itself.
+
+.. oaknut-command:: oaknut.hfe.cli:info_command
+   :prog: disc hfe info
+
+   .. cli-example:: cmd_hfe_info
+
+.. oaknut-command:: oaknut.hfe.cli:sectors_command
+   :prog: disc hfe sectors
+
+   ``--anomalies`` keeps only the tracks and sectors with remarks, so a
+   clean disc reduces to its unformatted tracks and a protected one to
+   its protection.
+
+   .. cli-example:: cmd_hfe_sectors
+
+.. oaknut-command:: oaknut.hfe.cli:flatten_command
+   :prog: disc hfe flatten
+
+   .. cli-example:: cmd_hfe_flatten
+
+
 ROMFS (Acorn ROM Filing System)
 -------------------------------
 

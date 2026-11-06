@@ -110,6 +110,8 @@ _REPORT_SUBCOMMANDS = frozenset(
         "get-exec",
         "afs plan",
         "afs users",
+        "hfe info",
+        "hfe sectors",
         "list-reports",
         "describe-report",
         "list-report-formats",
