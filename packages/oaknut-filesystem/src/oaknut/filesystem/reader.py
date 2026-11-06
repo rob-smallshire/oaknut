@@ -15,6 +15,15 @@ from contextlib import suppress
 from pathlib import Path
 from typing import Union
 
+from oaknut.filesystem.decoder import (
+    PREFIX_LENGTH,
+    DecodedImage,
+    ImageDecoder,
+    decode_filepath,
+    decoder_for,
+)
+from oaknut.filesystem.exceptions import ReadOnlyFilesystemError
+
 ImageSource = Union["ImageReader", bytes, bytearray, memoryview, str, Path]
 
 
@@ -35,8 +44,10 @@ class ImageReader:
         length: int | None = None,
         suffix: str | None = None,
         writable: bool = False,
+        decoded: DecodedImage | None = None,
         _closeables=(),
     ):
+        self._decoded = decoded
         self._data = data
         self._base = base
         self._length = (len(data) - base) if length is None else length
@@ -57,6 +68,13 @@ class ImageReader:
         for writing). Windows inherit it from their parent.
         """
         return self._writable
+
+    @property
+    def decoded(self) -> DecodedImage | None:
+        """The :class:`~oaknut.filesystem.decoder.DecodedImage` this reader
+        reads, when an image decoder produced it; ``None`` for a plain
+        sector image, and on a window."""
+        return self._decoded
 
     @property
     def suffix(self) -> str | None:
@@ -165,6 +183,7 @@ def reader_for(
     *,
     suffix_hint: str | None = None,
     writable: bool = False,
+    decoders: dict[str, ImageDecoder] | None = None,
 ) -> ImageReader:
     """Build an :class:`ImageReader` for *source*.
 
@@ -174,10 +193,25 @@ def reader_for(
     the reader is closed. *writable* maps the file for writing, so writes
     through the reader (and mutations of :meth:`ImageReader.buffer`) reach
     the file directly — used by the mutating CLI commands.
+
+    An image that a registered :class:`~oaknut.filesystem.decoder.ImageDecoder`
+    recognises (an HFE flux image, say) is decoded, and the reader reads
+    the decoded sector image instead, with the decoder's suffix as the
+    hint. *decoders* overrides the registered set. Such a reader is never
+    writable.
+
+    Raises:
+        ReadOnlyFilesystemError: *writable* was asked of an image that is
+            decoded.
     """
     if isinstance(source, ImageReader):
         return source
     if isinstance(source, (bytes, bytearray, memoryview)):
+        decoder = decoder_for(bytes(source[:PREFIX_LENGTH]), decoders)
+        if decoder is not None:
+            decoded = decoder.decode(bytes(source))
+            _refuse_writable(writable, decoded, "image")
+            return _decoded_reader(decoded, suffix_hint)
         # A bytearray/memoryview is mutable in place; bytes is not. Only
         # claim writability when the buffer can actually take a write.
         can_write = writable and not isinstance(source, bytes)
@@ -187,8 +221,28 @@ def reader_for(
         suffix = suffix_hint if suffix_hint is not None else path.suffix
         if path.stat().st_size == 0:
             return ImageReader(b"", suffix=suffix, writable=writable)
+        with path.open("rb") as handle:
+            prefix = handle.read(PREFIX_LENGTH)
+        decoder = decoder_for(prefix, decoders)
+        if decoder is not None:
+            decoded = decode_filepath(path, decoder)
+            _refuse_writable(writable, decoded, path.name)
+            return _decoded_reader(decoded, suffix_hint)
         handle = path.open("r+b" if writable else "rb")
         access = mmap.ACCESS_WRITE if writable else mmap.ACCESS_READ
         mapping = mmap.mmap(handle.fileno(), 0, access=access)
         return ImageReader(mapping, suffix=suffix, writable=writable, _closeables=(mapping, handle))
     raise TypeError(f"cannot build an ImageReader from {type(source).__name__}")
+
+
+def _decoded_reader(decoded: DecodedImage, suffix_hint: str | None) -> ImageReader:
+    suffix = suffix_hint if suffix_hint is not None else decoded.suffix
+    return ImageReader(decoded.data, suffix=suffix, writable=False, decoded=decoded)
+
+
+def _refuse_writable(writable: bool, decoded: DecodedImage, name: str) -> None:
+    if writable:
+        raise ReadOnlyFilesystemError(
+            f"{name} is a {decoded.format_name} image, which is read-only; "
+            f"convert it to a sector image to change it"
+        )

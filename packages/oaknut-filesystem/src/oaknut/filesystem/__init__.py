@@ -52,6 +52,7 @@ from oaknut.filesystem.coordinator import (
     identify,
     survey,
 )
+from oaknut.filesystem.decoder import DecodedImage, ImageDecoder
 from oaknut.filesystem.exceptions import (
     BeebScsiConfigError,
     FilesystemError,
@@ -152,6 +153,8 @@ __all__ = [
     "create_filesystem",
     "creating_filesystem",
     # reader
+    "DecodedImage",
+    "ImageDecoder",
     "ImageReader",
     "ImageSource",
     "reader_for",
