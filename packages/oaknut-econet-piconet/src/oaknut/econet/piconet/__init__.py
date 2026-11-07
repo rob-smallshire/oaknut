@@ -18,7 +18,7 @@ from oaknut.econet.piconet.protocol import PiconetMode, TxResult
 from oaknut.econet.piconet.serial_link import SerialPicoLink
 from oaknut.econet.piconet.transport import PiconetTransport
 
-__version__ = "13.6.0"
+__version__ = "13.6.1"
 
 __all__ = [
     "FakePiconet",

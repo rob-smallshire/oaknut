@@ -23,7 +23,7 @@ from oaknut.econet.station.config import (
 from oaknut.econet.station.host import Station
 from oaknut.econet.station.service import Service
 
-__version__ = "13.6.0"
+__version__ = "13.6.1"
 
 __all__ = [
     "Service",

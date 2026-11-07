@@ -7,6 +7,6 @@ The CLI itself lives in :mod:`oaknut.econet.host.cli`.
 
 from __future__ import annotations
 
-__version__ = "13.6.0"
+__version__ = "13.6.1"
 
 __all__: list[str] = []

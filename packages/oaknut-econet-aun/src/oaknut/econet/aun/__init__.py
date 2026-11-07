@@ -27,7 +27,7 @@ from oaknut.econet.aun.discovery import (
 from oaknut.econet.aun.transport import DEFAULT_AUN_PORT, AunTransport
 from oaknut.econet.aun.wire import AunPacket, AunType
 
-__version__ = "13.6.0"
+__version__ = "13.6.1"
 
 __all__ = [
     "AUN_SERVICE_TYPE",

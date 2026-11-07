@@ -18,7 +18,7 @@ from oaknut.econet.hat.fake import FakeKernelDevice
 from oaknut.econet.hat.gpio import EconetGpioDevice
 from oaknut.econet.hat.transport import HatTransport
 
-__version__ = "13.6.0"
+__version__ = "13.6.1"
 
 __all__ = [
     "EconetGpioDevice",
